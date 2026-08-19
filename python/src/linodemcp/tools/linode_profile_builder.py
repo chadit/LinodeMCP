@@ -11,11 +11,13 @@ profile builder workflow:
 
 Both tools carry ``Capability.Meta`` so the profile filter always
 admits them, even under the read-only default profile. They never
-touch the Linode API.
+touch the Linode API. The generator owns their registration; what is left
+here is the body each one's answer hook calls.
 
-The handlers read the live tool catalog through a module-level bridge
-(``_catalog_provider``) the server installs at startup. Tests inject
-reproducible fixtures via :func:`set_tool_catalog_provider`.
+The handlers read the live tool catalog off the builder state the server
+publishes for the call (:mod:`linodemcp.tools.builderstate`), so a reload
+reaches an already-registered tool and a handler reached without a server
+refuses rather than answering from an empty catalog.
 """
 
 from __future__ import annotations
@@ -23,76 +25,25 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent
 
 from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
-from linodemcp.profiles import Capability
 from linodemcp.profiles.builtin import categories as resolve_categories
+from linodemcp.tools.builderstate import (
+    BUILDER_UNCONFIGURED,
+    builder_state_from_context,
+)
+from linodemcp.tools.helpers import error_response
 from linodemcp.tools.proto_response import serialize_api_response
-from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from linodemcp.profiles.builtin import ToolDescriptor
-
-
-# Bridge module state. The Phase 4 server installs the provider during
-# __init__; tests install a reproducible stand-in via
-# set_tool_catalog_provider. ``None`` is the default; handlers that
-# fire before the bridge is wired return an empty catalog rather than
-# raising, so unit tests against the handlers can opt into providing a
-# fixture or accept "no tools".
-_catalog_provider: Callable[[], list[ToolDescriptor]] | None = None
-
-
-def set_tool_catalog_provider(
-    provider: Callable[[], list[ToolDescriptor]] | None,
-) -> None:
-    """Register the function that returns the live tool catalog.
-
-    Pass ``None`` to clear (used by tests during teardown to avoid
-    state bleeding across cases).
-    """
-    global _catalog_provider  # noqa: PLW0603 - process-wide bridge
-    _catalog_provider = provider
-
-
-def _resolve_catalog() -> list[ToolDescriptor]:
-    """Return the live catalog or an empty list when no bridge is set."""
-    if _catalog_provider is None:
-        return []
-    return _catalog_provider()
-
+    from linodemcp.profiles import Capability
 
 # Argument-key constants. These are the JSON property names the model
 # passes through MCP; hoisted so the handler and schema agree without
 # stringly-typed drift.
 _ARG_CATEGORY = "category"
 _ARG_CAPABILITY = "capability"
-
-
-def create_linode_profile_list_tools_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_list_tools`` MCP tool definition.
-
-    Schema mirrors the Go side: two optional string filters
-    (``category`` and ``capability``), both exact-match (capability
-    accepts case-insensitive short or long form, e.g. ``read`` or
-    ``CapRead``).
-    """
-    return (
-        Tool(
-            name="linode_profile_list_tools",
-            description=(
-                "List every registerable tool with its capability tag and "
-                "categories. Used by the profile builder to enumerate the "
-                "full menu before composing a user-defined profile. "
-                "Optional filters: category, capability."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileListToolsInput"),
-        ),
-        Capability.Meta,
-    )
 
 
 def _capability_matches(capability: Capability, filter_value: str) -> bool:
@@ -108,9 +59,7 @@ def _capability_matches(capability: Capability, filter_value: str) -> bool:
     return needle in {long_form.lower(), cap_form.lower()}
 
 
-async def handle_linode_profile_list_tools(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def profile_list_tools_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Return the filtered tool catalog as JSON text.
 
     The response shape per entry is ``{name, capability, categories}``
@@ -119,10 +68,14 @@ async def handle_linode_profile_list_tools(
     :func:`linodemcp.profiles.builtin.categories`. Both filters narrow
     the result; missing/empty filters do nothing.
     """
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
     category_filter = arguments.get(_ARG_CATEGORY, "")
     capability_filter = arguments.get(_ARG_CAPABILITY, "")
 
-    entries = _resolve_catalog()
+    entries = state.catalog()
     out: list[dict[str, Any]] = []
 
     for entry in entries:
@@ -143,6 +96,11 @@ async def handle_linode_profile_list_tools(
             }
         )
 
+    # Name-sorted. The catalog itself is in registration order, which differs
+    # per language, so sorting here is what makes one tool answer one order
+    # whichever binary served it.
+    out.sort(key=lambda entry: entry["name"])
+
     result = serialize_api_response(
         {"count": len(out), "tools": out},
         profile_builder_pb2.ProfileToolListResponse(),
@@ -150,30 +108,7 @@ async def handle_linode_profile_list_tools(
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-def create_linode_profile_list_categories_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_list_categories`` MCP tool definition.
-
-    No input arguments; the response is the deduplicated category list
-    with tool counts, sorted by name.
-    """
-    return (
-        Tool(
-            name="linode_profile_list_categories",
-            description=(
-                "List tool categories with the number of tools each covers. "
-                "Used by the profile builder to discover available "
-                "categories before drilling into a category with "
-                "linode_profile_list_tools."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileListCategoriesInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_profile_list_categories(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def profile_list_categories_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Return ``[{name, tool_count}]`` for every category in the catalog.
 
     Counts include every category a tool carries (a tool that appears
@@ -181,12 +116,14 @@ async def handle_linode_profile_list_categories(
     output is reproducible and the cross-language parity test can
     compare directly.
     """
-    # The tool takes no inputs per spec, but the dispatch contract fixes this
-    # signature. del marks the parameter used without renaming it, which would
-    # break the handler's keyword-call shape.
+    # The tool takes no inputs per spec; del marks the parameter used.
     del arguments
 
-    entries = _resolve_catalog()
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
+    entries = state.catalog()
     counts: dict[str, int] = {}
 
     for entry in entries:

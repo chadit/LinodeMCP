@@ -11,10 +11,10 @@ import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
-from linodemcp.gentools import handle_linode_domain_record_get
-from linodemcp.tools.linode_domain_records import (
+from linodemcp.gentools import (
     handle_linode_domain_record_create,
     handle_linode_domain_record_delete,
+    handle_linode_domain_record_get,
     handle_linode_domain_record_update,
 )
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 async def test_get_missing_domain_id(sample_config: Config) -> None:
     """domain_record_get with no domain_id errors before any API call."""
     result = await handle_linode_domain_record_get({"record_id": 5}, sample_config)
-    assert "domain_id is required" in result[0].text
+    assert "domain_id must be a positive integer" in result[0].text
 
 
 async def test_create_dry_run_requires_type(sample_config: Config) -> None:
@@ -39,7 +39,13 @@ async def test_create_dry_run_requires_type(sample_config: Config) -> None:
 async def test_create_dry_run_names_the_host(sample_config: Config) -> None:
     """A dry-run create with a name echoes that host in the side effect."""
     result = await handle_linode_domain_record_create(
-        {"domain_id": 333, "type": "A", "name": "www", "dry_run": True},
+        {
+            "domain_id": 333,
+            "type": "A",
+            "name": "www",
+            "target": "8.8.8.8",
+            "dry_run": True,
+        },
         sample_config,
     )
     body = json.loads(result[0].text)
@@ -78,7 +84,7 @@ async def test_create_rejects_invalid_a_target(sample_config: Config) -> None:
         {"domain_id": 333, "type": "A", "target": "not-an-ip", "confirm": True},
         sample_config,
     )
-    assert "A record target must be a valid IPv4 address" in result[0].text
+    assert "a record target must be a valid IPv4 address" in result[0].text
 
 
 async def test_update_dry_run_missing_domain_id(sample_config: Config) -> None:
@@ -86,7 +92,7 @@ async def test_update_dry_run_missing_domain_id(sample_config: Config) -> None:
     result = await handle_linode_domain_record_update(
         {"record_id": 555, "dry_run": True}, sample_config
     )
-    assert "domain_id is required" in result[0].text
+    assert "domain_id must be a positive integer" in result[0].text
 
 
 async def test_update_dry_run_missing_record_id(sample_config: Config) -> None:
@@ -94,7 +100,29 @@ async def test_update_dry_run_missing_record_id(sample_config: Config) -> None:
     result = await handle_linode_domain_record_update(
         {"domain_id": 333, "dry_run": True}, sample_config
     )
-    assert "record_id is required" in result[0].text
+    assert "record_id must be a positive integer" in result[0].text
+
+
+async def test_update_rejects_negative_ids(sample_config: Config) -> None:
+    """A negative id decodes as an int, so only the positivity rule stops it."""
+    result = await handle_linode_domain_record_update(
+        {"domain_id": -5, "record_id": 555, "confirm": True}, sample_config
+    )
+    assert "domain_id must be a positive integer" in result[0].text
+
+    result = await handle_linode_domain_record_update(
+        {"domain_id": 333, "record_id": -5, "confirm": True}, sample_config
+    )
+    assert "record_id must be a positive integer" in result[0].text
+
+
+async def test_create_rejects_negative_domain_id(sample_config: Config) -> None:
+    """A negative id decodes as an int, so only the positivity rule stops it."""
+    result = await handle_linode_domain_record_create(
+        {"domain_id": -5, "type": "A", "target": "8.8.8.8", "confirm": True},
+        sample_config,
+    )
+    assert "domain_id must be a positive integer" in result[0].text
 
 
 async def test_update_dry_run_reports_name_change(sample_config: Config) -> None:
@@ -136,7 +164,7 @@ async def test_update_confirmed_still_requires_record_id(
     result = await handle_linode_domain_record_update(
         {"domain_id": 333, "confirm": True}, sample_config
     )
-    assert "record_id is required" in result[0].text
+    assert "record_id must be a positive integer" in result[0].text
 
 
 async def test_update_rejects_invalid_name(sample_config: Config) -> None:
@@ -155,36 +183,19 @@ async def test_update_rejects_invalid_name(sample_config: Config) -> None:
 
 async def test_delete_missing_domain_id(sample_config: Config) -> None:
     """delete errors on a missing domain_id before any branch."""
-    result = await handle_linode_domain_record_delete({}, sample_config)
+    result = await handle_linode_domain_record_delete(
+        {"confirm": True, "confirm_bypass_dry_run": True}, sample_config
+    )
     assert "domain_id is required" in result[0].text
 
 
 async def test_delete_missing_record_id(sample_config: Config) -> None:
     """delete errors on a missing record_id before any branch."""
-    result = await handle_linode_domain_record_delete({"domain_id": 333}, sample_config)
+    result = await handle_linode_domain_record_delete(
+        {"domain_id": 333, "confirm": True, "confirm_bypass_dry_run": True},
+        sample_config,
+    )
     assert "record_id is required" in result[0].text
-
-
-async def test_delete_dry_run_previews_via_get(sample_config: Config) -> None:
-    """A dry-run delete fetches state via GET and does not delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_domain_record.return_value = {"id": 555, "type": "A"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_domain_record_delete(
-            {"domain_id": 333, "record_id": 555, "dry_run": True},
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["would_execute"]["method"] == "DELETE"
-    assert body["would_execute"]["path"] == "/domains/333/records/555"
-    mock_client.get_domain_record.assert_awaited_once_with(333, 555)
-    mock_client.delete_domain_record.assert_not_called()
 
 
 async def test_delete_requires_confirm(sample_config: Config) -> None:

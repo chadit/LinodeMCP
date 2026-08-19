@@ -16,6 +16,7 @@ import importlib
 import pkgutil
 import re
 from dataclasses import dataclass
+from enum import Enum
 from functools import cache
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
     from types import ModuleType
 
-    from google.protobuf.descriptor import Descriptor
+    from google.protobuf.descriptor import Descriptor, FieldDescriptor
     from google.protobuf.message import Message
 
 _GENERATED_PACKAGE = "linodemcp.genpb.linode.mcp.v1"
@@ -48,6 +49,47 @@ class RouteError(ValueError):
     """
 
 
+DEFAULT_SURFACE_SEGMENT = "v4"
+
+# The ApiSurface enum values, kept as numbers so this reader does not depend on
+# the generated module being importable to answer what a surface means.
+_SURFACE_SEGMENTS = {
+    0: DEFAULT_SURFACE_SEGMENT,
+    1: DEFAULT_SURFACE_SEGMENT,
+    2: "v4beta",
+}
+
+
+def surface_segment(surface: int) -> str:
+    """The base path segment a declared surface names.
+
+    An unknown value is refused, never defaulted: answering a beta-only route on
+    /v4 is a 404, and answering a v4 route on /v4beta reaches a different
+    resource surface, so guessing either way addresses the wrong thing. Go's
+    SurfaceSegment refuses the same set.
+    """
+    segment = _SURFACE_SEGMENTS.get(surface)
+    if segment is None:
+        msg = f"unknown API surface {surface}"
+        raise RouteError(msg)
+    return segment
+
+
+def base_for(base: str, segment: str) -> str:
+    """The base one surface's calls go to, given the configured one.
+
+    Only a base whose last segment is the default surface is re-pointed, so a
+    proxy, a mock, or a base an environment already pointed at the beta surface
+    is used exactly as configured. That is what keeps the per-environment apiUrl
+    override winning: a surface picks among versions of one deployment, it never
+    picks the deployment. Go's BaseFor implements the same rule.
+    """
+    suffix = "/" + DEFAULT_SURFACE_SEGMENT
+    if not base.endswith(suffix):
+        return base
+    return base[: -len(suffix)] + "/" + segment
+
+
 @dataclass(frozen=True)
 class Route:
     """One tool's declared operation, with its path slots in template order."""
@@ -56,6 +98,9 @@ class Route:
     method: str
     template: str
     slots: tuple[str, ...]
+    # The declared ApiSurface value, kept as declared rather than resolved so
+    # validate() reports one this build cannot address at startup.
+    surface: int = 0
 
     def endpoint(self, *values: object) -> str:
         """Fill the template's slots from values, in declared order.
@@ -79,6 +124,21 @@ class Route:
             text = _escape_segment(_slot_text(self.tool, slot, value))
             filled = filled.replace("{" + slot + "}", text)
         return filled
+
+    def preview_endpoint(self, *values: object) -> str:
+        """The filled path a preview and a staged plan report.
+
+        A preview names the request that would run, so it carries the surface
+        the client will actually address. Reporting the default base for a call
+        that goes elsewhere describes a request nothing makes, which is the
+        defect class this whole capability exists to remove. Go renders the
+        same string, in its renderer arm rather than here.
+        """
+        filled = self.endpoint(*values)
+        segment = surface_segment(self.surface)
+        if segment == DEFAULT_SURFACE_SEGMENT:
+            return filled
+        return "/" + segment + filled
 
 
 def _escape_segment(text: str) -> str:
@@ -174,6 +234,9 @@ def _declared() -> Iterator[Route]:
             method=str(route.method),
             template=path,
             slots=tuple(_SLOT.findall(path)),
+            # The surface rides on the message beside the route, so it is read
+            # from the same descriptor here rather than in a second walk.
+            surface=int(declared.Extensions[options.tool_api_surface]),
         )
 
 
@@ -245,6 +308,13 @@ class Contract:
     response: str
     confirm_message: str
     success_message: str
+    # The notice a mutation reports beside its success_message, "" for the
+    # responses that declare no warning field to carry one.
+    warning_message: str
+    # Whether warning_message was written at all, which is what separates a tool
+    # answering with a deliberately empty notice from one declaring no notice:
+    # the text alone reads back as "" for both.
+    warning_declared: bool
     resource_type: str
     retry_disabled: bool
     # The sentence the tool advertises to a client, and the one a failed Linode
@@ -252,6 +322,17 @@ class Contract:
     # spelled out per language until the contract could carry them.
     description: str
     error_message: str
+    # The steps of the handler that are hand-written rather than derived, named
+    # by kind. Each language implements a declared kind under a name it derives
+    # from the tool and the kind, so a hook is bound with nothing written out.
+    hooks: tuple[str, ...]
+    # Fields of the message the raw API body decodes into that the API sends as
+    # an explicit null, which the serializer drops and the answer writes back.
+    explicit_null_fields: tuple[str, ...]
+    # Members of a mutation's declared response the API's answer fills rather
+    # than the call, which is what makes the envelope itself the message the
+    # body decodes into.
+    response_body_fields: tuple[str, ...]
 
 
 def _contract_from(descriptor: Descriptor) -> Contract | None:
@@ -271,10 +352,19 @@ def _contract_from(descriptor: Descriptor) -> Contract | None:
         response=str(declared.Extensions[options.tool_response]),
         confirm_message=str(declared.Extensions[options.confirm_message]),
         success_message=str(declared.Extensions[options.success_message]),
+        warning_message=str(declared.Extensions[options.warning_message]),
+        warning_declared=declared.HasExtension(options.warning_message),
         resource_type=str(declared.Extensions[options.resource_type]),
         retry_disabled=bool(declared.Extensions[options.retry_disabled]),
         description=str(declared.Extensions[options.tool_description]),
         error_message=str(declared.Extensions[options.error_message]),
+        hooks=tuple(str(kind) for kind in declared.Extensions[options.tool_hooks]),
+        explicit_null_fields=tuple(
+            str(name) for name in declared.Extensions[options.explicit_null_fields]
+        ),
+        response_body_fields=tuple(
+            str(name) for name in declared.Extensions[options.response_body_fields]
+        ),
     )
 
 
@@ -358,6 +448,85 @@ def response_descriptor(tool: str) -> Descriptor:
         msg = f"tool {tool} names response {response}, which is not generated"
         raise RouteError(msg)
     return descriptor
+
+
+def echo_argument(member: FieldDescriptor) -> str:
+    """The tool argument one response member is filled from.
+
+    A member is resolved by its own name unless it declares echo_argument,
+    which is for the members the API spells differently than the tool spells
+    its argument. Both renderer arms read the same declaration, so a generated
+    handler and this reader agree on which value fills which member.
+    """
+    declared = str(member.GetOptions().Extensions[_options().echo_argument])
+
+    return declared or str(member.name)
+
+
+class ListShape(Enum):
+    """The JSON arrangement a list route answers with.
+
+    Nearly every Linode collection arrives as the page envelope, which is why
+    an undeclared route reads as DATA. The others are invisible from the
+    response message, so a reader that assumed the page for all of them would
+    answer a populated collection as an empty one and report success.
+    """
+
+    DATA = "data"
+    REQUIRED_DATA = "required_data"
+    KEYED = "keyed"
+    BARE = "bare"
+    SINGLETON = "singleton"
+    MARKER = "marker"
+
+
+@dataclass(frozen=True)
+class ElementLift:
+    """One element member the route nests somewhere else in the element body.
+
+    The firewall history's version sits inside its rules object, and the shared
+    rules message declares no version, so without the hoist the element answers
+    with the zero the decode left there.
+    """
+
+    member: str
+    source: str
+
+
+@dataclass(frozen=True)
+class ListEnvelope:
+    """One tool's declared list shape, the member KEYED names, and the hoists."""
+
+    shape: ListShape = ListShape.DATA
+    member: str = ""
+    lift: tuple[ElementLift, ...] = ()
+
+
+_LIST_SHAPES = {
+    1: ListShape.DATA,
+    2: ListShape.REQUIRED_DATA,
+    3: ListShape.KEYED,
+    4: ListShape.BARE,
+    5: ListShape.SINGLETON,
+    6: ListShape.MARKER,
+}
+
+
+@cache
+def list_envelope_for(tool: str) -> ListEnvelope:
+    """The shape the named tool's list route replies with.
+
+    Read from the contract rather than passed in at each call site, so one
+    caller cannot decode a route differently from another. Go's
+    linoderoute.ListEnvelopeFor answers the same question off the same option.
+    """
+    declared = input_descriptor(tool).GetOptions().Extensions[_options().list_envelope]
+    shape = _LIST_SHAPES.get(int(declared.shape), ListShape.DATA)
+    lift = tuple(
+        ElementLift(member=str(entry.member), source=str(entry.source))
+        for entry in declared.lift
+    )
+    return ListEnvelope(shape=shape, member=str(declared.member), lift=lift)
 
 
 @dataclass(frozen=True)
@@ -532,8 +701,15 @@ def validate() -> None:
 
     A slot list that disagrees with its template is not a failure this can
     have: slots are read off the template itself.
+
+    A surface this build cannot address is one it can have, so every declared
+    route resolves its segment here rather than failing at the one call that
+    needed it.
     """
     validate_declarations(_declarations())
+
+    for route in all_routes():
+        surface_segment(route.surface)
 
 
 def validate_registered(registered: Iterable[str]) -> None:

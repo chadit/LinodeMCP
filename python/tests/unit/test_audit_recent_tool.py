@@ -13,11 +13,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from linodemcp.audit import Capability, Event, Mode, Status
-from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_recent import (
+from linodemcp.config import Config
+from linodemcp.gentools import (
     create_linode_audit_recent_tool,
     handle_linode_audit_recent,
 )
+from linodemcp.profiles import Capability as ProfileCapability
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -90,7 +91,7 @@ async def test_returns_events_meta_excluded(
     body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
-    result = await handle_linode_audit_recent({})
+    result = await handle_linode_audit_recent({}, Config())
     payload = json.loads(result[0].text)
 
     assert payload["count"] == 2, "meta event excluded by default leaves two"
@@ -103,8 +104,14 @@ async def test_returns_events_meta_excluded(
 
 
 async def test_invalid_since_returns_error() -> None:
-    """A malformed since surfaces an error message naming the parameter."""
-    result = await handle_linode_audit_recent({"since": "not-a-timestamp"})
+    """A malformed since surfaces an Error: result naming the parameter.
+
+    The shape is pinned rather than only the wording: the hand-written handler
+    answered a plain TextContent here, and Go's answered a tool-result error,
+    so nothing but this would catch the two drifting apart again.
+    """
+    result = await handle_linode_audit_recent({"since": "not-a-timestamp"}, Config())
 
     assert len(result) == 1
+    assert result[0].text.startswith("Error: ")
     assert "since" in result[0].text, "error should name the bad parameter"

@@ -230,10 +230,7 @@ def test_main_succeeds_after_staleness_verification(
     def load_spec(_path: str | None) -> dict[str, Any]:
         return {"info": {"version": "4.229.1"}}
 
-    def go_hand_lists(_path: str | None) -> dict[str, set[str]]:
-        return {}
-
-    def hand_list_diffs(_doc: dict[str, Any], _lists: dict[str, set[str]]) -> list[str]:
+    def hand_list_diffs(_doc: dict[str, Any]) -> list[str]:
         return []
 
     commits = json.dumps(
@@ -243,7 +240,6 @@ def test_main_succeeds_after_staleness_verification(
     monkeypatch.setattr(sync_enums, "proto_enums", dict)
     monkeypatch.setattr(sync_enums, "ENUM_SPEC_MAP", {})
     monkeypatch.setattr(sync_enums, "load_spec", load_spec)
-    monkeypatch.setattr(sync_enums, "go_hand_lists", go_hand_lists)
     monkeypatch.setattr(sync_enums, "hand_list_diffs", hand_list_diffs)
     monkeypatch.setattr(sync_enums, "read_baseline", set)
 
@@ -258,15 +254,11 @@ def test_main_fails_closed_when_staleness_verification_fails(
     def load_spec(_path: str | None) -> dict[str, Any]:
         return {"info": {"version": "4.229.1"}}
 
-    def go_hand_lists(_path: str | None) -> dict[str, set[str]]:
-        return {}
-
-    def hand_list_diffs(_doc: dict[str, Any], _lists: dict[str, set[str]]) -> list[str]:
+    def hand_list_diffs(_doc: dict[str, Any]) -> list[str]:
         return []
 
     monkeypatch.setattr(sync_enums, "proto_enums", dict)
     monkeypatch.setattr(sync_enums, "load_spec", load_spec)
-    monkeypatch.setattr(sync_enums, "go_hand_lists", go_hand_lists)
     monkeypatch.setattr(sync_enums, "hand_list_diffs", hand_list_diffs)
 
     def fail(_doc: dict[str, Any]) -> str:
@@ -285,10 +277,7 @@ def test_update_baseline_fails_closed_before_write(
     def load_spec(_path: str | None) -> dict[str, Any]:
         return {"info": {"version": "4.229.1"}}
 
-    def go_hand_lists(_path: str | None) -> dict[str, set[str]]:
-        return {}
-
-    def hand_list_diffs(_doc: dict[str, Any], _lists: dict[str, set[str]]) -> list[str]:
+    def hand_list_diffs(_doc: dict[str, Any]) -> list[str]:
         return []
 
     baseline = tmp_path / "enum-baseline.txt"
@@ -296,7 +285,6 @@ def test_update_baseline_fails_closed_before_write(
     monkeypatch.setattr(sync_enums, "BASELINE", baseline)
     monkeypatch.setattr(sync_enums, "proto_enums", dict)
     monkeypatch.setattr(sync_enums, "load_spec", load_spec)
-    monkeypatch.setattr(sync_enums, "go_hand_lists", go_hand_lists)
     monkeypatch.setattr(sync_enums, "hand_list_diffs", hand_list_diffs)
 
     commits = json.dumps(

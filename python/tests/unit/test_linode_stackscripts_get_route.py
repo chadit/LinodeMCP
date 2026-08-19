@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from linodemcp.linode import Client, NetworkError, RetryableClient, StackScript
-from linodemcp.profiles import Capability
-from linodemcp.tools.linode_stackscripts import (
+from linodemcp.gentools import (
     create_linode_stackscript_get_tool,
     handle_linode_stackscript_get,
 )
+from linodemcp.linode import Client, NetworkError, RetryableClient, StackScript
+from linodemcp.profiles import Capability
 
 
 def _stackscript_payload(stackscript_id: int = 123) -> dict[str, Any]:
@@ -33,6 +33,7 @@ def _stackscript_payload(stackscript_id: int = 123) -> dict[str, Any]:
         "updated": "2024-01-15T12:00:00",
         "script": "#!/bin/bash",
         "user_defined_fields": [],
+        "rev_note": "first cut",
     }
 
 
@@ -147,6 +148,7 @@ async def test_handle_linode_stackscript_get_success(
         "deployments_active": 5,
         "is_public": False,
         "mine": True,
+        "rev_note": "first cut",
     }
     mock_linode_client.route_raw.assert_awaited_once_with("linode_stackscript_get", 123)
 

@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from linodemcp.linode import Instance, parse_instance
-from linodemcp.tools.linode_instance_write import handle_linode_instance_delete
+from linodemcp.gentools import handle_linode_instance_delete
 from linodemcp.twostage import reset_plan_store, set_plan_store
 from linodemcp.twostage.store import PlanStore
 
@@ -27,15 +26,17 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def stub_instance_walk(mock_linode_client: AsyncMock) -> None:
-    """The plan-time dependency walk lists volumes and instance IPs. Stub both
-    to empty so the walk runs cleanly; production fetches them from the API.
+    """Stub the sub-fetches the plan-time dependency walk makes so the walk
+    runs cleanly; production fetches them from the API.
     """
-    mock_linode_client.list_volumes.return_value = []
+    mock_linode_client.list_instance_volumes.return_value = {"data": []}
     mock_linode_client.list_instance_ips.return_value = {"ipv4": {"public": []}}
+    mock_linode_client.list_instance_firewalls.return_value = {"data": []}
 
 
-def _instance_state(status: str = "running") -> Instance:
-    return parse_instance({"id": 123, "label": "web-prod-01", "status": status})
+def _instance_state(status: str = "running") -> dict[str, Any]:
+    """The body the declared read answers with, which is what a plan hashes."""
+    return {"id": 123, "label": "web-prod-01", "status": status}
 
 
 async def _make_plan(cfg: Config) -> str:
@@ -52,7 +53,7 @@ async def _make_plan(cfg: Config) -> str:
 async def test_plan_then_apply(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = _instance_state()
+    mock_linode_client.route_raw.return_value = _instance_state()
 
     store = PlanStore()
     token = set_plan_store(store)
@@ -63,14 +64,16 @@ async def test_plan_then_apply(
         body = json.loads(plan_result[0].text)
         plan_id = body["plan_id"]
         assert body["would_execute"]["method"] == "DELETE"
-        mock_linode_client.delete_instance.assert_not_awaited()
+        mock_linode_client.route_call.assert_not_awaited()
         assert await store.length() == 1
 
         apply_result = await handle_linode_instance_delete(
             {"instance_id": 123, "mode": "apply", "plan_id": plan_id}, sample_config
         )
         assert "removed successfully" in apply_result[0].text
-        mock_linode_client.delete_instance.assert_awaited_once()
+        mock_linode_client.route_call.assert_awaited_once_with(
+            "linode_instance_delete", 123, retry=False
+        )
         assert await store.length() == 0
 
         again = await handle_linode_instance_delete(
@@ -84,14 +87,14 @@ async def test_plan_then_apply(
 async def test_apply_drift(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = _instance_state("running")
+    mock_linode_client.route_raw.return_value = _instance_state("running")
 
     store = PlanStore()
     token = set_plan_store(store)
     try:
         plan_id = await _make_plan(sample_config)
 
-        mock_linode_client.get_instance.return_value = _instance_state("offline")
+        mock_linode_client.route_raw.return_value = _instance_state("offline")
 
         result = await handle_linode_instance_delete(
             {"instance_id": 123, "mode": "apply", "plan_id": plan_id}, sample_config
@@ -100,7 +103,7 @@ async def test_apply_drift(
         assert "PLAN_DRIFT_DETECTED" in drift_text
         # Only status moved (running -> offline); the refusal must name it.
         assert "changed fields: status" in drift_text
-        mock_linode_client.delete_instance.assert_not_awaited()
+        mock_linode_client.route_call.assert_not_awaited()
     finally:
         reset_plan_store(token)
 
@@ -109,8 +112,8 @@ async def test_apply_ignores_cosmetic_drift(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
     state = _instance_state()
-    state.updated = "2026-06-01T00:00:00"
-    mock_linode_client.get_instance.return_value = state
+    state["updated"] = "2026-06-01T00:00:00"
+    mock_linode_client.route_raw.return_value = state
 
     store = PlanStore()
     token = set_plan_store(store)
@@ -118,14 +121,16 @@ async def test_apply_ignores_cosmetic_drift(
         plan_id = await _make_plan(sample_config)
 
         drifted = _instance_state()
-        drifted.updated = "2026-06-08T12:34:56"
-        mock_linode_client.get_instance.return_value = drifted
+        drifted["updated"] = "2026-06-08T12:34:56"
+        mock_linode_client.route_raw.return_value = drifted
 
         result = await handle_linode_instance_delete(
             {"instance_id": 123, "mode": "apply", "plan_id": plan_id}, sample_config
         )
         assert "removed successfully" in result[0].text
-        mock_linode_client.delete_instance.assert_awaited_once()
+        mock_linode_client.route_call.assert_awaited_once_with(
+            "linode_instance_delete", 123, retry=False
+        )
     finally:
         reset_plan_store(token)
 
@@ -133,7 +138,7 @@ async def test_apply_ignores_cosmetic_drift(
 async def test_apply_unknown_plan(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = _instance_state()
+    mock_linode_client.route_raw.return_value = _instance_state()
 
     store = PlanStore()
     token = set_plan_store(store)
@@ -143,7 +148,7 @@ async def test_apply_unknown_plan(
             sample_config,
         )
         assert "PLAN_NOT_FOUND" in result[0].text
-        mock_linode_client.delete_instance.assert_not_awaited()
+        mock_linode_client.route_call.assert_not_awaited()
     finally:
         reset_plan_store(token)
 
@@ -151,7 +156,7 @@ async def test_apply_unknown_plan(
 async def test_apply_expired(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = _instance_state()
+    mock_linode_client.route_raw.return_value = _instance_state()
 
     current = datetime.now(UTC)
     store = PlanStore(now=lambda: current)
@@ -165,7 +170,7 @@ async def test_apply_expired(
             {"instance_id": 123, "mode": "apply", "plan_id": plan_id}, sample_config
         )
         assert "PLAN_EXPIRED" in result[0].text
-        mock_linode_client.delete_instance.assert_not_awaited()
+        mock_linode_client.route_call.assert_not_awaited()
     finally:
         reset_plan_store(token)
 
@@ -173,7 +178,7 @@ async def test_apply_expired(
 async def test_apply_args_mismatch(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = _instance_state()
+    mock_linode_client.route_raw.return_value = _instance_state()
 
     store = PlanStore()
     token = set_plan_store(store)
@@ -184,7 +189,7 @@ async def test_apply_args_mismatch(
             {"instance_id": 999, "mode": "apply", "plan_id": plan_id}, sample_config
         )
         assert "PLAN_ARGS_MISMATCH" in result[0].text
-        mock_linode_client.delete_instance.assert_not_awaited()
+        mock_linode_client.route_call.assert_not_awaited()
     finally:
         reset_plan_store(token)
 
@@ -194,7 +199,7 @@ async def test_plan_fetch_error_returns_error_and_stores_no_plan(
 ) -> None:
     # A failed state fetch during plan must surface an error and leave nothing
     # to apply. ValueError is one of the fetch errors the plan path catches.
-    mock_linode_client.get_instance.side_effect = ValueError("boom")
+    mock_linode_client.route_raw.side_effect = ValueError("boom")
 
     store = PlanStore()
     token = set_plan_store(store)
@@ -204,7 +209,7 @@ async def test_plan_fetch_error_returns_error_and_stores_no_plan(
         )
         assert "Failed to fetch state for plan" in result[0].text
         assert await store.length() == 0
-        mock_linode_client.delete_instance.assert_not_awaited()
+        mock_linode_client.route_call.assert_not_awaited()
     finally:
         reset_plan_store(token)
 
@@ -214,7 +219,7 @@ async def test_plan_includes_dependency_walk(
 ) -> None:
     # A plan reads like a dry-run preview: the body carries the dependency
     # walk's output (a released public IP here), not just the state hash.
-    mock_linode_client.get_instance.return_value = _instance_state()
+    mock_linode_client.route_raw.return_value = _instance_state()
     mock_linode_client.list_instance_ips.return_value = {
         "ipv4": {"public": [{"address": "192.0.2.7"}]}
     }

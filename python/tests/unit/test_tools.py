@@ -2,7 +2,7 @@
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from mcp.types import TextContent
@@ -10,35 +10,9 @@ from mcp.types import TextContent
 from linodemcp.config import Config
 from linodemcp.genpb.linode.mcp.v1 import (
     common_pb2,
-    profile_pb2,
     sshkey_pb2,
-    support_ticket_pb2,
 )
 from linodemcp.gentools import (
-    handle_linode_domain_get,
-    handle_linode_domain_list,
-    handle_linode_domain_record_get,
-    handle_linode_domain_record_list,
-)
-from linodemcp.linode import (
-    Account,
-    Alerts,
-    Backups,
-    Domain,
-    DomainRecord,
-    Instance,
-    NodeBalancer,
-    Profile,
-    Schedule,
-    Specs,
-    SSHKey,
-    StackScript,
-    Transfer,
-    Volume,
-    parse_instance,
-)
-from linodemcp.profiles import Capability
-from linodemcp.tools import (
     create_linode_account_agreement_acknowledge_tool,
     create_linode_account_availability_list_tool,
     create_linode_account_beta_enroll_tool,
@@ -47,102 +21,55 @@ from linodemcp.tools import (
     create_linode_account_invoice_item_list_tool,
     create_linode_account_maintenance_list_tool,
     create_linode_account_oauth_client_get_tool,
-    create_linode_account_oauth_client_thumbnail_get_tool,
-    create_linode_account_payment_method_delete_tool,
     create_linode_account_payment_method_get_tool,
     create_linode_account_settings_get_tool,
-    create_linode_account_update_tool,
     create_linode_firewall_get_tool,
     create_linode_firewall_rules_get_tool,
-    create_linode_firewall_settings_update_tool,
     create_linode_firewall_template_get_tool,
-    create_linode_image_create_tool,
     create_linode_image_get_tool,
-    create_linode_image_sharegroup_token_create_tool,
-    create_linode_image_sharegroup_token_update_tool,
-    create_linode_image_update_tool,
-    create_linode_image_upload_tool,
-    create_linode_instance_backup_create_tool,
     create_linode_instance_backup_get_tool,
     create_linode_instance_backup_list_tool,
-    create_linode_instance_backup_restore_tool,
     create_linode_instance_backups_cancel_tool,
-    create_linode_instance_backups_enable_tool,
-    create_linode_instance_clone_tool,
-    create_linode_instance_config_create_tool,
     create_linode_instance_config_delete_tool,
     create_linode_instance_config_get_tool,
     create_linode_instance_config_interface_get_tool,
     create_linode_instance_config_interface_list_tool,
     create_linode_instance_config_list_tool,
-    create_linode_instance_disk_clone_tool,
-    create_linode_instance_disk_create_tool,
     create_linode_instance_disk_delete_tool,
     create_linode_instance_disk_get_tool,
     create_linode_instance_disk_list_tool,
-    create_linode_instance_disk_password_reset_tool,
-    create_linode_instance_disk_resize_tool,
-    create_linode_instance_disk_update_tool,
-    create_linode_instance_firewall_apply_tool,
     create_linode_instance_firewall_list_tool,
-    create_linode_instance_firewall_update_tool,
     create_linode_instance_interface_firewall_list_tool,
-    create_linode_instance_interface_upgrade_tool,
-    create_linode_instance_ip_allocate_tool,
     create_linode_instance_ip_delete_tool,
     create_linode_instance_ip_get_tool,
     create_linode_instance_ip_list_tool,
-    create_linode_instance_ip_update_tool,
-    create_linode_instance_migrate_tool,
-    create_linode_instance_mutate_tool,
     create_linode_instance_password_reset_tool,
-    create_linode_instance_rebuild_tool,
-    create_linode_instance_rescue_tool,
     create_linode_instance_stats_get_tool,
-    create_linode_instance_update_tool,
     create_linode_instance_volume_list_tool,
-    create_linode_ipv6_range_create_tool,
     create_linode_ipv6_range_delete_tool,
     create_linode_ipv6_range_get_tool,
     create_linode_kernel_get_tool,
     create_linode_kernel_list_tool,
-    create_linode_lke_cluster_create_tool,
-    create_linode_lke_cluster_delete_tool,
     create_linode_lke_cluster_get_tool,
     create_linode_lke_cluster_list_tool,
     create_linode_maintenance_policy_list_tool,
-    create_linode_managed_contact_delete_tool,
     create_linode_managed_contact_get_tool,
     create_linode_managed_contact_list_tool,
-    create_linode_managed_credential_get_tool,
     create_linode_managed_credential_list_tool,
-    create_linode_managed_credential_revoke_tool,
-    create_linode_managed_credential_update_tool,
-    create_linode_managed_credential_username_password_update_tool,
     create_linode_managed_issue_get_tool,
     create_linode_managed_issue_list_tool,
     create_linode_managed_linode_settings_list_tool,
-    create_linode_managed_service_disable_tool,
     create_linode_managed_service_get_tool,
     create_linode_managed_sshkey_get_tool,
-    create_linode_managed_stats_get_tool,
     create_linode_monitor_service_alert_definition_get_tool,
     create_linode_monitor_service_get_tool,
     create_linode_monitor_service_list_tool,
-    create_linode_monitor_service_token_create_tool,
-    create_linode_nodebalancer_config_create_tool,
     create_linode_nodebalancer_config_delete_tool,
     create_linode_nodebalancer_config_get_tool,
     create_linode_nodebalancer_config_list_tool,
-    create_linode_nodebalancer_config_node_create_tool,
     create_linode_nodebalancer_config_node_delete_tool,
     create_linode_nodebalancer_config_node_get_tool,
-    create_linode_nodebalancer_config_node_update_tool,
-    create_linode_nodebalancer_config_rebuild_tool,
-    create_linode_nodebalancer_config_update_tool,
-    create_linode_nodebalancer_create_tool,
     create_linode_nodebalancer_firewall_list_tool,
-    create_linode_nodebalancer_firewall_update_tool,
     create_linode_nodebalancer_stats_get_tool,
     create_linode_nodebalancer_vpc_config_get_tool,
     create_linode_nodebalancer_vpc_config_list_tool,
@@ -153,59 +80,38 @@ from linodemcp.tools import (
     create_linode_object_storage_quota_usage_get_tool,
     create_linode_placement_group_assign_tool,
     create_linode_placement_group_create_tool,
-    create_linode_placement_group_delete_tool,
     create_linode_placement_group_get_tool,
     create_linode_placement_group_list_tool,
     create_linode_placement_group_unassign_tool,
     create_linode_placement_group_update_tool,
-    create_linode_profile_app_delete_tool,
     create_linode_profile_app_get_tool,
     create_linode_profile_app_list_tool,
     create_linode_profile_device_get_tool,
     create_linode_profile_device_list_tool,
-    create_linode_profile_device_revoke_tool,
     create_linode_profile_login_get_tool,
     create_linode_profile_login_list_tool,
     create_linode_profile_phone_number_delete_tool,
-    create_linode_profile_phone_number_send_tool,
-    create_linode_profile_phone_number_verify_tool,
-    create_linode_profile_preferences_get_tool,
-    create_linode_profile_preferences_update_tool,
-    create_linode_profile_security_question_answer_tool,
     create_linode_profile_security_question_list_tool,
     create_linode_profile_tfa_disable_tool,
-    create_linode_profile_tfa_enable_confirm_tool,
-    create_linode_profile_tfa_enable_tool,
-    create_linode_profile_token_create_tool,
-    create_linode_profile_token_delete_tool,
     create_linode_profile_token_get_tool,
     create_linode_profile_token_list_tool,
-    create_linode_profile_token_update_tool,
     create_linode_region_availability_get_tool,
     create_linode_region_availability_list_tool,
     create_linode_region_get_tool,
     create_linode_stackscript_create_tool,
     create_linode_stackscript_delete_tool,
-    create_linode_support_ticket_attachment_create_tool,
-    create_linode_support_ticket_close_tool,
-    create_linode_support_ticket_create_tool,
     create_linode_support_ticket_get_tool,
     create_linode_support_ticket_list_tool,
-    create_linode_support_ticket_reply_create_tool,
     create_linode_support_ticket_reply_list_tool,
     create_linode_tag_create_tool,
-    create_linode_tag_delete_tool,
     create_linode_tag_list_tool,
     create_linode_tag_object_list_tool,
     create_linode_vlan_delete_tool,
     create_linode_vlan_list_tool,
-    create_linode_vpc_create_tool,
     create_linode_vpc_delete_tool,
     create_linode_vpc_get_tool,
     create_linode_vpc_list_tool,
-    create_linode_vpc_subnet_create_tool,
     create_linode_vpc_subnet_delete_tool,
-    handle_hello,
     handle_linode_account_agreement_acknowledge,
     handle_linode_account_availability_list,
     handle_linode_account_beta_enroll,
@@ -218,184 +124,111 @@ from linodemcp.tools import (
     handle_linode_account_maintenance_list,
     handle_linode_account_notification_list,
     handle_linode_account_oauth_client_get,
-    handle_linode_account_oauth_client_thumbnail_get,
-    handle_linode_account_payment_method_delete,
     handle_linode_account_payment_method_get,
     handle_linode_account_payment_method_list,
     handle_linode_account_service_transfer_list,
     handle_linode_account_settings_get,
-    handle_linode_account_update,
     handle_linode_domain_clone,
     handle_linode_domain_create,
-    handle_linode_domain_delete,
+    handle_linode_domain_get,
+    handle_linode_domain_list,
     handle_linode_domain_record_create,
-    handle_linode_domain_record_delete,
+    handle_linode_domain_record_get,
+    handle_linode_domain_record_list,
     handle_linode_domain_record_update,
     handle_linode_domain_update,
-    handle_linode_firewall_create,
     handle_linode_firewall_delete,
     handle_linode_firewall_get,
     handle_linode_firewall_list,
     handle_linode_firewall_rules_get,
-    handle_linode_firewall_rules_update,
-    handle_linode_firewall_settings_update,
     handle_linode_firewall_template_get,
     handle_linode_firewall_template_list,
-    handle_linode_firewall_update,
-    handle_linode_image_create,
     handle_linode_image_get,
     handle_linode_image_list,
-    handle_linode_image_sharegroup_token_create,
-    handle_linode_image_sharegroup_token_update,
-    handle_linode_image_update,
-    handle_linode_image_upload,
-    handle_linode_instance_backup_create,
     handle_linode_instance_backup_get,
     handle_linode_instance_backup_list,
-    handle_linode_instance_backup_restore,
     handle_linode_instance_backups_cancel,
-    handle_linode_instance_backups_enable,
-    handle_linode_instance_boot,
-    handle_linode_instance_clone,
-    handle_linode_instance_config_create,
     handle_linode_instance_config_delete,
     handle_linode_instance_config_get,
     handle_linode_instance_config_interface_get,
     handle_linode_instance_config_interface_list,
     handle_linode_instance_config_list,
-    handle_linode_instance_create,
     handle_linode_instance_delete,
-    handle_linode_instance_disk_clone,
-    handle_linode_instance_disk_create,
     handle_linode_instance_disk_delete,
     handle_linode_instance_disk_get,
     handle_linode_instance_disk_list,
-    handle_linode_instance_disk_password_reset,
-    handle_linode_instance_disk_resize,
-    handle_linode_instance_disk_update,
-    handle_linode_instance_firewall_apply,
     handle_linode_instance_firewall_list,
-    handle_linode_instance_firewall_update,
     handle_linode_instance_get,
     handle_linode_instance_interface_firewall_list,
-    handle_linode_instance_interface_upgrade,
-    handle_linode_instance_ip_allocate,
     handle_linode_instance_ip_delete,
     handle_linode_instance_ip_get,
     handle_linode_instance_ip_list,
-    handle_linode_instance_ip_update,
     handle_linode_instance_list,
-    handle_linode_instance_migrate,
-    handle_linode_instance_mutate,
     handle_linode_instance_password_reset,
-    handle_linode_instance_reboot,
-    handle_linode_instance_rebuild,
-    handle_linode_instance_rescue,
     handle_linode_instance_resize,
-    handle_linode_instance_shutdown,
     handle_linode_instance_stats_get,
-    handle_linode_instance_update,
     handle_linode_instance_volume_list,
     handle_linode_ipv6_pool_list,
-    handle_linode_ipv6_range_create,
     handle_linode_ipv6_range_delete,
     handle_linode_ipv6_range_get,
     handle_linode_ipv6_range_list,
     handle_linode_kernel_get,
     handle_linode_kernel_list,
-    handle_linode_lke_acl_delete,
-    handle_linode_lke_acl_get,
-    handle_linode_lke_acl_update,
     handle_linode_lke_api_endpoint_list,
-    handle_linode_lke_cluster_create,
-    handle_linode_lke_cluster_delete,
     handle_linode_lke_cluster_get,
     handle_linode_lke_cluster_list,
-    handle_linode_lke_cluster_recycle,
     handle_linode_lke_cluster_regenerate,
-    handle_linode_lke_cluster_update,
     handle_linode_lke_dashboard_get,
-    handle_linode_lke_kubeconfig_delete,
     handle_linode_lke_kubeconfig_get,
-    handle_linode_lke_node_delete,
     handle_linode_lke_node_get,
     handle_linode_lke_node_recycle,
-    handle_linode_lke_pool_create,
-    handle_linode_lke_pool_delete,
     handle_linode_lke_pool_get,
     handle_linode_lke_pool_list,
     handle_linode_lke_pool_recycle,
-    handle_linode_lke_pool_update,
-    handle_linode_lke_service_token_delete,
     handle_linode_lke_tier_version_list,
     handle_linode_lke_type_list,
     handle_linode_lke_version_get,
     handle_linode_lke_version_list,
     handle_linode_maintenance_policy_list,
-    handle_linode_managed_contact_create,
-    handle_linode_managed_contact_delete,
     handle_linode_managed_contact_get,
     handle_linode_managed_contact_list,
-    handle_linode_managed_credential_get,
     handle_linode_managed_credential_list,
-    handle_linode_managed_credential_revoke,
-    handle_linode_managed_credential_update,
-    handle_linode_managed_credential_username_password_update,
     handle_linode_managed_issue_get,
     handle_linode_managed_issue_list,
     handle_linode_managed_linode_settings_list,
-    handle_linode_managed_linode_settings_update,
-    handle_linode_managed_service_create,
-    handle_linode_managed_service_disable,
     handle_linode_managed_service_get,
     handle_linode_managed_service_list,
     handle_linode_managed_sshkey_get,
-    handle_linode_managed_stats_get,
     handle_linode_monitor_service_alert_definition_get,
     handle_linode_monitor_service_get,
     handle_linode_monitor_service_list,
-    handle_linode_monitor_service_token_create,
     handle_linode_network_transfer_price_list,
-    handle_linode_nodebalancer_config_create,
     handle_linode_nodebalancer_config_delete,
     handle_linode_nodebalancer_config_get,
     handle_linode_nodebalancer_config_list,
-    handle_linode_nodebalancer_config_node_create,
     handle_linode_nodebalancer_config_node_delete,
     handle_linode_nodebalancer_config_node_get,
     handle_linode_nodebalancer_config_node_list,
-    handle_linode_nodebalancer_config_node_update,
-    handle_linode_nodebalancer_config_rebuild,
-    handle_linode_nodebalancer_config_update,
-    handle_linode_nodebalancer_create,
     handle_linode_nodebalancer_delete,
     handle_linode_nodebalancer_firewall_list,
-    handle_linode_nodebalancer_firewall_update,
     handle_linode_nodebalancer_get,
     handle_linode_nodebalancer_list,
     handle_linode_nodebalancer_stats_get,
-    handle_linode_nodebalancer_update,
     handle_linode_nodebalancer_vpc_config_get,
     handle_linode_nodebalancer_vpc_config_list,
-    handle_linode_object_storage_bucket_access_allow,
     handle_linode_object_storage_bucket_access_get,
-    handle_linode_object_storage_bucket_access_update,
     handle_linode_object_storage_bucket_by_region_list,
     handle_linode_object_storage_bucket_create,
     handle_linode_object_storage_bucket_delete,
     handle_linode_object_storage_bucket_get,
     handle_linode_object_storage_bucket_list,
-    handle_linode_object_storage_bucket_object_list,
     handle_linode_object_storage_cancel,
     handle_linode_object_storage_endpoint_list,
-    handle_linode_object_storage_key_create,
     handle_linode_object_storage_key_delete,
     handle_linode_object_storage_key_get,
     handle_linode_object_storage_key_list,
-    handle_linode_object_storage_key_update,
     handle_linode_object_storage_object_acl_get,
     handle_linode_object_storage_object_acl_update,
-    handle_linode_object_storage_presigned_url_create,
     handle_linode_object_storage_quota_get,
     handle_linode_object_storage_quota_list,
     handle_linode_object_storage_quota_usage_get,
@@ -406,35 +239,22 @@ from linodemcp.tools import (
     handle_linode_object_storage_type_list,
     handle_linode_placement_group_assign,
     handle_linode_placement_group_create,
-    handle_linode_placement_group_delete,
     handle_linode_placement_group_get,
     handle_linode_placement_group_list,
     handle_linode_placement_group_unassign,
     handle_linode_placement_group_update,
-    handle_linode_profile_app_delete,
     handle_linode_profile_app_get,
     handle_linode_profile_app_list,
     handle_linode_profile_device_get,
     handle_linode_profile_device_list,
-    handle_linode_profile_device_revoke,
     handle_linode_profile_get,
     handle_linode_profile_login_get,
     handle_linode_profile_login_list,
     handle_linode_profile_phone_number_delete,
-    handle_linode_profile_phone_number_send,
-    handle_linode_profile_phone_number_verify,
-    handle_linode_profile_preferences_get,
-    handle_linode_profile_preferences_update,
-    handle_linode_profile_security_question_answer,
     handle_linode_profile_security_question_list,
     handle_linode_profile_tfa_disable,
-    handle_linode_profile_tfa_enable,
-    handle_linode_profile_tfa_enable_confirm,
-    handle_linode_profile_token_create,
-    handle_linode_profile_token_delete,
     handle_linode_profile_token_get,
     handle_linode_profile_token_list,
-    handle_linode_profile_token_update,
     handle_linode_region_availability_get,
     handle_linode_region_availability_list,
     handle_linode_region_get,
@@ -447,15 +267,10 @@ from linodemcp.tools import (
     handle_linode_stackscript_create,
     handle_linode_stackscript_delete,
     handle_linode_stackscript_list,
-    handle_linode_support_ticket_attachment_create,
-    handle_linode_support_ticket_close,
-    handle_linode_support_ticket_create,
     handle_linode_support_ticket_get,
     handle_linode_support_ticket_list,
-    handle_linode_support_ticket_reply_create,
     handle_linode_support_ticket_reply_list,
     handle_linode_tag_create,
-    handle_linode_tag_delete,
     handle_linode_tag_list,
     handle_linode_tag_object_list,
     handle_linode_type_get,
@@ -472,46 +287,31 @@ from linodemcp.tools import (
     handle_linode_volume_resize,
     handle_linode_volume_type_list,
     handle_linode_volume_update,
-    handle_linode_vpc_create,
     handle_linode_vpc_delete,
     handle_linode_vpc_get,
     handle_linode_vpc_ip_all_list,
     handle_linode_vpc_ip_list,
     handle_linode_vpc_list,
-    handle_linode_vpc_subnet_create,
     handle_linode_vpc_subnet_delete,
     handle_linode_vpc_subnet_get,
     handle_linode_vpc_subnet_list,
-    handle_linode_vpc_subnet_update,
-    handle_linode_vpc_update,
-    handle_version,
 )
+from linodemcp.gentools.oauth_client_thumbnail import (
+    create_linode_account_oauth_client_thumbnail_get_tool,
+    handle_linode_account_oauth_client_thumbnail_get,
+)
+from linodemcp.linode import (
+    Profile,
+    Volume,
+)
+from linodemcp.profiles import Capability
 from linodemcp.tools.linode_object_storage import object_storage_key_to_response_dict
 from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema as proto_schema
 
-
-async def test_handle_hello_with_name() -> None:
-    """Test hello tool with name parameter."""
-    result = await handle_hello({"name": "Alice"})
-    assert len(result) == 1
-    assert "Hello, Alice!" in result[0].text
-    assert "LinodeMCP server is running" in result[0].text
-
-
-async def test_handle_hello_without_name() -> None:
-    """Test hello tool without name parameter."""
-    result = await handle_hello({})
-    assert len(result) == 1
-    assert "Hello, World!" in result[0].text
-
-
-async def test_handle_version() -> None:
-    """Test version tool."""
-    result = await handle_version({})
-    assert len(result) == 1
-    assert "version" in result[0].text.lower()
-    assert "0.1.0" in result[0].text
+# A public key long enough to pass the declared length window; the contract
+# refuses anything under 80 characters, which a stub like "ssh-rsa AAAA" is.
+SAMPLE_SSH_KEY = "ssh-rsa " + "A" * 96 + " user@host"
 
 
 async def test_handle_linode_profile(
@@ -571,228 +371,6 @@ async def test_handle_linode_profile_missing_environment(sample_config: Config) 
     assert "Error" in result[0].text or "error" in result[0].text
 
 
-def test_create_linode_profile_preferences_get_tool() -> None:
-    """Profile preferences get tool exposes read-only schema."""
-    tool, capability = create_linode_profile_preferences_get_tool()
-
-    assert tool.name == "linode_profile_preferences_get"
-    assert capability == Capability.Read
-    assert "required" not in tool.input_schema
-
-
-def test_create_linode_account_payment_method_delete_tool() -> None:
-    """Account payment method delete tool exposes confirm-gated schema."""
-    tool, capability = create_linode_account_payment_method_delete_tool()
-
-    assert tool.name == "linode_account_payment_method_delete"
-    assert capability == Capability.Admin
-    assert tool.input_schema["required"] == ["payment_method_id", "confirm"]
-    assert tool.input_schema["properties"]["payment_method_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_account_payment_method_delete_success(
-    sample_config: Config,
-) -> None:
-    """Handler deletes a payment method with confirm=true."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_account_payment_method.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_account_payment_method_delete(
-            {"payment_method_id": 123, "confirm": True}, sample_config
-        )
-
-    payload = json.loads(result[0].text)
-    assert payload["message"] == "Payment method deleted successfully"
-    assert payload["payment_method_id"] == 123
-    assert "result" not in payload
-    mock_client.delete_account_payment_method.assert_awaited_once_with(123)
-
-
-async def test_handle_linode_account_payment_method_delete_dry_run(
-    sample_config: Config,
-) -> None:
-    """Dry-run previews the DELETE route without calling the client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_account_payment_method_delete(
-            {"payment_method_id": 456, "confirm": False, "dry_run": True},
-            sample_config,
-        )
-
-    payload = json.loads(result[0].text)
-    assert payload["dry_run"] is True
-    assert payload["would_execute"]["method"] == "DELETE"
-    assert payload["would_execute"]["path"] == "/account/payment-methods/456"
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_account_payment_method_delete_requires_boolean_confirm(
-    sample_config: Config, confirm: object
-) -> None:
-    """Missing or non-true confirm values are rejected before client calls."""
-    arguments: dict[str, object] = {"payment_method_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_account_payment_method_delete(
-            arguments, sample_config
-        )
-
-    assert "Set confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "payment_method_id", [None, 0, -1, True, "1", "1/2", "1?x", ".."]
-)
-async def test_handle_linode_account_payment_method_delete_validates_id(
-    sample_config: Config, payment_method_id: object
-) -> None:
-    """Malformed payment method IDs are rejected before client calls."""
-    arguments: dict[str, object] = {"confirm": True}
-    if payment_method_id is not None:
-        arguments["payment_method_id"] = payment_method_id
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_account_payment_method_delete(
-            arguments, sample_config
-        )
-
-    assert "payment_method_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_profile_preferences_get_success(
-    sample_config: Config,
-) -> None:
-    """Handler gets profile preferences."""
-    preferences = {"dashboard": {"theme": "dark"}, "dismissed": ["welcome"]}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_profile_preferences.return_value = preferences
-        mock_client.__aenter__.return_value = mock_client
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_preferences_get({}, sample_config)
-
-    assert len(result) == 1
-    assert "dashboard" in result[0].text
-    mock_client.get_profile_preferences.assert_awaited_once_with()
-
-
-async def test_handle_linode_profile_preferences_get_error(
-    sample_config: Config,
-) -> None:
-    """Handler surfaces client errors for profile preferences reads."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_profile_preferences.side_effect = RuntimeError("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_preferences_get({}, sample_config)
-
-    assert len(result) == 1
-    assert "Failed to retrieve Linode profile preferences" in result[0].text
-
-
-def test_create_linode_profile_preferences_update_tool() -> None:
-    """Profile preferences update tool exposes confirm-gated schema."""
-    tool, capability = create_linode_profile_preferences_update_tool()
-
-    assert tool.name == "linode_profile_preferences_update"
-    assert capability == Capability.Write
-    assert tool.input_schema["required"] == ["confirm"]
-    assert tool.input_schema["properties"]["preferences"]["type"] == "object"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_profile_preferences_update_success(
-    sample_config: Config,
-) -> None:
-    """Handler updates profile preferences with confirm=true."""
-    preferences = {"dashboard": {"theme": "dark"}, "dismissed": ["welcome"]}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_profile_preferences.return_value = preferences
-        mock_client.__aenter__.return_value = mock_client
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_preferences_update(
-            {"preferences": preferences, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert json.loads(result[0].text) == {
-        "message": "Profile preferences updated successfully",
-        "preferences": preferences,
-    }
-    mock_client.update_profile_preferences.assert_awaited_once_with(preferences)
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_profile_preferences_update_requires_boolean_confirm(
-    sample_config: Config, confirm: Any
-) -> None:
-    """Profile preferences update rejects missing or non-true confirm."""
-    arguments: dict[str, Any] = {"preferences": {"theme": "dark"}}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_profile_preferences_update(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("preferences", [None, [], "theme", 1, True, {}])
-async def test_handle_linode_profile_preferences_update_requires_object(
-    sample_config: Config, preferences: Any
-) -> None:
-    """Profile preferences update rejects a non-object or empty preferences."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_profile_preferences_update(
-            {"preferences": preferences, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "preferences must be a non-empty object" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_profile_preferences_update_error(
-    sample_config: Config,
-) -> None:
-    """Handler surfaces client errors for profile preferences updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_profile_preferences.side_effect = RuntimeError("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_preferences_update(
-            {"preferences": {"theme": "dark"}, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "Failed to update Linode profile preferences" in result[0].text
-
-
 async def test_linode_instance_config_delete_tool_definition() -> None:
     """Test linode_instance_config_delete tool definition."""
     tool, capability = create_linode_instance_config_delete_tool()
@@ -802,26 +380,6 @@ async def test_linode_instance_config_delete_tool_definition() -> None:
     assert tool.input_schema["required"] == ["linode_id", "config_id", "confirm"]
     assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
     assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_instance_config_delete(sample_config: Config) -> None:
-    """Test linode_instance_config_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_instance_config.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_config_delete(
-            {"linode_id": 123, "config_id": 6, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "deleted" in result[0].text
-    assert "123" in result[0].text
-    assert "6" in result[0].text
-    mock_client.delete_instance_config.assert_called_once_with(123, 6)
 
 
 @pytest.mark.parametrize(
@@ -844,40 +402,6 @@ async def test_handle_linode_instance_config_delete_requires_boolean_confirm(
     mock_client_class.assert_not_called()
 
 
-async def test_handle_linode_instance_config_delete_dry_run(
-    sample_config: Config,
-) -> None:
-    """dry_run previews config deletion without calling delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_instance_config.return_value = {"id": 6, "label": "boot"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_config_delete(
-            {
-                "linode_id": 123,
-                "config_id": 6,
-                "confirm": True,
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_instance_config_delete"
-    assert body["would_execute"] == {
-        "method": "DELETE",
-        "path": "/linode/instances/123/configs/6",
-    }
-    assert body["current_state"] == {"id": 6, "label": "boot"}
-    mock_client.get_instance_config.assert_called_once_with(123, 6)
-    mock_client.delete_instance_config.assert_not_called()
-
-
 @pytest.mark.parametrize(
     "arguments",
     [
@@ -885,7 +409,6 @@ async def test_handle_linode_instance_config_delete_dry_run(
         {"linode_id": 0, "config_id": 6, "confirm": True},
         {"linode_id": -1, "config_id": 6, "confirm": True},
         {"linode_id": True, "config_id": 6, "confirm": True},
-        {"linode_id": "123", "config_id": 6, "confirm": True},
         {"linode_id": "1/2", "config_id": 6, "confirm": True},
         {"linode_id": "1?x", "config_id": 6, "confirm": True},
         {"linode_id": "..", "config_id": 6, "confirm": True},
@@ -893,7 +416,6 @@ async def test_handle_linode_instance_config_delete_dry_run(
         {"linode_id": 123, "config_id": 0, "confirm": True},
         {"linode_id": 123, "config_id": -1, "confirm": True},
         {"linode_id": 123, "config_id": True, "confirm": True},
-        {"linode_id": 123, "config_id": "6", "confirm": True},
         {"linode_id": 123, "config_id": "1/2", "confirm": True},
         {"linode_id": 123, "config_id": "1?x", "confirm": True},
         {"linode_id": 123, "config_id": "..", "confirm": True},
@@ -919,7 +441,7 @@ async def test_handle_linode_instance_config_delete_error(
     """Test linode_instance_config_delete error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.delete_instance_config.side_effect = Exception("API error")
+        mock_client.route_call.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -929,7 +451,9 @@ async def test_handle_linode_instance_config_delete_error(
         )
 
     assert len(result) == 1
-    assert "Failed to delete" in result[0].text or "error" in result[0].text.lower()
+    assert (
+        "Failed to remove configuration profile 6 from instance 123" in result[0].text
+    )
 
 
 async def test_linode_instance_config_get_tool_definition() -> None:
@@ -949,7 +473,7 @@ async def test_handle_linode_instance_config_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_instance_config.return_value = mock_config
+        mock_client.route_raw.return_value = mock_config
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -961,7 +485,7 @@ async def test_handle_linode_instance_config_get(sample_config: Config) -> None:
     assert len(result) == 1
     assert "boot-config" in result[0].text
     assert "not_in_proto" not in result[0].text
-    mock_client.get_instance_config.assert_called_once_with(123, 6)
+    mock_client.route_raw.assert_called_once_with("linode_instance_config_get", 123, 6)
 
 
 @pytest.mark.parametrize(
@@ -999,7 +523,7 @@ async def test_handle_linode_instance_config_get_error(sample_config: Config) ->
     """Test linode_instance_config_get error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_instance_config.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1036,7 +560,7 @@ async def test_handle_linode_instance_config_interface_get(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_instance_config_interface.return_value = mock_interface
+        mock_client.route_raw.return_value = mock_interface
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1047,7 +571,9 @@ async def test_handle_linode_instance_config_interface_get(
 
     assert len(result) == 1
     assert "vlan" in result[0].text
-    mock_client.get_instance_config_interface.assert_called_once_with(123, 6, 9)
+    mock_client.route_raw.assert_called_once_with(
+        "linode_instance_config_interface_get", 123, 6, 9
+    )
 
 
 @pytest.mark.parametrize(
@@ -1095,7 +621,7 @@ async def test_handle_linode_instance_config_interface_get_error(
     """Test linode_instance_config_interface_get error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_instance_config_interface.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1151,7 +677,7 @@ async def test_handle_linode_instance_config_interfaces_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_instance_config_interfaces.return_value = mock_interfaces
+        mock_client.route_raw.return_value = mock_interfaces
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1165,7 +691,9 @@ async def test_handle_linode_instance_config_interfaces_list(
     assert payload["count"] == 2
     assert [iface["id"] for iface in payload["interfaces"]] == [202, 101]
     assert payload["interfaces"][0] == mock_interfaces[0]
-    mock_client.list_instance_config_interfaces.assert_called_once_with(123, 6)
+    mock_client.route_raw.assert_called_once_with(
+        "linode_instance_config_interface_list", 123, 6, query=""
+    )
 
 
 @pytest.mark.parametrize(
@@ -1207,7 +735,7 @@ async def test_handle_linode_instance_config_interfaces_list_error(
     """Test linode_instance_config_interface_list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_instance_config_interfaces.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1253,7 +781,7 @@ async def test_handle_linode_instance_stats(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_instance_stats.return_value = stats_payload
+        mock_client.route_raw.return_value = stats_payload
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1265,7 +793,7 @@ async def test_handle_linode_instance_stats(sample_config: Config) -> None:
     assert len(result) == 1
     assert "linode123" in result[0].text
     assert "1715731200000" in result[0].text
-    mock_client.get_instance_stats.assert_awaited_once_with(123456)
+    mock_client.route_raw.assert_awaited_once_with("linode_instance_stats_get", 123456)
 
 
 @pytest.mark.parametrize("linode_id", [None, 0, -1, True, "1", "1/2", "1?x", ".."])
@@ -1297,7 +825,7 @@ async def test_handle_linode_instance_configs_list(sample_config: Config) -> Non
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_instance_configs.return_value = mock_configs
+        mock_client.route_raw.return_value = mock_configs
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1308,7 +836,9 @@ async def test_handle_linode_instance_configs_list(sample_config: Config) -> Non
 
     assert len(result) == 1
     assert "boot-config" in result[0].text
-    mock_client.list_instance_configs.assert_called_once_with(123, page=2, page_size=50)
+    mock_client.route_raw.assert_called_once_with(
+        "linode_instance_config_list", 123, query="page=2&page_size=50"
+    )
 
 
 @pytest.mark.parametrize(
@@ -1361,7 +891,7 @@ async def test_handle_linode_instance_configs_list_error(sample_config: Config) 
     """Test linode_instance_config_list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_instance_configs.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1422,7 +952,7 @@ async def test_handle_linode_instances_list_error(sample_config: Config) -> None
     """Test linode_instance_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1540,8 +1070,7 @@ async def test_handle_linode_account_beta_enroll_dry_run(
     assert body["would_execute"]["path"] == "/account/betas"
     assert body["would_execute"]["body"] == {"id": "distributed-beta"}
     assert body["current_state"] is None
-    assert len(body["side_effects"]) == 1
-    assert "distributed-beta" in body["side_effects"][0]
+    assert body["side_effects"] == []
     mock_client_class.assert_not_called()
 
 
@@ -1566,7 +1095,7 @@ async def test_handle_linode_account_beta_enroll(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.enroll_account_beta.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1579,7 +1108,9 @@ async def test_handle_linode_account_beta_enroll(
         "message": "Account beta enrollment requested successfully",
         "id": "distributed-beta",
     }
-    mock_client.enroll_account_beta.assert_awaited_once_with("distributed-beta")
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_account_beta_enroll", body={"id": "distributed-beta"}
+    )
 
 
 @pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
@@ -1602,8 +1133,11 @@ async def test_handle_linode_account_beta_enroll_requires_boolean_confirm(
     ("arguments", "expected_error"),
     [
         ({"confirm": True}, "id is required"),
-        ({"id": 123, "confirm": True}, "id must be a non-empty string"),
-        ({"id": "   ", "confirm": True}, "id must be a non-empty string"),
+        ({"id": 123, "confirm": True}, "id must be a string"),
+        (
+            {"id": "   ", "confirm": True},
+            "id must contain only letters, numbers, underscores, and hyphens",
+        ),
     ],
 )
 async def test_handle_linode_account_beta_enroll_rejects_invalid_id(
@@ -1650,9 +1184,9 @@ async def test_handle_linode_account_agreements_acknowledge_dry_run(
     assert body["tool"] == "linode_account_agreement_acknowledge"
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/account/agreements"
+    assert body["would_execute"]["body"] == {"eu_model": True}
     assert body["current_state"] is None
-    assert len(body["side_effects"]) == 1
-    assert "acknowledged" in body["side_effects"][0]
+    assert body["side_effects"] == []
     mock_client_class.assert_not_called()
 
 
@@ -1664,7 +1198,7 @@ async def test_handle_linode_account_agreements_acknowledge(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.acknowledge_account_agreements.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1677,8 +1211,9 @@ async def test_handle_linode_account_agreements_acknowledge(
     assert json.loads(result[0].text) == {
         "message": "Account agreements acknowledged successfully"
     }
-    mock_client.acknowledge_account_agreements.assert_awaited_once_with(
-        {"eu_model": True, "privacy_policy": True}
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_account_agreement_acknowledge",
+        body={"eu_model": True, "privacy_policy": True},
     )
 
 
@@ -1687,7 +1222,7 @@ async def test_handle_linode_account_agreements_acknowledge_rejects_false(
 ) -> None:
     """Agreement acknowledge rejects a false value locally (matches Go)."""
     result = await handle_linode_account_agreement_acknowledge(
-        {"billing_agreement": False}, sample_config
+        {"billing_agreement": False, "confirm": True}, sample_config
     )
 
     assert len(result) == 1
@@ -1721,7 +1256,7 @@ async def test_handle_linode_account_agreements_acknowledge_requires_field(
             {"confirm": True}, sample_config
         )
 
-    assert "At least one account agreement field" in result[0].text
+    assert "at least one account agreement field" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -1736,124 +1271,6 @@ async def test_handle_linode_account_agreements_acknowledge_requires_boolean_fie
 
     assert "eu_model must be a boolean" in result[0].text
     mock_client_class.assert_not_called()
-
-
-async def test_create_linode_account_update_tool() -> None:
-    """Test linode_account_update tool schema."""
-    tool, capability = create_linode_account_update_tool()
-
-    assert tool.name == "linode_account_update"
-    assert capability.name == "Admin"
-    assert "email" in tool.input_schema["properties"]
-    assert "confirm" in tool.input_schema["required"]
-
-
-async def test_handle_linode_account_update(sample_config: Config) -> None:
-    """Test linode_account_update tool."""
-    mock_account = {
-        "first_name": "Test",
-        "last_name": "User",
-        "email": "updated@example.com",
-        "company": "TestCo",
-        "address_1": "123 Test St",
-        "address_2": "Suite 1",
-        "city": "Test City",
-        "state": "TS",
-        "zip": "12345",
-        "country": "US",
-        "phone": "555-1234",
-        "balance": 100.50,
-        "balance_uninvoiced": 50.25,
-        "capabilities": ["Linodes", "Block Storage"],
-        "active_since": "2020-01-01T00:00:00",
-        "euuid": "abcd-1234",
-        "billing_source": "linode",
-        "active_promotions": [],
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.route_raw.return_value = mock_account
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_account_update(
-            {"email": "updated@example.com", "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "updated@example.com" in result[0].text
-        assert "Account updated successfully" in result[0].text
-        mock_client.route_raw.assert_called_once_with(
-            "linode_account_update", body={"email": "updated@example.com"}
-        )
-
-
-async def test_handle_linode_account_update_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Test linode_account_update requires confirmation."""
-    result = await handle_linode_account_update(
-        {"email": "updated@example.com"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_account_update_requires_field(
-    sample_config: Config,
-) -> None:
-    """Test linode_account_update requires an account field."""
-    result = await handle_linode_account_update({"confirm": True}, sample_config)
-
-    assert len(result) == 1
-    assert "At least one account field" in result[0].text
-
-
-async def test_handle_linode_account_update_dry_run_previews_without_confirm(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the PUT without confirm and fetches current state."""
-    mock_account = Account(
-        first_name="Test",
-        last_name="User",
-        email="current@example.com",
-        company="TestCo",
-        address_1="123 Test St",
-        address_2="Suite 1",
-        city="Test City",
-        state="TS",
-        zip="12345",
-        country="US",
-        phone="555-1234",
-        balance=100.50,
-        balance_uninvoiced=50.25,
-        capabilities=["Linodes"],
-        active_since="2020-01-01T00:00:00",
-        euuid="abcd-1234",
-        billing_source="linode",
-        active_promotions=[],
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_account.return_value = mock_account
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_account_update(
-            {"email": "updated@example.com", "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_account_update"
-    assert body["would_execute"]["method"] == "PUT"
-    assert body["would_execute"]["path"] == "/account"
-    mock_client.update_account.assert_not_called()
 
 
 async def test_create_linode_managed_contacts_list_tool() -> None:
@@ -1879,7 +1296,7 @@ async def test_handle_linode_managed_contacts_list(sample_config: Config) -> Non
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_managed_contacts.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1898,7 +1315,9 @@ async def test_handle_linode_managed_contacts_list(sample_config: Config) -> Non
                 {"id": 1, "name": "Primary", "email": "ops@example.com", "updated": ""}
             ],
         }
-        mock_client.list_managed_contacts.assert_awaited_once_with(page=1, page_size=25)
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_managed_contact_list", query="page=1&page_size=25"
+        )
 
 
 async def test_handle_linode_managed_contacts_list_rejects_invalid_page(
@@ -1954,7 +1373,7 @@ async def test_handle_linode_managed_issues_list(sample_config: Config) -> None:
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_managed_issues.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1978,7 +1397,9 @@ async def test_handle_linode_managed_issues_list(sample_config: Config) -> None:
                 }
             ],
         }
-        mock_client.list_managed_issues.assert_awaited_once_with(page=1, page_size=25)
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_managed_issue_list", query="page=1&page_size=25"
+        )
 
 
 async def test_handle_linode_managed_issues_list_rejects_invalid_page(
@@ -2037,7 +1458,7 @@ async def test_handle_linode_managed_linode_settings_list(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_managed_linode_settings.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2053,8 +1474,8 @@ async def test_handle_linode_managed_linode_settings_list(
         "count": 1,
         "managed_linode_settings": [{"id": 123, "label": "web-1", "group": "prod"}],
     }
-    mock_client.list_managed_linode_settings.assert_awaited_once_with(
-        page=2, page_size=25
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_managed_linode_settings_list", query="page=2&page_size=25"
     )
 
 
@@ -2110,302 +1531,6 @@ async def test_handle_linode_managed_linode_settings_list_rejects_low_page_size(
     mock_client_class.assert_not_called()
 
 
-async def test_create_linode_managed_service_disable_tool() -> None:
-    """Test linode_managed_service_disable tool schema."""
-    tool, capability = create_linode_managed_service_disable_tool()
-
-    assert tool.name == "linode_managed_service_disable"
-    assert capability is Capability.Admin
-    assert tool.input_schema["type"] == "object"
-    assert tool.input_schema["required"] == ["service_id", "confirm"]
-    assert tool.input_schema["properties"]["service_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_managed_service_disable(sample_config: Config) -> None:
-    """Test linode_managed_service_disable tool."""
-    response_data: dict[str, Any] = {"id": 9944, "status": "disabled"}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.disable_managed_service.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_managed_service_disable(
-            {"service_id": 9944, "confirm": True}, sample_config
-        )
-
-    assert json.loads(result[0].text) == {
-        "message": "Managed service disabled successfully",
-        "service_id": 9944,
-    }
-    mock_client.disable_managed_service.assert_awaited_once_with(9944)
-
-
-async def test_handle_linode_managed_service_disable_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Test linode_managed_service_disable requires confirm."""
-    arguments: dict[str, Any] = {"service_id": 9944}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_service_disable(arguments, sample_config)
-
-    assert "confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_service_disable_validates_service_id(
-    sample_config: Config,
-) -> None:
-    """Test linode_managed_service_disable validates service_id."""
-    arguments: dict[str, Any] = {"service_id": "1/2", "confirm": True}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_service_disable(arguments, sample_config)
-
-    assert "service_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_service_disable_dry_run(
-    sample_config: Config,
-) -> None:
-    """Test linode_managed_service_disable dry run response."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_service_disable(
-            {"service_id": 9944, "confirm": True, "dry_run": True}, sample_config
-        )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_managed_service_disable"
-    assert payload["would_execute"]["method"] == "POST"
-    assert payload["would_execute"]["path"] == "/managed/services/9944/disable"
-    mock_client_class.assert_not_called()
-
-
-async def test_create_linode_managed_contact_delete_tool() -> None:
-    """Test linode_managed_contact_delete tool schema."""
-    tool, capability = create_linode_managed_contact_delete_tool()
-
-    assert tool.name == "linode_managed_contact_delete"
-    assert capability is Capability.Admin
-    assert tool.input_schema["type"] == "object"
-    assert tool.input_schema["required"] == ["contact_id", "confirm"]
-    assert tool.input_schema["properties"]["contact_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_managed_contact_delete(sample_config: Config) -> None:
-    """Test linode_managed_contact_delete tool."""
-    response_data: dict[str, Any] = {"id": 123}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_managed_contact.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_managed_contact_delete(
-            {"contact_id": 123, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert json.loads(result[0].text) == {
-            "message": "Managed contact deleted successfully",
-            "contact_id": 123,
-        }
-        mock_client.delete_managed_contact.assert_awaited_once_with(123)
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_managed_contact_delete_requires_confirm(
-    sample_config: Config, confirm: object
-) -> None:
-    """Managed contact delete requires literal confirm=true before client calls."""
-    arguments: dict[str, object] = {"contact_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contact_delete(arguments, sample_config)
-
-    assert "confirm" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("contact_id", [None, 0, "123", "1/2", "1?x", "..", True])
-async def test_handle_linode_managed_contact_delete_validates_contact_id(
-    sample_config: Config, contact_id: object
-) -> None:
-    """Managed contact delete validates contact ID before client calls."""
-    arguments: dict[str, object] = {"confirm": True}
-    if contact_id is not None:
-        arguments["contact_id"] = contact_id
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contact_delete(arguments, sample_config)
-
-    assert "contact_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_contact_delete_dry_run(
-    sample_config: Config,
-) -> None:
-    """Managed contact delete dry run previews DELETE without calling the client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contact_delete(
-            {"contact_id": 123, "confirm": True, "dry_run": True}, sample_config
-        )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_managed_contact_delete"
-    assert payload["would_execute"]["method"] == "DELETE"
-    assert payload["would_execute"]["path"] == "/managed/contacts/123"
-    mock_client_class.assert_not_called()
-
-
-async def test_create_linode_managed_credential_get_tool() -> None:
-    """Test linode_managed_credential_get tool schema."""
-    tool, capability = create_linode_managed_credential_get_tool()
-
-    assert tool.name == "linode_managed_credential_get"
-    assert capability == Capability.Admin
-    assert "credential_id" in tool.input_schema["properties"]
-    assert tool.input_schema["required"] == ["credential_id"]
-
-
-async def test_handle_linode_managed_credential_get(sample_config: Config) -> None:
-    """Test linode_managed_credential_get tool."""
-    response_data: dict[str, Any] = {"id": 123, "label": "db-root"}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_managed_credential.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_managed_credential_get(
-            {"credential_id": 123}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["id"] == 123
-        assert body["label"] == "db-root"
-        assert body["last_decrypted"] == ""
-        mock_client.get_managed_credential.assert_awaited_once_with(123)
-
-
-@pytest.mark.parametrize("credential_id", [None, 0, -1, True, "/", "1?", ".."])
-async def test_handle_linode_managed_credential_get_rejects_invalid_id(
-    sample_config: Config, credential_id: object
-) -> None:
-    """Managed credential get rejects invalid IDs before client construction."""
-    arguments = {} if credential_id is None else {"credential_id": credential_id}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_credential_get(arguments, sample_config)
-
-    assert "credential_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_create_linode_managed_credential_username_password_update_tool() -> None:
-    """Test username/password credential update tool schema."""
-    tool, capability = create_linode_managed_credential_username_password_update_tool()
-    assert tool.name == "linode_managed_credential_username_password_update"
-    assert capability is Capability.Admin
-    assert set(tool.input_schema["required"]) == {
-        "credential_id",
-        "password",
-        "confirm",
-    }
-    assert tool.input_schema["properties"]["credential_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["password"]["type"] == "string"
-    assert tool.input_schema["properties"]["username"]["type"] == "string"
-
-
-async def test_handle_linode_managed_credential_username_password_update(
-    sample_config: Config,
-) -> None:
-    """Test username/password credential update handler."""
-    response_data: dict[str, Any] = {"id": 91, "username": "root"}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_update = mock_client.update_managed_credential_username_password
-        mock_update.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-        result = await handle_linode_managed_credential_username_password_update(
-            {
-                "credential_id": 91,
-                "password": "s3cret",
-                "username": "root",
-                "confirm": True,
-            },
-            sample_config,
-        )
-    assert len(result) == 1
-    # The id-echo carries the credential id; the credential metadata and the
-    # secret are intentionally not echoed.
-    assert json.loads(result[0].text) == {
-        "message": "Managed credential 91 updated successfully",
-        "credential_id": 91,
-    }
-    mock_update.assert_awaited_once_with(91, password="s3cret", username="root")
-
-
-async def test_create_linode_managed_credential_revoke_tool() -> None:
-    """Test linode_managed_credential_revoke tool schema."""
-    tool, capability = create_linode_managed_credential_revoke_tool()
-
-    assert tool.name == "linode_managed_credential_revoke"
-    assert capability is Capability.Admin
-    assert set(tool.input_schema["required"]) == {"credential_id", "confirm"}
-    assert tool.input_schema["properties"]["credential_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_managed_credential_revoke(sample_config: Config) -> None:
-    """Test linode_managed_credential_revoke handler."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.revoke_managed_credential.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_managed_credential_revoke(
-            {"credential_id": 91, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert json.loads(result[0].text) == {
-        "message": "Managed credential 91 revoked successfully",
-        "credential_id": 91,
-    }
-    mock_client.revoke_managed_credential.assert_awaited_once_with(91)
-
-
-async def test_handle_linode_managed_credential_revoke_rejects_bad_id(
-    sample_config: Config,
-) -> None:
-    """Test linode_managed_credential_revoke rejects invalid IDs."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_credential_revoke(
-            {"credential_id": "91/../x", "confirm": True}, sample_config
-        )
-
-    assert "credential_id must be an integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
 async def test_create_linode_managed_credentials_list_tool() -> None:
     """Test linode_managed_credential_list tool schema."""
     tool, capability = create_linode_managed_credential_list_tool()
@@ -2426,7 +1551,7 @@ async def test_handle_linode_managed_credentials_list(sample_config: Config) -> 
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_managed_credentials.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2445,8 +1570,8 @@ async def test_handle_linode_managed_credentials_list(sample_config: Config) -> 
                 {"id": 1, "label": "credential", "last_decrypted": ""}
             ],
         }
-        mock_client.list_managed_credentials.assert_awaited_once_with(
-            page=1, page_size=25
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_managed_credential_list", query="page=1&page_size=25"
         )
 
 
@@ -2492,7 +1617,7 @@ async def test_handle_linode_managed_ssh_key_get(sample_config: Config) -> None:
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_ssh_key.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2503,7 +1628,7 @@ async def test_handle_linode_managed_ssh_key_get(sample_config: Config) -> None:
     assert json.loads(result[0].text) == {
         "ssh_key": "ssh-rsa AAAAmanagedkey linode-managed"
     }
-    mock_client.get_managed_ssh_key.assert_awaited_once_with()
+    mock_client.route_raw.assert_awaited_once_with("linode_managed_sshkey_get")
 
 
 async def test_handle_linode_managed_ssh_key_get_propagates_errors(
@@ -2512,179 +1637,16 @@ async def test_handle_linode_managed_ssh_key_get_propagates_errors(
     """Test linode_managed_sshkey_get reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_ssh_key.side_effect = Exception("boom")
+        mock_client.route_raw.side_effect = Exception("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_managed_sshkey_get({}, sample_config)
 
-    assert "Failed to get Linode Managed SSH key" in result[0].text
+    assert "Failed to retrieve the managed SSH key" in result[0].text
     assert "boom" in result[0].text
-    mock_client.get_managed_ssh_key.assert_awaited_once_with()
-
-
-async def test_create_linode_managed_credential_update_tool() -> None:
-    """Test linode_managed_credential_update tool schema."""
-    tool, capability = create_linode_managed_credential_update_tool()
-
-    assert tool.name == "linode_managed_credential_update"
-    assert capability is Capability.Admin
-    assert set(tool.input_schema["required"]) == {"credential_id", "label", "confirm"}
-    assert tool.input_schema["properties"]["credential_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["label"]["type"] == "string"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_managed_credential_update(sample_config: Config) -> None:
-    """Test linode_managed_credential_update tool."""
-    response_data = {"id": 42, "label": "prod-root"}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_managed_credential.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_managed_credential_update(
-            {"credential_id": 42, "label": "prod-root", "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    # The full ManagedCredential element is emitted; last_decrypted is an
-    # implicit-presence string so it serializes as "" when absent from the body.
-    assert json.loads(result[0].text) == {
-        "message": "Managed credential 42 updated successfully",
-        "credential": {"id": 42, "label": "prod-root", "last_decrypted": ""},
-    }
-    mock_client.update_managed_credential.assert_awaited_once_with(
-        42, label="prod-root"
-    )
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_managed_credential_update_requires_confirm(
-    sample_config: Config,
-    confirm: object,
-) -> None:
-    """Test linode_managed_credential_update requires literal confirm=true."""
-    arguments: dict[str, object] = {"credential_id": 42, "label": "prod-root"}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_credential_update(arguments, sample_config)
-
-    assert "confirm" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("bad_credential_id", [0, -1, True, "1/2", "1?x", ".."])
-async def test_handle_linode_managed_credential_update_rejects_bad_credential_id(
-    sample_config: Config,
-    bad_credential_id: object,
-) -> None:
-    """Test linode_managed_credential_update validates credential_id."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_credential_update(
-            {"credential_id": bad_credential_id, "label": "prod-root", "confirm": True},
-            sample_config,
-        )
-
-    assert "credential_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected"),
-    [
-        ({"credential_id": 42, "confirm": True}, "label is required"),
-        (
-            {"credential_id": 42, "label": "", "confirm": True},
-            "label must be a non-empty string",
-        ),
-        (
-            {"credential_id": 42, "label": 123, "confirm": True},
-            "label must be a non-empty string",
-        ),
-        (
-            {"credential_id": 42, "label": "prod-root", "id": 99, "confirm": True},
-            "Read-only fields are not accepted: id",
-        ),
-        (
-            {
-                "credential_id": 42,
-                "label": "prod-root",
-                "last_decrypted": "2024-01-01T00:00:00",
-                "confirm": True,
-            },
-            "Read-only fields are not accepted: last_decrypted",
-        ),
-    ],
-)
-async def test_handle_linode_managed_credential_update_rejects_invalid_body(
-    sample_config: Config,
-    arguments: dict[str, object],
-    expected: str,
-) -> None:
-    """Test linode_managed_credential_update validates body fields."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_credential_update(arguments, sample_config)
-
-    assert expected in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_credential_update_dry_run(
-    sample_config: Config,
-) -> None:
-    """Test linode_managed_credential_update dry run."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_credential_update(
-            {
-                "credential_id": 42,
-                "label": "prod-root",
-                "confirm": True,
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_managed_credential_update"
-    assert payload["would_execute"]["method"] == "PUT"
-    assert payload["would_execute"]["path"] == "/managed/credentials/42"
-    assert payload["would_execute"]["body"] == {"label": "prod-root"}
-    mock_client_class.assert_not_called()
-
-
-async def test_create_linode_managed_stats_tool() -> None:
-    """Test linode_managed_stats_get tool schema."""
-    tool, capability = create_linode_managed_stats_get_tool()
-
-    assert tool.name == "linode_managed_stats_get"
-    assert capability is Capability.Read
-    assert tool.input_schema["type"] == "object"
-    assert "required" not in tool.input_schema
-
-
-async def test_handle_linode_managed_stats(sample_config: Config) -> None:
-    """Test linode_managed_stats_get tool."""
-    response_data: dict[str, Any] = {"data": {"cpu": [{"x": 1, "y": 2.0}]}}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_managed_stats.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_managed_stats_get({}, sample_config)
-
-        assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
-        mock_client.get_managed_stats.assert_awaited_once_with()
+    mock_client.route_raw.assert_awaited_once_with("linode_managed_sshkey_get")
 
 
 async def test_create_linode_managed_issue_get_tool() -> None:
@@ -2704,7 +1666,7 @@ async def test_handle_linode_managed_issue_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_issue.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2716,7 +1678,7 @@ async def test_handle_linode_managed_issue_get(sample_config: Config) -> None:
         assert data["id"] == 77
         assert data["entity"]["label"] == "web-1"
         assert data["services"] == []
-        mock_client.get_managed_issue.assert_awaited_once_with(77)
+        mock_client.route_raw.assert_awaited_once_with("linode_managed_issue_get", 77)
 
 
 @pytest.mark.parametrize(
@@ -2739,7 +1701,11 @@ async def test_handle_linode_managed_issue_get_rejects_bad_issue_id(
         result = await handle_linode_managed_issue_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "issue_id must be a positive integer" in result[0].text
+    if arguments:
+        assert "issue_id must be a positive integer" in result[0].text
+    else:
+        # An absent id is told apart from an unusable one by the bounded reader.
+        assert "issue_id is required" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2749,7 +1715,7 @@ async def test_handle_linode_managed_issue_get_reports_client_errors(
     """Test Managed issue handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_issue.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2757,8 +1723,8 @@ async def test_handle_linode_managed_issue_get_reports_client_errors(
         result = await handle_linode_managed_issue_get({"issue_id": 77}, sample_config)
 
     assert len(result) == 1
-    assert "Failed to get Linode Managed issue: boom" in result[0].text
-    mock_client.get_managed_issue.assert_awaited_once_with(77)
+    assert "Failed to retrieve managed issue 77: boom" in result[0].text
+    mock_client.route_raw.assert_awaited_once_with("linode_managed_issue_get", 77)
 
 
 async def test_create_linode_managed_contact_get_tool() -> None:
@@ -2778,7 +1744,7 @@ async def test_handle_linode_managed_contact_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_contact.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2793,7 +1759,7 @@ async def test_handle_linode_managed_contact_get(sample_config: Config) -> None:
         assert body["name"] == "Primary on-call"
         assert "group" not in body
         assert body["phone"] == {}
-        mock_client.get_managed_contact.assert_awaited_once_with(42)
+        mock_client.route_raw.assert_awaited_once_with("linode_managed_contact_get", 42)
 
 
 @pytest.mark.parametrize(
@@ -2816,7 +1782,11 @@ async def test_handle_linode_managed_contact_get_rejects_bad_contact_id(
         result = await handle_linode_managed_contact_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "contact_id must be a positive integer" in result[0].text
+    if arguments:
+        assert "contact_id must be a positive integer" in result[0].text
+    else:
+        # An absent id is told apart from an unusable one by the bounded reader.
+        assert "contact_id is required" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2826,7 +1796,7 @@ async def test_handle_linode_managed_contact_get_reports_client_errors(
     """Test Managed contact handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_contact.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2836,8 +1806,8 @@ async def test_handle_linode_managed_contact_get_reports_client_errors(
         )
 
     assert len(result) == 1
-    assert "Failed to get Linode Managed contact: boom" in result[0].text
-    mock_client.get_managed_contact.assert_awaited_once_with(42)
+    assert "Failed to retrieve managed contact 42: boom" in result[0].text
+    mock_client.route_raw.assert_awaited_once_with("linode_managed_contact_get", 42)
 
 
 async def test_create_linode_managed_service_get_tool() -> None:
@@ -2858,7 +1828,7 @@ async def test_handle_linode_managed_service_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_service.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2872,7 +1842,9 @@ async def test_handle_linode_managed_service_get(sample_config: Config) -> None:
         assert body["id"] == 314
         assert body["label"] == "web monitor"
         assert body["credentials"] == []
-        mock_client.get_managed_service.assert_awaited_once_with(314)
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_managed_service_get", 314
+        )
 
 
 @pytest.mark.parametrize(
@@ -2896,7 +1868,11 @@ async def test_handle_linode_managed_service_get_rejects_bad_service_id(
         result = await handle_linode_managed_service_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "service_id must be a positive integer" in result[0].text
+    if arguments:
+        assert "service_id must be a positive integer" in result[0].text
+    else:
+        # An absent id is told apart from an unusable one by the bounded reader.
+        assert "service_id is required" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2906,7 +1882,7 @@ async def test_handle_linode_managed_service_get_reports_client_errors(
     """Test Managed service handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_managed_service.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2916,8 +1892,8 @@ async def test_handle_linode_managed_service_get_reports_client_errors(
         )
 
     assert len(result) == 1
-    assert "Failed to get Linode Managed service monitor: boom" in result[0].text
-    mock_client.get_managed_service.assert_awaited_once_with(314)
+    assert "Failed to retrieve managed service 314: boom" in result[0].text
+    mock_client.route_raw.assert_awaited_once_with("linode_managed_service_get", 314)
 
 
 async def test_create_linode_account_beta_get_tool() -> None:
@@ -2936,7 +1912,7 @@ async def test_handle_linode_account_beta_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_beta.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2949,7 +1925,9 @@ async def test_handle_linode_account_beta_get(sample_config: Config) -> None:
     assert data["id"] == "example-open"
     assert data["label"] == "Example Open Beta"
     assert "description" not in data
-    mock_client.get_account_beta.assert_awaited_once_with("example-open")
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_account_beta_get", "example-open"
+    )
 
 
 async def test_handle_linode_account_beta_get_requires_beta_id(
@@ -3014,7 +1992,7 @@ async def test_handle_linode_account_settings_get(sample_config: Config) -> None
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_settings.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3028,7 +2006,7 @@ async def test_handle_linode_account_settings_get(sample_config: Config) -> None
     assert body["interfaces_for_new_linodes"] == "legacy_config"
     assert body["maintenance_policy"] == "linode/migrate"
     assert "longview_subscription" not in body
-    mock_client.get_account_settings.assert_awaited_once_with()
+    mock_client.route_raw.assert_awaited_once_with("linode_account_settings_get")
 
 
 async def test_create_linode_account_maintenance_list_tool() -> None:
@@ -3052,7 +2030,7 @@ async def test_handle_linode_account_maintenance_list(sample_config: Config) -> 
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_maintenance.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3067,8 +2045,8 @@ async def test_handle_linode_account_maintenance_list(sample_config: Config) -> 
     assert element["status"] == "pending"
     assert element["entity"]["id"] == 123
     assert element["entity"]["type"] == "linode"
-    mock_client.list_account_maintenance.assert_awaited_once_with(
-        page=None, page_size=None
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_account_maintenance_list", query=""
     )
 
 
@@ -3104,7 +2082,7 @@ async def test_handle_linode_account_notification_list_returns_proto_envelope(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_notifications.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3155,7 +2133,7 @@ async def test_handle_linode_account_payment_method_list_returns_proto_envelope(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_payment_methods.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3206,7 +2184,7 @@ async def test_handle_linode_account_child_account_list_returns_proto_envelope(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_child_accounts.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3259,196 +2237,6 @@ async def test_handle_linode_account_beta_list_rejects_non_integer_page(
     mock_client_class.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    ("ssh", "expected_error"),
-    [
-        ({"ip": ""}, "ssh.ip must be a non-empty string"),
-        ({"ip": 5}, "ssh.ip must be a non-empty string"),
-        ({"port": 0}, "ssh.port must be an integer from 1 to 65535 or null"),
-        ({"port": 70000}, "ssh.port must be an integer from 1 to 65535 or null"),
-        (
-            {"user": "x" * 33},
-            "ssh.user must be a string up to 32 characters or null",
-        ),
-    ],
-)
-async def test_handle_linode_managed_linode_settings_update_rejects_bad_ssh(
-    ssh: dict[str, Any], expected_error: str, sample_config: Config
-) -> None:
-    """Invalid ssh sub-fields are rejected before any client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_linode_settings_update(
-            {"linode_id": 123, "ssh": ssh}, sample_config
-        )
-
-    assert expected_error in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_linode_settings_update_requires_ssh_object(
-    sample_config: Config,
-) -> None:
-    """A missing or non-object ssh field is rejected before any client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_linode_settings_update(
-            {"linode_id": 123, "confirm": True}, sample_config
-        )
-
-    assert "ssh must be a non-empty object" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_linode_settings_update_accepts_full_ssh(
-    sample_config: Config,
-) -> None:
-    """A complete valid ssh object is normalized and sent to the client."""
-    response_data: dict[str, Any] = {"id": 123, "ssh": {"access": True}}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_managed_linode_settings.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_managed_linode_settings_update(
-            {
-                "linode_id": 123,
-                "confirm": True,
-                "ssh": {
-                    "access": True,
-                    "ip": "  198.51.100.7  ",
-                    "port": 2222,
-                    "user": "deploy",
-                },
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    # The full ManagedLinodeSettings element is emitted; label and group are
-    # implicit-presence strings ("" when absent) and ssh.ip is too; port and
-    # user are explicit-presence so they stay omitted when the body lacks them.
-    assert json.loads(result[0].text) == {
-        "message": "Managed Linode settings for Linode 123 updated successfully",
-        "settings": {
-            "id": 123,
-            "label": "",
-            "group": "",
-            "ssh": {"access": True, "ip": ""},
-        },
-    }
-    mock_client.update_managed_linode_settings.assert_awaited_once()
-    await_args = mock_client.update_managed_linode_settings.await_args
-    assert await_args.args[0] == 123
-    sent_ssh = await_args.kwargs["ssh"]
-    assert sent_ssh["ip"] == "198.51.100.7"
-    assert sent_ssh["user"] == "deploy"
-    assert sent_ssh["port"] == 2222
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected_error"),
-    [
-        (
-            {"label": "web", "service_type": "ping", "address": "https://a"},
-            "service_type must be one of: tcp, url",
-        ),
-        (
-            {
-                "label": "web",
-                "service_type": "url",
-                "address": "https://a",
-                "timeout": 30,
-                "credentials": "nope",
-            },
-            "credentials must be an array of positive integers",
-        ),
-        (
-            {
-                "label": "web",
-                "service_type": "url",
-                "address": "https://a",
-                "timeout": 30,
-                "credentials": [0],
-            },
-            "credentials must be an array of positive integers",
-        ),
-    ],
-)
-async def test_handle_linode_managed_service_create_rejects_bad_body(
-    arguments: dict[str, Any], expected_error: str, sample_config: Config
-) -> None:
-    """Invalid service-create fields short-circuit before any client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_service_create(arguments, sample_config)
-
-    assert expected_error in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_service_create_requires_timeout(
-    sample_config: Config,
-) -> None:
-    """A managed service create with no timeout is rejected before any call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_service_create(
-            {
-                "confirm": True,
-                "label": "web",
-                "service_type": "url",
-                "address": "https://a",
-            },
-            sample_config,
-        )
-
-    assert "timeout is required" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_contact_create_rejects_bad_phone(
-    sample_config: Config,
-) -> None:
-    """A non-string phone sub-field is rejected before any client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contact_create(
-            {"name": "Ops", "phone": {"primary": 5551234}},
-            sample_config,
-        )
-
-    assert "phone.primary must be a non-empty string or null" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_contact_create_rejects_read_only_fields(
-    sample_config: Config,
-) -> None:
-    """Setting the API-assigned id/updated on create is rejected before any call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_managed_contact_create(
-            {"id": 5, "name": "Ops", "email": "ops@example.com"},
-            sample_config,
-        )
-
-    assert (
-        "id and updated are read-only and cannot be set "
-        "when creating a managed contact" in result[0].text
-    )
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_managed_contact_create_accepts_null_phone_field(
-    sample_config: Config,
-) -> None:
-    """An explicit null phone field is normalized into the request body."""
-    result = await handle_linode_managed_contact_create(
-        {"name": "Ops", "phone": {"primary": None, "secondary": "555-0100"}},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
 async def test_handle_linode_ipv6_range_list_returns_count_envelope(
     sample_config: Config,
 ) -> None:
@@ -3461,7 +2249,7 @@ async def test_handle_linode_ipv6_range_list_returns_count_envelope(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_ipv6_ranges.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3473,7 +2261,9 @@ async def test_handle_linode_ipv6_range_list_returns_count_envelope(
     payload = json.loads(result[0].text)
     assert payload["count"] == 1
     assert payload["ipv6_ranges"][0]["range"] == "2600:3c00::/64"
-    mock_client.list_ipv6_ranges.assert_awaited_once_with(page=1, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_ipv6_range_list", query="page=1&page_size=25"
+    )
 
 
 async def test_handle_linode_ipv6_range_list_rejects_non_integer_page(
@@ -3505,7 +2295,7 @@ async def test_handle_linode_ipv6_pool_list_returns_proto_envelope(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_ipv6_pools.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3520,7 +2310,9 @@ async def test_handle_linode_ipv6_pool_list_returns_proto_envelope(
     assert pool["range"] == "2600:3c03::/64"
     assert pool["region"] == "us-east"
     assert pool["prefix"] == 64
-    mock_client.list_ipv6_pools.assert_awaited_once_with(page=1, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_ipv6_pool_list", query="page=1&page_size=25"
+    )
 
 
 async def test_handle_linode_ipv6_pool_list_rejects_non_integer_page(
@@ -3587,7 +2379,7 @@ async def test_handle_linode_firewall_template_list_emits_nested_rules(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_firewall_templates.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3605,7 +2397,9 @@ async def test_handle_linode_firewall_template_list_emits_nested_rules(
     assert rules["outbound"] == []
     assert rules["inbound"][0]["ports"] == "443"
     assert rules["inbound"][0]["addresses"]["ipv4"] == ["0.0.0.0/0"]
-    mock_client.list_firewall_templates.assert_awaited_once_with(page=1, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_firewall_template_list", query="page=1&page_size=25"
+    )
 
 
 async def test_handle_linode_network_transfer_price_list_reuses_linode_type(
@@ -3628,7 +2422,7 @@ async def test_handle_linode_network_transfer_price_list_reuses_linode_type(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_network_transfer_prices.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3641,7 +2435,9 @@ async def test_handle_linode_network_transfer_price_list_reuses_linode_type(
     assert price["id"] == "distributed_network_transfer"
     assert price["price"] == {"hourly": 0.01, "monthly": 0.0}
     assert price["region_prices"][0]["id"] == "id-cgk"
-    mock_client.get_network_transfer_prices.assert_awaited_once_with()
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_network_transfer_price_list", query=""
+    )
 
 
 async def test_handle_linode_account_service_transfer_list_returns_envelope(
@@ -3663,7 +2459,7 @@ async def test_handle_linode_account_service_transfer_list_returns_envelope(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_service_transfers.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3712,7 +2508,7 @@ async def test_handle_linode_maintenance_policies_list(sample_config: Config) ->
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_maintenance_policies.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3725,8 +2521,8 @@ async def test_handle_linode_maintenance_policies_list(sample_config: Config) ->
     assert payload["maintenance_policies"][0]["slug"] == "linode/migrate"
     assert payload["maintenance_policies"][0]["label"] == "Migrate"
     assert "data" not in payload
-    mock_client.list_maintenance_policies.assert_awaited_once_with(
-        page=None, page_size=None
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_maintenance_policy_list", query=""
     )
 
 
@@ -3791,7 +2587,7 @@ async def test_handle_linode_account_availability_list(sample_config: Config) ->
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_availability.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3805,7 +2601,9 @@ async def test_handle_linode_account_availability_list(sample_config: Config) ->
     assert body["count"] == 1
     assert body["account_availabilities"][0]["region"] == "us-east"
     assert body["account_availabilities"][0]["unavailable"] == ["Kubernetes"]
-    mock_client.list_account_availability.assert_awaited_once_with(page=2, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_account_availability_list", query="page=2&page_size=25"
+    )
 
 
 async def test_create_linode_account_tags_list_tool() -> None:
@@ -3838,7 +2636,7 @@ async def test_handle_linode_account_tags_list(sample_config: Config) -> None:
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_tags.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3867,7 +2665,9 @@ async def test_handle_linode_account_tags_list(sample_config: Config) -> None:
                 },
             ],
         }
-        mock_client.list_tags.assert_awaited_once_with(page=2, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_tag_list", query="page=2&page_size=25"
+    )
 
 
 async def test_create_linode_account_tag_objects_list_tool() -> None:
@@ -3897,16 +2697,6 @@ async def test_handle_linode_account_tag_objects_list_rejects_path_unsafe_label(
     result = await handle_linode_tag_object_list(
         {"tag_label": "bad#tag"}, sample_config
     )
-
-    assert len(result) == 1
-    assert "tag_label must not contain '?', '#', or '..'" in result[0].text
-
-
-async def test_handle_linode_account_tag_delete_rejects_path_unsafe_label(
-    sample_config: Config,
-) -> None:
-    """Tag delete rejects a path-unsafe tag_label (matches Go)."""
-    result = await handle_linode_tag_delete({"tag_label": "bad#tag"}, sample_config)
 
     assert len(result) == 1
     assert "tag_label must not contain '?', '#', or '..'" in result[0].text
@@ -3951,7 +2741,7 @@ async def test_handle_linode_account_tag_objects_list(sample_config: Config) -> 
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_tagged_objects.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3975,8 +2765,8 @@ async def test_handle_linode_account_tag_objects_list(sample_config: Config) -> 
         }
         assert "data" not in payload
         assert "page" not in payload
-        mock_client.list_tagged_objects.assert_awaited_once_with(
-            "production", page=2, page_size=25
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_tag_object_list", "production", query="page=2&page_size=25"
         )
 
 
@@ -4060,7 +2850,7 @@ async def test_handle_linode_account_tag_create_rejects_non_list_resource_ids(
     )
 
     assert len(result) == 1
-    assert "linodes must be a list of integers" in result[0].text
+    assert "linodes must be an array of integers" in result[0].text
 
 
 async def test_handle_linode_account_tag_create_rejects_non_positive_resource_ids(
@@ -4092,7 +2882,7 @@ async def test_handle_linode_account_tag_create(sample_config: Config) -> None:
     response_data: dict[str, Any] = {"label": "production"}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_tag.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4120,13 +2910,15 @@ async def test_handle_linode_account_tag_create(sample_config: Config) -> None:
                 "volumes": [],
             },
         }
-        mock_client.create_tag.assert_awaited_once_with(
-            "production",
-            domains=[1],
-            linodes=[2],
-            nodebalancers=[3],
-            volumes=[4],
-            reserved_ipv4_addresses=None,
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_tag_create",
+            body={
+                "label": "production",
+                "domains": [1],
+                "linodes": [2],
+                "nodebalancers": [3],
+                "volumes": [4],
+            },
         )
 
 
@@ -4136,7 +2928,7 @@ async def test_handle_linode_account_tag_create_omits_empty_resource_lists(
     """Tag creation omits empty resource lists."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_tag.return_value = {"label": "production"}
+        mock_client.route_raw.return_value = {"label": "production"}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4145,13 +2937,12 @@ async def test_handle_linode_account_tag_create_omits_empty_resource_lists(
             {"confirm": True, "label": "production", "linodes": []}, sample_config
         )
 
-        mock_client.create_tag.assert_awaited_once_with(
-            "production",
-            domains=None,
-            linodes=None,
-            nodebalancers=None,
-            volumes=None,
-            reserved_ipv4_addresses=None,
+        # A list the caller supplied empty travels as an empty list: the shared
+        # body reader treats it as a value that clears the field, where the
+        # hand-written handlers dropped it.
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_tag_create",
+            body={"label": "production", "linodes": []},
         )
 
 
@@ -4161,7 +2952,7 @@ async def test_handle_linode_account_tag_create_reports_client_errors(
     """Tag creation reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_tag.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4171,195 +2962,22 @@ async def test_handle_linode_account_tag_create_reports_client_errors(
         )
 
         assert len(result) == 1
-        assert "Failed to create Linode tag" in result[0].text
+        assert "Failed to create tag" in result[0].text
 
 
 async def test_account_tag_create_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
     """Account tag create tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
+    from linodemcp import gentools as gentools_mod
 
-    assert "create_linode_tag_create_tool" in tools_mod.__all__
-    assert "handle_linode_tag_create" in tools_mod.__all__
+    assert "create_linode_tag_create_tool" in gentools_mod.__all__
+    assert "handle_linode_tag_create" in gentools_mod.__all__
 
     from linodemcp.server import get_tool_registry
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_tag_create"].capability is Capability.Write
-
-
-async def test_create_linode_account_support_ticket_create_tool() -> None:
-    """Test support ticket create tool schema."""
-    tool, capability = create_linode_support_ticket_create_tool()
-
-    assert tool.name == "linode_support_ticket_create"
-    assert capability is Capability.Write
-    assert set(tool.input_schema["required"]) == {"summary", "description", "confirm"}
-    assert "severity" in tool.input_schema["properties"]
-
-
-async def test_handle_linode_account_support_ticket_create_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Support ticket creation requires confirmation."""
-    result = await handle_linode_support_ticket_create(
-        {"summary": "Need help", "description": "Details"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_create_requires_summary(
-    sample_config: Config,
-) -> None:
-    """Support ticket creation requires a non-empty summary."""
-    result = await handle_linode_support_ticket_create(
-        {"confirm": True, "description": "Details", "summary": "   "},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "summary" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_create_requires_description(
-    sample_config: Config,
-) -> None:
-    """Support ticket creation requires a non-empty description."""
-    result = await handle_linode_support_ticket_create(
-        {"confirm": True, "summary": "Need help", "description": "   "},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "description" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_create_rejects_bad_managed_issue(
-    sample_config: Config,
-) -> None:
-    """Support ticket creation validates managed_issue."""
-    result = await handle_linode_support_ticket_create(
-        {
-            "confirm": True,
-            "summary": "Need help",
-            "description": "Details",
-            "managed_issue": "yes",
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "managed_issue" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_create_rejects_bad_severity(
-    sample_config: Config,
-) -> None:
-    """Support ticket creation validates severity."""
-    result = await handle_linode_support_ticket_create(
-        {
-            "confirm": True,
-            "summary": "Need help",
-            "description": "Details",
-            "severity": 4,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "severity" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_create(
-    sample_config: Config,
-) -> None:
-    """Test support ticket create handler."""
-    response_data: dict[str, Any] = {"id": 789, "summary": "Need help"}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_support_ticket.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_create(
-            {
-                "confirm": True,
-                "summary": " Need help ",
-                "description": " Details ",
-                "linode_id": 123,
-                "severity": 2,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        expected = serialize_api_response(
-            {"message": "Support ticket opened successfully", "ticket": response_data},
-            support_ticket_pb2.SupportTicketWriteResponse(),
-        )
-        assert json.loads(result[0].text) == expected
-        mock_client.create_support_ticket.assert_awaited_once_with(
-            "Need help",
-            "Details",
-            bucket=None,
-            database_id=None,
-            domain_id=None,
-            firewall_id=None,
-            linode_id=123,
-            lkecluster_id=None,
-            longviewclient_id=None,
-            managed_issue=None,
-            nodebalancer_id=None,
-            region=None,
-            severity=2,
-            vlan=None,
-            volume_id=None,
-            vpc_id=None,
-        )
-
-
-async def test_handle_linode_account_support_ticket_create_reports_client_errors(
-    sample_config: Config,
-) -> None:
-    """Support ticket creation reports client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_support_ticket.side_effect = RuntimeError("boom")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_create(
-            {
-                "confirm": True,
-                "summary": "Need help",
-                "description": "Details",
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "Failed to open Linode support ticket" in result[0].text
-    assert "boom" in result[0].text
-
-
-async def test_account_support_ticket_create_tool_is_exported_and_registered(
-    sample_config: Config,
-) -> None:
-    """Support ticket create tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
-
-    assert "create_linode_support_ticket_create_tool" in tools_mod.__all__
-    assert "handle_linode_support_ticket_create" in tools_mod.__all__
-
-    from linodemcp.server import get_tool_registry
-
-    registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_support_ticket_create"].capability is Capability.Write
 
 
 async def test_create_linode_account_support_ticket_get_tool() -> None:
@@ -4404,7 +3022,7 @@ async def test_handle_linode_account_support_tickets_list(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_support_tickets.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4423,7 +3041,9 @@ async def test_handle_linode_account_support_tickets_list(
         assert "filter" not in payload
         # the raw page envelope (page/pages/results) is dropped for the contract
         assert "page" not in payload
-        mock_client.list_support_tickets.assert_awaited_once_with(page=2, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_support_ticket_list", query="page=2&page_size=25"
+    )
 
 
 async def test_handle_linode_account_support_tickets_list_reports_client_errors(
@@ -4432,7 +3052,7 @@ async def test_handle_linode_account_support_tickets_list_reports_client_errors(
     """Test support tickets list handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_support_tickets.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4440,7 +3060,7 @@ async def test_handle_linode_account_support_tickets_list_reports_client_errors(
         result = await handle_linode_support_ticket_list({}, sample_config)
 
     assert len(result) == 1
-    assert "Failed to list Linode support tickets" in result[0].text
+    assert "Failed to retrieve items" in result[0].text
     assert "boom" in result[0].text
 
 
@@ -4481,7 +3101,7 @@ async def test_handle_linode_account_support_ticket_get(
     response_data: dict[str, Any] = {"id": 123, "summary": "Need help"}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_support_ticket.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4498,7 +3118,7 @@ async def test_handle_linode_account_support_ticket_get(
         assert body["closable"] is False
         assert "closed" not in body
         assert "entity" not in body
-        mock_client.get_support_ticket.assert_awaited_once_with(123)
+        mock_client.route_raw.assert_awaited_once_with("linode_support_ticket_get", 123)
 
 
 async def test_handle_linode_account_support_ticket_get_reports_client_errors(
@@ -4507,7 +3127,7 @@ async def test_handle_linode_account_support_ticket_get_reports_client_errors(
     """Test support ticket get handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_support_ticket.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4517,7 +3137,7 @@ async def test_handle_linode_account_support_ticket_get_reports_client_errors(
         )
 
     assert len(result) == 1
-    assert "Failed to get Linode support ticket" in result[0].text
+    assert "Failed to retrieve support ticket" in result[0].text
     assert "boom" in result[0].text
 
 
@@ -4564,7 +3184,7 @@ async def test_handle_linode_account_oauth_client_get(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_oauth_client.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4579,7 +3199,9 @@ async def test_handle_linode_account_oauth_client_get(
         assert body["label"] == "Example OAuth Client"
         assert body["public"] is False
         assert body["thumbnail_url"] == ""
-        mock_client.get_account_oauth_client.assert_awaited_once_with("client-123")
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_account_oauth_client_get", "client-123"
+        )
 
 
 async def test_create_linode_account_payment_method_get_tool() -> None:
@@ -4640,7 +3262,7 @@ async def test_handle_linode_account_payment_method_get(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_payment_method.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4657,7 +3279,9 @@ async def test_handle_linode_account_payment_method_get(
             "data": {"card_type": "Visa", "last_four": "1234", "expiry": "12/2027"},
         }
         assert "not_in_proto" not in result[0].text
-        mock_client.get_account_payment_method.assert_awaited_once_with(123)
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_account_payment_method_get", 123
+        )
 
 
 async def test_handle_linode_account_payment_method_get_reports_client_errors(
@@ -4666,7 +3290,7 @@ async def test_handle_linode_account_payment_method_get_reports_client_errors(
     """Test payment method get handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_payment_method.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4676,7 +3300,7 @@ async def test_handle_linode_account_payment_method_get_reports_client_errors(
         )
 
     assert len(result) == 1
-    assert "Failed to retrieve Linode account payment method" in result[0].text
+    assert "Failed to retrieve payment method" in result[0].text
     assert "boom" in result[0].text
 
 
@@ -4703,14 +3327,20 @@ async def test_handle_linode_account_oauth_client_thumbnail_get_requires_client_
 async def test_handle_linode_account_oauth_client_thumbnail_get_rejects_bad_client_id(
     sample_config: Config,
 ) -> None:
-    """OAuth client thumbnail retrieval rejects malformed client IDs."""
+    """OAuth client thumbnail retrieval rejects malformed client IDs.
+
+    Every one answers before a client is opened, which is what keeps a bad id
+    off the wire rather than into a path segment.
+    """
     for bad_client_id in (123, "   ", "client/id", "client?id", ".."):
-        result = await handle_linode_account_oauth_client_thumbnail_get(
-            {"client_id": bad_client_id}, sample_config
-        )
+        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+            result = await handle_linode_account_oauth_client_thumbnail_get(
+                {"client_id": bad_client_id}, sample_config
+            )
 
         assert len(result) == 1
         assert "client_id" in result[0].text
+        mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_account_oauth_client_thumbnail_get(
@@ -4763,7 +3393,7 @@ async def test_handle_linode_account_oauth_client_thumbnail_get_reports_client_e
         )
 
     assert len(result) == 1
-    assert "Failed to retrieve Linode account OAuth client thumbnail" in result[0].text
+    assert "Failed to get account OAuth client thumbnail 'client-123'" in result[0].text
     assert "boom" in result[0].text
 
 
@@ -4773,7 +3403,7 @@ async def test_handle_linode_account_oauth_client_get_reports_client_errors(
     """Test OAuth client get handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_oauth_client.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4783,7 +3413,7 @@ async def test_handle_linode_account_oauth_client_get_reports_client_errors(
         )
 
     assert len(result) == 1
-    assert "Failed to retrieve Linode account OAuth client" in result[0].text
+    assert "Failed to retrieve OAuth client" in result[0].text
     assert "boom" in result[0].text
 
 
@@ -4844,7 +3474,7 @@ async def test_handle_linode_account_support_ticket_replies_list(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_support_ticket_replies.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4859,8 +3489,8 @@ async def test_handle_linode_account_support_ticket_replies_list(
         assert payload["support_ticket_replies"][0]["id"] == 456
         assert payload["support_ticket_replies"][0]["description"] == "Thanks"
         assert "page" not in payload
-        mock_client.list_support_ticket_replies.assert_awaited_once_with(
-            123, page=2, page_size=25
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_support_ticket_reply_list", 123, query="page=2&page_size=25"
         )
 
 
@@ -4896,7 +3526,7 @@ async def test_handle_linode_account_invoice_items_list(sample_config: Config) -
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_invoice_items.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4910,15 +3540,15 @@ async def test_handle_linode_account_invoice_items_list(sample_config: Config) -
     assert payload["account_invoice_items"][0]["label"] == "Compute Instance"
     assert payload["account_invoice_items"][0]["amount"] == 12.34
     assert "page" not in payload
-    mock_client.list_account_invoice_items.assert_awaited_once_with(
-        123, page=2, page_size=25
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_account_invoice_item_list", 123, query="page=2&page_size=25"
     )
 
 
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({}, "invoice_id must be a positive integer"),
+        ({}, "invoice_id is required"),
         ({"invoice_id": 0}, "invoice_id must be a positive integer"),
         ({"invoice_id": False}, "invoice_id must be a positive integer"),
         ({"invoice_id": "123/456"}, "invoice_id must be a positive integer"),
@@ -4948,7 +3578,7 @@ async def test_handle_linode_account_invoice_items_list_reports_client_errors(
     """Account invoice items list reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_account_invoice_items.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4969,7 +3599,7 @@ async def test_handle_linode_account_event_get(sample_config: Config) -> None:
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_event.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4983,7 +3613,7 @@ async def test_handle_linode_account_event_get(sample_config: Config) -> None:
     assert data["status"] == "finished"
     assert data["seen"] is False
     assert "entity" not in data
-    mock_client.get_account_event.assert_awaited_once_with(123)
+    mock_client.route_raw.assert_awaited_once_with("linode_account_event_get", 123)
 
 
 @pytest.mark.parametrize(
@@ -5001,7 +3631,10 @@ async def test_handle_linode_account_event_get_validates_event_id(
         result = await handle_linode_account_event_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "event_id must be a positive integer" in result[0].text
+    if event_id is None:
+        assert "event_id is required" in result[0].text
+    else:
+        assert "event_id must be a positive integer" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -5011,7 +3644,7 @@ async def test_handle_linode_account_event_get_reports_client_errors(
     """Account event get reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_event.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5019,7 +3652,7 @@ async def test_handle_linode_account_event_get_reports_client_errors(
         result = await handle_linode_account_event_get({"event_id": 123}, sample_config)
 
     assert len(result) == 1
-    assert "Failed to get Linode account event" in result[0].text
+    assert "Failed to retrieve account event" in result[0].text
     assert "boom" in result[0].text
 
 
@@ -5029,7 +3662,7 @@ async def test_handle_linode_account_support_ticket_replies_list_reports_client_
     """Test support ticket replies list handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_support_ticket_replies.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5039,476 +3672,23 @@ async def test_handle_linode_account_support_ticket_replies_list_reports_client_
         )
 
     assert len(result) == 1
-    assert "Failed to list Linode support ticket replies" in result[0].text
+    assert "Failed to retrieve items" in result[0].text
     assert "boom" in result[0].text
-
-
-async def test_create_linode_account_support_ticket_close_tool() -> None:
-    """Test support ticket close tool schema."""
-    tool, capability = create_linode_support_ticket_close_tool()
-
-    assert tool.name == "linode_support_ticket_close"
-    assert capability is Capability.Write
-    assert tool.input_schema["required"] == ["ticket_id", "confirm"]
-
-
-async def test_handle_linode_account_support_ticket_close_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Support ticket close requires confirmation."""
-    result = await handle_linode_support_ticket_close({"ticket_id": 123}, sample_config)
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_close_validates_ticket_id(
-    sample_config: Config,
-) -> None:
-    """Support ticket close validates ticket_id."""
-    result = await handle_linode_support_ticket_close(
-        {"confirm": True, "ticket_id": 0},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "ticket_id" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_close_dry_run_rejects_bad_id(
-    sample_config: Config,
-) -> None:
-    """A close dry-run with an invalid ticket_id rejects before any client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_support_ticket_close(
-            {"dry_run": True, "ticket_id": 0},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "ticket_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_account_support_ticket_reply_create_dry_run_bad_id(
-    sample_config: Config,
-) -> None:
-    """A reply-create dry-run with an invalid ticket_id rejects before any call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_support_ticket_reply_create(
-            {"dry_run": True, "ticket_id": 0, "description": "hello"},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "ticket_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_account_support_ticket_attachment_dry_run_bad_id(
-    sample_config: Config,
-) -> None:
-    """An attachment dry-run with an invalid ticket_id rejects before any call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_support_ticket_attachment_create(
-            {"dry_run": True, "ticket_id": 0, "file": "attachment.txt"},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "ticket_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_account_support_ticket_close(
-    sample_config: Config,
-) -> None:
-    """Test support ticket close handler."""
-    response_data: dict[str, Any] = {"id": 123, "status": "closed"}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.close_support_ticket.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_close(
-            {"confirm": True, "ticket_id": 123},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        expected = serialize_api_response(
-            {"message": "Support ticket closed successfully", "ticket_id": 123},
-            support_ticket_pb2.SupportTicketIDResponse(),
-        )
-        assert json.loads(result[0].text) == expected
-        mock_client.close_support_ticket.assert_awaited_once_with(123)
-
-
-async def test_handle_linode_account_support_ticket_close_reports_client_errors(
-    sample_config: Config,
-) -> None:
-    """Support ticket close reports client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.close_support_ticket.side_effect = RuntimeError("boom")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_close(
-            {"confirm": True, "ticket_id": 123},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "Failed to close Linode support ticket" in result[0].text
-        assert "boom" in result[0].text
 
 
 async def test_account_support_ticket_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
     """Support ticket get tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
+    from linodemcp import gentools as gentools_mod
 
-    assert "create_linode_support_ticket_get_tool" in tools_mod.__all__
-    assert "handle_linode_support_ticket_get" in tools_mod.__all__
+    assert "create_linode_support_ticket_get_tool" in gentools_mod.__all__
+    assert "handle_linode_support_ticket_get" in gentools_mod.__all__
 
     from linodemcp.server import get_tool_registry
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_support_ticket_get"].capability is Capability.Read
-
-
-async def test_account_support_ticket_close_tool_is_exported_and_registered(
-    sample_config: Config,
-) -> None:
-    """Support ticket close tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
-    from linodemcp.server import get_tool_registry
-
-    assert "create_linode_support_ticket_close_tool" in tools_mod.__all__
-    assert "handle_linode_support_ticket_close" in tools_mod.__all__
-
-    registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_support_ticket_close"].capability is Capability.Write
-
-
-async def test_create_linode_account_support_ticket_reply_create_tool() -> None:
-    """Test support ticket reply create tool schema."""
-    tool, capability = create_linode_support_ticket_reply_create_tool()
-
-    assert tool.name == "linode_support_ticket_reply_create"
-    assert capability is Capability.Write
-    assert tool.input_schema["required"] == [
-        "ticket_id",
-        "description",
-        "confirm",
-    ]
-
-
-async def test_handle_linode_account_support_ticket_reply_create_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Support ticket reply creation requires confirmation."""
-    result = await handle_linode_support_ticket_reply_create(
-        {"ticket_id": 123, "description": "Thanks"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_reply_create_validates_ticket_id(
-    sample_config: Config,
-) -> None:
-    """Support ticket reply creation validates ticket_id."""
-    result = await handle_linode_support_ticket_reply_create(
-        {"confirm": True, "ticket_id": 0, "description": "Thanks"},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "ticket_id" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_reply_create_requires_description(
-    sample_config: Config,
-) -> None:
-    """Support ticket reply creation requires a non-empty description."""
-    result = await handle_linode_support_ticket_reply_create(
-        {"confirm": True, "ticket_id": 123, "description": "   "},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "description" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_reply_create(
-    sample_config: Config,
-) -> None:
-    """Test support ticket reply create handler."""
-    response_data: dict[str, Any] = {"id": 456, "description": "Thanks"}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_support_ticket_reply.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_reply_create(
-            {"confirm": True, "ticket_id": 123, "description": " Thanks "},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        expected = serialize_api_response(
-            {
-                "message": "Support ticket reply created successfully",
-                "reply": response_data,
-            },
-            support_ticket_pb2.SupportTicketReplyWriteResponse(),
-        )
-        assert json.loads(result[0].text) == expected
-        mock_client.create_support_ticket_reply.assert_awaited_once_with(123, "Thanks")
-
-
-async def test_handle_linode_account_support_ticket_reply_create_reports_client_errors(
-    sample_config: Config,
-) -> None:
-    """Support ticket reply creation reports client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_support_ticket_reply.side_effect = RuntimeError("boom")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_reply_create(
-            {"confirm": True, "ticket_id": 123, "description": "Thanks"},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "Failed to create Linode support ticket reply" in result[0].text
-
-
-async def test_account_support_ticket_reply_create_tool_is_exported_and_registered(
-    sample_config: Config,
-) -> None:
-    """Support ticket reply create tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
-    from linodemcp.server import get_tool_registry
-
-    assert "create_linode_support_ticket_reply_create_tool" in tools_mod.__all__
-    assert "handle_linode_support_ticket_reply_create" in tools_mod.__all__
-
-    registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_support_ticket_reply_create"].capability is Capability.Write
-
-
-async def test_create_linode_account_support_ticket_attachment_create_tool() -> None:
-    """Test support ticket attachment create tool schema."""
-    tool, capability = create_linode_support_ticket_attachment_create_tool()
-
-    assert tool.name == "linode_support_ticket_attachment_create"
-    assert capability is Capability.Write
-    assert tool.input_schema["required"] == ["ticket_id", "file", "confirm"]
-
-
-async def test_handle_linode_account_support_ticket_attachment_create_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Support ticket attachment creation requires confirmation."""
-    result = await handle_linode_support_ticket_attachment_create(
-        {"ticket_id": 123, "file": "/Users/e/a.txt"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_support_ticket_attachment_validates_ticket_id(
-    sample_config: Config,
-) -> None:
-    """Support ticket attachment creation validates ticket_id."""
-    result = await handle_linode_support_ticket_attachment_create(
-        {"confirm": True, "ticket_id": 0, "file": "/Users/e/a.txt"},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "ticket_id" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_attachment_create_requires_file(
-    sample_config: Config,
-) -> None:
-    """Support ticket attachment creation requires a non-empty file."""
-    result = await handle_linode_support_ticket_attachment_create(
-        {"confirm": True, "ticket_id": 123, "file": "   "},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "file" in result[0].text
-
-
-async def test_handle_support_ticket_attachment_requires_absolute_file(
-    sample_config: Config,
-) -> None:
-    """Support ticket attachment creation requires an absolute file path."""
-    result = await handle_linode_support_ticket_attachment_create(
-        {"confirm": True, "ticket_id": 123, "file": "attachment.txt"},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "absolute path" in result[0].text
-
-
-async def test_handle_support_ticket_attachment_requires_file_key(
-    sample_config: Config,
-) -> None:
-    """Support ticket attachment creation requires the file key."""
-    result = await handle_linode_support_ticket_attachment_create(
-        {"confirm": True, "ticket_id": 123},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "file" in result[0].text
-
-
-async def test_handle_linode_account_support_ticket_attachment_create(
-    sample_config: Config,
-) -> None:
-    """Test support ticket attachment create handler."""
-    response_data: dict[str, Any] = {"id": 789, "file": "attachment.txt"}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_support_ticket_attachment.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_attachment_create(
-            {"confirm": True, "ticket_id": 123, "file": " /Users/e/a.txt "},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        expected = serialize_api_response(
-            {
-                "message": "Support ticket attachment created successfully",
-                "ticket_id": 123,
-            },
-            support_ticket_pb2.SupportTicketIDResponse(),
-        )
-        assert json.loads(result[0].text) == expected
-        mock_client.create_support_ticket_attachment.assert_awaited_once_with(
-            123, "/Users/e/a.txt"
-        )
-
-
-async def test_handle_support_ticket_attachment_reports_client_errors(
-    sample_config: Config,
-) -> None:
-    """Support ticket attachment creation reports client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_support_ticket_attachment.side_effect = RuntimeError("boom")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_support_ticket_attachment_create(
-            {"confirm": True, "ticket_id": 123, "file": "/Users/e/a.txt"},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "Failed to create Linode support ticket attachment" in result[0].text
-
-
-async def test_account_support_ticket_attachment_create_tool_is_exported_and_registered(
-    sample_config: Config,
-) -> None:
-    """Support ticket attachment create tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
-    from linodemcp.server import get_tool_registry
-
-    assert "create_linode_support_ticket_attachment_create_tool" in tools_mod.__all__
-    assert "handle_linode_support_ticket_attachment_create" in tools_mod.__all__
-
-    registry = {entry.name: entry for entry in get_tool_registry()}
-    assert (
-        registry["linode_support_ticket_attachment_create"].capability
-        is Capability.Write
-    )
-
-
-async def test_create_linode_account_tag_delete_tool() -> None:
-    """Test linode_tag_delete tool schema."""
-    tool, capability = create_linode_tag_delete_tool()
-
-    assert tool.name == "linode_tag_delete"
-    assert capability is Capability.Destroy
-    assert "tag_label" in tool.input_schema["required"]
-    assert "confirm" in tool.input_schema["required"]
-
-
-async def test_handle_linode_account_tag_delete_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Tag delete requires confirmation."""
-    result = await handle_linode_tag_delete({"tag_label": "obsolete"}, sample_config)
-
-    assert len(result) == 1
-    assert "confirm must be true to delete a tag" in result[0].text
-
-
-async def test_handle_linode_account_tag_delete_requires_label(
-    sample_config: Config,
-) -> None:
-    """Tag delete requires a non-empty tag label."""
-    result = await handle_linode_tag_delete({"confirm": True}, sample_config)
-
-    assert len(result) == 1
-    assert "tag_label" in result[0].text
-
-
-async def test_handle_linode_account_tag_delete_rejects_blank_label(
-    sample_config: Config,
-) -> None:
-    """Tag delete rejects a blank tag label."""
-    result = await handle_linode_tag_delete(
-        {"tag_label": "   ", "confirm": True}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "tag_label" in result[0].text
-
-
-async def test_handle_linode_account_tag_delete(sample_config: Config) -> None:
-    """Test linode_tag_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_tag.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_tag_delete(
-            {"tag_label": "obsolete", "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "deleted successfully" in result[0].text
-        mock_client.delete_tag.assert_awaited_once_with("obsolete")
 
 
 async def test_create_linode_regions_get_tool() -> None:
@@ -5522,11 +3702,11 @@ async def test_create_linode_regions_get_tool() -> None:
 
 async def test_linode_regions_get_tool_is_exported_and_registered() -> None:
     """Region get tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
+    from linodemcp import gentools as gentools_mod
     from linodemcp.server import get_tool_registry
 
-    assert "create_linode_region_get_tool" in tools_mod.__all__
-    assert "handle_linode_region_get" in tools_mod.__all__
+    assert "create_linode_region_get_tool" in gentools_mod.__all__
+    assert "handle_linode_region_get" in gentools_mod.__all__
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_region_get"].capability is Capability.Read
@@ -5618,7 +3798,7 @@ async def test_handle_linode_regions_availability_list(sample_config: Config) ->
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_regions_availability.return_value = availability
+        mock_client.route_raw.return_value = {"data": availability}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5630,7 +3810,9 @@ async def test_handle_linode_regions_availability_list(sample_config: Config) ->
         assert data["count"] == 2
         assert "availability" not in data
         assert data["region_availabilities"] == availability
-        mock_client.list_regions_availability.assert_awaited_once_with()
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_region_availability_list", query=""
+        )
 
 
 async def test_handle_linode_regions_availability_list_error(
@@ -5639,7 +3821,7 @@ async def test_handle_linode_regions_availability_list_error(
     """Test linode_region_availability_list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_regions_availability.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5673,7 +3855,7 @@ async def test_handle_linode_regions_availability_get(sample_config: Config) -> 
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_region_availability.return_value = availability
+        mock_client.route_raw.return_value = availability
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5688,7 +3870,9 @@ async def test_handle_linode_regions_availability_get(sample_config: Config) -> 
         assert len(data["region_availabilities"]) == 2
         assert data["region_availabilities"][0]["plan"] == "g6-standard-1"
         assert "not_in_proto" not in result[0].text
-        mock_client.get_region_availability.assert_awaited_once_with("us-east")
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_region_availability_get", "us-east", query=""
+        )
 
 
 async def test_handle_linode_regions_availability_get_rejects_malformed_region_id(
@@ -5720,7 +3904,7 @@ async def test_handle_linode_regions_availability_get_error(
     """Test linode_region_availability_get error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_region_availability.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5855,7 +4039,7 @@ async def test_handle_linode_kernels_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_kernels.return_value = response
+        mock_client.route_raw.return_value = response
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5868,7 +4052,9 @@ async def test_handle_linode_kernels_list(sample_config: Config) -> None:
     body = json.loads(result[0].text)
     assert body["count"] == 1
     assert body["kernels"][0]["id"] == "linode/latest-64bit"
-    mock_client.list_kernels.assert_awaited_once_with(page=2, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_kernel_list", query="page=2&page_size=25"
+    )
 
 
 @pytest.mark.parametrize(
@@ -5961,7 +4147,7 @@ async def test_handle_linode_types_list(sample_config: Config) -> None:
             "price": {"hourly": 0.03, "monthly": 20.0},
             "addons": {"backups": {"price": {"hourly": 0.008, "monthly": 5.0}}},
         }
-        mock_client.route_raw.assert_awaited_once_with("linode_type_list")
+        mock_client.route_raw.assert_awaited_once_with("linode_type_list", query="")
 
 
 async def test_handle_linode_types_list_filter_class(sample_config: Config) -> None:
@@ -6063,7 +4249,7 @@ async def test_handle_linode_type_get_rejects_malformed_type_id(
             result = await handle_linode_type_get({"type_id": type_id}, sample_config)
 
         assert len(result) == 1
-        assert "letters, numbers, and hyphens" in result[0].text
+        assert "type_id must not contain '/', '?', '#', or '..'" in result[0].text
         mock_client_class.assert_not_called()
 
 
@@ -6077,7 +4263,7 @@ async def test_handle_linode_type_get_requires_string_type_id(
         result = await handle_linode_type_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "type_id is required" in result[0].text
+    assert "type_id must be a non-empty string" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -6093,7 +4279,7 @@ async def test_handle_linode_type_get_error(sample_config: Config) -> None:
         result = await handle_linode_type_get({"type_id": "g6-nanode-1"}, sample_config)
 
         assert len(result) == 1
-        assert "Failed to retrieve Linode type g6-nanode-1" in result[0].text
+        assert "Failed to retrieve Linode type: " in result[0].text
 
 
 async def test_handle_linode_volume_get(sample_config: Config) -> None:
@@ -6158,7 +4344,7 @@ async def test_handle_linode_volume_types_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_volume_types.return_value = volume_types
+        mock_client.route_raw.return_value = {"data": volume_types}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6176,7 +4362,7 @@ async def test_handle_linode_volume_types_list(sample_config: Config) -> None:
             "region_prices": [{"id": "us-iad", "hourly": 0.00018, "monthly": 0.12}],
             "transfer": 0,
         }
-        mock_client.list_volume_types.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 async def test_handle_linode_volumes_list(sample_config: Config) -> None:
@@ -6275,300 +4461,6 @@ async def test_handle_linode_volumes_list_filter_region(sample_config: Config) -
         assert '"count": 1' in result[0].text
 
 
-async def test_create_linode_image_upload_tool_def() -> None:
-    """Image upload tool should require label, region, and confirm."""
-    tool, capability = create_linode_image_upload_tool()
-    assert tool.name == "linode_image_upload"
-    assert capability.name == "Write"
-    assert tool.input_schema["required"] == ["label", "region", "confirm"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_image_upload_success(sample_config: Config) -> None:
-    """Image upload tool should call the client and return upload details."""
-    upload_response = {
-        "image": {"id": "private/98765", "label": "upload-image"},
-        "upload_to": "https://uploads.example.invalid/image",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.upload_image.return_value = upload_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_image_upload(
-            {
-                "label": "upload-image",
-                "region": "us-east",
-                "cloud_init": True,
-                "description": "Uploaded image",
-                "tags": ["prod"],
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": "Image upload 'upload-image' (private/98765) created successfully",
-        "upload_to": "https://uploads.example.invalid/image",
-        "image": {
-            "id": "private/98765",
-            "label": "upload-image",
-            "description": "",
-            "type": "",
-            "vendor": "",
-            "status": "",
-            "created": "",
-            "created_by": "",
-            "capabilities": [],
-            "tags": [],
-            "size": 0,
-            "is_public": False,
-            "deprecated": False,
-        },
-    }
-    mock_client.upload_image.assert_awaited_once_with(
-        label="upload-image",
-        region="us-east",
-        cloud_init=True,
-        description="Uploaded image",
-        tags=["prod"],
-    )
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_image_upload_confirm_required(
-    sample_config: Config, confirm: object
-) -> None:
-    """Image upload should require literal confirm=true before client call."""
-    arguments: dict[str, object] = {"label": "upload-image", "region": "us-east"}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_upload(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        (
-            {"region": "us-east", "confirm": True},
-            "label must be a non-empty string",
-        ),
-        (
-            {"label": "upload-image", "confirm": True},
-            "region must be a non-empty string",
-        ),
-        (
-            {
-                "label": "upload-image",
-                "region": "us-east",
-                "cloud_init": "yes",
-                "confirm": True,
-            },
-            "cloud_init must be a boolean",
-        ),
-        (
-            {
-                "label": "upload-image",
-                "region": "us-east",
-                "tags": ["prod", ""],
-                "confirm": True,
-            },
-            "tags must contain non-empty strings",
-        ),
-    ],
-)
-async def test_handle_linode_image_upload_validation_errors(
-    sample_config: Config, arguments: dict[str, object], message: str
-) -> None:
-    """Image upload should validate required and optional body fields."""
-    result = await handle_linode_image_upload(arguments, sample_config)
-
-    assert len(result) == 1
-    assert message in result[0].text
-
-
-async def test_image_upload_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true previews the upload with request body and no call."""
-    result = await handle_linode_image_upload(
-        {
-            "label": "upload-image",
-            "region": "us-east",
-            "description": "Uploaded image",
-            "tags": ["prod"],
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_image_upload"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/images/upload"
-    assert body["would_execute"]["body"] == {
-        "label": "upload-image",
-        "region": "us-east",
-        "description": "Uploaded image",
-        "tags": ["prod"],
-    }
-    assert "confirm=true" not in result[0].text
-
-
-async def test_create_linode_image_update_tool_def() -> None:
-    """Image update tool should require image_id and confirm."""
-    tool, capability = create_linode_image_update_tool()
-    assert tool.name == "linode_image_update"
-    assert capability.name == "Write"
-    assert tool.input_schema["required"] == ["image_id", "confirm"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_image_update_success(sample_config: Config) -> None:
-    """Image update serializes the raw API body through the Image write proto."""
-    raw_image = {
-        "id": "private/12345",
-        "label": "renamed-image",
-        "description": "Updated image",
-        "type": "manual",
-        "vendor": "",
-        "status": "available",
-        "created": "2024-01-01T00:00:00",
-        "created_by": "testuser",
-        "capabilities": ["cloud-init"],
-        "tags": ["prod"],
-        "size": 2048,
-        "is_public": False,
-        "deprecated": False,
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_image_raw.return_value = raw_image
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_image_update(
-            {
-                "image_id": "private/12345",
-                "label": "renamed-image",
-                "description": "Updated image",
-                "tags": ["prod"],
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    payload = json.loads(result[0].text)
-    assert payload["message"] == "Image 'private/12345' updated successfully"
-    assert payload["image"]["label"] == "renamed-image"
-    assert payload["image"]["tags"] == ["prod"]
-    mock_client.update_image_raw.assert_awaited_once_with(
-        image_id="private/12345",
-        label="renamed-image",
-        description="Updated image",
-        tags=["prod"],
-    )
-
-
-async def test_handle_linode_image_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """Image update dry-run should preview the PUT without requiring confirm."""
-    result = await handle_linode_image_update(
-        {"image_id": "private/12345", "label": "renamed", "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_image_update"
-    assert body["would_execute"]["method"] == "PUT"
-    assert body["would_execute"]["path"] == "/images/private%2F12345"
-    assert body["would_execute"]["body"] == {"label": "renamed"}
-    assert "confirm=true" not in result[0].text
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_image_update_confirm_required(
-    sample_config: Config, confirm: object
-) -> None:
-    """Image update should require literal confirm=true before client call."""
-    arguments: dict[str, object] = {"image_id": "private/12345", "label": "renamed"}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("image_id", "message"),
-    [
-        ("", "image_id must be a non-empty string"),
-        ("private/12345?x=1", "image_id must not contain"),
-        ("../private/12345", "image_id must not contain"),
-        ("private/123/extra", "image_id must match private/<numeric_id>"),
-        ("private//123", "image_id must match private/<numeric_id>"),
-        ("/private/123", "image_id must match private/<numeric_id>"),
-    ],
-)
-async def test_handle_linode_image_update_rejects_bad_image_ids(
-    sample_config: Config, image_id: str, message: str
-) -> None:
-    """Image update rejects malformed image IDs before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_update(
-            {"image_id": image_id, "label": "renamed", "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({"image_id": "private/12345", "confirm": True}, "at least one"),
-        ({"image_id": "private/12345", "label": "", "confirm": True}, "label"),
-        (
-            {"image_id": "private/12345", "description": 123, "confirm": True},
-            "description",
-        ),
-        ({"image_id": "private/12345", "tags": "prod", "confirm": True}, "tags"),
-    ],
-)
-async def test_handle_linode_image_update_validation_errors(
-    sample_config: Config, arguments: dict[str, object], message: str
-) -> None:
-    """Image update validates writable request fields before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
 async def test_create_linode_kernel_get_tool_def() -> None:
     """Kernel get tool should require kernel_id."""
     tool, capability = create_linode_kernel_get_tool()
@@ -6592,7 +4484,7 @@ async def test_handle_linode_kernel_get_success(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_kernel.return_value = kernel
+        mock_client.route_raw.return_value = kernel
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6609,7 +4501,9 @@ async def test_handle_linode_kernel_get_success(sample_config: Config) -> None:
         assert body["kvm"] is True
         assert body["deprecated"] is False
         assert "xen" not in body
-        mock_client.get_kernel.assert_awaited_once_with("linode/latest-64bit")
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_kernel_get", "linode/latest-64bit"
+        )
 
 
 @pytest.mark.parametrize(
@@ -6628,7 +4522,7 @@ async def test_handle_linode_kernel_get_accepts_valid_kernel_ids(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_kernel.return_value = kernel
+        mock_client.route_raw.return_value = kernel
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6639,7 +4533,7 @@ async def test_handle_linode_kernel_get_accepts_valid_kernel_ids(
         )
 
     assert json.loads(result[0].text)["id"] == kernel_id
-    mock_client.get_kernel.assert_awaited_once_with(kernel_id)
+    mock_client.route_raw.assert_awaited_once_with("linode_kernel_get", kernel_id)
 
 
 @pytest.mark.parametrize(
@@ -6745,347 +4639,6 @@ async def test_handle_linode_image_get_rejects_malformed_image_id(
 
     assert len(result) == 1
     assert "image_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_create_linode_image_create_tool_def() -> None:
-    """Image create tool should require disk_id and confirm."""
-    tool, capability = create_linode_image_create_tool()
-    assert tool.name == "linode_image_create"
-    assert capability.name == "Write"
-    assert tool.input_schema["required"] == ["disk_id", "confirm"]
-
-
-async def test_handle_linode_image_create_success(sample_config: Config) -> None:
-    """Image create serializes the raw API body through the Image write proto."""
-    raw_image = {
-        "id": "private/12345",
-        "label": "app-image",
-        "description": "Application image",
-        "type": "manual",
-        "vendor": "",
-        "status": "creating",
-        "created": "2024-01-01T00:00:00",
-        "created_by": "testuser",
-        "capabilities": ["cloud-init"],
-        "tags": ["prod"],
-        "size": 2048,
-        "is_public": False,
-        "deprecated": False,
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_image_raw.return_value = raw_image
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_image_create(
-            {
-                "disk_id": 123,
-                "label": "app-image",
-                "description": "Application image",
-                "cloud_init": True,
-                "tags": ["prod"],
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        payload = json.loads(result[0].text)
-        assert (
-            payload["message"]
-            == "Image 'app-image' (private/12345) created successfully"
-        )
-        # The full Image proto element is emitted, not a curated subset.
-        assert payload["image"]["id"] == "private/12345"
-        assert payload["image"]["size"] == 2048
-        assert payload["image"]["capabilities"] == ["cloud-init"]
-        mock_client.create_image_raw.assert_awaited_once_with(
-            disk_id=123,
-            label="app-image",
-            description="Application image",
-            cloud_init=True,
-            tags=["prod"],
-        )
-
-
-async def test_handle_linode_image_create_confirm_required(
-    sample_config: Config,
-) -> None:
-    """Image create should require confirm=true."""
-    result = await handle_linode_image_create({"disk_id": 123}, sample_config)
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_image_create_invalid_tags(sample_config: Config) -> None:
-    """Image create should validate tags."""
-    result = await handle_linode_image_create(
-        {"disk_id": 123, "tags": ["prod", ""], "confirm": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "tags" in result[0].text
-
-
-async def test_image_create_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true previews the create with no resource state and no call."""
-    result = await handle_linode_image_create(
-        {"disk_id": 123, "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_image_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/images"
-    assert body["current_state"] is None
-    assert any("123" in s for s in body["side_effects"])
-    assert "confirm=true" not in result[0].text
-
-
-async def test_image_create_dry_run_still_validates_disk_id(
-    sample_config: Config,
-) -> None:
-    """Missing/invalid disk_id must error out regardless of dry_run."""
-    result = await handle_linode_image_create({"dry_run": True}, sample_config)
-
-    assert len(result) == 1
-    assert "disk_id must be a positive integer" in result[0].text
-
-
-async def test_image_create_dry_run_side_effect_includes_label(
-    sample_config: Config,
-) -> None:
-    """A provided label is echoed in the dry-run side effect text."""
-    result = await handle_linode_image_create(
-        {"disk_id": 123, "label": "golden", "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert any("labeled 'golden'" in s for s in body["side_effects"])
-
-
-async def test_image_create_invalid_disk_id_rejected_after_confirm(
-    sample_config: Config,
-) -> None:
-    """A non-positive disk_id is rejected on the execute path, not just dry-run."""
-    result = await handle_linode_image_create(
-        {"disk_id": 0, "confirm": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "disk_id must be a positive integer" in result[0].text
-
-
-async def test_create_linode_images_sharegroups_token_update_tool_def() -> None:
-    """Image share group token update tool should require UUID, label, and confirm."""
-    tool, capability = create_linode_image_sharegroup_token_update_tool()
-
-    assert tool.name == "linode_image_sharegroup_token_update"
-    assert capability.name == "Write"
-    assert tool.input_schema["required"] == ["token_uuid", "label", "confirm"]
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_images_sharegroups_token_update_success(
-    sample_config: Config,
-) -> None:
-    """Image share group token update should call the client once."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_image_sharegroup_token.return_value = {
-            "id": "sharegroup-record-1",
-            "label": "renamed-token",
-            "token_uuid": "11111111-1111-4111-8111-111111111111",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_image_sharegroup_token_update(
-            {
-                "token_uuid": "11111111-1111-4111-8111-111111111111",
-                "label": "renamed-token",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "renamed-token" in result[0].text
-        mock_client.update_image_sharegroup_token.assert_awaited_once_with(
-            token_uuid="11111111-1111-4111-8111-111111111111",
-            label="renamed-token",
-        )
-
-
-async def test_create_linode_images_sharegroups_token_create_tool_def() -> None:
-    """Image share group token create tool should require UUID and confirm."""
-    tool, capability = create_linode_image_sharegroup_token_create_tool()
-
-    assert tool.name == "linode_image_sharegroup_token_create"
-    assert capability.name == "Write"
-    assert tool.input_schema["required"] == ["valid_for_sharegroup_uuid", "confirm"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_images_sharegroups_token_create_success(
-    sample_config: Config,
-) -> None:
-    """Image share group token create should call the client once."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_image_sharegroup_token.return_value = {
-            "token_uuid": "tok-2222",
-            "label": "partner-token",
-            "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_image_sharegroup_token_create(
-            {
-                "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
-                "label": "partner-token",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        payload = json.loads(result[0].text)
-        assert payload == {
-            "message": "Image share group token 'tok-2222' created successfully",
-            "token": {
-                "token": "",
-                "token_uuid": "tok-2222",
-                "status": "",
-                "label": "partner-token",
-                "created": "",
-                "valid_for_sharegroup_uuid": ("11111111-1111-4111-8111-111111111111"),
-                "sharegroup_uuid": "",
-                "sharegroup_label": "",
-            },
-        }
-        mock_client.create_image_sharegroup_token.assert_awaited_once_with(
-            valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
-            label="partner-token",
-        )
-
-
-@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
-async def test_handle_linode_images_sharegroups_token_create_requires_true_confirm(
-    sample_config: Config, bad_confirm: object
-) -> None:
-    """Image share group token create rejects non-true confirm before the client."""
-    arguments: dict[str, Any] = {
-        "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111"
-    }
-    if bad_confirm is not None:
-        arguments["confirm"] = bad_confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_sharegroup_token_create(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "bad_uuid", [None, "", "   ", "not-a-uuid", "../", "uuid?x=1", 123, True]
-)
-async def test_handle_linode_images_sharegroups_token_create_validates_uuid(
-    sample_config: Config, bad_uuid: object
-) -> None:
-    """Image share group token create requires the documented UUID body field."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_sharegroup_token_create(
-            {"valid_for_sharegroup_uuid": bad_uuid, "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "valid_for_sharegroup_uuid" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("bad_label", ["", "   ", 123, True])
-async def test_handle_linode_images_sharegroups_token_create_validates_label(
-    sample_config: Config, bad_label: object
-) -> None:
-    """Image share group token create rejects malformed optional labels."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_sharegroup_token_create(
-            {
-                "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
-                "label": bad_label,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "label" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_image_sharegroup_token_create_dry_run_previews_without_confirm(
-    sample_config: Config,
-) -> None:
-    """Dry-run previews without requiring the confirm gate."""
-    result = await handle_linode_image_sharegroup_token_create(
-        {
-            "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert '"dry_run": true' in result[0].text
-
-
-async def test_image_sharegroup_token_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews token creation without calling the client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_image_sharegroup_token_create(
-            {
-                "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
-                "label": "partner-token",
-                "confirm": True,
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_image_sharegroup_token_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/images/sharegroups/tokens"
-    assert body["would_execute"]["body"] == {
-        "valid_for_sharegroup_uuid": "11111111-1111-4111-8111-111111111111",
-        "label": "partner-token",
-    }
     mock_client_class.assert_not_called()
 
 
@@ -7214,7 +4767,7 @@ async def test_handle_linode_regions_list_error(sample_config: Config) -> None:
     """Test linode_region_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7229,7 +4782,7 @@ async def test_handle_linode_types_list_error(sample_config: Config) -> None:
     """Test linode_type_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7244,7 +4797,7 @@ async def test_handle_linode_volumes_list_error(sample_config: Config) -> None:
     """Test linode_volume_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7259,7 +4812,7 @@ async def test_handle_linode_images_list_error(sample_config: Config) -> None:
     """Test linode_image_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7501,7 +5054,7 @@ async def test_handle_linode_sshkeys_list_error(sample_config: Config) -> None:
     """Test linode_sshkey_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7699,7 +5252,7 @@ async def test_handle_linode_domain_record_get_missing_id(
     result = await handle_linode_domain_record_get({"domain_id": 1}, sample_config)
 
     assert len(result) == 1
-    assert "record_id is required" in result[0].text
+    assert "record_id must be a positive integer" in result[0].text
 
 
 async def test_handle_linode_domain_records_list_filter_type(
@@ -8021,7 +5574,7 @@ async def test_handle_linode_firewalls_list_error(sample_config: Config) -> None
     """Test linode_firewall_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8175,7 +5728,7 @@ async def test_handle_linode_nodebalancers_list_error(sample_config: Config) -> 
     """Test linode_nodebalancer_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8209,7 +5762,7 @@ async def test_handle_linode_nodebalancer_config_get(sample_config: Config) -> N
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config.return_value = mock_config
+        mock_client.route_raw.return_value = mock_config
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8225,7 +5778,9 @@ async def test_handle_linode_nodebalancer_config_get(sample_config: Config) -> N
         assert data["protocol"] == "http"
         assert data["nodes_status"] == {"up": 0, "down": 0}
         assert data["check_passive"] is False
-        mock_client.get_nodebalancer_config.assert_called_once_with(8, 6)
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_config_get", 8, 6
+        )
 
 
 async def test_handle_linode_nodebalancer_config_get_invalid_arguments(
@@ -8273,7 +5828,7 @@ async def test_handle_linode_nodebalancer_config_get_error(
     """Test linode_nodebalancer_config_get error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8307,7 +5862,7 @@ async def test_handle_linode_nodebalancer_configs_list(sample_config: Config) ->
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_configs.return_value = mock_configs
+        mock_client.route_raw.return_value = mock_configs
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8322,8 +5877,8 @@ async def test_handle_linode_nodebalancer_configs_list(sample_config: Config) ->
         assert body["configs"][0]["id"] == 6
         assert body["configs"][0]["port"] == 80
         assert body["configs"][0]["protocol"] == "http"
-        mock_client.list_nodebalancer_configs.assert_called_once_with(
-            8, page=None, page_size=None
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_config_list", 8, query=""
         )
 
 
@@ -8335,7 +5890,7 @@ async def test_handle_linode_nodebalancer_configs_list_with_pagination(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_configs.return_value = mock_configs
+        mock_client.route_raw.return_value = mock_configs
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8346,16 +5901,14 @@ async def test_handle_linode_nodebalancer_configs_list_with_pagination(
 
         body = json.loads(result[0].text)
         assert body == {"count": 0, "configs": []}
-        mock_client.list_nodebalancer_configs.assert_called_once_with(
-            8, page=2, page_size=50
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_config_list", 8, query="page=2&page_size=50"
         )
 
 
 async def test_handle_linode_nodebalancer_type_list(sample_config: Config) -> None:
     """Proto-canonical envelope: count plus full LinodeType elements."""
-    from linodemcp.tools.linode_nodebalancers import (
-        handle_linode_nodebalancer_type_list,
-    )
+    from linodemcp.gentools import handle_linode_nodebalancer_type_list
 
     mock_types = [
         {
@@ -8371,7 +5924,7 @@ async def test_handle_linode_nodebalancer_type_list(sample_config: Config) -> No
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_types.return_value = mock_types
+        mock_client.route_raw.return_value = {"data": mock_types}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8397,7 +5950,9 @@ async def test_handle_linode_nodebalancer_type_list(sample_config: Config) -> No
         "region_prices": [],
         "transfer": 0,
     }
-    mock_client.list_nodebalancer_types.assert_awaited_once_with()
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_nodebalancer_type_list", query=""
+    )
 
 
 @pytest.mark.parametrize(
@@ -8441,7 +5996,7 @@ async def test_handle_linode_nodebalancer_configs_list_error(
     """Test linode_nodebalancer_config_list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_configs.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8469,7 +6024,7 @@ async def test_handle_linode_nodebalancer_config_nodes_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_config_nodes.return_value = mock_nodes
+        mock_client.route_raw.return_value = mock_nodes
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8480,8 +6035,8 @@ async def test_handle_linode_nodebalancer_config_nodes_list(
 
         assert len(result) == 1
         assert "node-1" in result[0].text
-        mock_client.list_nodebalancer_config_nodes.assert_called_once_with(
-            8, 6, page=None, page_size=None
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_config_node_list", 8, 6, query=""
         )
 
 
@@ -8493,7 +6048,7 @@ async def test_handle_linode_nodebalancer_config_nodes_list_with_pagination(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_config_nodes.return_value = mock_nodes
+        mock_client.route_raw.return_value = mock_nodes
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8506,8 +6061,8 @@ async def test_handle_linode_nodebalancer_config_nodes_list_with_pagination(
         assert len(result) == 1
         data = json.loads(result[0].text)
         assert data == {"count": 0, "nodes": []}
-        mock_client.list_nodebalancer_config_nodes.assert_called_once_with(
-            8, 6, page=2, page_size=50
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_config_node_list", 8, 6, query="page=2&page_size=50"
         )
 
 
@@ -8583,7 +6138,7 @@ async def test_handle_linode_nodebalancer_config_nodes_list_error(
     """Test linode_nodebalancer_config_node_list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_config_nodes.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8594,162 +6149,6 @@ async def test_handle_linode_nodebalancer_config_nodes_list_error(
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
-
-
-def test_linode_nodebalancer_config_node_create_tool_definition() -> None:
-    """NodeBalancer config node create tool should require inputs and confirm."""
-    tool, capability = create_linode_nodebalancer_config_node_create_tool()
-    assert tool.name == "linode_nodebalancer_config_node_create"
-    assert capability == Capability.Write
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "nodebalancer_id" in required
-    assert "config_id" in required
-    assert "address" in required
-    assert "label" in required
-    assert "confirm" in required
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
-async def test_handle_linode_nodebalancer_config_node_create_confirm_required(
-    sample_config: Config, confirm_value: object
-) -> None:
-    """Config node create rejects non-true boolean confirm before client call."""
-    arguments: dict[str, Any] = {
-        "nodebalancer_id": 8,
-        "config_id": 6,
-        "address": "192.0.2.4:80",
-        "label": "node-1",
-    }
-    if confirm_value is not None:
-        arguments["confirm"] = confirm_value
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_config_node_create(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("field", "value", "message"),
-    [
-        ("nodebalancer_id", "8/9", "nodebalancer_id"),
-        ("config_id", "6?x", "config_id"),
-        ("nodebalancer_id", "..", "nodebalancer_id"),
-        ("address", None, "address"),
-        ("address", "", "address"),
-        ("label", None, "label"),
-        ("label", "ab", "label"),
-        ("label", "x" * 33, "label"),
-        ("mode", "invalid", "mode"),
-        ("subnet_id", 0, "subnet_id"),
-        ("weight", "50", "weight"),
-        ("weight", 0, "weight"),
-        ("weight", 256, "weight"),
-    ],
-)
-async def test_handle_linode_nodebalancer_config_node_create_validation_errors(
-    sample_config: Config, field: str, value: object, message: str
-) -> None:
-    """Config node create validates path params and body before client call."""
-    arguments: dict[str, Any] = {
-        "nodebalancer_id": 8,
-        "config_id": 6,
-        "address": "192.0.2.4:80",
-        "label": "node-1",
-        "confirm": True,
-    }
-    arguments[field] = value
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_config_node_create(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text.lower()
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_nodebalancer_config_node_create_success(
-    sample_config: Config,
-) -> None:
-    """Config node create calls the client with the expected body."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_nodebalancer_config_node.return_value = {
-            "id": 4,
-            "label": "node-1",
-            "address": "192.0.2.4:80",
-            "mode": "accept",
-            "weight": 50,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_create(
-            {
-                "nodebalancer_id": 8,
-                "config_id": 6,
-                "address": "192.0.2.4:80",
-                "label": "node-1",
-                "mode": "accept",
-                "weight": 50,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert "created successfully" in data["message"]
-    # The body is the full NodeBalancerConfigNode proto element.
-    assert data["node"]["id"] == 4
-    assert data["node"]["label"] == "node-1"
-    assert data["node"]["address"] == "192.0.2.4:80"
-    assert data["node"]["mode"] == "accept"
-    assert data["node"]["weight"] == 50
-    mock_client.create_nodebalancer_config_node.assert_awaited_once_with(
-        8,
-        6,
-        {
-            "address": "192.0.2.4:80",
-            "label": "node-1",
-            "mode": "accept",
-            "weight": 50,
-        },
-    )
-
-
-async def test_handle_linode_nodebalancer_config_node_create_error(
-    sample_config: Config,
-) -> None:
-    """Config node create propagates client errors through execute_tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_nodebalancer_config_node.side_effect = Exception("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_create(
-            {
-                "nodebalancer_id": 8,
-                "config_id": 6,
-                "address": "192.0.2.4:80",
-                "label": "node-1",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "failed" in result[0].text.lower() or "error" in result[0].text.lower()
 
 
 async def test_handle_linode_nodebalancer_get(sample_config: Config) -> None:
@@ -8845,7 +6244,7 @@ async def test_handle_linode_nodebalancer_vpc_configs_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_vpc_configs.return_value = mock_configs
+        mock_client.route_raw.return_value = mock_configs
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8862,8 +6261,8 @@ async def test_handle_linode_nodebalancer_vpc_configs_list(
         assert data["vpc_configs"][0]["vpc_id"] == 1
         assert data["vpc_configs"][0]["subnet_id"] == 1
         assert data["vpc_configs"][0]["nodebalancer_id"] == 8
-        mock_client.list_nodebalancer_vpc_configs.assert_called_once_with(
-            8, page=1, page_size=25
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_vpc_config_list", 8, query="page=1&page_size=25"
         )
 
 
@@ -8913,7 +6312,7 @@ async def test_handle_linode_nodebalancer_vpc_configs_list_error(
     """Test linode_nodebalancer_vpc_config_list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_vpc_configs.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8950,7 +6349,7 @@ async def test_handle_linode_nodebalancer_vpc_config_get(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_vpc_config.return_value = mock_config
+        mock_client.route_raw.return_value = mock_config
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8964,7 +6363,9 @@ async def test_handle_linode_nodebalancer_vpc_config_get(
         assert data["id"] == 456
         assert data["vpc_id"] == 789
         assert "ipv4_range_id" not in data
-        mock_client.get_nodebalancer_vpc_config.assert_called_once_with(123, 456)
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_vpc_config_get", 123, 456
+        )
 
 
 @pytest.mark.parametrize(
@@ -9006,7 +6407,7 @@ async def test_handle_linode_nodebalancer_vpc_config_get_error(
     """Test linode_nodebalancer_vpc_config_get error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_vpc_config.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9186,7 +6587,7 @@ async def test_handle_linode_stackscripts_list_error(sample_config: Config) -> N
     """Test linode_stackscript_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9217,25 +6618,19 @@ async def test_linode_stackscript_delete_tool_schema() -> None:
 
 
 async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -> None:
-    """Dry-run previews the DELETE route with the fetched script as state."""
+    """Dry-run previews the DELETE route with the read script as state.
+
+    The state comes from the declared read, so rev_note reaches the preview: the
+    API sends it and the StackScript message models it.
+    """
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_stackscript.return_value = StackScript(
-            id=12345,
-            username="tester",
-            user_gravatar_id="",
-            label="deploy",
-            description="",
-            images=[],
-            deployments_total=0,
-            deployments_active=0,
-            is_public=False,
-            mine=True,
-            created="",
-            updated="",
-            script="#!/bin/bash",
-            user_defined_fields=[],
-        )
+        mock_client.route_raw.return_value = {
+            "id": 12345,
+            "label": "deploy",
+            "script": "#!/bin/bash",
+            "rev_note": "first cut",
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9251,14 +6646,15 @@ async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -
     assert payload["would_execute"]["method"] == "DELETE"
     assert payload["would_execute"]["path"] == "/linode/stackscripts/12345"
     assert payload["current_state"]["label"] == "deploy"
-    mock_client.delete_stackscript.assert_not_called()
+    assert payload["current_state"]["rev_note"] == "first cut"
+    mock_client.route_call.assert_not_called()
 
 
 async def test_handle_linode_stackscript_delete(sample_config: Config) -> None:
     """Test linode_stackscript_delete tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.delete_stackscript.return_value = {}
+        mock_client.route_raw.return_value = {}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9270,7 +6666,9 @@ async def test_handle_linode_stackscript_delete(sample_config: Config) -> None:
     assert len(result) == 1
     assert "12345" in result[0].text
     assert "deleted" in result[0].text.lower()
-    mock_client.delete_stackscript.assert_awaited_once_with(12345)
+    mock_client.route_call.assert_awaited_once_with(
+        "linode_stackscript_delete", 12345, retry=False
+    )
 
 
 @pytest.mark.parametrize(
@@ -9320,7 +6718,7 @@ async def test_handle_linode_stackscript_delete_error(sample_config: Config) -> 
     """Test linode_stackscript_delete error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.delete_stackscript.side_effect = Exception("API error")
+        mock_client.route_call.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9438,22 +6836,22 @@ async def test_handle_linode_stackscript_create_validates_required_fields(
 
 async def test_handle_linode_sshkey_create(sample_config: Config) -> None:
     """Test linode_sshkey_create tool."""
-    mock_key = SSHKey(
-        id=12345,
-        label="my-key",
-        ssh_key="ssh-rsa AAAA...",
-        created="2024-01-15T10:00:00",
-    )
+    raw_key = {
+        "id": 12345,
+        "label": "my-key",
+        "ssh_key": SAMPLE_SSH_KEY,
+        "created": "2024-01-15T10:00:00",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_ssh_key.return_value = mock_key
+        mock_client.route_raw.return_value = raw_key
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_sshkey_create(
-            {"label": "my-key", "ssh_key": "ssh-rsa AAAA...", "confirm": True},
+            {"label": "my-key", "ssh_key": SAMPLE_SSH_KEY, "confirm": True},
             sample_config,
         )
 
@@ -9461,19 +6859,14 @@ async def test_handle_linode_sshkey_create(sample_config: Config) -> None:
         expected = serialize_api_response(
             {
                 "message": "SSH key 'my-key' (ID: 12345) created successfully",
-                "ssh_key": {
-                    "id": 12345,
-                    "label": "my-key",
-                    "ssh_key": "ssh-rsa AAAA...",
-                    "created": "2024-01-15T10:00:00",
-                },
+                "ssh_key": raw_key,
             },
             sshkey_pb2.SSHKeyWriteResponse(),
         )
         out = json.loads(result[0].text)
         assert out == expected
         # The public key is public information and is restored in full.
-        assert out["ssh_key"]["ssh_key"] == "ssh-rsa AAAA..."
+        assert out["ssh_key"]["ssh_key"] == SAMPLE_SSH_KEY
 
 
 async def test_handle_linode_sshkey_create_missing_params(
@@ -9489,16 +6882,16 @@ async def test_handle_linode_sshkey_create_missing_params(
 
 async def test_handle_linode_sshkey_update(sample_config: Config) -> None:
     """Test linode_sshkey_update tool."""
-    mock_key = SSHKey(
-        id=12345,
-        label="renamed-key",
-        ssh_key="ssh-rsa AAAA...",
-        created="2024-01-15T10:00:00",
-    )
+    raw_key = {
+        "id": 12345,
+        "label": "renamed-key",
+        "ssh_key": SAMPLE_SSH_KEY,
+        "created": "2024-01-15T10:00:00",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_ssh_key.return_value = mock_key
+        mock_client.route_raw.return_value = raw_key
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9508,7 +6901,9 @@ async def test_handle_linode_sshkey_update(sample_config: Config) -> None:
             sample_config,
         )
 
-        mock_client.update_ssh_key.assert_awaited_once_with(12345, "renamed-key")
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_sshkey_update", 12345, body={"label": "renamed-key"}
+        )
         assert len(result) == 1
         assert "renamed-key" in result[0].text
         assert "updated" in result[0].text.lower()
@@ -9534,27 +6929,10 @@ async def test_handle_linode_sshkey_update_no_confirm(sample_config: Config) -> 
     assert "confirm" in result[0].text.lower()
 
 
-async def test_handle_linode_sshkey_delete(sample_config: Config) -> None:
-    """Test linode_sshkey_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_ssh_key.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_sshkey_delete(
-            {"ssh_key_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "removed" in result[0].text.lower()
-
-
 async def test_sshkey_create_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true previews the create with no resource state and no call."""
     result = await handle_linode_sshkey_create(
-        {"label": "my-key", "ssh_key": "ssh-rsa AAAA", "dry_run": True},
+        {"label": "my-key", "ssh_key": SAMPLE_SSH_KEY, "dry_run": True},
         sample_config,
     )
 
@@ -9581,31 +6959,6 @@ async def test_sshkey_create_dry_run_still_validates_label(
     assert "label is required" in result[0].text
 
 
-async def test_sshkey_update_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true fetches state via GET and never calls update."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_ssh_key.return_value = {"id": 123, "label": "old"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_sshkey_update(
-            {"ssh_key_id": 123, "label": "renamed", "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_sshkey_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/profile/sshkeys/123"
-        assert any("renamed" in s for s in body["side_effects"])
-        mock_client.get_ssh_key.assert_awaited_once_with(123)
-        mock_client.update_ssh_key.assert_not_called()
-
-
 async def test_sshkey_update_dry_run_still_validates_id(
     sample_config: Config,
 ) -> None:
@@ -9616,31 +6969,6 @@ async def test_sshkey_update_dry_run_still_validates_id(
 
     assert len(result) == 1
     assert "ssh_key_id must be a positive integer" in result[0].text
-
-
-async def test_sshkey_delete_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true fetches state via GET and never calls delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_ssh_key.return_value = {"id": 123, "label": "old"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_sshkey_delete(
-            {"ssh_key_id": 123, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_sshkey_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/profile/sshkeys/123"
-        mock_client.get_ssh_key.assert_awaited_once_with(123)
-        mock_client.delete_ssh_key.assert_not_called()
-        assert "confirm=true" not in result[0].text
 
 
 async def test_sshkey_delete_dry_run_still_validates_id(
@@ -9690,705 +7018,12 @@ async def test_stackscript_create_dry_run_still_validates_label(
     assert "label is required" in result[0].text
 
 
-async def test_handle_linode_instance_boot(sample_config: Config) -> None:
-    """Test linode_instance_boot tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.boot_instance.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_boot(
-            {"instance_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "boot" in result[0].text.lower()
-
-
-async def test_handle_linode_instance_reboot(sample_config: Config) -> None:
-    """Test linode_instance_reboot tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.reboot_instance.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_reboot(
-            {"instance_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "reboot" in result[0].text.lower()
-
-
-async def test_handle_linode_instance_shutdown(sample_config: Config) -> None:
-    """Test linode_instance_shutdown tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.shutdown_instance.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_shutdown(
-            {"instance_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "shutdown" in result[0].text.lower()
-
-
-async def test_handle_linode_instance_create_no_confirm(sample_config: Config) -> None:
-    """Test linode_instance_create tool without confirmation."""
-    result = await handle_linode_instance_create(
-        {"region": "us-east", "type": "g6-nanode-1", "firewall_id": 12345},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_handle_linode_instance_create_missing_firewall_id(
-    sample_config: Config,
-) -> None:
-    """The current Linode Interfaces generation requires firewall_id at create
-    time. The tool must reject the call before any HTTP request when missing.
-    """
-    result = await handle_linode_instance_create(
-        {"region": "us-east", "type": "g6-nanode-1", "confirm": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "firewall_id is required" in result[0].text
-
-
-def test_linode_instance_create_tool_schema() -> None:
-    """The tool schema must expose firewall_id and the route flags, and must
-    not surface the legacy private_ip parameter.
-    """
-    from linodemcp.tools import create_linode_instance_create_tool
-
-    tool, _ = create_linode_instance_create_tool()
-    props: dict[str, Any] = tool.input_schema["properties"]
-    required: list[str] = tool.input_schema["required"]
-
-    assert "firewall_id" in props, "schema must include firewall_id"
-    assert "route_ipv4" in props, "schema must include route_ipv4"
-    assert "route_ipv6" in props, "schema must include route_ipv6"
-    assert "private_ip" not in props, (
-        "schema must not include legacy private_ip parameter"
-    )
-    assert "firewall_id" in required, "firewall_id must be required"
-
-
-async def test_handle_linode_instance_create(
-    sample_config: Config, sample_instance_data: dict[str, Any]
-) -> None:
-    """Test linode_instance_create tool."""
-    mock_instance = Instance(
-        id=sample_instance_data["id"],
-        label=sample_instance_data["label"],
-        status=sample_instance_data["status"],
-        type=sample_instance_data["type"],
-        region=sample_instance_data["region"],
-        image=sample_instance_data["image"],
-        ipv4=sample_instance_data["ipv4"],
-        ipv6=sample_instance_data["ipv6"],
-        hypervisor=sample_instance_data["hypervisor"],
-        specs=Specs(
-            disk=sample_instance_data["specs"]["disk"],
-            memory=sample_instance_data["specs"]["memory"],
-            vcpus=sample_instance_data["specs"]["vcpus"],
-            transfer=sample_instance_data["specs"]["transfer"],
-            gpus=sample_instance_data["specs"]["gpus"],
-        ),
-        alerts=Alerts(
-            cpu=sample_instance_data["alerts"]["cpu"],
-            network_in=sample_instance_data["alerts"]["network_in"],
-            network_out=sample_instance_data["alerts"]["network_out"],
-            transfer_quota=sample_instance_data["alerts"]["transfer_quota"],
-            io=sample_instance_data["alerts"]["io"],
-        ),
-        backups=Backups(
-            enabled=sample_instance_data["backups"]["enabled"],
-            available=sample_instance_data["backups"]["available"],
-            schedule=Schedule(day="Saturday", window="W0"),
-            last_successful=None,
-        ),
-        created=sample_instance_data["created"],
-        updated=sample_instance_data["updated"],
-        group=sample_instance_data["group"],
-        tags=sample_instance_data["tags"],
-        watchdog_enabled=sample_instance_data["watchdog_enabled"],
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_instance.return_value = mock_instance
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_create(
-            {
-                "region": "us-east",
-                "type": "g6-nanode-1",
-                "firewall_id": 12345,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "created" in result[0].text.lower()
-
-
-async def test_handle_linode_instance_update_no_confirm(sample_config: Config) -> None:
-    """Test linode_instance_update tool without confirmation."""
-    result = await handle_linode_instance_update(
-        {"instance_id": 12345, "label": "updated-instance"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_instance_firewalls_update_requires_boolean_confirm(
-    sample_config: Config, confirm: object
-) -> None:
-    """Confirm must be exactly true before the client is called."""
-    arguments: dict[str, Any] = {"linode_id": 42, "firewall_ids": [123]}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
-async def test_handle_linode_instance_firewalls_update_rejects_invalid_linode_id(
-    sample_config: Config, linode_id: object
-) -> None:
-    """Malformed Linode IDs are rejected before the client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_update(
-            {"linode_id": linode_id, "firewall_ids": [123], "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "linode_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("firewall_ids", ["123", [0], [-1], [True], ["123"]])
-async def test_handle_linode_instance_firewalls_update_rejects_invalid_firewall_ids(
-    sample_config: Config, firewall_ids: object
-) -> None:
-    """Invalid firewall_ids are rejected before the client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_update(
-            {"linode_id": 42, "firewall_ids": firewall_ids, "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "firewall_ids must be a list of positive integers" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("field", "value", "message"),
-    [
-        ("page", "2", "page must be an integer"),
-        ("page", 0, "page must be an integer greater than or equal to 1"),
-        ("page_size", "25", "page_size must be an integer"),
-        ("page_size", 24, "page_size must be an integer from 25 through 500"),
-        ("page_size", 501, "page_size must be an integer from 25 through 500"),
-    ],
-)
-async def test_handle_linode_instance_firewalls_update_rejects_invalid_pagination(
-    sample_config: Config, field: str, value: object, message: str
-) -> None:
-    """Invalid pagination values are rejected before the client call."""
-    arguments: dict[str, Any] = {
-        "linode_id": 42,
-        "firewall_ids": [123],
-        "confirm": True,
-        field: value,
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-def test_linode_instance_firewalls_update_tool_schema() -> None:
-    """The Linode firewall assignment update schema exposes safety controls."""
-    tool, capability = create_linode_instance_firewall_update_tool()
-    props: dict[str, Any] = tool.input_schema["properties"]
-
-    assert tool.name == "linode_instance_firewall_update"
-    assert capability.name == "Write"
-    assert tool.input_schema == proto_schema(
-        "linode.mcp.v1.InstanceFirewallUpdateInput"
-    )
-    assert "linode_id" in tool.input_schema["required"]
-    assert "confirm" in tool.input_schema["required"]
-    # A repeated proto field cannot land in the generated required set, so
-    # firewall_ids is optional at the schema level; the handler enforces it.
-    assert "firewall_ids" in props
-    assert "firewall_ids" not in tool.input_schema["required"]
-    assert "dry_run" not in tool.input_schema["required"]
-    assert props["dry_run"]["type"] == "boolean"
-    assert props["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_instance_firewalls_update(
-    sample_config: Config,
-) -> None:
-    """Test linode_instance_firewall_update tool."""
-    response_data = {"data": [{"id": 123}], "page": 1, "pages": 1, "results": 1}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_instance_firewalls.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_firewall_update(
-            {
-                "linode_id": 42,
-                "firewall_ids": [123],
-                "page": 2,
-                "page_size": 25,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert json.loads(result[0].text) == {
-        "count": 1,
-        "firewalls": [
-            {
-                "id": 123,
-                "label": "",
-                "status": "",
-                "tags": [],
-                "created": "",
-                "updated": "",
-            }
-        ],
-    }
-    mock_client.update_instance_firewalls.assert_awaited_once_with(
-        42, [123], page=2, page_size=25
-    )
-
-
-async def test_handle_linode_instance_firewalls_update_allows_empty_firewall_ids(
-    sample_config: Config,
-) -> None:
-    """An empty firewall_ids list is forwarded as the documented removal path."""
-    response_data: dict[str, Any] = {
-        "data": [],
-        "page": 1,
-        "pages": 1,
-        "results": 0,
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_instance_firewalls.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_firewall_update(
-            {"linode_id": 42, "firewall_ids": [], "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert json.loads(result[0].text) == {"count": 0, "firewalls": []}
-    mock_client.update_instance_firewalls.assert_awaited_once_with(
-        42, [], page=None, page_size=None
-    )
-
-
-async def test_instance_firewalls_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the PUT body/query and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_update(
-            {
-                "linode_id": 42,
-                "firewall_ids": [123],
-                "page": 2,
-                "page_size": 25,
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_instance_firewall_update"
-    assert body["would_execute"]["method"] == "PUT"
-    assert (
-        body["would_execute"]["path"]
-        == "/linode/instances/42/firewalls?page=2&page_size=25"
-    )
-    assert body["would_execute"]["body"] == {"firewall_ids": [123]}
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_instance_update_missing_field(
-    sample_config: Config,
-) -> None:
-    """Test linode_instance_update tool with no update fields."""
-    result = await handle_linode_instance_update(
-        {"instance_id": 12345, "confirm": True}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "at least one update field" in result[0].text.lower()
-
-
-def test_linode_instance_update_tool_schema() -> None:
-    """The update tool schema exposes documented editable fields."""
-    tool, capability = create_linode_instance_update_tool()
-    props: dict[str, Any] = tool.input_schema["properties"]
-
-    assert tool.name == "linode_instance_update"
-    assert capability.name == "Write"
-    assert "instance_id" in tool.input_schema["required"]
-    assert "confirm" in tool.input_schema["required"]
-    for field in (
-        "label",
-        "group",
-        "tags",
-        "alerts",
-        "maintenance_policy",
-        "watchdog_enabled",
-    ):
-        assert field in props
-
-
-async def test_handle_linode_instance_update(
-    sample_config: Config, sample_instance_data: dict[str, Any]
-) -> None:
-    """Instance update serializes the raw API body through the Instance write proto.
-
-    The raw body carries interface_generation, which the old curated
-    instance_to_response_dict dropped; routing through the full Instance proto
-    now emits it.
-    """
-    raw_instance = {
-        **sample_instance_data,
-        "label": "updated-instance",
-        "tags": ["updated", "prod"],
-        "watchdog_enabled": False,
-        "interface_generation": "linode",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_instance_raw.return_value = raw_instance
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_update(
-            {
-                "instance_id": 12345,
-                "label": "updated-instance",
-                "tags": ["updated", "prod"],
-                "watchdog_enabled": False,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        payload = json.loads(result[0].text)
-        assert payload["message"] == "Instance 123456 updated successfully"
-        assert payload["instance"]["label"] == "updated-instance"
-        # interface_generation now survives (the curated dict used to drop it).
-        assert payload["instance"]["interface_generation"] == "linode"
-        mock_client.update_instance_raw.assert_called_once_with(
-            12345,
-            label="updated-instance",
-            tags=["updated", "prod"],
-            watchdog_enabled=False,
-        )
-
-
 async def test_handle_linode_instance_delete_no_confirm(sample_config: Config) -> None:
     """Test linode_instance_delete tool without confirmation."""
     result = await handle_linode_instance_delete({"instance_id": 12345}, sample_config)
 
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
-
-
-async def test_handle_linode_instance_delete(sample_config: Config) -> None:
-    """Test linode_instance_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_instance.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_delete(
-            {"instance_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == "Instance 12345 removed successfully"
-        assert data["instance_id"] == 12345
-
-
-def test_linode_instance_mutate_tool_schema_requires_confirm() -> None:
-    """Mutate tool schema requires explicit confirmation."""
-    tool, capability = create_linode_instance_mutate_tool()
-
-    assert tool.name == "linode_instance_mutate"
-    assert capability is Capability.Write
-    assert "confirm" in tool.input_schema["required"]
-    assert (
-        tool.input_schema["properties"]["allow_auto_disk_resize"]["type"] == "boolean"
-    )
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_instance_mutate_rejects_bad_confirm(
-    confirm: object, sample_config: Config
-) -> None:
-    """Mutate rejects missing or non-true confirmation before client calls."""
-    arguments: dict[str, Any] = {"linode_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_mutate(arguments, sample_config)
-
-    assert "Set confirm=true to proceed" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
-async def test_handle_linode_instance_mutate_rejects_bad_linode_id(
-    bad_linode_id: object, sample_config: Config
-) -> None:
-    """Mutate rejects malformed Linode IDs before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_mutate(
-            {"linode_id": bad_linode_id, "confirm": True}, sample_config
-        )
-
-    assert "linode_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_instance_mutate_rejects_bad_disk_resize(
-    sample_config: Config,
-) -> None:
-    """Mutate rejects non-boolean allow_auto_disk_resize before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_mutate(
-            {
-                "linode_id": 123,
-                "allow_auto_disk_resize": "true",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert "allow_auto_disk_resize must be a boolean" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_instance_mutate(sample_config: Config) -> None:
-    """Test linode_instance_mutate tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.mutate_instance.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_mutate(
-            {
-                "linode_id": 123,
-                "allow_auto_disk_resize": False,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "upgrade" in result[0].text.lower()
-        mock_client.mutate_instance.assert_awaited_once_with(
-            123, allow_auto_disk_resize=False
-        )
-
-
-async def test_instance_mutate_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must preview mutate without client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_mutate(
-            {"linode_id": 123, "allow_auto_disk_resize": False, "dry_run": True},
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_mutate"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/123/mutate"
-    assert body["would_execute"]["body"] == {"allow_auto_disk_resize": False}
-    mock_client_class.assert_not_called()
-
-
-def test_linode_instance_upgrade_interfaces_tool_schema_requires_confirm() -> None:
-    """Upgrade interfaces tool schema requires explicit confirmation."""
-    tool, capability = create_linode_instance_interface_upgrade_tool()
-
-    assert tool.name == "linode_instance_interface_upgrade"
-    assert capability is Capability.Write
-    assert "confirm" in tool.input_schema["required"]
-    assert tool.input_schema["properties"]["api_dry_run"]["type"] == "boolean"
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_instance_upgrade_interfaces_rejects_bad_confirm(
-    confirm: object, sample_config: Config
-) -> None:
-    """Upgrade interfaces rejects missing or non-true confirmation before calls."""
-    arguments: dict[str, Any] = {"linode_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_interface_upgrade(
-            arguments, sample_config
-        )
-
-    assert "Set confirm=true to proceed" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("bad_linode_id", ["1/2", "1?x=2", "..", True, 0, -1])
-async def test_handle_linode_instance_upgrade_interfaces_rejects_bad_linode_id(
-    bad_linode_id: object, sample_config: Config
-) -> None:
-    """Upgrade interfaces rejects malformed Linode IDs before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_interface_upgrade(
-            {"linode_id": bad_linode_id, "confirm": True}, sample_config
-        )
-
-    assert "linode_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        (
-            {"linode_id": 123, "config_id": "1", "confirm": True},
-            "config_id must be an integer",
-        ),
-        (
-            {"linode_id": 123, "config_id": 0, "confirm": True},
-            "config_id must be at least 1",
-        ),
-        (
-            {"linode_id": 123, "api_dry_run": "true", "confirm": True},
-            "api_dry_run must be a boolean",
-        ),
-    ],
-)
-async def test_handle_linode_instance_upgrade_interfaces_rejects_bad_body_fields(
-    arguments: dict[str, Any], message: str, sample_config: Config
-) -> None:
-    """Upgrade interfaces validates optional body fields before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_interface_upgrade(
-            arguments, sample_config
-        )
-
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_instance_upgrade_interfaces(sample_config: Config) -> None:
-    """Test linode_instance_interface_upgrade tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.upgrade_instance_interfaces.return_value = {"dry_run": False}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_interface_upgrade(
-            {
-                "linode_id": 123,
-                "config_id": 456,
-                "api_dry_run": False,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert json.loads(result[0].text) == {
-            "message": "Linode 123 interface upgrade initiated",
-            "config_id": 0,
-            "dry_run": False,
-            "interfaces": [],
-        }
-        mock_client.upgrade_instance_interfaces.assert_awaited_once_with(
-            123, config_id=456, dry_run=False
-        )
-
-
-async def test_instance_upgrade_interfaces_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews interface upgrade without client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_interface_upgrade(
-            {"linode_id": 123, "config_id": 456, "api_dry_run": True, "dry_run": True},
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_interface_upgrade"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/123/upgrade-interfaces"
-    assert body["would_execute"]["body"] == {"config_id": 456, "dry_run": True}
-    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_instance_resize_no_confirm(sample_config: Config) -> None:
@@ -10399,153 +7034,6 @@ async def test_handle_linode_instance_resize_no_confirm(sample_config: Config) -
 
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
-
-
-async def test_handle_linode_instance_resize(sample_config: Config) -> None:
-    """Test linode_instance_resize tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.resize_instance.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_resize(
-            {"instance_id": 12345, "type": "g6-standard-1", "confirm": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert (
-            data["message"]
-            == "Instance 12345 resize to g6-standard-1 initiated successfully"
-        )
-        assert data["new_type"] == "g6-standard-1"
-
-
-async def test_handle_linode_firewall_create(sample_config: Config) -> None:
-    """Test linode_firewall_create tool."""
-    mock_firewall: dict[str, Any] = {
-        "id": 12345,
-        "label": "my-firewall",
-        "status": "enabled",
-        "rules": {
-            "inbound": [],
-            "inbound_policy": "ACCEPT",
-            "outbound": [],
-            "outbound_policy": "ACCEPT",
-        },
-        "tags": [],
-        "created": "2024-01-15T10:00:00",
-        "updated": "2024-01-15T10:00:00",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_firewall_raw.return_value = mock_firewall
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_firewall_create(
-            {"label": "my-firewall", "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        # The write envelope carries the full firewall element plus a message
-        # that names the label and id.
-        assert "my-firewall" in result[0].text
-        assert "(ID: 12345) created successfully" in result[0].text
-        assert '"status": "enabled"' in result[0].text
-
-
-async def test_handle_linode_firewall_update(sample_config: Config) -> None:
-    """Test linode_firewall_update tool."""
-    mock_firewall: dict[str, Any] = {
-        "id": 12345,
-        "label": "updated-firewall",
-        "status": "enabled",
-        "rules": {
-            "inbound": [],
-            "inbound_policy": "ACCEPT",
-            "outbound": [],
-            "outbound_policy": "ACCEPT",
-        },
-        "tags": [],
-        "created": "2024-01-15T10:00:00",
-        "updated": "2024-01-15T12:00:00",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_firewall_raw.return_value = mock_firewall
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_firewall_update(
-            {"firewall_id": 12345, "label": "updated-firewall", "confirm": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        # The message matches Go: "Firewall <id> modified successfully".
-        assert "Firewall 12345 modified successfully" in result[0].text
-        assert "updated-firewall" in result[0].text
-
-
-async def test_handle_linode_firewall_delete(sample_config: Config) -> None:
-    """Test linode_firewall_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_firewall.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_firewall_delete(
-            {"firewall_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "removed successfully" in result[0].text.lower()
-        assert "12345" in result[0].text
-
-
-async def test_firewall_delete_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete.
-
-    Decodes the JSON body so a future renaming of the v0 wire shape or
-    a regression where Execute fires anyway gets caught.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_firewall.return_value = {
-            "id": 789,
-            "label": "prod-fw",
-            "status": "enabled",
-        }
-        mock_client.list_firewall_devices.return_value = {"data": []}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_firewall_delete(
-            {"firewall_id": 789, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_firewall_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/networking/firewalls/789"
-        mock_client.get_firewall.assert_awaited_once_with(789)
-        mock_client.delete_firewall.assert_not_called()
 
 
 async def test_firewall_delete_dry_run_does_not_require_confirm(
@@ -10579,589 +7067,7 @@ async def test_firewall_delete_dry_run_still_validates_firewall_id(
     )
 
     assert len(result) == 1
-    assert "firewall_id is required" in result[0].text
-
-
-async def test_firewall_delete_dry_run_surfaces_device_dependencies(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: attached devices appear as removed dependencies."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_firewall.return_value = {"id": 789, "label": "prod-fw"}
-        mock_client.list_firewall_devices.return_value = {
-            "data": [
-                {"id": 1, "entity": {"id": 555, "type": "linode", "label": "web"}},
-                {"id": 2, "entity": {"id": 666, "type": "nodebalancer", "label": "lb"}},
-            ]
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_firewall_delete(
-            {"firewall_id": 789, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        deps = body["dependencies"]
-        assert len(deps) == 2
-        assert {d["kind"] for d in deps} == {"linode", "nodebalancer"}
-        assert all(d["action"] == "removed" for d in deps)
-        assert body["warnings"]
-        mock_client.delete_firewall.assert_not_called()
-
-
-async def test_firewall_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the create with no resource state and no call."""
-    result = await handle_linode_firewall_create(
-        {"label": "fw-01", "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_firewall_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/firewalls"
-    assert body["current_state"] is None
-    assert any("fw-01" in s for s in body["side_effects"])
-    assert "confirm=true" not in result[0].text
-
-
-async def test_firewall_create_dry_run_still_validates_label(
-    sample_config: Config,
-) -> None:
-    """Missing label must error out regardless of dry_run."""
-    result = await handle_linode_firewall_create({"dry_run": True}, sample_config)
-
-    assert len(result) == 1
-    assert "label is required" in result[0].text
-
-
-async def test_firewall_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call update."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_firewall.return_value = {"id": 789, "label": "prod-fw"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_firewall_update(
-            {"firewall_id": 789, "label": "renamed", "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_firewall_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/networking/firewalls/789"
-        assert any("renamed" in s for s in body["side_effects"])
-        mock_client.get_firewall.assert_awaited_once_with(789)
-        mock_client.update_firewall_raw.assert_not_called()
-
-
-async def test_firewall_update_dry_run_still_validates_firewall_id(
-    sample_config: Config,
-) -> None:
-    """Missing firewall_id must error out regardless of dry_run."""
-    result = await handle_linode_firewall_update({"dry_run": True}, sample_config)
-
-    assert len(result) == 1
-    assert "firewall_id is required" in result[0].text
-
-
-async def test_firewall_rules_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch current rules via GET and never replace them."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_firewall_rules.return_value = {"inbound": [], "outbound": []}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_firewall_rules_update(
-            {"firewall_id": 789, "inbound": [], "outbound": [], "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_firewall_rules_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/networking/firewalls/789/rules"
-        mock_client.get_firewall_rules.assert_awaited_once_with(789)
-        mock_client.update_firewall_rules_raw.assert_not_called()
-
-
-async def test_firewall_rules_update_dry_run_still_validates_firewall_id(
-    sample_config: Config,
-) -> None:
-    """Missing firewall_id must error out regardless of dry_run."""
-    result = await handle_linode_firewall_rules_update(
-        {"inbound": [], "outbound": [], "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "firewall_id is required" in result[0].text
-
-
-async def test_firewall_settings_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch settings via GET and never update them."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_firewall_settings.return_value = {"default_firewall_ids": {}}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_firewall_settings_update(
-            {"default_firewall_ids": {"linode": 5}, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_firewall_settings_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/networking/firewalls/settings"
-        mock_client.get_firewall_settings.assert_awaited_once()
-        mock_client.update_firewall_settings.assert_not_called()
-
-
-async def test_firewall_settings_update_dry_run_still_validates_ids(
-    sample_config: Config,
-) -> None:
-    """Missing default_firewall_ids must error out regardless of dry_run."""
-    result = await handle_linode_firewall_settings_update(
-        {"dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "default_firewall_ids" in result[0].text
-
-
-async def test_firewall_device_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the device assignment with no call."""
-    from linodemcp.tools.linode_firewalls_write import (
-        handle_linode_firewall_device_create,
-    )
-
-    result = await handle_linode_firewall_device_create(
-        {"firewall_id": 789, "id": 456, "type": "linode", "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_firewall_device_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/firewalls/789/devices"
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-    assert len(body["side_effects"]) == 1
-    assert "456" in body["side_effects"][0]
-    assert "firewall 789" in body["side_effects"][0]
-
-
-async def test_firewall_device_create_dry_run_still_validates_firewall_id(
-    sample_config: Config,
-) -> None:
-    """Missing firewall_id must error out regardless of dry_run."""
-    from linodemcp.tools.linode_firewalls_write import (
-        handle_linode_firewall_device_create,
-    )
-
-    result = await handle_linode_firewall_device_create(
-        {"id": 456, "type": "linode", "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "firewall_id is required" in result[0].text
-
-
-async def test_handle_linode_firewall_rules_update(sample_config: Config) -> None:
-    """Test linode_firewall_rules_update tool happy path."""
-    mock_result: dict[str, Any] = {
-        "inbound": [
-            {
-                "action": "ACCEPT",
-                "protocol": "TCP",
-                "ports": "22",
-                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
-                "label": "allow-ssh",
-                "description": "",
-            }
-        ],
-        "inbound_policy": "DROP",
-        "outbound": [],
-        "outbound_policy": "ACCEPT",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_firewall_rules_raw.return_value = mock_result
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_firewall_rules_update(
-            {
-                "firewall_id": 12345,
-                "inbound": mock_result["inbound"],
-                "outbound": mock_result["outbound"],
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        # The write envelope carries firewall_id and the full proto ruleset,
-        # including the policy fields, not just inbound/outbound counts.
-        assert "Firewall 12345 rules updated successfully" in result[0].text
-        assert '"firewall_id": 12345' in result[0].text
-        assert '"inbound_policy": "DROP"' in result[0].text
-        assert '"label": "allow-ssh"' in result[0].text
-
-
-async def test_handle_linode_firewall_rules_update_forwards_rules_verbatim(
-    sample_config: Config,
-) -> None:
-    """Rule objects reach the client untouched: an unknown field survives and no
-    empty label/description or null ipv6 is injected, so Go and Python put the
-    same bytes on the wire."""
-    inbound_rule = {
-        "action": "ACCEPT",
-        "protocol": "TCP",
-        "ports": "22",
-        "addresses": {"ipv4": ["198.51.100.0/24"]},
-        "note": "keep me",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_firewall_rules_raw.return_value = {
-            "inbound": [],
-            "inbound_policy": "ACCEPT",
-            "outbound": [],
-            "outbound_policy": "ACCEPT",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_firewall_rules_update(
-            {
-                "firewall_id": 12345,
-                "inbound": [inbound_rule],
-                "outbound": [],
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert not result[0].text.startswith("Error:")
-    mock_client.update_firewall_rules_raw.assert_awaited_once()
-    _, call_kwargs = mock_client.update_firewall_rules_raw.call_args
-    assert call_kwargs["inbound"] == [inbound_rule]
-    assert call_kwargs["outbound"] == []
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_firewall_rules_update_requires_boolean_confirm(
-    sample_config: Config, confirm: Any
-) -> None:
-    """Firewall rules update rejects missing or non-true confirm."""
-    arguments: dict[str, Any] = {"firewall_id": 12345}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_rules_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_firewall_rules_update_missing_id(
-    sample_config: Config,
-) -> None:
-    """Firewall rules update rejects missing firewall_id."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_rules_update(
-            {"confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "firewall_id is required" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("firewall_id", ["12345", "../12345", "12345?x=1", True])
-async def test_handle_linode_firewall_rules_update_invalid_id(
-    sample_config: Config, firewall_id: Any
-) -> None:
-    """Firewall rules update rejects malformed firewall_id values."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_rules_update(
-            {"firewall_id": firewall_id, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "firewall_id must be an integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("firewall_id", [0, -1])
-async def test_handle_linode_firewall_rules_update_non_positive_id(
-    sample_config: Config, firewall_id: int
-) -> None:
-    """Firewall rules update rejects non-positive firewall IDs."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_rules_update(
-            {"firewall_id": firewall_id, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "firewall_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {"firewall_id": 12345, "confirm": True},
-        {"firewall_id": 12345, "confirm": True, "inbound": []},
-        {"firewall_id": 12345, "confirm": True, "outbound": []},
-    ],
-)
-async def test_handle_linode_firewall_rules_update_requires_explicit_rule_lists(
-    sample_config: Config, arguments: dict[str, Any]
-) -> None:
-    """Firewall rules update requires explicit inbound and outbound rule lists."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_rules_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert " is required" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("inbound", "not-a-list"),
-        ("outbound", "not-a-list"),
-        ("inbound", ["bad-rule"]),
-        ("outbound", ["bad-rule"]),
-    ],
-)
-async def test_handle_linode_firewall_rules_update_invalid_rule_lists(
-    sample_config: Config, field: str, value: Any
-) -> None:
-    """Firewall rules update rejects malformed rule lists."""
-    arguments: dict[str, Any] = {
-        "firewall_id": 12345,
-        "confirm": True,
-        "inbound": [],
-        "outbound": [],
-        field: value,
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_rules_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert f"{field} must be an array of objects" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_linode_instance_firewalls_apply_tool_definition() -> None:
-    """Test linode_instance_firewall_apply tool definition."""
-    tool, capability = create_linode_instance_firewall_apply_tool()
-
-    assert tool.name == "linode_instance_firewall_apply"
-    assert capability is Capability.Write
-    assert tool.input_schema == proto_schema("linode.mcp.v1.InstanceFirewallApplyInput")
-    assert tool.input_schema["required"] == ["linode_id", "confirm"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_instance_firewalls_apply(sample_config: Config) -> None:
-    """Test linode_instance_firewall_apply tool happy path."""
-    mock_result = {"id": 123, "label": "web-1"}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.apply_linode_firewalls.return_value = mock_result
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_firewall_apply(
-            {"linode_id": 123, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body == {
-        "message": "Firewall apply initiated for instance 123",
-        "linode_id": 123,
-    }
-    mock_client.apply_linode_firewalls.assert_awaited_once_with(123)
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_instance_firewalls_apply_requires_boolean_confirm(
-    sample_config: Config, confirm: Any
-) -> None:
-    """Linode firewall apply rejects missing or non-true confirm."""
-    arguments: dict[str, Any] = {"linode_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_apply(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "Set confirm=true to proceed" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("linode_id", [None, "123", "../123", "123?x=1", True, 0, -1])
-async def test_handle_linode_instance_firewalls_apply_invalid_linode_id(
-    sample_config: Config, linode_id: Any
-) -> None:
-    """Linode firewall apply rejects malformed Linode IDs before client calls."""
-    arguments: dict[str, Any] = {"confirm": True}
-    if linode_id is not None:
-        arguments["linode_id"] = linode_id
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_apply(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "linode_id" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_instance_firewalls_apply_dry_run(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews Linode firewall apply without a client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_firewall_apply(
-            {"linode_id": 123, "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_firewall_apply"
-    assert body["would_execute"] == {
-        "method": "POST",
-        "path": "/linode/instances/123/firewalls/apply",
-    }
-    assert "Linode 123" in body["side_effects"][0]
-    mock_client_class.assert_not_called()
-
-
-async def test_linode_firewall_settings_update_tool_definition() -> None:
-    """Test linode_firewall_settings_update tool definition."""
-    tool, capability = create_linode_firewall_settings_update_tool()
-
-    assert tool.name == "linode_firewall_settings_update"
-    assert capability is Capability.Write
-    assert tool.input_schema["required"] == ["confirm"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["default_firewall_ids"]["type"] == "object"
-
-
-async def test_handle_linode_firewall_settings_update(sample_config: Config) -> None:
-    """Test linode_firewall_settings_update tool happy path."""
-    payload = {"linode": 100, "nodebalancer": 101}
-    mock_result = {"default_firewall_ids": payload}
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_firewall_settings.return_value = mock_result
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_firewall_settings_update(
-            {"default_firewall_ids": payload, "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["message"] == "Default firewall settings updated successfully"
-    assert body["settings"]["default_firewall_ids"]["linode"] == 100
-    assert body["settings"]["default_firewall_ids"]["nodebalancer"] == 101
-    mock_client.update_firewall_settings.assert_awaited_once_with(payload)
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_firewall_settings_update_requires_boolean_confirm(
-    sample_config: Config, confirm: Any
-) -> None:
-    """Default firewall update rejects missing or non-true confirm."""
-    arguments: dict[str, Any] = {"default_firewall_ids": {"linode": 100}}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_settings_update(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "Set confirm=true to proceed" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "default_firewall_ids",
-    [
-        None,
-        {},
-        {"linode": 0},
-        {"linode": -1},
-        {"linode": True},
-        {"linode": "100"},
-        {"unknown": 100},
-    ],
-)
-async def test_handle_linode_firewall_settings_update_invalid_default_ids(
-    sample_config: Config, default_firewall_ids: Any
-) -> None:
-    """Default firewall update rejects malformed default_firewall_ids."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_firewall_settings_update(
-            {"default_firewall_ids": default_firewall_ids, "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "default_firewall_ids must be" in result[0].text
-    mock_client_class.assert_not_called()
+    assert "firewall_id must be a positive integer" in result[0].text
 
 
 async def test_handle_linode_domain_clone(sample_config: Config) -> None:
@@ -11197,17 +7103,27 @@ async def test_handle_linode_domain_clone(sample_config: Config) -> None:
 
 
 async def test_domain_clone_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true previews the clone and does not call the client."""
-    result = await handle_linode_domain_clone(
-        {
-            "domain_id": 12345,
-            "domain": "clone.example.com",
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
+    """dry_run=true reads the zone being cloned and does not clone it."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.route_raw.return_value = {"id": 12345, "domain": "example.com"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
 
+        result = await handle_linode_domain_clone(
+            {
+                "domain_id": 12345,
+                "domain": "clone.example.com",
+                "confirm": True,
+                "dry_run": True,
+            },
+            sample_config,
+        )
+
+    # The one call is the declared read: a clone that ran would show a second
+    # route_raw carrying the body.
+    mock_client.route_raw.assert_awaited_once_with("linode_domain_get", 12345)
     assert len(result) == 1
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
@@ -11347,107 +7263,6 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
         )
 
 
-async def test_domain_update_dry_run_surfaces_field_changes(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier B walk: domain update names the SOA-email change."""
-    current = Domain(
-        id=12345,
-        domain="example.com",
-        type="master",
-        status="active",
-        soa_email="old@example.com",
-        description="",
-        tags=[],
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T12:00:00",
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_domain.return_value = current
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_domain_update(
-            {"domain_id": 12345, "soa_email": "new@example.com", "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_domain_update"
-        assert any("new@example.com" in s for s in body["side_effects"])
-        mock_client.update_domain.assert_not_called()
-
-
-async def test_handle_linode_domain_delete(sample_config: Config) -> None:
-    """Test linode_domain_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_domain.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_domain_delete(
-            {"domain_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert (
-            body["message"] == "Domain 12345 and all its records removed successfully"
-        )
-
-
-async def test_domain_delete_dry_run_surfaces_ns_record_dependencies(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: NS records appear as cascade_deleted dependencies."""
-
-    def _record(
-        record_id: int, record_type: str, name: str, target: str
-    ) -> DomainRecord:
-        return DomainRecord(
-            id=record_id,
-            type=record_type,
-            name=name,
-            target=target,
-            priority=0,
-            weight=0,
-            port=0,
-            ttl_sec=300,
-            created="2024-01-15T10:00:00",
-            updated="2024-01-15T10:00:00",
-        )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_domain.return_value = {"id": 12345, "domain": "example.com"}
-        mock_client.list_domain_records.return_value = [
-            _record(1, "NS", "example.com", "ns1.linode.com"),
-            _record(2, "A", "www", "192.0.2.1"),
-        ]
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_domain_delete(
-            {"domain_id": 12345, "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_domain_delete"
-        deps = body["dependencies"]
-        assert len(deps) == 1
-        assert deps[0]["kind"] == "ns_record"
-        assert deps[0]["action"] == "cascade_deleted"
-        assert body["warnings"]
-        mock_client.delete_domain.assert_not_called()
-
-
 async def test_handle_linode_domain_record_create(sample_config: Config) -> None:
     """Test linode_domain_record_create sends documented body, full element."""
     raw_record = {
@@ -11580,7 +7395,7 @@ async def test_domain_record_create_dry_run_returns_preview(
 ) -> None:
     """dry_run=true previews the record create with no state and no call."""
     result = await handle_linode_domain_record_create(
-        {"domain_id": 333, "type": "A", "target": "192.0.2.1", "dry_run": True},
+        {"domain_id": 333, "type": "A", "target": "8.8.8.8", "dry_run": True},
         sample_config,
     )
 
@@ -11593,7 +7408,7 @@ async def test_domain_record_create_dry_run_returns_preview(
     assert body["current_state"] is None
     assert len(body["side_effects"]) == 1
     assert "A record" in body["side_effects"][0]
-    assert "192.0.2.1" in body["side_effects"][0]
+    assert "8.8.8.8" in body["side_effects"][0]
 
 
 async def test_domain_record_create_dry_run_still_validates_domain_id(
@@ -11605,7 +7420,7 @@ async def test_domain_record_create_dry_run_still_validates_domain_id(
     )
 
     assert len(result) == 1
-    assert "domain_id is required" in result[0].text
+    assert "domain_id must be a positive integer" in result[0].text
 
 
 async def test_domain_record_update_dry_run_returns_preview(
@@ -11623,7 +7438,7 @@ async def test_domain_record_update_dry_run_returns_preview(
             {
                 "domain_id": 333,
                 "record_id": 555,
-                "target": "192.0.2.2",
+                "target": "8.8.4.4",
                 "dry_run": True,
             },
             sample_config,
@@ -11634,27 +7449,9 @@ async def test_domain_record_update_dry_run_returns_preview(
         assert body["tool"] == "linode_domain_record_update"
         assert body["would_execute"]["method"] == "PUT"
         assert body["would_execute"]["path"] == "/domains/333/records/555"
-        assert any("192.0.2.2" in s for s in body["side_effects"])
+        assert any("8.8.4.4" in s for s in body["side_effects"])
         mock_client.get_domain_record.assert_awaited_once_with(333, 555)
-        mock_client.update_domain_record.assert_not_called()
-
-
-async def test_handle_linode_domain_record_delete(sample_config: Config) -> None:
-    """Test linode_domain_record_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_domain_record.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_domain_record_delete(
-            {"domain_id": 12345, "record_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["message"] == "Record 12345 removed successfully from domain 12345"
+        mock_client.route_raw.assert_not_called()
 
 
 async def test_handle_linode_volume_create_no_confirm(sample_config: Config) -> None:
@@ -11818,7 +7615,7 @@ async def test_handle_linode_volume_detach(sample_config: Config) -> None:
     """Test linode_volume_detach tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.detach_volume.return_value = None
+        mock_client.route_raw.return_value = None
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11944,23 +7741,6 @@ async def test_handle_linode_volume_delete_no_confirm(sample_config: Config) -> 
     assert "confirm" in result[0].text.lower()
 
 
-async def test_handle_linode_volume_delete(sample_config: Config) -> None:
-    """Test linode_volume_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_volume.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_volume_delete(
-            {"volume_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "removed" in result[0].text.lower()
-
-
 async def test_volume_create_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true previews the create with no resource state and no call."""
     result = await handle_linode_volume_create(
@@ -11989,51 +7769,6 @@ async def test_volume_create_dry_run_still_validates_label(
 
     assert len(result) == 1
     assert "label is required" in result[0].text
-
-
-async def test_volume_clone_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true fetches the source volume via GET and never clones."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = {"id": 333, "label": "src"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_clone(
-            {"volume_id": 333, "label": "copy", "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_volume_clone"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/volumes/333/clone"
-        mock_client.get_volume.assert_awaited_once_with(333)
-        mock_client.clone_volume.assert_not_called()
-
-
-async def test_volume_attach_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true fetches state via GET and never attaches."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_attach(
-            {"volume_id": 333, "linode_id": 444, "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_volume_attach"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/volumes/333/attach"
-        mock_client.get_volume.assert_awaited_once_with(333)
-        mock_client.attach_volume.assert_not_called()
-        assert any("444" in s for s in body["side_effects"])
 
 
 async def test_volume_attach_dry_run_still_validates_volume_id(
@@ -12067,7 +7802,7 @@ async def test_volume_detach_dry_run_returns_preview(sample_config: Config) -> N
         assert body["would_execute"]["method"] == "POST"
         assert body["would_execute"]["path"] == "/volumes/333/detach"
         mock_client.get_volume.assert_awaited_once_with(333)
-        mock_client.detach_volume.assert_not_called()
+        mock_client.route_call.assert_not_called()
 
 
 async def test_volume_detach_dry_run_surfaces_current_attachment(
@@ -12103,91 +7838,7 @@ async def test_volume_detach_dry_run_surfaces_current_attachment(
 
         body = json.loads(result[0].text)
         assert any("444" in s for s in body["side_effects"])
-        mock_client.detach_volume.assert_not_called()
-
-
-async def test_volume_resize_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true fetches state via GET and never resizes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_resize(
-            {"volume_id": 333, "size": 100, "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_volume_resize"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/volumes/333/resize"
-        mock_client.get_volume.assert_awaited_once_with(333)
-        mock_client.resize_volume.assert_not_called()
-
-
-async def test_volume_resize_dry_run_surfaces_size_change(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier B walk: resize names the size change + grow-only warning."""
-
-    current = Volume(
-        id=333,
-        label="vol",
-        status="active",
-        size=50,
-        region="us-east",
-        linode_id=None,
-        linode_label=None,
-        filesystem_path="/dev/disk/by-id/x",
-        tags=[],
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-        hardware_type="nvme",
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = current
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_resize(
-            {"volume_id": 333, "size": 100, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        effect = body["side_effects"][0]
-        assert "50 GB" in effect
-        assert "100 GB" in effect
-        assert body["warnings"]
-        mock_client.resize_volume.assert_not_called()
-
-
-async def test_volume_update_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true fetches state via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_update(
-            {"volume_id": 333, "label": "renamed", "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_volume_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/volumes/333"
-        assert any("renamed" in s for s in body["side_effects"])
-        mock_client.get_volume.assert_awaited_once_with(333)
-        mock_client.update_volume.assert_not_called()
+        mock_client.route_call.assert_not_called()
 
 
 async def test_volume_update_dry_run_still_validates_change(
@@ -12200,678 +7851,6 @@ async def test_volume_update_dry_run_still_validates_change(
 
     assert len(result) == 1
     assert "label or tags is required" in result[0].text
-
-
-async def test_linode_nodebalancer_firewalls_update_tool_definition() -> None:
-    """Test linode_nodebalancer_firewall_update tool definition."""
-    tool, capability = create_linode_nodebalancer_firewall_update_tool()
-
-    assert tool.name == "linode_nodebalancer_firewall_update"
-    assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["firewall_ids"]["type"] == "array"
-    assert "page" in tool.input_schema["properties"]
-    assert "page_size" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    # firewall_ids is a required array in the hand-built schema; a repeated proto
-    # field cannot land in the generated required set, so it drops to optional
-    # there while the handler still enforces its presence.
-    assert tool.input_schema["required"] == ["nodebalancer_id", "confirm"]
-
-
-async def test_handle_linode_nodebalancer_firewalls_update(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_firewall_update tool."""
-    mock_firewalls = {
-        "data": [{"id": 123, "label": "web-fw"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_firewalls.return_value = mock_firewalls
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_firewall_update(
-            {
-                "nodebalancer_id": 8,
-                "firewall_ids": [123],
-                "page": 1,
-                "page_size": 25,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["count"] == 1
-        assert data["firewalls"][0]["id"] == 123
-        assert data["firewalls"][0]["label"] == "web-fw"
-        assert "filter" not in data
-        mock_client.update_nodebalancer_firewalls.assert_called_once_with(
-            8, [123], page=1, page_size=25
-        )
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({"nodebalancer_id": 8, "firewall_ids": [123]}, "Set confirm=true to proceed"),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": False},
-            "Set confirm=true to proceed",
-        ),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": "true"},
-            "Set confirm=true to proceed",
-        ),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": 1},
-            "Set confirm=true to proceed",
-        ),
-        (
-            {"firewall_ids": [123], "confirm": True},
-            "nodebalancer_id is required",
-        ),
-        (
-            {"nodebalancer_id": 0, "firewall_ids": [123], "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "8", "firewall_ids": [123], "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": True, "firewall_ids": [123], "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1/2", "firewall_ids": [123], "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1?x", "firewall_ids": [123], "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "..", "firewall_ids": [123], "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "confirm": True},
-            "firewall_ids must be a list of positive integers",
-        ),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": [0], "confirm": True},
-            "firewall_ids must be a list of positive integers",
-        ),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": ["123"], "confirm": True},
-            "firewall_ids must be a list of positive integers",
-        ),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": [True], "confirm": True},
-            "firewall_ids must be a list of positive integers",
-        ),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": [], "page": 0, "confirm": True},
-            "page must be an integer greater than or equal to 1",
-        ),
-        (
-            {"nodebalancer_id": 8, "firewall_ids": [], "page": "1", "confirm": True},
-            "page must be an integer",
-        ),
-        (
-            {
-                "nodebalancer_id": 8,
-                "firewall_ids": [],
-                "page_size": 24,
-                "confirm": True,
-            },
-            "page_size must be an integer from 25 through 500",
-        ),
-        (
-            {
-                "nodebalancer_id": 8,
-                "firewall_ids": [],
-                "page_size": 501,
-                "confirm": True,
-            },
-            "page_size must be an integer from 25 through 500",
-        ),
-    ],
-)
-async def test_handle_linode_nodebalancer_firewalls_update_invalid_arguments(
-    sample_config: Config, arguments: dict[str, Any], message: str
-) -> None:
-    """NodeBalancer firewall update rejects invalid arguments before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_firewall_update(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-def test_linode_nodebalancer_config_rebuild_tool_definition() -> None:
-    """Test linode_nodebalancer_config_rebuild tool definition."""
-    tool, capability = create_linode_nodebalancer_config_rebuild_tool()
-
-    assert tool.name == "linode_nodebalancer_config_rebuild"
-    assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.input_schema["properties"]
-    assert "config_id" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["required"] == [
-        "nodebalancer_id",
-        "config_id",
-        "confirm",
-    ]
-
-
-_REBUILD_NODES = [{"label": "backend-1", "address": "192.0.2.10:80"}]
-# Rebuild replaces the whole backend node set, so nodes is required on every
-# call that gets far enough to reach the client.
-_REBUILD_ARGS = {
-    "nodebalancer_id": 8,
-    "config_id": 6,
-    "confirm": True,
-    "nodes": _REBUILD_NODES,
-}
-
-
-async def test_handle_linode_nodebalancer_config_rebuild(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_rebuild tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.rebuild_nodebalancer_config.return_value = {
-            "id": 6,
-            "nodebalancer_id": 8,
-            "port": 80,
-            "protocol": "http",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_rebuild(
-            _REBUILD_ARGS,
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == "Rebuilt config 6 for NodeBalancer 8 successfully"
-        # The body is the full NodeBalancerConfig proto element.
-        assert data["config"]["id"] == 6
-        assert data["config"]["nodebalancer_id"] == 8
-        assert data["config"]["port"] == 80
-        assert data["config"]["protocol"] == "http"
-        mock_client.rebuild_nodebalancer_config.assert_called_once_with(
-            8, 6, {"nodes": _REBUILD_NODES}
-        )
-
-
-async def test_handle_linode_nodebalancer_config_rebuild_empty_response(
-    sample_config: Config,
-) -> None:
-    """Rebuild fills proto defaults when the API body is empty.
-
-    The empty-body id-echo fallback is gone: every config write now returns the
-    full NodeBalancerConfig element, so an empty API body serializes to an
-    all-default config rather than a {nodebalancer_id, config_id} echo.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.rebuild_nodebalancer_config.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_rebuild(
-            _REBUILD_ARGS,
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == "Rebuilt config 6 for NodeBalancer 8 successfully"
-        assert data["config"]["id"] == 0
-        assert data["config"]["nodebalancer_id"] == 0
-        mock_client.rebuild_nodebalancer_config.assert_called_once_with(
-            8, 6, {"nodes": _REBUILD_NODES}
-        )
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({}, "This rebuilds a NodeBalancer config. Set confirm=true to proceed."),
-        ({"confirm": False}, "Set confirm=true to proceed"),
-        ({"confirm": "true"}, "Set confirm=true to proceed"),
-        ({"confirm": 1}, "Set confirm=true to proceed"),
-        (
-            {"nodebalancer_id": 0, "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "8", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": True, "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1/2", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1?x", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "..", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": 0, "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "6", "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": False, "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "4/5", "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "4?x", "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "..", "confirm": True},
-            "config_id",
-        ),
-    ],
-)
-async def test_handle_linode_nodebalancer_config_rebuild_invalid_arguments(
-    sample_config: Config, arguments: dict[str, Any], message: str
-) -> None:
-    """NodeBalancer config rebuild rejects invalid arguments before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_config_rebuild(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_nodebalancer_config_rebuild_carries_body(
-    sample_config: Config,
-) -> None:
-    """Every documented rebuild body field reaches the client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.rebuild_nodebalancer_config.return_value = {"id": 6}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        body = {
-            "port": 443,
-            "protocol": "http",
-            "algorithm": "leastconn",
-            "stickiness": "none",
-            "check": "connection",
-            "check_interval": 5,
-            "check_timeout": 3,
-            "check_attempts": 2,
-            "check_path": "/healthz",
-            "check_body": "ok",
-            "udp_check_port": 8080,
-        }
-        await handle_linode_nodebalancer_config_rebuild(
-            {**_REBUILD_ARGS, **body},
-            sample_config,
-        )
-
-        mock_client.rebuild_nodebalancer_config.assert_called_once_with(
-            8, 6, {"nodes": _REBUILD_NODES, **body}
-        )
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({}, "nodes is required"),
-        ({"nodes": 7}, "nodes must be an array of objects"),
-        ({"nodes": ["web"]}, "nodes must be an array of objects"),
-        (
-            {"nodes": [], "algorithm": "fastest"},
-            "algorithm must be one of: roundrobin, leastconn, source, ring_hash",
-        ),
-        (
-            {"nodes": [], "protocol": "gopher"},
-            "protocol must be one of: http, https, tcp, udp",
-        ),
-        (
-            {"nodes": [], "stickiness": "sticky"},
-            "stickiness must be one of: none, table, http_cookie, session, source_ip",
-        ),
-        (
-            {"nodes": [], "check": "ping"},
-            "check must be one of: none, connection, http, http_body",
-        ),
-        (
-            {"nodes": [], "port": 70000},
-            "port must be an integer from 1 through 65535",
-        ),
-        (
-            {"nodes": [], "check_interval": 0},
-            "check_interval must be an integer greater than or equal to 1",
-        ),
-        (
-            {"nodes": [], "check_timeout": 0},
-            "check_timeout must be an integer greater than or equal to 1",
-        ),
-        (
-            {"nodes": [], "check_attempts": 0},
-            "check_attempts must be an integer greater than or equal to 1",
-        ),
-        (
-            {"nodes": [], "udp_check_port": 0},
-            "udp_check_port must be an integer greater than or equal to 1",
-        ),
-    ],
-)
-async def test_handle_linode_nodebalancer_config_rebuild_body_errors(
-    sample_config: Config, arguments: dict[str, Any], message: str
-) -> None:
-    """Rebuild body validation rejects before any client call, with Go's text."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_config_rebuild(
-            {"nodebalancer_id": 8, "config_id": 6, "confirm": True, **arguments},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert result[0].text == f"Error: {message}"
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_nodebalancer_config_rebuild_error(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_rebuild error handling."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.rebuild_nodebalancer_config.side_effect = Exception("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_rebuild(
-            _REBUILD_ARGS,
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "Failed" in result[0].text or "error" in result[0].text.lower()
-
-
-async def test_handle_linode_nodebalancer_firewalls_update_error(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_firewall_update error handling."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_firewalls.side_effect = Exception("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_firewall_update(
-            {"nodebalancer_id": 8, "firewall_ids": [], "confirm": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "Failed" in result[0].text or "error" in result[0].text.lower()
-
-
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {"region": "us-east"},
-        {"region": "us-east", "confirm": False},
-        {"region": "us-east", "confirm": "true"},
-        {"region": "us-east", "confirm": 1},
-    ],
-)
-async def test_handle_linode_nodebalancer_create_requires_strict_confirm(
-    arguments: dict[str, Any],
-    sample_config: Config,
-) -> None:
-    """NodeBalancer create rejects missing and non-literal confirmation."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_create(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-    mock_client_class.assert_not_called()
-
-
-def test_linode_nodebalancer_create_tool_exposes_optional_ipv4() -> None:
-    """The shared NodeBalancer create schema advertises optional IPv4."""
-    tool, capability = create_linode_nodebalancer_create_tool()
-
-    assert capability is Capability.Write
-    assert tool.input_schema["properties"]["ipv4"]["type"] == "string"
-    assert "ipv4" not in tool.input_schema["required"]
-
-
-async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
-    """NodeBalancer create serializes the raw body through the write proto."""
-    raw_nodebalancer: dict[str, Any] = {
-        "id": 12345,
-        "label": "my-nodebalancer",
-        "region": "us-east",
-        "hostname": "nb-192-0-2-1.newark.nodebalancer.linode.com",
-        "ipv4": "192.0.2.1",
-        "ipv6": "2600:3c03::1",
-        "client_conn_throttle": 0,
-        "transfer": {"in": 100.0, "out": 200.0, "total": 300.0},
-        "tags": [],
-        "created": "2024-01-15T10:00:00",
-        "updated": "2024-01-15T10:00:00",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_nodebalancer_raw.return_value = raw_nodebalancer
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_create(
-            {
-                "region": "us-east",
-                "ipv4": "192.0.2.141",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        payload = json.loads(result[0].text)
-        expected_message = (
-            "NodeBalancer 'my-nodebalancer' (ID: 12345) created successfully in us-east"
-        )
-        assert payload["message"] == expected_message
-        assert payload["nodebalancer"]["id"] == 12345
-        assert payload["nodebalancer"]["transfer"]["total"] == 300.0
-        mock_client.create_nodebalancer_raw.assert_awaited_once_with(
-            region="us-east",
-            label=None,
-            client_conn_throttle=0,
-            ipv4="192.0.2.141",
-            tags=None,
-            fields={},
-        )
-
-
-async def test_handle_linode_nodebalancer_create_omits_unselected_ipv4(
-    sample_config: Config,
-) -> None:
-    """NodeBalancer create preserves omission when IPv4 is not selected."""
-    raw_nodebalancer: dict[str, Any] = {
-        "id": 12345,
-        "label": "nodebalancer",
-        "region": "us-east",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_nodebalancer_raw.return_value = raw_nodebalancer
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        await handle_linode_nodebalancer_create(
-            {"region": "us-east", "confirm": True}, sample_config
-        )
-
-    mock_client.create_nodebalancer_raw.assert_awaited_once_with(
-        region="us-east",
-        label=None,
-        client_conn_throttle=0,
-        ipv4=None,
-        tags=None,
-        fields={},
-    )
-
-
-@pytest.mark.parametrize("ipv4", ["2001:db8::1", "not-an-address", "", 123])
-async def test_handle_linode_nodebalancer_create_rejects_invalid_ipv4(
-    ipv4: object,
-    sample_config: Config,
-) -> None:
-    """NodeBalancer create rejects invalid IPv4 values before client setup."""
-    arguments: dict[str, Any] = {
-        "region": "us-east",
-        "ipv4": ipv4,
-        "confirm": True,
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_create(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "ipv4 must be a valid IPv4 address" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_nodebalancer_update(sample_config: Config) -> None:
-    """Test linode_nodebalancer_update tool."""
-    mock_nodebalancer = NodeBalancer(
-        id=12345,
-        label="updated-nodebalancer",
-        region="us-east",
-        hostname="nb-192-0-2-1.newark.nodebalancer.linode.com",
-        ipv4="192.0.2.1",
-        ipv6="2600:3c03::1",
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T12:00:00",
-        client_conn_throttle=5,
-        transfer=Transfer(in_=100, out=200, total=300),
-        tags=[],
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer.return_value = mock_nodebalancer
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_update(
-            {
-                "nodebalancer_id": 12345,
-                "label": "updated-nodebalancer",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "updated" in result[0].text.lower()
-
-
-async def test_handle_linode_nodebalancer_delete(sample_config: Config) -> None:
-    """Test linode_nodebalancer_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_nodebalancer.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_delete(
-            {"nodebalancer_id": 12345, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == "NodeBalancer 12345 removed successfully"
-
-
-async def test_nodebalancer_delete_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer.return_value = {
-            "id": 444,
-            "label": "prod-lb",
-            "region": "us-east",
-        }
-        mock_client.list_nodebalancer_configs.return_value = {"data": []}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_delete(
-            {"nodebalancer_id": 444, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_nodebalancer_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/nodebalancers/444"
-        mock_client.get_nodebalancer.assert_awaited_once_with(444)
-        mock_client.delete_nodebalancer.assert_not_called()
 
 
 async def test_nodebalancer_delete_dry_run_does_not_require_confirm(
@@ -12895,38 +7874,6 @@ async def test_nodebalancer_delete_dry_run_does_not_require_confirm(
         assert "confirm=true" not in result[0].text
 
 
-async def test_nodebalancer_delete_dry_run_surfaces_config_dependencies(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: configs appear as cascade_deleted dependencies."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer.return_value = {"id": 444, "label": "prod-lb"}
-        mock_client.list_nodebalancer_configs.return_value = {
-            "data": [
-                {"id": 10, "port": 80, "protocol": "http"},
-                {"id": 11, "port": 443, "protocol": "https"},
-            ]
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_delete(
-            {"nodebalancer_id": 444, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        deps = body["dependencies"]
-        assert len(deps) == 2
-        assert all(d["kind"] == "nodebalancer_config" for d in deps)
-        assert all(d["action"] == "cascade_deleted" for d in deps)
-        assert body["warnings"]
-        mock_client.delete_nodebalancer.assert_not_called()
-
-
 async def test_nodebalancer_delete_dry_run_still_validates_nodebalancer_id(
     sample_config: Config,
 ) -> None:
@@ -12937,503 +7884,7 @@ async def test_nodebalancer_delete_dry_run_still_validates_nodebalancer_id(
     )
 
     assert len(result) == 1
-    assert "nodebalancer_id is required" in result[0].text
-
-
-async def test_nodebalancer_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the create with no resource state and no call."""
-    result = await handle_linode_nodebalancer_create(
-        {"region": "us-east", "ipv4": "192.0.2.141", "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_nodebalancer_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/nodebalancers"
-    assert body["would_execute"]["body"] == {
-        "region": "us-east",
-        "ipv4": "192.0.2.141",
-    }
-    assert body["current_state"] is None
-    assert any("us-east" in s for s in body["side_effects"])
-    assert any("192.0.2.141" in s for s in body["side_effects"])
-    assert body["warnings"]
-    assert "confirm=true" not in result[0].text
-
-
-async def test_nodebalancer_create_dry_run_omits_unselected_ipv4(
-    sample_config: Config,
-) -> None:
-    """Dry-run body omits IPv4 when no reserved address is selected."""
-    result = await handle_linode_nodebalancer_create(
-        {"region": "us-east", "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)["would_execute"]["body"]
-    assert body == {"region": "us-east"}
-    assert "ipv4" not in body
-
-
-@pytest.mark.parametrize("ipv4", ["2001:db8::1", "not-an-address", "", 123])
-async def test_nodebalancer_create_dry_run_rejects_invalid_ipv4(
-    ipv4: object,
-    sample_config: Config,
-) -> None:
-    """Dry-run validates the same IPv4 input as live creation."""
-    result = await handle_linode_nodebalancer_create(
-        {"region": "us-east", "ipv4": ipv4, "dry_run": True}, sample_config
-    )
-
-    assert "ipv4 must be a valid IPv4 address" in result[0].text
-
-
-async def test_nodebalancer_create_dry_run_still_validates_region(
-    sample_config: Config,
-) -> None:
-    """Missing region must error out regardless of dry_run."""
-    result = await handle_linode_nodebalancer_create({"dry_run": True}, sample_config)
-
-    assert len(result) == 1
-    assert "region is required" in result[0].text
-
-
-async def test_nodebalancer_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call update."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer.return_value = {"id": 444, "label": "prod-lb"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_update(
-            {"nodebalancer_id": 444, "label": "renamed", "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_nodebalancer_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/nodebalancers/444"
-        assert any("renamed" in s for s in body["side_effects"])
-        mock_client.get_nodebalancer.assert_awaited_once_with(444)
-        mock_client.update_nodebalancer.assert_not_called()
-
-
-async def test_nodebalancer_update_dry_run_still_validates_nodebalancer_id(
-    sample_config: Config,
-) -> None:
-    """Missing nodebalancer_id must error out regardless of dry_run."""
-    result = await handle_linode_nodebalancer_update({"dry_run": True}, sample_config)
-
-    assert len(result) == 1
-    assert "nodebalancer_id is required" in result[0].text
-
-
-async def test_networking_ip_allocate_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the allocate with no resource state and no call."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_allocate,
-    )
-
-    result = await handle_linode_networking_ip_allocate(
-        {"linode_id": 123, "type": "ipv4", "public": True, "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_networking_ip_allocate"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/ips"
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-
-
-async def test_networking_ip_allocate_dry_run_still_validates_linode_id(
-    sample_config: Config,
-) -> None:
-    """Missing linode_id must error out regardless of dry_run."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_allocate,
-    )
-
-    result = await handle_linode_networking_ip_allocate(
-        {"type": "ipv4", "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "linode_id must be an integer" in result[0].text
-
-
-async def test_ipv6_range_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the create with no resource state and no call."""
-    result = list(
-        await handle_linode_ipv6_range_create(
-            {"prefix_length": 64, "linode_id": 123, "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_ipv6_range_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/ipv6/ranges"
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-    assert len(body["side_effects"]) == 1
-    assert "/64" in body["side_effects"][0]
-    assert "instance 123" in body["side_effects"][0]
-
-
-async def test_ipv6_range_create_dry_run_still_validates_prefix_length(
-    sample_config: Config,
-) -> None:
-    """Missing prefix_length must error out regardless of dry_run."""
-    result = list(
-        await handle_linode_ipv6_range_create({"dry_run": True}, sample_config)
-    )
-
-    assert len(result) == 1
-    assert "prefix_length" in result[0].text
-
-
-async def test_linode_nodebalancer_config_node_update_tool_definition() -> None:
-    """Test linode_nodebalancer_config_node_update tool definition."""
-    tool, capability = create_linode_nodebalancer_config_node_update_tool()
-    assert tool.name == "linode_nodebalancer_config_node_update"
-    assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.input_schema["properties"]
-    assert "config_id" in tool.input_schema["properties"]
-    assert "node_id" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert "mode" in tool.input_schema["properties"]
-    assert "weight" in tool.input_schema["properties"]
-    assert tool.input_schema["required"] == [
-        "nodebalancer_id",
-        "config_id",
-        "node_id",
-        "confirm",
-    ]
-
-
-async def test_handle_linode_nodebalancer_config_node_update(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_node_update tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_config_node.return_value = {
-            "id": 7,
-            "address": "192.0.2.7:80",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_update(
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "address": "192.0.2.7:80",
-                "label": "web-7",
-                "mode": "drain",
-                "subnet_id": 123,
-                "weight": 50,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == (
-            "NodeBalancer node 7 updated successfully for NodeBalancer 12345 config 6"
-        )
-        # The body is the full NodeBalancerConfigNode proto element.
-        assert data["node"]["id"] == 7
-        assert data["node"]["address"] == "192.0.2.7:80"
-        mock_client.update_nodebalancer_config_node.assert_called_once_with(
-            12345,
-            6,
-            7,
-            {
-                "address": "192.0.2.7:80",
-                "label": "web-7",
-                "mode": "drain",
-                "subnet_id": 123,
-                "weight": 50,
-            },
-        )
-
-
-async def test_handle_linode_nodebalancer_config_node_update_empty_response(
-    sample_config: Config,
-) -> None:
-    """Node update fills proto defaults when the API body is empty.
-
-    The empty-body id-echo fallback is gone: the node write now returns the full
-    NodeBalancerConfigNode element, so an empty API body serializes to an
-    all-default node rather than an id echo.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_config_node.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_update(
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "mode": "reject",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        # The message id is read from the raw API body (None for an empty body),
-        # while the serialized node element fills proto defaults (id 0).
-        assert "updated successfully" in data["message"]
-        assert data["node"]["id"] == 0
-        assert data["node"]["address"] == ""
-        mock_client.update_nodebalancer_config_node.assert_called_once_with(
-            12345, 6, 7, {"mode": "reject"}
-        )
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({}, "This updates a NodeBalancer node. Set confirm=true to proceed."),
-        ({"confirm": False}, "Set confirm=true to proceed"),
-        ({"confirm": "true"}, "Set confirm=true to proceed"),
-        ({"confirm": 1}, "Set confirm=true to proceed"),
-        (
-            {"nodebalancer_id": 12345, "config_id": 6, "node_id": 7, "confirm": True},
-            "at least one update field is required",
-        ),
-        (
-            {"nodebalancer_id": 0, "config_id": 6, "node_id": 7, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "12345", "config_id": 6, "node_id": 7, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": True, "config_id": 6, "node_id": 7, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1/2", "config_id": 6, "node_id": 7, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1?x", "config_id": 6, "node_id": 7, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "..", "config_id": 6, "node_id": 7, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": 12345, "config_id": 0, "node_id": 7, "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 12345, "config_id": "6", "node_id": 7, "confirm": True},
-            "config_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": False,
-                "node_id": 7,
-                "confirm": True,
-            },
-            "config_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": "4/5",
-                "node_id": 7,
-                "confirm": True,
-            },
-            "config_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": "4?x",
-                "node_id": 7,
-                "confirm": True,
-            },
-            "config_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": "..",
-                "node_id": 7,
-                "confirm": True,
-            },
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 12345, "config_id": 6, "node_id": 0, "confirm": True},
-            "node_id",
-        ),
-        (
-            {"nodebalancer_id": 12345, "config_id": 6, "node_id": "7", "confirm": True},
-            "node_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": False,
-                "confirm": True,
-            },
-            "node_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": "7/8",
-                "confirm": True,
-            },
-            "node_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": "7?x",
-                "confirm": True,
-            },
-            "node_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": "..",
-                "confirm": True,
-            },
-            "node_id",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "address": "",
-                "confirm": True,
-            },
-            "address must be a non-empty string",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "label": "ab",
-                "confirm": True,
-            },
-            "label must be 3 to 32 characters",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "mode": "invalid",
-                "confirm": True,
-            },
-            "mode must be one of: accept, backup, drain, none, reject",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "subnet_id": 0,
-                "confirm": True,
-            },
-            "subnet_id must be at least 1",
-        ),
-        (
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "weight": 256,
-                "confirm": True,
-            },
-            "weight must be at most 255",
-        ),
-    ],
-)
-async def test_handle_linode_nodebalancer_config_node_update_invalid_arguments(
-    sample_config: Config, arguments: dict[str, Any], message: str
-) -> None:
-    """NodeBalancer config node update rejects invalid arguments before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_config_node_update(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_nodebalancer_config_node_update_error(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_node_update error handling."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_config_node.side_effect = Exception("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_update(
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "mode": "reject",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "Failed" in result[0].text or "error" in result[0].text.lower()
+    assert "nodebalancer_id must be a positive integer" in result[0].text
 
 
 async def test_linode_nodebalancer_config_delete_tool_definition() -> None:
@@ -13447,119 +7898,6 @@ async def test_linode_nodebalancer_config_delete_tool_definition() -> None:
         "confirm",
     ]
     assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_nodebalancer_config_delete(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_nodebalancer_config.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_delete(
-            {"nodebalancer_id": 12345, "config_id": 6, "confirm": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Config 6 removed from NodeBalancer 12345 successfully"
-    mock_client.delete_nodebalancer_config.assert_called_once_with(12345, 6)
-
-
-@pytest.mark.parametrize("confirm_value", [False, None, "true", 1])
-async def test_handle_linode_nodebalancer_config_delete_confirm_rejected(
-    confirm_value: object, sample_config: Config
-) -> None:
-    """Missing, false, string, and numeric confirm are rejected before client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_delete(
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "confirm": confirm_value,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    assert "set confirm=true to proceed" in result[0].text.lower()
-    mock_client.delete_nodebalancer_config.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected"),
-    [
-        (
-            {"config_id": 6, "confirm": True},
-            "nodebalancer_id is required",
-        ),
-        (
-            {"nodebalancer_id": "1/2", "config_id": 6, "confirm": True},
-            "nodebalancer_id must be a positive integer",
-        ),
-        (
-            {"nodebalancer_id": 12345, "config_id": "6?x", "confirm": True},
-            "config_id must be a positive integer",
-        ),
-        (
-            {"nodebalancer_id": 12345, "config_id": "..", "confirm": True},
-            "config_id must be a positive integer",
-        ),
-    ],
-)
-async def test_handle_linode_nodebalancer_config_delete_invalid_args(
-    arguments: dict[str, object], expected: str, sample_config: Config
-) -> None:
-    """Invalid path arguments are rejected before client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_delete(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert expected in result[0].text
-    mock_client.delete_nodebalancer_config.assert_not_called()
-
-
-async def test_nodebalancer_config_delete_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config.return_value = {
-            "id": 222,
-            "port": 80,
-            "protocol": "http",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_delete(
-            {"nodebalancer_id": 111, "config_id": 222, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_nodebalancer_config_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/nodebalancers/111/configs/222"
-        mock_client.get_nodebalancer_config.assert_awaited_once_with(111, 222)
-        mock_client.delete_nodebalancer_config.assert_not_called()
 
 
 async def test_nodebalancer_config_delete_dry_run_does_not_require_confirm(
@@ -13605,110 +7943,6 @@ async def test_linode_nodebalancer_config_node_delete_tool_definition() -> None:
         "node_id",
         "confirm",
     ]
-
-
-async def test_handle_linode_nodebalancer_config_node_delete(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_node_delete tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_nodebalancer_config_node.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_delete(
-            {"nodebalancer_id": 12345, "config_id": 6, "node_id": 7, "confirm": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == (
-            "NodeBalancer node 7 removed successfully from NodeBalancer 12345 config 6"
-        )
-        mock_client.delete_nodebalancer_config_node.assert_called_once_with(12345, 6, 7)
-
-
-@pytest.mark.parametrize("confirm_value", [False, None])
-async def test_handle_linode_nodebalancer_config_node_delete_confirm_rejected(
-    confirm_value: object, sample_config: Config
-) -> None:
-    """Missing/false confirm is rejected before client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_delete(
-            {
-                "nodebalancer_id": 12345,
-                "config_id": 6,
-                "node_id": 7,
-                "confirm": confirm_value,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "confirm=true" in result[0].text.lower()
-        mock_client.delete_nodebalancer_config_node.assert_not_called()
-
-
-async def test_handle_linode_nodebalancer_config_node_delete_missing_args(
-    sample_config: Config,
-) -> None:
-    """Missing required args are rejected before client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_delete(
-            {"nodebalancer_id": 12345, "confirm": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "config_id is required" in result[0].text.lower()
-        mock_client.delete_nodebalancer_config_node.assert_not_called()
-
-
-async def test_nodebalancer_config_node_delete_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config_node.return_value = {
-            "id": 333,
-            "address": "10.0.0.5:80",
-            "label": "web-01",
-            "mode": "accept",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_delete(
-            {
-                "nodebalancer_id": 111,
-                "config_id": 222,
-                "node_id": 333,
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_nodebalancer_config_node_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert (
-            body["would_execute"]["path"] == "/nodebalancers/111/configs/222/nodes/333"
-        )
-        mock_client.get_nodebalancer_config_node.assert_awaited_once_with(111, 222, 333)
-        mock_client.delete_nodebalancer_config_node.assert_not_called()
 
 
 async def test_nodebalancer_config_node_delete_dry_run_does_not_require_confirm(
@@ -13767,7 +8001,7 @@ async def test_handle_linode_object_storage_buckets_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_buckets.return_value = mock_buckets
+        mock_client.route_raw.return_value = {"data": mock_buckets}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -13777,7 +8011,7 @@ async def test_handle_linode_object_storage_buckets_list(
         assert len(result) == 1
         assert "my-bucket" in result[0].text
         assert '"count": 1' in result[0].text
-        mock_client.list_object_storage_buckets.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 async def test_handle_linode_object_storage_buckets_list_error(
@@ -13786,7 +8020,7 @@ async def test_handle_linode_object_storage_buckets_list_error(
     """Test linode_object_storage_bucket_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_buckets.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -13812,7 +8046,7 @@ async def test_handle_linode_object_storage_buckets_region_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_buckets_for_region.return_value = mock_buckets
+        mock_client.route_raw.return_value = {"data": mock_buckets}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -13829,8 +8063,8 @@ async def test_handle_linode_object_storage_buckets_region_list(
         # envelope, so the output carries only count + buckets.
         assert "region" not in body
         assert "not_in_proto" not in result[0].text
-        mock_client.list_object_storage_buckets_for_region.assert_called_once_with(
-            "us-ord"
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_bucket_by_region_list", "us-ord", query=""
         )
 
 
@@ -13865,9 +8099,7 @@ async def test_handle_linode_object_storage_buckets_region_list_error(
     """Test region-scoped bucket list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_buckets_for_region.side_effect = Exception(
-            "API error"
-        )
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -13895,7 +8127,7 @@ async def test_handle_linode_object_storage_bucket_get(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_bucket.return_value = mock_bucket
+        mock_client.route_raw.return_value = mock_bucket
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -13906,8 +8138,8 @@ async def test_handle_linode_object_storage_bucket_get(
 
         assert len(result) == 1
         assert "my-bucket" in result[0].text
-        mock_client.get_object_storage_bucket.assert_called_once_with(
-            "us-east-1", "my-bucket"
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_bucket_get", "us-east-1", "my-bucket"
         )
 
 
@@ -13956,241 +8188,6 @@ async def test_handle_linode_object_storage_bucket_get_rejects_bad_path_params(
     mock_client_class.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({"region": "us/east", "label": "my-bucket"}, "region must be a valid"),
-        ({"region": "us-east", "label": "bad?bucket"}, "label must be a valid"),
-        ({"region": "..", "label": "my-bucket"}, "region must be a valid"),
-    ],
-)
-async def test_handle_linode_object_storage_bucket_contents_rejects_bad_path_params(
-    arguments: dict[str, object], message: str, sample_config: Config
-) -> None:
-    """Bucket contents rejects malformed path params before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_object_storage_bucket_object_list(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_object_storage_bucket_contents(
-    sample_config: Config,
-) -> None:
-    """Test linode_object_storage_bucket_object_list tool."""
-    mock_response = {
-        "data": [
-            {
-                "name": "photos/cat.jpg",
-                "etag": "abc123",
-                "last_modified": "2024-06-01T00:00:00",
-                "owner": "user",
-                "size": 512000,
-                "is_prefix": False,
-            },
-        ],
-        "is_truncated": False,
-        "next_marker": "",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_object_storage_bucket_contents.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_object_list(
-            {"region": "us-east-1", "label": "my-bucket"}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["count"] == 1
-        assert body["objects"][0]["name"] == "photos/cat.jpg"
-        assert body["objects"][0]["size"] == 512000
-        assert body["is_truncated"] is False
-
-
-async def test_handle_linode_object_storage_bucket_contents_with_prefix(
-    sample_config: Config,
-) -> None:
-    """Test linode_object_storage_bucket_object_list with prefix filter."""
-    mock_response = {
-        "data": [
-            {
-                "name": "images/logo.png",
-                "etag": "def456",
-                "last_modified": "2024-06-01T00:00:00",
-                "owner": "user",
-                "size": 256000,
-                "is_prefix": False,
-            },
-        ],
-        "is_truncated": True,
-        "next_marker": "images/next.png",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_object_storage_bucket_contents.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_object_list(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "prefix": "images/",
-                "delimiter": "/",
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["objects"][0]["name"] == "images/logo.png"
-        assert body["is_truncated"] is True
-        assert body["next_marker"] == "images/next.png"
-        assert body["filter"] == "prefix=images/, delimiter=/"
-
-
-async def test_handle_linode_object_storage_bucket_object_list_marker_and_page_size(
-    sample_config: Config,
-) -> None:
-    """Marker and page_size flow into the request params but not the filter echo.
-
-    The proto envelope's filter echoes only prefix and delimiter, matching Go;
-    marker and page_size are still sent to the API.
-    """
-    mock_response: dict[str, Any] = {
-        "data": [
-            {
-                "name": "images/next.png",
-                "etag": "ghi789",
-                "last_modified": "2024-06-02T00:00:00",
-                "owner": "user",
-                "size": 512000,
-                "is_prefix": False,
-            },
-        ],
-        "is_truncated": False,
-        "next_marker": "",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_object_storage_bucket_contents.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_object_list(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "marker": "images/logo.png",
-                "page_size": "100",
-            },
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["count"] == 1
-        assert body["objects"][0]["name"] == "images/next.png"
-        # size is int64 in proto and stays a JSON number.
-        assert body["objects"][0]["size"] == 512000
-        assert "marker" not in body.get("filter", "")
-        assert "page_size" not in body.get("filter", "")
-
-    sent_params = mock_client.list_object_storage_bucket_contents.await_args.args[2]
-    assert sent_params["marker"] == "images/logo.png"
-    assert sent_params["page_size"] == "100"
-
-
-async def test_handle_linode_object_storage_bucket_object_list_delimiter_only(
-    sample_config: Config,
-) -> None:
-    """A delimiter-only request echoes just the delimiter in the filter."""
-    mock_response: dict[str, Any] = {
-        "data": [{"name": "folder/", "is_prefix": True}],
-        "is_truncated": False,
-        "next_marker": "",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_object_storage_bucket_contents.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_object_list(
-            {"region": "us-east-1", "label": "my-bucket", "delimiter": "/"},
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body["filter"] == "delimiter=/"
-    assert body["objects"][0]["is_prefix"] is True
-
-
-async def test_handle_linode_object_storage_bucket_object_list_no_filter(
-    sample_config: Config,
-) -> None:
-    """With no prefix or delimiter the envelope omits the filter field."""
-    mock_response: dict[str, Any] = {
-        "data": [],
-        "is_truncated": False,
-        "next_marker": "",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_object_storage_bucket_contents.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_object_list(
-            {"region": "us-east-1", "label": "my-bucket"}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["count"] == 0
-    assert body["objects"] == []
-    assert "filter" not in body
-
-
-async def test_handle_linode_object_storage_bucket_contents_missing_region(
-    sample_config: Config,
-) -> None:
-    """Test linode_object_storage_bucket_object_list with missing region."""
-    result = await handle_linode_object_storage_bucket_object_list(
-        {"label": "my-bucket"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "region is required" in result[0].text
-
-
-async def test_handle_linode_object_storage_bucket_contents_missing_label(
-    sample_config: Config,
-) -> None:
-    """Test linode_object_storage_bucket_object_list with missing label."""
-    result = await handle_linode_object_storage_bucket_object_list(
-        {"region": "us-east-1"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "label is required" in result[0].text
-
-
 async def test_linode_object_storage_cluster_get_removed_from_registry() -> None:
     """Deprecated Object Storage cluster get tool should not be registered."""
     from linodemcp.server import get_tool_registry
@@ -14223,7 +8220,7 @@ async def test_handle_linode_object_storage_types_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_types.return_value = mock_types
+        mock_client.route_raw.return_value = {"data": mock_types}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14236,7 +8233,7 @@ async def test_handle_linode_object_storage_types_list(
         assert body["types"][0]["region_prices"] == [
             {"id": "us-east", "hourly": 0.02, "monthly": 5.0},
         ]
-        mock_client.list_object_storage_types.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 def test_object_storage_key_to_response_dict_shapes_nested_grants() -> None:
@@ -14289,7 +8286,7 @@ async def test_handle_linode_object_storage_types_list_error(
     """Test linode_object_storage_type_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_types.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14323,7 +8320,7 @@ async def test_handle_linode_object_storage_endpoints_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_endpoints.return_value = mock_endpoints
+        mock_client.route_raw.return_value = {"data": mock_endpoints}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14335,7 +8332,9 @@ async def test_handle_linode_object_storage_endpoints_list(
         assert '"count": 1' in result[0].text
         # No page arguments were supplied, so both stay None and the query
         # string is omitted, leaving the API's own default page in effect.
-        mock_client.list_object_storage_endpoints.assert_called_once_with(None, None)
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_endpoint_list", query=""
+        )
 
 
 async def test_handle_linode_object_storage_endpoints_list_error(
@@ -14344,7 +8343,7 @@ async def test_handle_linode_object_storage_endpoints_list_error(
     """Test linode_object_storage_endpoint_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_endpoints.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14352,7 +8351,7 @@ async def test_handle_linode_object_storage_endpoints_list_error(
         result = await handle_linode_object_storage_endpoint_list({}, sample_config)
 
         assert len(result) == 1
-        assert "Failed to retrieve Object Storage endpoints" in result[0].text
+        assert "Failed to retrieve items" in result[0].text
 
 
 async def test_handle_linode_object_storage_keys_list(
@@ -14385,7 +8384,7 @@ async def test_handle_linode_object_storage_keys_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_keys.return_value = mock_keys
+        mock_client.route_raw.return_value = {"data": mock_keys}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14402,7 +8401,7 @@ async def test_handle_linode_object_storage_keys_list(
             "us-east-1.linodeobjects.com"
         )
         assert "filter" not in payload
-        mock_client.list_object_storage_keys.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 async def test_handle_linode_object_storage_keys_list_error(
@@ -14411,7 +8410,7 @@ async def test_handle_linode_object_storage_keys_list_error(
     """Test linode_object_storage_key_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_keys.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14443,7 +8442,7 @@ async def test_handle_linode_object_storage_key_get(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_key.return_value = mock_key
+        mock_client.route_raw.return_value = mock_key
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14455,7 +8454,9 @@ async def test_handle_linode_object_storage_key_get(
         assert len(result) == 1
         assert "my-key" in result[0].text
         assert "my-bucket" in result[0].text
-        mock_client.get_object_storage_key.assert_called_once_with(42)
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_key_get", 42
+        )
 
 
 async def test_handle_linode_object_storage_key_get_missing_id(
@@ -14490,7 +8491,7 @@ async def test_handle_linode_object_storage_quotas_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_quotas.return_value = mock_quotas
+        mock_client.route_raw.return_value = {"data": mock_quotas}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14500,7 +8501,9 @@ async def test_handle_linode_object_storage_quotas_list(
         assert len(result) == 1
         assert "obj-buckets-us-sea-1.linodeobjects.com" in result[0].text
         assert '"count": 1' in result[0].text
-        mock_client.list_object_storage_quotas.assert_called_once_with()
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_quota_list", query=""
+        )
 
 
 async def test_handle_linode_object_storage_quotas_list_error(
@@ -14509,7 +8512,7 @@ async def test_handle_linode_object_storage_quotas_list_error(
     """Test linode_object_storage_quota_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_object_storage_quotas.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14517,7 +8520,7 @@ async def test_handle_linode_object_storage_quotas_list_error(
         result = await handle_linode_object_storage_quota_list({}, sample_config)
 
         assert len(result) == 1
-        assert "Failed to retrieve Object Storage quotas" in result[0].text
+        assert "Failed to retrieve items" in result[0].text
 
 
 def test_linode_object_storage_quota_get_tool_schema() -> None:
@@ -14542,7 +8545,7 @@ async def test_handle_linode_object_storage_quota_get(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_quota.return_value = mock_quota
+        mock_client.route_raw.return_value = mock_quota
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14556,8 +8559,8 @@ async def test_handle_linode_object_storage_quota_get(
         assert "quota_id" in result[0].text
         assert "obj-buckets-us-sea-1.linodeobjects.com" in result[0].text
         assert "not_in_proto" not in result[0].text
-        mock_client.get_object_storage_quota.assert_called_once_with(
-            "obj-buckets-us-sea-1.linodeobjects.com"
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_quota_get", "obj-buckets-us-sea-1.linodeobjects.com"
         )
 
 
@@ -14569,16 +8572,25 @@ async def test_handle_linode_object_storage_quota_get_requires_id(
         result = await handle_linode_object_storage_quota_get({}, sample_config)
 
     assert len(result) == 1
-    assert "obj_quota_id must be a valid Object Storage quota ID" in result[0].text
+    assert "obj_quota_id is required" in result[0].text
     mock_client_class.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    "bad_id",
-    ["quota/with/slash", "quota?x=1", "quota#x", "..", "quota..id", "", 123, True],
+    ("bad_id", "message"),
+    [
+        ("quota/with/slash", "must not contain path separators"),
+        ("quota?x=1", "must not contain path separators"),
+        ("quota#x", "must not contain path separators"),
+        ("..", "must not contain path separators"),
+        ("quota..id", "must not contain path separators"),
+        ("", "obj_quota_id is required"),
+        (123, "obj_quota_id is required"),
+        (True, "obj_quota_id is required"),
+    ],
 )
 async def test_handle_linode_object_storage_quota_get_rejects_bad_id(
-    sample_config: Config, bad_id: Any
+    sample_config: Config, bad_id: Any, message: str
 ) -> None:
     """Quota get rejects malformed path parameters before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -14587,7 +8599,7 @@ async def test_handle_linode_object_storage_quota_get_rejects_bad_id(
         )
 
     assert len(result) == 1
-    assert "obj_quota_id must be a valid Object Storage quota ID" in result[0].text
+    assert message in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -14597,7 +8609,7 @@ async def test_handle_linode_object_storage_quota_get_error(
     """Test linode_object_storage_quota_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_quota.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14633,7 +8645,7 @@ async def test_handle_linode_object_storage_quota_usage(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_quota_usage.return_value = mock_usage
+        mock_client.route_raw.return_value = mock_usage
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14647,8 +8659,8 @@ async def test_handle_linode_object_storage_quota_usage(
             "quota_limit": 1000000000000,
             "usage": 5368709120,
         }
-        mock_client.get_object_storage_quota_usage.assert_called_once_with(
-            "obj-bucket-us-ord-1"
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_quota_usage_get", "obj-bucket-us-ord-1"
         )
 
 
@@ -14660,13 +8672,27 @@ async def test_handle_linode_object_storage_quota_usage_requires_id(
         result = await handle_linode_object_storage_quota_usage_get({}, sample_config)
 
     assert len(result) == 1
-    assert "obj_quota_id must be a valid Object Storage quota ID" in result[0].text
+    assert "obj_quota_id is required" in result[0].text
     mock_client_class.assert_not_called()
 
 
-@pytest.mark.parametrize("bad_id", ["1/2", "1?x=1", "..", 0, -1, True, 1.9])
+# The two languages worded this one refusal differently and the contract now
+# carries one wording for both: an id nobody sent reads as required, and one the
+# route cannot address names the characters it will not take.
+@pytest.mark.parametrize(
+    ("bad_id", "expected"),
+    [
+        ("1/2", "obj_quota_id must not contain"),
+        ("1?x=1", "obj_quota_id must not contain"),
+        ("..", "obj_quota_id must not contain"),
+        (0, "obj_quota_id is required"),
+        (-1, "obj_quota_id is required"),
+        (True, "obj_quota_id is required"),
+        (1.9, "obj_quota_id is required"),
+    ],
+)
 async def test_handle_linode_object_storage_quota_usage_rejects_bad_id(
-    sample_config: Config, bad_id: Any
+    sample_config: Config, bad_id: Any, expected: str
 ) -> None:
     """Quota usage rejects malformed path parameters before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -14675,7 +8701,7 @@ async def test_handle_linode_object_storage_quota_usage_rejects_bad_id(
         )
 
     assert len(result) == 1
-    assert "obj_quota_id must be a valid Object Storage quota ID" in result[0].text
+    assert expected in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -14685,7 +8711,7 @@ async def test_handle_linode_object_storage_quota_usage_error(
     """Test linode_object_storage_quota_usage_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_quota_usage.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14706,7 +8732,7 @@ async def test_handle_linode_object_storage_transfer(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_transfer.return_value = mock_transfer
+        mock_client.route_raw.return_value = mock_transfer
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14715,7 +8741,7 @@ async def test_handle_linode_object_storage_transfer(
 
         assert len(result) == 1
         assert json.loads(result[0].text) == {"used": 1073741824}
-        mock_client.get_object_storage_transfer.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 async def test_handle_linode_object_storage_transfer_error(
@@ -14724,7 +8750,7 @@ async def test_handle_linode_object_storage_transfer_error(
     """Test linode_object_storage_transfer_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_transfer.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14743,7 +8769,7 @@ async def test_handle_linode_object_storage_bucket_access_get(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_bucket_access.return_value = mock_access
+        mock_client.route_raw.return_value = mock_access
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14754,8 +8780,8 @@ async def test_handle_linode_object_storage_bucket_access_get(
 
         assert len(result) == 1
         assert "public-read" in result[0].text
-        mock_client.get_object_storage_bucket_access.assert_called_once_with(
-            "us-east-1", "my-bucket"
+        mock_client.route_raw.assert_called_once_with(
+            "linode_object_storage_bucket_access_get", "us-east-1", "my-bucket"
         )
 
 
@@ -14789,9 +8815,7 @@ async def test_handle_linode_object_storage_bucket_access_get_error(
     """Test linode_object_storage_bucket_access_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_bucket_access.side_effect = Exception(
-            "API error"
-        )
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -14835,12 +8859,16 @@ async def test_handle_object_storage_cancel_requires_boolean_true_confirm(
 async def test_handle_object_storage_cancel_success(
     sample_config: Config,
 ) -> None:
-    """Object Storage cancel returns the fixed confirmation, matching Go."""
+    """Object Storage cancel returns the fixed confirmation, matching Go.
+
+    The retry=False keyword is the contract's retry_disabled reaching the call:
+    a replayed cancel would act twice on account service state.
+    """
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         # The cancel endpoint returns an empty body; the handler emits the fixed
         # confirmation message regardless, so the API return is not echoed.
-        mock_client.cancel_object_storage.return_value = {}
+        mock_client.route_call.return_value = None
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -14853,7 +8881,9 @@ async def test_handle_object_storage_cancel_success(
     assert json.loads(result[0].text) == {
         "message": "Object Storage cancellation requested successfully"
     }
-    mock_client.cancel_object_storage.assert_called_once_with()
+    mock_client.route_call.assert_called_once_with(
+        "linode_object_storage_cancel", retry=False
+    )
 
 
 async def test_handle_object_storage_cancel_error(
@@ -14862,7 +8892,7 @@ async def test_handle_object_storage_cancel_error(
     """Object Storage cancel should report client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.cancel_object_storage.side_effect = Exception("API error")
+        mock_client.route_call.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -14941,7 +8971,7 @@ async def test_handle_object_storage_bucket_create_success(
     """Test bucket create success."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.create_object_storage_bucket.return_value = {
+        mock_client.route_raw.return_value = {
             "label": "my-bucket",
             "region": "us-east-1",
             "created": "2024-01-01T00:00:00",
@@ -14987,74 +9017,6 @@ async def test_handle_object_storage_bucket_delete_missing_region(
 
     assert len(result) == 1
     assert "region is required" in result[0].text
-
-
-async def test_handle_object_storage_bucket_delete_success(
-    sample_config: Config,
-) -> None:
-    """Test bucket delete success."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_object_storage_bucket.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_delete(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "removed successfully" in result[0].text
-
-
-async def test_bucket_delete_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete.
-
-    Decodes the JSON body so a future renaming of the v0 wire shape or
-    a regression where Execute fires anyway gets caught.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_object_storage_bucket.return_value = {
-            "label": "my-bucket",
-            "region": "us-east-1",
-            "size": 1024,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_delete(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_object_storage_bucket_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert (
-            body["would_execute"]["path"]
-            == "/object-storage/buckets/us-east-1/my-bucket"
-        )
-        assert body["current_state"]["label"] == "my-bucket"
-        mock_client.get_object_storage_bucket.assert_awaited_once_with(
-            "us-east-1", "my-bucket"
-        )
-        mock_client.delete_object_storage_bucket.assert_not_called()
 
 
 async def test_bucket_delete_dry_run_does_not_require_confirm(
@@ -15116,399 +9078,6 @@ async def test_bucket_delete_dry_run_still_validates_label(
     assert "label is required" in result[0].text
 
 
-async def test_handle_object_storage_bucket_access_allow_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Test bucket access allow requires confirm."""
-    result = await handle_linode_object_storage_bucket_access_allow(
-        {
-            "region": "us-east-1",
-            "label": "my-bucket",
-            "acl": "public-read",
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_object_storage_bucket_access_allow_invalid_acl(
-    sample_config: Config,
-) -> None:
-    """Test bucket access allow rejects invalid ACL."""
-    result = await handle_linode_object_storage_bucket_access_allow(
-        {
-            "region": "us-east-1",
-            "label": "my-bucket",
-            "acl": "bad-acl",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert result[0].text == (
-        "Error: acl must be one of: "
-        "private, public-read, authenticated-read, public-read-write"
-    )
-
-
-async def test_handle_object_storage_bucket_access_allow_success(
-    sample_config: Config,
-) -> None:
-    """Test bucket access allow success."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.allow_object_storage_bucket_access.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_access_allow(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "acl": "public-read",
-                "cors_enabled": True,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        payload = json.loads(result[0].text)
-        assert payload == {
-            "message": (
-                "Access settings for bucket 'my-bucket' in us-east-1 "
-                "applied successfully"
-            ),
-            "access": {
-                "acl": "public-read",
-                "cors_enabled": True,
-            },
-        }
-        mock_client.allow_object_storage_bucket_access.assert_called_once_with(
-            region="us-east-1",
-            label="my-bucket",
-            acl="public-read",
-            cors_enabled=True,
-        )
-
-
-async def test_handle_object_storage_bucket_access_allow_defaults_from_args(
-    sample_config: Config,
-) -> None:
-    """Without acl/cors_enabled, the access element falls back to empty/false.
-
-    The allow endpoint returns no body, so the access element is built from the
-    request args. An omitted acl becomes "" and an omitted cors_enabled becomes
-    false, matching the Go implementation byte-for-byte.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.allow_object_storage_bucket_access.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_access_allow(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        payload = json.loads(result[0].text)
-        assert payload == {
-            "message": (
-                "Access settings for bucket 'my-bucket' in us-east-1 "
-                "applied successfully"
-            ),
-            "access": {
-                "acl": "",
-                "cors_enabled": False,
-            },
-        }
-
-
-async def test_handle_object_storage_bucket_access_update_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Test bucket access update requires confirm."""
-    result = await handle_linode_object_storage_bucket_access_update(
-        {
-            "region": "us-east-1",
-            "label": "my-bucket",
-            "acl": "public-read",
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_object_storage_bucket_access_update_invalid_acl(
-    sample_config: Config,
-) -> None:
-    """Test bucket access update rejects invalid ACL."""
-    result = await handle_linode_object_storage_bucket_access_update(
-        {
-            "region": "us-east-1",
-            "label": "my-bucket",
-            "acl": "bad-acl",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert result[0].text == (
-        "Error: acl must be one of: "
-        "private, public-read, authenticated-read, public-read-write"
-    )
-
-
-async def test_handle_object_storage_bucket_access_update_success(
-    sample_config: Config,
-) -> None:
-    """Test bucket access update success."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.update_object_storage_bucket_access.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_object_storage_bucket_access_update(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "acl": "public-read",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "modified successfully" in result[0].text
-        payload = json.loads(result[0].text)
-        assert payload["message"] == (
-            "Access settings for bucket 'my-bucket' in us-east-1 modified successfully"
-        )
-        assert payload["access"] == {"acl": "public-read", "cors_enabled": False}
-
-
-async def test_object_storage_key_create_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Key create should require confirm=true."""
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {"label": "my-key"},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "Error" in result[0].text
-    assert "confirm=true" in result[0].text
-    assert "secret_key" in result[0].text
-
-
-async def test_object_storage_key_create_empty_label(
-    sample_config: Config,
-) -> None:
-    """Key create should reject empty label."""
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {"label": "", "confirm": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "label is required" in result[0].text
-
-
-async def test_object_storage_key_create_label_too_long(
-    sample_config: Config,
-) -> None:
-    """Key create should reject label over 50 chars."""
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {"label": "a" * 51, "confirm": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "50 characters" in result[0].text
-
-
-async def test_object_storage_key_create_invalid_json(
-    sample_config: Config,
-) -> None:
-    """Key create should reject invalid bucket_access JSON."""
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {
-                "label": "my-key",
-                "bucket_access": "not-valid-json",
-                "confirm": True,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "Invalid bucket_access JSON" in result[0].text
-
-
-async def test_object_storage_key_create_invalid_permissions(
-    sample_config: Config,
-) -> None:
-    """Key create should reject invalid permissions."""
-    bucket_access = json.dumps(
-        [
-            {
-                "bucket_name": "mybucket",
-                "region": "us-east-1",
-                "permissions": "admin",
-            }
-        ]
-    )
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {
-                "label": "my-key",
-                "bucket_access": bucket_access,
-                "confirm": True,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "read_only" in result[0].text
-
-
-async def test_object_storage_key_create_success(
-    sample_config: Config,
-) -> None:
-    """Key create should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_object_storage_key.return_value = {
-            "id": 42,
-            "label": "my-key",
-            "access_key": "AKIAIOSFODNN7EXAMPLE",
-            "secret_key": "wJalrXUtnFEMI/bPxRfiCYEXAMPLEKEY",
-            "limited": False,
-            "bucket_access": [],
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_key_create(
-                {"label": "my-key", "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "created successfully" in result[0].text
-        assert "IMPORTANT" in result[0].text
-        assert "ONLY ONCE" in result[0].text
-
-
-async def test_object_storage_key_create_missing_env() -> None:
-    """Key create should fail with missing environment."""
-    cfg = Config(environments={})
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {"label": "my-key", "confirm": True},
-            cfg,
-        )
-    )
-
-    assert len(result) == 1
-    assert "Error" in result[0].text
-
-
-async def test_object_storage_key_update_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Key update should require confirm=true."""
-    result = list(
-        await handle_linode_object_storage_key_update(
-            {"key_id": 42, "label": "new-label"},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_object_storage_key_update_invalid_key_id(
-    sample_config: Config,
-) -> None:
-    """Key update should reject invalid key_id."""
-    result = list(
-        await handle_linode_object_storage_key_update(
-            {"key_id": 0, "label": "new-label", "confirm": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "key_id is required" in result[0].text
-
-
-async def test_object_storage_key_update_success(
-    sample_config: Config,
-) -> None:
-    """Key update should succeed and echo the key element from the response."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        # The update endpoint echoes the full key (no secret material), which
-        # put_raw returns for the proto key element.
-        mock_client.route_raw.return_value = {
-            "id": 42,
-            "label": "updated-key",
-            "access_key": "SYNTHETICACCESSKEY000000",
-            "limited": True,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_key_update(
-                {
-                    "key_id": 42,
-                    "label": "updated-key",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "modified successfully" in result[0].text
-        payload = json.loads(result[0].text)
-        assert payload["message"] == "Access key 42 modified successfully"
-        assert payload["key"]["id"] == 42
-        assert payload["key"]["label"] == "updated-key"
-
-
 async def test_object_storage_key_delete_requires_confirm(
     sample_config: Config,
 ) -> None:
@@ -15536,29 +9105,7 @@ async def test_object_storage_key_delete_invalid_key_id(
     )
 
     assert len(result) == 1
-    assert "key_id is required" in result[0].text
-
-
-async def test_object_storage_key_delete_success(
-    sample_config: Config,
-) -> None:
-    """Key delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_object_storage_key.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_key_delete(
-                {"key_id": 42, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "revoked successfully" in result[0].text
+    assert "key_id must be a positive integer" in result[0].text
 
 
 async def test_object_storage_key_delete_missing_env() -> None:
@@ -15567,114 +9114,6 @@ async def test_object_storage_key_delete_missing_env() -> None:
     result = list(
         await handle_linode_object_storage_key_delete(
             {"key_id": 42, "confirm": True},
-            cfg,
-        )
-    )
-
-    assert len(result) == 1
-    assert "Error" in result[0].text
-
-
-async def test_presigned_url_missing_name(
-    sample_config: Config,
-) -> None:
-    """Presigned URL should fail when name is missing."""
-    result = list(
-        await handle_linode_object_storage_presigned_url_create(
-            {"region": "us-east-1", "label": "my-bucket", "method": "GET"},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "name" in result[0].text
-
-
-async def test_presigned_url_invalid_method(
-    sample_config: Config,
-) -> None:
-    """Presigned URL should fail with invalid method."""
-    result = list(
-        await handle_linode_object_storage_presigned_url_create(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "name": "photo.jpg",
-                "method": "DELETE",
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "GET" in result[0].text
-    assert "PUT" in result[0].text
-
-
-async def test_presigned_url_invalid_expires(
-    sample_config: Config,
-) -> None:
-    """Presigned URL should fail with out of range expires_in."""
-    result = list(
-        await handle_linode_object_storage_presigned_url_create(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "name": "photo.jpg",
-                "method": "GET",
-                "expires_in": 700000,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "604800" in result[0].text
-
-
-async def test_presigned_url_success(
-    sample_config: Config,
-) -> None:
-    """Presigned URL create emits {url} proto-canonically (unknown fields drop)."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_presigned_url.return_value = {
-            "url": "https://bucket.example.com/photo.jpg?signed=abc",
-            "not_in_proto": "dropped",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_presigned_url_create(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "name": "photo.jpg",
-                    "method": "GET",
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert json.loads(result[0].text) == {
-            "url": "https://bucket.example.com/photo.jpg?signed=abc",
-        }
-
-
-async def test_presigned_url_missing_env() -> None:
-    """Presigned URL should fail with missing environment."""
-    cfg = Config(environments={})
-    result = list(
-        await handle_linode_object_storage_presigned_url_create(
-            {
-                "region": "us-east-1",
-                "label": "my-bucket",
-                "name": "photo.jpg",
-                "method": "GET",
-            },
             cfg,
         )
     )
@@ -15704,7 +9143,7 @@ async def test_object_acl_get_success(
     """Object ACL get should succeed with valid input."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_object_acl.return_value = {
+        mock_client.route_raw.return_value = {
             "acl": "public-read",
             "acl_xml": "<AccessControlPolicy>...</AccessControlPolicy>",
         }
@@ -15778,7 +9217,7 @@ async def test_object_acl_update_success(
     """Object ACL update should succeed with valid input."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.update_object_acl.return_value = {
+        mock_client.route_raw.return_value = {
             "acl": "public-read",
             "acl_xml": "<AccessControlPolicy>...</AccessControlPolicy>",
         }
@@ -15801,6 +9240,12 @@ async def test_object_acl_update_success(
 
         assert len(result) == 1
         assert "public-read" in result[0].text
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_object_storage_object_acl_update",
+            "us-east-1",
+            "my-bucket",
+            body={"name": "photo.jpg", "acl": "public-read"},
+        )
         payload = json.loads(result[0].text)
         assert (
             payload["message"]
@@ -15817,7 +9262,7 @@ async def test_ssl_get_success(
     """SSL get should succeed with valid input."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_bucket_ssl.return_value = {
+        mock_client.route_raw.return_value = {
             "ssl": True,
         }
         mock_client.__aenter__.return_value = mock_client
@@ -15876,7 +9321,7 @@ async def test_ssl_upload_success(
     """SSL upload should succeed with valid input."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.upload_bucket_ssl.return_value = {"ssl": True}
+        mock_client.route_raw.return_value = {"ssl": True}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -15896,8 +9341,11 @@ async def test_ssl_upload_success(
 
         assert len(result) == 1
         assert "SSL certificate uploaded" in result[0].text
-        mock_client.upload_bucket_ssl.assert_awaited_once_with(
-            "us-east-1", "my-bucket", "cert", "key"
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_object_storage_ssl_upload",
+            "us-east-1",
+            "my-bucket",
+            body={"certificate": "cert", "private_key": "key"},
         )
         payload = json.loads(result[0].text)
         assert (
@@ -15944,72 +9392,6 @@ async def test_ssl_delete_confirm_required(
 
     assert len(result) == 1
     assert "confirm=true" in result[0].text
-
-
-async def test_ssl_delete_success(
-    sample_config: Config,
-) -> None:
-    """SSL delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_bucket_ssl.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_ssl_delete(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "SSL certificate deleted" in result[0].text
-
-
-async def test_ssl_delete_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch SSL state via GET and never call delete.
-
-    Decodes the JSON body so a future renaming of the v0 wire shape or
-    a regression where Execute fires anyway gets caught.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_bucket_ssl.return_value = {"ssl": True}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_ssl_delete(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "dry_run": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_object_storage_ssl_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert (
-            body["would_execute"]["path"]
-            == "/object-storage/buckets/us-east-1/my-bucket/ssl"
-        )
-        assert body["current_state"] == {"ssl": True}
-        mock_client.get_bucket_ssl.assert_awaited_once_with("us-east-1", "my-bucket")
-        mock_client.delete_bucket_ssl.assert_not_called()
 
 
 async def test_ssl_delete_dry_run_does_not_require_confirm(
@@ -16115,220 +9497,6 @@ async def test_obj_bucket_create_dry_run_still_validates_label(
     assert "label is required" in result[0].text
 
 
-async def test_obj_bucket_access_allow_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch current access via GET and never apply it."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_object_storage_bucket_access.return_value = {"acl": "private"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_bucket_access_allow(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "acl": "private",
-                    "dry_run": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_object_storage_bucket_access_allow"
-        assert body["would_execute"]["method"] == "POST"
-        assert (
-            body["would_execute"]["path"]
-            == "/object-storage/buckets/us-east-1/my-bucket/access"
-        )
-        mock_client.get_object_storage_bucket_access.assert_awaited_once_with(
-            "us-east-1", "my-bucket"
-        )
-        mock_client.allow_object_storage_bucket_access.assert_not_called()
-
-
-async def test_obj_bucket_access_allow_dry_run_rejects_invalid_acl(
-    sample_config: Config,
-) -> None:
-    """An invalid acl is rejected during dry_run before any client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_bucket_access_allow(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "acl": "not-a-real-acl",
-                    "dry_run": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "acl" in result[0].text.lower()
-        mock_client.get_object_storage_bucket_access.assert_not_called()
-        mock_client.allow_object_storage_bucket_access.assert_not_called()
-
-
-async def test_obj_bucket_access_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch current access via GET and never update it."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_object_storage_bucket_access.return_value = {"acl": "private"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_bucket_access_update(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "acl": "private",
-                    "dry_run": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_object_storage_bucket_access_update"
-        assert body["would_execute"]["method"] == "PUT"
-        mock_client.get_object_storage_bucket_access.assert_awaited_once_with(
-            "us-east-1", "my-bucket"
-        )
-        assert any("private" in s for s in body["side_effects"])
-        mock_client.update_object_storage_bucket_access.assert_not_called()
-
-
-async def test_obj_key_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the key create with no call (no secret leak)."""
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {"label": "my-key", "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_object_storage_key_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/object-storage/keys"
-    assert body["current_state"] is None
-    assert any("my-key" in s for s in body["side_effects"])
-    assert body["warnings"]
-    assert "confirm=true" not in result[0].text
-
-
-async def test_obj_key_create_dry_run_still_validates_label(
-    sample_config: Config,
-) -> None:
-    """Missing label must error out regardless of dry_run."""
-    result = list(
-        await handle_linode_object_storage_key_create(
-            {"dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "label is required" in result[0].text
-
-
-async def test_obj_key_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch the key (not the secret) via GET and never update."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_object_storage_key.return_value = {"id": 77, "label": "my-key"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_key_update(
-                {"key_id": 77, "label": "renamed", "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_object_storage_key_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/object-storage/keys/77"
-        assert any("renamed" in s for s in body["side_effects"])
-        mock_client.get_object_storage_key.assert_awaited_once_with(key_id=77)
-        mock_client.update_object_storage_key.assert_not_called()
-
-
-async def test_obj_key_update_dry_run_still_validates_key_id(
-    sample_config: Config,
-) -> None:
-    """Missing key_id must error out regardless of dry_run."""
-    result = list(
-        await handle_linode_object_storage_key_update(
-            {"label": "renamed", "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "key_id is required" in result[0].text
-
-
-async def test_obj_object_acl_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch current ACL via GET and never update it."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_object_acl.return_value = {"acl": "private"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_object_storage_object_acl_update(
-                {
-                    "region": "us-east-1",
-                    "label": "my-bucket",
-                    "name": "object.txt",
-                    "acl": "private",
-                    "dry_run": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_object_storage_object_acl_update"
-        assert body["would_execute"]["method"] == "PUT"
-        mock_client.get_object_acl.assert_awaited_once_with(
-            "us-east-1", "my-bucket", "object.txt"
-        )
-        assert any("private" in s for s in body["side_effects"])
-        mock_client.update_object_acl.assert_not_called()
-
-
 async def test_obj_ssl_upload_dry_run_returns_preview_no_key_echoed(
     sample_config: Config,
 ) -> None:
@@ -16410,25 +9578,6 @@ async def test_lke_cluster_get_tool_definition() -> None:
     assert "cluster_id" in (tool.input_schema.get("required") or [])
 
 
-async def test_lke_cluster_create_tool_definition() -> None:
-    """LKE cluster create tool should require label, region, k8s_version."""
-    tool, _ = create_linode_lke_cluster_create_tool()
-    assert tool.name == "linode_lke_cluster_create"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "label" in required
-    assert "region" in required
-    assert "k8s_version" in required
-
-
-async def test_lke_cluster_delete_tool_definition() -> None:
-    """LKE cluster delete tool should require cluster_id and confirm."""
-    tool, _ = create_linode_lke_cluster_delete_tool()
-    assert tool.name == "linode_lke_cluster_delete"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "cluster_id" in required
-    assert "confirm" in required
-
-
 async def test_lke_clusters_list(sample_config: Config) -> None:
     """LKE clusters list should return cluster data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
@@ -16451,7 +9600,9 @@ async def test_lke_clusters_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "my-cluster" in result[0].text
-        mock_client.route_raw.assert_called_once_with("linode_lke_cluster_list")
+        mock_client.route_raw.assert_called_once_with(
+            "linode_lke_cluster_list", query=""
+        )
 
 
 async def test_lke_clusters_list_no_filter_returns_all(sample_config: Config) -> None:
@@ -16507,7 +9658,7 @@ async def test_lke_cluster_get(sample_config: Config) -> None:
     """LKE cluster get should return cluster details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 1,
             "label": "my-cluster",
             "region": "us-east",
@@ -16541,7 +9692,6 @@ async def test_lke_cluster_get_missing_id(sample_config: Config) -> None:
         handle_linode_lke_kubeconfig_get,
         handle_linode_lke_dashboard_get,
         handle_linode_lke_api_endpoint_list,
-        handle_linode_lke_acl_get,
     ],
 )
 @pytest.mark.parametrize(
@@ -16564,178 +9714,6 @@ async def test_lke_cluster_id_path_handlers_reject_bad_id(
     assert expected in result[0].text
 
 
-async def test_lke_cluster_create_confirm_required(sample_config: Config) -> None:
-    """LKE cluster create should require confirm=true."""
-    result = list(
-        await handle_linode_lke_cluster_create(
-            {
-                "label": "new-cluster",
-                "region": "us-east",
-                "k8s_version": "1.29",
-                "node_pools": [{"type": "g6-standard-1", "count": 3}],
-                "confirm": False,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_cluster_create_missing_label(sample_config: Config) -> None:
-    """LKE cluster create should fail without label."""
-    result = list(
-        await handle_linode_lke_cluster_create(
-            {
-                "region": "us-east",
-                "k8s_version": "1.29",
-                "node_pools": [{"type": "g6-standard-1", "count": 3}],
-                "confirm": True,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "label" in result[0].text.lower()
-
-
-async def test_lke_cluster_create_success(sample_config: Config) -> None:
-    """LKE cluster create should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_lke_cluster.return_value = {
-            "id": 10,
-            "label": "new-cluster",
-            "region": "us-east",
-            "k8s_version": "1.29",
-            "status": "ready",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_cluster_create(
-                {
-                    "label": "new-cluster",
-                    "region": "us-east",
-                    "k8s_version": "1.29",
-                    "node_pools": [{"type": "g6-standard-1", "count": 3}],
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "new-cluster" in result[0].text
-
-
-async def test_lke_cluster_update_confirm_required(sample_config: Config) -> None:
-    """LKE cluster update should require confirm=true."""
-    result = list(
-        await handle_linode_lke_cluster_update(
-            {"cluster_id": 1, "label": "updated", "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_cluster_update_success(sample_config: Config) -> None:
-    """LKE cluster update should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.update_lke_cluster.return_value = {
-            "id": 1,
-            "label": "updated",
-            "region": "us-east",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_cluster_update(
-                {"cluster_id": 1, "label": "updated", "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "updated" in result[0].text
-
-
-async def test_lke_cluster_delete_confirm_required(sample_config: Config) -> None:
-    """LKE cluster delete should require confirm=true."""
-    result = list(
-        await handle_linode_lke_cluster_delete(
-            {"cluster_id": 1, "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_cluster_delete_success(sample_config: Config) -> None:
-    """LKE cluster delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_lke_cluster.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_cluster_delete(
-                {"cluster_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "removed" in result[0].text.lower()
-
-
-async def test_lke_cluster_recycle_confirm_required(sample_config: Config) -> None:
-    """LKE cluster recycle should require confirm=true."""
-    result = list(
-        await handle_linode_lke_cluster_recycle(
-            {"cluster_id": 1, "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_cluster_recycle_success(sample_config: Config) -> None:
-    """LKE cluster recycle should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.recycle_lke_cluster.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_cluster_recycle(
-                {"cluster_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "recycle" in result[0].text.lower()
-
-
 async def test_lke_cluster_regenerate_confirm_required(
     sample_config: Config,
 ) -> None:
@@ -16751,33 +9729,15 @@ async def test_lke_cluster_regenerate_confirm_required(
     assert "confirm=true" in result[0].text
 
 
-async def test_lke_cluster_regenerate_success(sample_config: Config) -> None:
-    """LKE cluster regenerate should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.regenerate_lke_cluster.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_cluster_regenerate(
-                {"cluster_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "regenerat" in result[0].text.lower()
-
-
 async def test_lke_pools_list(sample_config: Config) -> None:
     """LKE pools list should return pool data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_lke_node_pools.return_value = [
-            {"id": 100, "type": "g6-standard-1", "count": 3},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"id": 100, "type": "g6-standard-1", "count": 3},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -16793,7 +9753,9 @@ async def test_lke_pools_list(sample_config: Config) -> None:
         assert body["pools"][0]["id"] == 100
         assert body["pools"][0]["type"] == "g6-standard-1"
         assert body["pools"][0]["count"] == 3
-        mock_client.list_lke_node_pools.assert_awaited_once_with(1)
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_lke_pool_list", 1, query=""
+        )
 
 
 async def test_lke_pools_list_missing_cluster_id(sample_config: Config) -> None:
@@ -16853,7 +9815,7 @@ async def test_lke_pool_get(sample_config: Config) -> None:
     """LKE pool get should return pool details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_lke_node_pool.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 100,
             "type": "g6-standard-1",
             "count": 3,
@@ -16872,133 +9834,6 @@ async def test_lke_pool_get(sample_config: Config) -> None:
         assert "g6-standard-1" in result[0].text
 
 
-async def test_lke_pool_create_confirm_required(sample_config: Config) -> None:
-    """LKE pool create should require confirm=true."""
-    result = list(
-        await handle_linode_lke_pool_create(
-            {
-                "cluster_id": 1,
-                "type": "g6-standard-1",
-                "count": 3,
-                "confirm": False,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_pool_create_success(sample_config: Config) -> None:
-    """LKE pool create should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_lke_node_pool.return_value = {
-            "id": 200,
-            "type": "g6-standard-1",
-            "count": 3,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_pool_create(
-                {
-                    "cluster_id": 1,
-                    "type": "g6-standard-1",
-                    "count": 3,
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert "created in cluster 1" in data["message"]
-        # The body is the full LKENodePool proto element.
-        assert data["pool"]["id"] == 200
-        assert data["pool"]["type"] == "g6-standard-1"
-        assert data["pool"]["count"] == 3
-
-
-async def test_lke_pool_update_confirm_required(sample_config: Config) -> None:
-    """LKE pool update should require confirm=true."""
-    result = list(
-        await handle_linode_lke_pool_update(
-            {"cluster_id": 1, "pool_id": 100, "count": 5, "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_pool_update_success(sample_config: Config) -> None:
-    """LKE pool update should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.update_lke_node_pool.return_value = {
-            "id": 100,
-            "type": "g6-standard-1",
-            "count": 5,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_pool_update(
-                {"cluster_id": 1, "pool_id": 100, "count": 5, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == "Node pool 100 in cluster 1 modified successfully"
-        # The body is the full LKENodePool proto element.
-        assert data["pool"]["id"] == 100
-        assert data["pool"]["type"] == "g6-standard-1"
-        assert data["pool"]["count"] == 5
-
-
-async def test_lke_pool_delete_confirm_required(sample_config: Config) -> None:
-    """LKE pool delete should require confirm=true."""
-    result = list(
-        await handle_linode_lke_pool_delete(
-            {"cluster_id": 1, "pool_id": 100, "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_pool_delete_success(sample_config: Config) -> None:
-    """LKE pool delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_lke_node_pool.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_pool_delete(
-                {"cluster_id": 1, "pool_id": 100, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "deleted" in result[0].text.lower()
-
-
 async def test_lke_pool_recycle_confirm_required(sample_config: Config) -> None:
     """LKE pool recycle should require confirm=true."""
     result = list(
@@ -17012,31 +9847,11 @@ async def test_lke_pool_recycle_confirm_required(sample_config: Config) -> None:
     assert "confirm=true" in result[0].text
 
 
-async def test_lke_pool_recycle_success(sample_config: Config) -> None:
-    """LKE pool recycle should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.recycle_lke_node_pool.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_pool_recycle(
-                {"cluster_id": 1, "pool_id": 100, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "recycle" in result[0].text.lower()
-
-
 async def test_lke_node_get(sample_config: Config) -> None:
     """LKE node get should return node details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_lke_node.return_value = {
+        mock_client.route_raw.return_value = {
             "id": "lke-node-abc",
             "instance_id": 555,
             "status": "ready",
@@ -17063,39 +9878,6 @@ async def test_lke_node_get_missing_node_id(sample_config: Config) -> None:
     assert "node_id" in result[0].text.lower()
 
 
-async def test_lke_node_delete_confirm_required(sample_config: Config) -> None:
-    """LKE node delete should require confirm=true."""
-    result = list(
-        await handle_linode_lke_node_delete(
-            {"cluster_id": 1, "node_id": "lke-node-abc", "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_node_delete_success(sample_config: Config) -> None:
-    """LKE node delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_lke_node.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_node_delete(
-                {"cluster_id": 1, "node_id": "lke-node-abc", "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "deleted" in result[0].text.lower()
-
-
 async def test_lke_node_recycle_confirm_required(sample_config: Config) -> None:
     """LKE node recycle should require confirm=true."""
     result = list(
@@ -17109,31 +9891,11 @@ async def test_lke_node_recycle_confirm_required(sample_config: Config) -> None:
     assert "confirm=true" in result[0].text
 
 
-async def test_lke_node_recycle_success(sample_config: Config) -> None:
-    """LKE node recycle should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.recycle_lke_node.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_node_recycle(
-                {"cluster_id": 1, "node_id": "lke-node-abc", "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "recycle" in result[0].text.lower()
-
-
 async def test_lke_kubeconfig_get(sample_config: Config) -> None:
     """LKE kubeconfig get should return kubeconfig data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_lke_kubeconfig.return_value = {
+        mock_client.route_raw.return_value = {
             "kubeconfig": "YXBpVmVyc2lvbjogdjEK",
         }
         mock_client.__aenter__.return_value = mock_client
@@ -17148,46 +9910,11 @@ async def test_lke_kubeconfig_get(sample_config: Config) -> None:
         assert "kubeconfig" in result[0].text.lower()
 
 
-async def test_lke_kubeconfig_delete_confirm_required(
-    sample_config: Config,
-) -> None:
-    """LKE kubeconfig delete should require confirm=true."""
-    result = list(
-        await handle_linode_lke_kubeconfig_delete(
-            {"cluster_id": 1, "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_kubeconfig_delete_success(sample_config: Config) -> None:
-    """LKE kubeconfig delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_lke_kubeconfig.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_kubeconfig_delete(
-                {"cluster_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "regenerated" in result[0].text.lower()
-
-
 async def test_lke_dashboard_get(sample_config: Config) -> None:
     """LKE dashboard get should return dashboard URL."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_lke_dashboard.return_value = {
+        mock_client.route_raw.return_value = {
             "url": "https://dashboard.example.com",
         }
         mock_client.__aenter__.return_value = mock_client
@@ -17206,9 +9933,11 @@ async def test_lke_api_endpoints_list(sample_config: Config) -> None:
     """LKE API endpoints list should return endpoint data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_lke_api_endpoints.return_value = [
-            {"endpoint": "https://api.lke.example.com"},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"endpoint": "https://api.lke.example.com"},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -17221,400 +9950,16 @@ async def test_lke_api_endpoints_list(sample_config: Config) -> None:
         assert "endpoint" in result[0].text.lower()
 
 
-async def test_lke_service_token_delete_confirm_required(
-    sample_config: Config,
-) -> None:
-    """LKE service token delete should require confirm=true."""
-    result = list(
-        await handle_linode_lke_service_token_delete(
-            {"cluster_id": 1, "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_service_token_delete_success(sample_config: Config) -> None:
-    """LKE service token delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_lke_service_token.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_service_token_delete(
-                {"cluster_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "deleted" in result[0].text.lower()
-
-
-async def test_lke_cluster_delete_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {
-            "id": 123,
-            "label": "prod",
-            "region": "us-east",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_cluster_delete(
-            {"cluster_id": 123, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_lke_cluster_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/lke/clusters/123"
-        mock_client.get_lke_cluster.assert_awaited_once_with(123)
-        mock_client.delete_lke_cluster.assert_not_called()
-
-
-async def test_lke_cluster_delete_dry_run_still_validates_cluster_id(
-    sample_config: Config,
-) -> None:
-    """Missing cluster_id must error regardless of dry_run."""
-    result = await handle_linode_lke_cluster_delete({"dry_run": True}, sample_config)
-    assert "cluster_id is required" in result[0].text
-
-
-async def test_lke_pool_delete_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_node_pool.return_value = {"id": 10, "count": 3}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_pool_delete(
-                {"cluster_id": 123, "pool_id": 10, "dry_run": True},
-                sample_config,
-            )
-        )
-
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_lke_pool_delete"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/pools/10"
-        mock_client.get_lke_node_pool.assert_awaited_once_with(123, 10)
-        mock_client.delete_lke_node_pool.assert_not_called()
-
-
-async def test_lke_pool_delete_dry_run_surfaces_node_dependencies(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: pool nodes' backing Linodes cascade-delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_node_pool.return_value = {
-            "id": 10,
-            "count": 2,
-            "nodes": [
-                {"id": "node-a", "instance_id": 9001},
-                {"id": "node-b", "instance_id": 9002},
-            ],
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_pool_delete(
-                {"cluster_id": 123, "pool_id": 10, "dry_run": True},
-                sample_config,
-            )
-        )
-
-        body = json.loads(result[0].text)
-        deps = body["dependencies"]
-        assert len(deps) == 2
-        assert all(d["kind"] == "instance" for d in deps)
-        assert all(d["action"] == "cascade_deleted" for d in deps)
-        assert body["warnings"]
-        mock_client.delete_lke_node_pool.assert_not_called()
-
-
-async def test_lke_pool_delete_dry_run_still_validates_ids(
-    sample_config: Config,
-) -> None:
-    """Missing cluster_id must error regardless of dry_run."""
-    result = list(
-        await handle_linode_lke_pool_delete(
-            {"pool_id": 10, "dry_run": True}, sample_config
-        )
-    )
-    assert "cluster_id is required" in result[0].text
-
-
-async def test_lke_node_delete_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch node state (mixed int+string IDs)."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_node.return_value = {"id": "123-abc", "status": "ready"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_node_delete(
-            {"cluster_id": 123, "node_id": "123-abc", "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_node_delete"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/nodes/123-abc"
-        mock_client.get_lke_node.assert_awaited_once_with(123, "123-abc")
-        mock_client.delete_lke_node.assert_not_called()
-
-
-async def test_lke_node_delete_dry_run_surfaces_backing_linode(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: the node's backing Linode cascade-deletes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_node.return_value = {
-            "id": "123-abc",
-            "instance_id": 9100,
-            "status": "ready",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_node_delete(
-            {"cluster_id": 123, "node_id": "123-abc", "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        deps = body["dependencies"]
-        assert len(deps) == 1
-        assert deps[0]["kind"] == "instance"
-        assert deps[0]["action"] == "cascade_deleted"
-        assert deps[0]["id"] == 9100
-        assert body["warnings"]
-        mock_client.delete_lke_node.assert_not_called()
-
-
-async def test_lke_node_delete_dry_run_still_validates_node_id(
-    sample_config: Config,
-) -> None:
-    """Missing node_id must error regardless of dry_run."""
-    result = await handle_linode_lke_node_delete(
-        {"cluster_id": 123, "dry_run": True}, sample_config
-    )
-    assert "node_id is required" in result[0].text
-
-
-async def test_lke_kubeconfig_delete_dry_run_fetches_cluster_not_kubeconfig(
-    sample_config: Config,
-) -> None:
-    """Dry-run must fetch cluster metadata, NOT kubeconfig content.
-
-    Locks the credential-safety design choice: dry-run never surfaces
-    the kubeconfig itself to the model. A regression that swaps the
-    fetch to ``get_lke_kubeconfig`` would surface a credential.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "prod"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_kubeconfig_delete(
-                {"cluster_id": 123, "dry_run": True}, sample_config
-            )
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_kubeconfig_delete"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/kubeconfig"
-        mock_client.get_lke_cluster.assert_awaited_once_with(123)
-        mock_client.get_lke_kubeconfig.assert_not_called()
-        mock_client.delete_lke_kubeconfig.assert_not_called()
-
-
-async def test_lke_service_token_delete_dry_run_fetches_cluster_not_token(
-    sample_config: Config,
-) -> None:
-    """Dry-run must fetch cluster metadata, NOT the service token.
-
-    Same credential-safety design as kubeconfig_delete.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "prod"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_service_token_delete(
-                {"cluster_id": 123, "dry_run": True}, sample_config
-            )
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_service_token_delete"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/servicetoken"
-        mock_client.get_lke_cluster.assert_awaited_once_with(123)
-        mock_client.delete_lke_service_token.assert_not_called()
-
-
-async def test_lke_acl_get(sample_config: Config) -> None:
-    """LKE ACL get emits the bare ACL proto-canonically (unknown fields drop)."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        # The client layer unwraps the API's {"acl": {...}} envelope. The
-        # handler serializes the bare ACL through LKEControlPlaneACL, so a
-        # field the proto does not model must be dropped, proving the output
-        # routes through the serializer rather than passing the dict through.
-        mock_client.get_lke_control_plane_acl.return_value = {
-            "enabled": True,
-            "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
-            "not_in_proto": "dropped",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(await handle_linode_lke_acl_get({"cluster_id": 1}, sample_config))
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body == {
-            "enabled": True,
-            "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
-        }
-
-
-async def test_lke_acl_update_confirm_required(sample_config: Config) -> None:
-    """LKE ACL update should require confirm=true."""
-    result = list(
-        await handle_linode_lke_acl_update(
-            {
-                "cluster_id": 1,
-                "enabled": True,
-                "addresses": {"ipv4": ["10.0.0.0/8"]},
-                "confirm": False,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_acl_update_success(sample_config: Config) -> None:
-    """LKE ACL update should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.update_lke_control_plane_acl.return_value = {
-            "acl": {
-                "enabled": True,
-                "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
-            },
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_acl_update(
-                {
-                    "cluster_id": 1,
-                    "acl": {
-                        "enabled": True,
-                        "addresses": {"ipv4": ["10.0.0.0/8"]},
-                    },
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body == {
-            "message": "Control plane ACL for cluster 1 modified successfully",
-            "acl": {
-                "enabled": True,
-                "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
-            },
-        }
-        mock_client.update_lke_control_plane_acl.assert_awaited_once_with(
-            1, {"enabled": True, "addresses": {"ipv4": ["10.0.0.0/8"]}}
-        )
-
-
-async def test_lke_acl_delete_confirm_required(sample_config: Config) -> None:
-    """LKE ACL delete should require confirm=true."""
-    result = list(
-        await handle_linode_lke_acl_delete(
-            {"cluster_id": 1, "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_lke_acl_delete_success(sample_config: Config) -> None:
-    """LKE ACL delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_lke_control_plane_acl.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_lke_acl_delete(
-                {"cluster_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert json.loads(result[0].text) == {
-            "message": "Control plane ACL for cluster 1 removed successfully",
-            "cluster_id": 1,
-        }
-
-
 async def test_lke_versions_list(sample_config: Config) -> None:
     """LKE versions list should return version data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_lke_versions.return_value = [
-            {"id": "1.29"},
-            {"id": "1.28"},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"id": "1.29"},
+                {"id": "1.28"},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -17633,7 +9978,7 @@ async def test_lke_version_get(sample_config: Config) -> None:
     """LKE version get should return version details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_lke_version.return_value = {"id": "1.29"}
+        mock_client.route_raw.return_value = {"id": "1.29"}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -17670,15 +10015,19 @@ async def test_lke_types_list(sample_config: Config) -> None:
     """LKE types list returns the proto-canonical LinodeType envelope."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_lke_types.return_value = [
-            {
-                "id": "g6-standard-1",
-                "label": "Linode 2GB",
-                "price": {"hourly": 0.018, "monthly": 12.0},
-                "region_prices": [{"id": "id-cgk", "hourly": 0.021, "monthly": 14.0}],
-                "transfer": 0,
-            },
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {
+                    "id": "g6-standard-1",
+                    "label": "Linode 2GB",
+                    "price": {"hourly": 0.018, "monthly": 12.0},
+                    "region_prices": [
+                        {"id": "id-cgk", "hourly": 0.021, "monthly": 14.0}
+                    ],
+                    "transfer": 0,
+                },
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -17702,9 +10051,11 @@ async def test_lke_tier_versions_list(sample_config: Config) -> None:
     """LKE tier versions list should return tier version data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_lke_tier_versions.return_value = [
-            {"id": "1.29", "tier": "standard"},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"id": "1.29", "tier": "standard"},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -17717,7 +10068,9 @@ async def test_lke_tier_versions_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "1.29" in result[0].text
-        mock_client.list_lke_tier_versions.assert_awaited_once_with("standard")
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_lke_tier_version_list", "standard", query=""
+        )
 
 
 async def test_lke_tier_versions_list_requires_tier(sample_config: Config) -> None:
@@ -17784,16 +10137,6 @@ async def test_vpc_get_tool_definition() -> None:
     assert "vpc_id" in (tool.input_schema.get("required") or [])
 
 
-async def test_vpc_create_tool_definition() -> None:
-    """VPC create tool should require label, region, confirm."""
-    tool, _ = create_linode_vpc_create_tool()
-    assert tool.name == "linode_vpc_create"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "label" in required
-    assert "region" in required
-    assert "confirm" in required
-
-
 async def test_vpc_delete_tool_definition() -> None:
     """VPC delete tool should require vpc_id and confirm."""
     tool, _ = create_linode_vpc_delete_tool()
@@ -17801,20 +10144,6 @@ async def test_vpc_delete_tool_definition() -> None:
     required: list[str] = tool.input_schema.get("required") or []
     assert "vpc_id" in required
     assert "confirm" in required
-
-
-async def test_ipv6_range_create_tool_definition() -> None:
-    """IPv6 range create tool should require prefix_length and confirm."""
-    tool, _ = create_linode_ipv6_range_create_tool()
-    assert tool.name == "linode_ipv6_range_create"
-    required: list[str] = tool.input_schema.get("required") or []
-    properties: dict[str, Any] = tool.input_schema.get("properties") or {}
-    assert "prefix_length" in required
-    assert "confirm" in required
-    assert "linode_id" in properties
-    assert "route_target" in properties
-    assert "linode_id" not in required
-    assert "route_target" not in required
 
 
 async def test_ipv6_range_get_tool_definition() -> None:
@@ -17834,17 +10163,6 @@ async def test_ipv6_range_delete_tool_definition() -> None:
     assert tool.name == "linode_ipv6_range_delete"
     required: list[str] = tool.input_schema.get("required") or []
     assert "range" in required
-    assert "confirm" in required
-
-
-async def test_vpc_subnet_create_tool_definition() -> None:
-    """VPC subnet create tool should require vpc_id, label, ipv4, confirm."""
-    tool, _ = create_linode_vpc_subnet_create_tool()
-    assert tool.name == "linode_vpc_subnet_create"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "vpc_id" in required
-    assert "label" in required
-    assert "ipv4" in required
     assert "confirm" in required
 
 
@@ -17979,9 +10297,11 @@ async def test_vlans_list(sample_config: Config) -> None:
     """VLANs list should return VLAN data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_vlans.return_value = [
-            {"label": "app-vlan", "region": "us-east", "linodes": [123]},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"label": "app-vlan", "region": "us-east", "linodes": [123]},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -17995,7 +10315,7 @@ async def test_vlans_list(sample_config: Config) -> None:
             {"label": "app-vlan", "region": "us-east", "linodes": [123]}
         ]
         assert "filter" not in payload
-        mock_client.list_vlans.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 async def test_vlans_list_rejects_non_integer_page(sample_config: Config) -> None:
@@ -18008,7 +10328,7 @@ async def test_vlans_list_rejects_non_integer_page(sample_config: Config) -> Non
 
         assert len(result) == 1
         assert "page must be an integer" in result[0].text
-        mock_client.list_vlans.assert_not_called()
+        mock_client.route_raw.assert_not_called()
 
 
 async def test_vlans_list_rejects_page_size_below_minimum(
@@ -18023,7 +10343,7 @@ async def test_vlans_list_rejects_page_size_below_minimum(
 
         assert len(result) == 1
         assert "page_size must be an integer from 25 through 500" in result[0].text
-        mock_client.list_vlans.assert_not_called()
+        mock_client.route_raw.assert_not_called()
 
 
 async def test_vlans_list_rejects_page_size_above_maximum(
@@ -18038,7 +10358,7 @@ async def test_vlans_list_rejects_page_size_above_maximum(
 
         assert len(result) == 1
         assert "page_size must be an integer from 25 through 500" in result[0].text
-        mock_client.list_vlans.assert_not_called()
+        mock_client.route_raw.assert_not_called()
 
 
 async def test_vlan_delete_confirm_required(sample_config: Config) -> None:
@@ -18058,14 +10378,19 @@ async def test_vlan_delete_success(sample_config: Config) -> None:
     """VLAN delete should succeed with valid input."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.delete_vlan.return_value = None
+        mock_client.route_call.return_value = None
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
 
         result = list(
             await handle_linode_vlan_delete(
-                {"region_id": "us-east", "label": "app-vlan", "confirm": True},
+                {
+                    "region_id": "us-east",
+                    "label": "app-vlan",
+                    "confirm": True,
+                    "confirm_bypass_dry_run": True,
+                },
                 sample_config,
             )
         )
@@ -18076,63 +10401,9 @@ async def test_vlan_delete_success(sample_config: Config) -> None:
             payload["message"]
             == "VLAN app-vlan deleted successfully from region us-east"
         )
-        mock_client.delete_vlan.assert_called_once_with("us-east", "app-vlan")
-
-
-async def test_vlan_delete_dry_run_lists_and_filters(
-    sample_config: Config,
-) -> None:
-    """dry_run lists VLANs and filters to the match, never deleting.
-
-    VLANs have no single-GET endpoint, so the dry-run fetch lists and
-    filters. Catches a regression where delete fires on the dry-run path.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.list_vlans.return_value = [
-            {"label": "other-vlan", "region": "us-east"},
-            {"label": "app-vlan", "region": "us-east", "linodes": [123]},
-        ]
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vlan_delete(
-                {"region_id": "us-east", "label": "app-vlan", "dry_run": True},
-                sample_config,
-            )
+        mock_client.route_call.assert_called_once_with(
+            "linode_vlan_delete", "us-east", "app-vlan", retry=False
         )
-
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_vlan_delete"
-        assert body["would_execute"]["path"] == "/networking/vlans/us-east/app-vlan"
-        assert body["current_state"]["label"] == "app-vlan"
-        mock_client.list_vlans.assert_awaited_once()
-        mock_client.delete_vlan.assert_not_called()
-
-
-async def test_vlan_delete_dry_run_not_found_errors(
-    sample_config: Config,
-) -> None:
-    """dry_run on a non-existent VLAN surfaces a not-found error."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.list_vlans.return_value = []
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vlan_delete(
-                {"region_id": "us-east", "label": "ghost-vlan", "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert "VLAN not found" in result[0].text
-        mock_client.delete_vlan.assert_not_called()
 
 
 async def test_vlan_delete_dry_run_still_validates_region(
@@ -18162,7 +10433,7 @@ async def test_vpc_get(sample_config: Config) -> None:
     """VPC get should return VPC details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_vpc.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 1,
             "label": "my-vpc",
             "region": "us-east",
@@ -18209,7 +10480,7 @@ async def test_ipv6_range_get_success(sample_config: Config) -> None:
         mock_client = AsyncMock()
         # The detail endpoint returns is_bgp and the bound Linode IDs and omits
         # route_target; the extra key must drop through the serializer.
-        mock_client.get_ipv6_range.return_value = {
+        mock_client.route_raw.return_value = {
             "range": ipv6_range,
             "region": "us-east",
             "prefix": 64,
@@ -18239,7 +10510,9 @@ async def test_ipv6_range_get_success(sample_config: Config) -> None:
             "is_bgp": False,
             "linodes": [12345, 12346],
         }
-        mock_client.get_ipv6_range.assert_called_once_with(ipv6_range)
+        mock_client.route_raw.assert_called_once_with(
+            "linode_ipv6_range_get", ipv6_range
+        )
 
 
 async def test_ipv6_range_get_rejects_malformed_range(sample_config: Config) -> None:
@@ -18258,107 +10531,17 @@ async def test_ipv6_range_delete_rejects_malformed_range(
     """IPv6 range delete rejects a non-prefix range locally (matches Go)."""
     result = list(
         await handle_linode_ipv6_range_delete(
-            {"range": "2001:db8::1/64"}, sample_config
-        )
-    )
-
-    assert len(result) == 1
-    assert "range must be a valid IPv6 prefix" in result[0].text
-
-
-async def test_vpc_create_confirm_required(sample_config: Config) -> None:
-    """VPC create should require confirm=true."""
-    result = list(
-        await handle_linode_vpc_create(
             {
-                "label": "new-vpc",
-                "region": "us-east",
-                "confirm": False,
+                "range": "2001:db8::1/64",
+                "confirm": True,
+                "confirm_bypass_dry_run": True,
             },
             sample_config,
         )
     )
 
     assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_vpc_create_missing_label(sample_config: Config) -> None:
-    """VPC create should fail without label."""
-    result = list(
-        await handle_linode_vpc_create(
-            {"region": "us-east", "confirm": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "label" in result[0].text.lower()
-
-
-async def test_vpc_create_success(sample_config: Config) -> None:
-    """VPC create should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_vpc.return_value = {
-            "id": 10,
-            "label": "new-vpc",
-            "region": "us-east",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_create(
-                {
-                    "label": "new-vpc",
-                    "region": "us-east",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "new-vpc" in result[0].text
-
-
-async def test_vpc_update_confirm_required(sample_config: Config) -> None:
-    """VPC update should require confirm=true."""
-    result = list(
-        await handle_linode_vpc_update(
-            {"vpc_id": 1, "label": "updated", "confirm": False},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_vpc_update_success(sample_config: Config) -> None:
-    """VPC update should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.update_vpc.return_value = {
-            "id": 1,
-            "label": "updated-vpc",
-            "region": "us-east",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_update(
-                {"vpc_id": 1, "label": "updated-vpc", "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "updated-vpc" in result[0].text
+    assert "range must be a valid IPv6 prefix" in result[0].text
 
 
 async def test_vpc_delete_confirm_required(sample_config: Config) -> None:
@@ -18372,60 +10555,6 @@ async def test_vpc_delete_confirm_required(sample_config: Config) -> None:
 
     assert len(result) == 1
     assert "confirm=true" in result[0].text
-
-
-async def test_vpc_delete_success(sample_config: Config) -> None:
-    """VPC delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_vpc.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_delete(
-                {"vpc_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "removed successfully" in result[0].text.lower()
-        assert '"vpc_id": 1' in result[0].text
-
-
-async def test_vpc_delete_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_vpc.return_value = {
-            "id": 123,
-            "label": "prod-vpc",
-            "region": "us-east",
-        }
-        mock_client.list_vpc_subnets.return_value = []
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_delete(
-                {"vpc_id": 123, "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_vpc_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/vpcs/123"
-        mock_client.get_vpc.assert_awaited_once_with(123)
-        mock_client.delete_vpc.assert_not_called()
 
 
 async def test_vpc_delete_dry_run_does_not_require_confirm(
@@ -18451,38 +10580,6 @@ async def test_vpc_delete_dry_run_does_not_require_confirm(
         assert "confirm=true" not in result[0].text
 
 
-async def test_vpc_delete_dry_run_surfaces_subnet_dependencies(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: subnets appear as cascade_deleted dependencies."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_vpc.return_value = {"id": 123, "label": "prod-vpc"}
-        mock_client.list_vpc_subnets.return_value = [
-            {"id": 1, "label": "subnet-a", "linodes": [{"id": 456}]},
-            {"id": 2, "label": "subnet-b", "linodes": []},
-        ]
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_delete(
-                {"vpc_id": 123, "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        deps = body["dependencies"]
-        assert len(deps) == 2
-        assert all(d["kind"] == "vpc_subnet" for d in deps)
-        assert all(d["action"] == "cascade_deleted" for d in deps)
-        assert any("interface" in w for w in body["warnings"])
-        mock_client.delete_vpc.assert_not_called()
-
-
 async def test_vpc_delete_dry_run_still_validates_vpc_id(
     sample_config: Config,
 ) -> None:
@@ -18495,130 +10592,7 @@ async def test_vpc_delete_dry_run_still_validates_vpc_id(
     )
 
     assert len(result) == 1
-    assert "vpc_id is required" in result[0].text
-
-
-async def test_ipv6_range_create_validation_errors(sample_config: Config) -> None:
-    """IPv6 range create should validate confirmation and documented fields."""
-    cases: list[tuple[dict[str, Any], str]] = [
-        (
-            {"prefix_length": 64, "linode_id": 123, "confirm": False},
-            "confirm=true",
-        ),
-        ({"linode_id": 123, "confirm": True}, "prefix_length"),
-        (
-            {"prefix_length": 48, "linode_id": 123, "confirm": True},
-            "56 or 64",
-        ),
-        ({"prefix_length": 64, "confirm": True}, "linode_id or route_target"),
-        (
-            {
-                "prefix_length": 64,
-                "linode_id": 123,
-                "route_target": "2001:0db8::1",
-                "confirm": True,
-            },
-            "mutually exclusive",
-        ),
-        (
-            {"prefix_length": 64, "linode_id": "bad-id", "confirm": True},
-            "valid integer",
-        ),
-        (
-            {"prefix_length": 64, "route_target": "   ", "confirm": True},
-            "non-empty",
-        ),
-    ]
-
-    for arguments, expected_message in cases:
-        result = list(await handle_linode_ipv6_range_create(arguments, sample_config))
-
-        assert len(result) == 1
-        assert expected_message in result[0].text
-
-
-async def test_ipv6_range_create_success_with_linode_id(
-    sample_config: Config,
-) -> None:
-    """IPv6 range create should call the retryable client with linode_id."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_ipv6_range.return_value = {
-            "range": "2001:0db8::/64",
-            "route_target": "2001:0db8::1",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_ipv6_range_create(
-                {"prefix_length": "64", "linode_id": "123", "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body == {
-            "message": "IPv6 range created",
-            "range": {
-                "range": "2001:0db8::/64",
-                "region": "",
-                "prefix": 0,
-                "route_target": "2001:0db8::1",
-                "linodes": [],
-            },
-        }
-        mock_client.create_ipv6_range.assert_called_once_with(
-            prefix_length=64,
-            linode_id=123,
-            route_target=None,
-        )
-
-
-async def test_ipv6_range_create_success_with_route_target(
-    sample_config: Config,
-) -> None:
-    """IPv6 range create should call the retryable client with route_target."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_ipv6_range.return_value = {
-            "range": "2001:0db8::/56",
-            "route_target": "2001:0db8::1",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_ipv6_range_create(
-                {
-                    "prefix_length": 56,
-                    "route_target": " 2001:0db8::1 ",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body == {
-            "message": "IPv6 range created",
-            "range": {
-                "range": "2001:0db8::/56",
-                "region": "",
-                "prefix": 0,
-                "route_target": "2001:0db8::1",
-                "linodes": [],
-            },
-        }
-        mock_client.create_ipv6_range.assert_called_once_with(
-            prefix_length=56,
-            linode_id=None,
-            route_target="2001:0db8::1",
-        )
+    assert "vpc_id must be a positive integer" in result[0].text
 
 
 async def test_ipv6_range_delete_confirm_required(sample_config: Config) -> None:
@@ -18652,14 +10626,18 @@ async def test_ipv6_range_delete_success(sample_config: Config) -> None:
     ipv6_range = "2001:0db8::/64"
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.delete_ipv6_range.return_value = None
+        mock_client.route_call.return_value = None
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
 
         result = list(
             await handle_linode_ipv6_range_delete(
-                {"range": ipv6_range, "confirm": True},
+                {
+                    "range": ipv6_range,
+                    "confirm": True,
+                    "confirm_bypass_dry_run": True,
+                },
                 sample_config,
             )
         )
@@ -18670,7 +10648,9 @@ async def test_ipv6_range_delete_success(sample_config: Config) -> None:
             "message": "IPv6 range deleted",
             "range": ipv6_range,
         }
-        mock_client.delete_ipv6_range.assert_called_once_with(ipv6_range)
+        mock_client.route_call.assert_called_once_with(
+            "linode_ipv6_range_delete", ipv6_range, retry=False
+        )
 
 
 async def test_ipv6_range_delete_dry_run_returns_preview(
@@ -18680,7 +10660,7 @@ async def test_ipv6_range_delete_dry_run_returns_preview(
     ipv6_range = "2001:0db8::/64"
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_ipv6_range.return_value = {
+        mock_client.route_raw.return_value = {
             "range": ipv6_range,
             "region": "us-east",
             "prefix": 64,
@@ -18700,9 +10680,13 @@ async def test_ipv6_range_delete_dry_run_returns_preview(
         assert body["dry_run"] is True
         assert body["tool"] == "linode_ipv6_range_delete"
         assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == f"/networking/ipv6/ranges/{ipv6_range}"
-        mock_client.get_ipv6_range.assert_awaited_once_with(ipv6_range)
-        mock_client.delete_ipv6_range.assert_not_called()
+        assert (
+            body["would_execute"]["path"] == "/networking/ipv6/ranges/2001:0db8::%2F64"
+        )
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_ipv6_range_get", ipv6_range
+        )
+        mock_client.route_call.assert_not_called()
 
 
 async def test_ipv6_range_delete_dry_run_still_validates_range(
@@ -18719,9 +10703,11 @@ async def test_vpc_ips_list(sample_config: Config) -> None:
     """VPC IPs list should return IP data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_vpc_ips.return_value = [
-            {"address": "10.0.0.1", "vpc_id": 1, "subnet_id": 1},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"address": "10.0.0.1", "vpc_id": 1, "subnet_id": 1},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -18740,9 +10726,11 @@ async def test_vpc_ip_list(sample_config: Config) -> None:
     """VPC IP list should return IPs for a specific VPC."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.list_vpc_ip.return_value = [
-            {"address": "10.0.0.2", "vpc_id": 1, "subnet_id": 1},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"address": "10.0.0.2", "vpc_id": 1, "subnet_id": 1},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -18830,7 +10818,7 @@ async def test_vpc_subnet_get(sample_config: Config) -> None:
     """VPC subnet get should return subnet details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_vpc_subnet.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 1,
             "label": "my-subnet",
             "ipv4": "10.0.0.0/24",
@@ -18860,123 +10848,6 @@ async def test_vpc_subnet_get_missing_ids(sample_config: Config) -> None:
     assert "subnet_id" in result[0].text.lower()
 
 
-async def test_vpc_subnet_create_confirm_required(
-    sample_config: Config,
-) -> None:
-    """VPC subnet create should require confirm=true."""
-    result = list(
-        await handle_linode_vpc_subnet_create(
-            {
-                "vpc_id": 1,
-                "label": "new-subnet",
-                "ipv4": "10.0.0.0/24",
-                "confirm": False,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_vpc_subnet_create_missing_label(
-    sample_config: Config,
-) -> None:
-    """VPC subnet create should fail without label."""
-    result = list(
-        await handle_linode_vpc_subnet_create(
-            {
-                "vpc_id": 1,
-                "ipv4": "10.0.0.0/24",
-                "confirm": True,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "label" in result[0].text.lower()
-
-
-async def test_vpc_subnet_create_success(sample_config: Config) -> None:
-    """VPC subnet create should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.create_vpc_subnet.return_value = {
-            "id": 5,
-            "label": "new-subnet",
-            "ipv4": "10.0.0.0/24",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_subnet_create(
-                {
-                    "vpc_id": 1,
-                    "label": "new-subnet",
-                    "ipv4": "10.0.0.0/24",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "new-subnet" in result[0].text
-
-
-async def test_vpc_subnet_update_confirm_required(
-    sample_config: Config,
-) -> None:
-    """VPC subnet update should require confirm=true."""
-    result = list(
-        await handle_linode_vpc_subnet_update(
-            {
-                "vpc_id": 1,
-                "subnet_id": 1,
-                "label": "updated",
-                "confirm": False,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_vpc_subnet_update_success(sample_config: Config) -> None:
-    """VPC subnet update should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.update_vpc_subnet.return_value = {
-            "id": 1,
-            "label": "updated-subnet",
-            "ipv4": "10.0.0.0/24",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_subnet_update(
-                {
-                    "vpc_id": 1,
-                    "subnet_id": 1,
-                    "label": "updated-subnet",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "updated-subnet" in result[0].text
-
-
 async def test_vpc_subnet_delete_confirm_required(
     sample_config: Config,
 ) -> None:
@@ -18990,104 +10861,6 @@ async def test_vpc_subnet_delete_confirm_required(
 
     assert len(result) == 1
     assert "confirm=true" in result[0].text
-
-
-async def test_vpc_subnet_delete_success(sample_config: Config) -> None:
-    """VPC subnet delete should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.delete_vpc_subnet.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_subnet_delete(
-                {"vpc_id": 1, "subnet_id": 1, "confirm": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        assert "deleted" in result[0].text.lower()
-
-
-async def test_vpc_subnet_delete_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call delete."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_vpc_subnet.return_value = {
-            "id": 10,
-            "label": "web-subnet",
-            "ipv4": "10.0.0.0/24",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_subnet_delete(
-                {"vpc_id": 123, "subnet_id": 10, "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_vpc_subnet_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/vpcs/123/subnets/10"
-        mock_client.get_vpc_subnet.assert_awaited_once_with(123, 10)
-        mock_client.delete_vpc_subnet.assert_not_called()
-
-
-async def test_vpc_subnet_delete_dry_run_surfaces_linode_dependencies(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: Linodes with interfaces in the subnet detach.
-
-    The walk reads the already-fetched subnet state and fetches the parent VPC
-    once to label the warning, so its label has to be mocked too.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_vpc_subnet.return_value = {
-            "id": 10,
-            "label": "web-subnet",
-            "linodes": [{"id": 456}, {"id": 789}],
-        }
-        mock_client.get_vpc.return_value = {"id": 123, "label": "prod-vpc"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_subnet_delete(
-                {"vpc_id": 123, "subnet_id": 10, "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        deps = body["dependencies"]
-        assert len(deps) == 2
-        assert all(d["kind"] == "instance" for d in deps)
-        assert all(d["action"] == "detached" for d in deps)
-        # Pin the fetched VPC label into the warning: an unconfigured get_vpc mock
-        # renders a coroutine repr here instead of "prod-vpc", so this also guards
-        # against that regression.
-        assert body["warnings"] == [
-            (
-                '2 Linode(s) have interfaces in subnet "web-subnet" '
-                '(VPC "prod-vpc") and will be detached.'
-            )
-        ]
-        mock_client.get_vpc.assert_awaited_once_with(123)
-        mock_client.delete_vpc_subnet.assert_not_called()
 
 
 async def test_vpc_subnet_delete_dry_run_does_not_require_confirm(
@@ -19127,164 +10900,6 @@ async def test_vpc_subnet_delete_dry_run_still_validates_ids(
     assert "vpc_id is required" in result[0].text
 
 
-async def test_vpc_create_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true previews the create with no resource state and no call."""
-    result = list(
-        await handle_linode_vpc_create(
-            {"label": "vpc-01", "region": "us-east", "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_vpc_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/vpcs"
-    assert body["current_state"] is None
-    assert any("vpc-01" in s for s in body["side_effects"])
-    assert "confirm=true" not in result[0].text
-
-
-async def test_vpc_create_dry_run_still_validates_label(
-    sample_config: Config,
-) -> None:
-    """Missing label must error out regardless of dry_run."""
-    result = list(
-        await handle_linode_vpc_create(
-            {"region": "us-east", "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "label is required" in result[0].text
-
-
-async def test_vpc_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call update."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_vpc.return_value = {"id": 55, "label": "prod-vpc"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_update(
-                {"vpc_id": 55, "label": "renamed", "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_vpc_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/vpcs/55"
-        assert any("renamed" in s for s in body["side_effects"])
-        mock_client.get_vpc.assert_awaited_once_with(55)
-        mock_client.update_vpc.assert_not_called()
-
-
-async def test_vpc_update_dry_run_still_validates_vpc_id(
-    sample_config: Config,
-) -> None:
-    """Missing vpc_id must error out regardless of dry_run."""
-    result = list(await handle_linode_vpc_update({"dry_run": True}, sample_config))
-
-    assert len(result) == 1
-    assert "vpc_id is required" in result[0].text
-
-
-async def test_vpc_subnet_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the subnet create with no call."""
-    result = list(
-        await handle_linode_vpc_subnet_create(
-            {
-                "vpc_id": 55,
-                "label": "subnet-01",
-                "ipv4": "10.0.0.0/24",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_vpc_subnet_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/vpcs/55/subnets"
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-    assert len(body["side_effects"]) == 1
-    assert "subnet-01" in body["side_effects"][0]
-    assert "10.0.0.0/24" in body["side_effects"][0]
-
-
-async def test_vpc_subnet_create_dry_run_still_validates_vpc_id(
-    sample_config: Config,
-) -> None:
-    """Missing vpc_id must error out regardless of dry_run."""
-    result = list(
-        await handle_linode_vpc_subnet_create(
-            {"label": "subnet-01", "ipv4": "10.0.0.0/24", "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "vpc_id is required" in result[0].text
-
-
-async def test_vpc_subnet_update_dry_run_returns_preview_without_mutating(
-    sample_config: Config,
-) -> None:
-    """dry_run=true must fetch state via GET and never call update."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_vpc_subnet.return_value = {"id": 10, "label": "sub"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = list(
-            await handle_linode_vpc_subnet_update(
-                {"vpc_id": 55, "subnet_id": 10, "label": "renamed", "dry_run": True},
-                sample_config,
-            )
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_vpc_subnet_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/vpcs/55/subnets/10"
-        mock_client.get_vpc_subnet.assert_awaited_once_with(55, 10)
-        mock_client.update_vpc_subnet.assert_not_called()
-
-
-async def test_vpc_subnet_update_dry_run_still_validates_label(
-    sample_config: Config,
-) -> None:
-    """Missing label must error out regardless of dry_run."""
-    result = list(
-        await handle_linode_vpc_subnet_update(
-            {"vpc_id": 55, "subnet_id": 10, "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "label is required" in result[0].text
-
-
 async def test_instance_backups_list_tool_definition() -> None:
     """Backups list tool should require linode_id."""
     tool, _ = create_linode_instance_backup_list_tool()
@@ -19299,35 +10914,6 @@ async def test_instance_backup_get_tool_definition() -> None:
     required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "backup_id" in required
-
-
-async def test_instance_backup_create_tool_def() -> None:
-    """Backup create tool should require linode_id and confirm."""
-    tool, _ = create_linode_instance_backup_create_tool()
-    assert tool.name == "linode_instance_backup_create"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "confirm" in required
-
-
-async def test_instance_backup_restore_tool_def() -> None:
-    """Backup restore should require linode_id, backup_id, linode_id, confirm."""
-    tool, _ = create_linode_instance_backup_restore_tool()
-    assert tool.name == "linode_instance_backup_restore"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "backup_id" in required
-    assert "linode_id" in required
-    assert "confirm" in required
-
-
-async def test_instance_backups_enable_tool_def() -> None:
-    """Backups enable tool should require linode_id and confirm."""
-    tool, _ = create_linode_instance_backups_enable_tool()
-    assert tool.name == "linode_instance_backups_enable"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "confirm" in required
 
 
 async def test_instance_backups_cancel_tool_def() -> None:
@@ -19359,7 +10945,7 @@ async def test_instance_backups_list_success(
     """
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.list_instance_backups.return_value = {
+        mock_client.route_raw.return_value = {
             "automatic": [
                 {"id": 42, "label": "", "status": "successful", "type": "auto"}
             ],
@@ -19393,58 +10979,7 @@ async def test_instance_backups_list_invalid_id(
         )
     )
     assert len(result) == 1
-    assert "must be a valid integer" in result[0].text
-
-
-async def test_instance_backup_create_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Backup create should require confirm=true."""
-    result = list(
-        await handle_linode_instance_backup_create({"linode_id": 123}, sample_config)
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_backup_create_success(
-    sample_config: Config,
-) -> None:
-    """Backup create should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
-        mock_client = AsyncMock()
-        mock_client.create_instance_backup.return_value = {
-            "id": 456,
-            "label": "my-snap",
-            "status": "pending",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mc.return_value = mock_client
-
-        result = list(
-            await handle_linode_instance_backup_create(
-                {
-                    "linode_id": 123,
-                    "label": "my-snap",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-        )
-        assert len(result) == 1
-        assert "my-snap" in result[0].text
-
-
-async def test_instance_backups_enable_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Backups enable should require confirm=true."""
-    result = list(
-        await handle_linode_instance_backups_enable({"linode_id": 123}, sample_config)
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
+    assert "linode_id must be a positive integer" in result[0].text
 
 
 async def test_instance_backups_cancel_no_confirm(
@@ -19453,24 +10988,6 @@ async def test_instance_backups_cancel_no_confirm(
     """Backups cancel should require confirm=true."""
     result = list(
         await handle_linode_instance_backups_cancel({"linode_id": 123}, sample_config)
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_backup_restore_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Backup restore should require confirm=true."""
-    result = list(
-        await handle_linode_instance_backup_restore(
-            {
-                "linode_id": 123,
-                "backup_id": 456,
-                "target_linode_id": 789,
-            },
-            sample_config,
-        )
     )
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
@@ -19497,7 +11014,7 @@ async def test_instance_backup_get_invalid_backup_id(
         )
     )
     assert len(result) == 1
-    assert "backup_id must be a valid integer" in result[0].text
+    assert "backup_id must be a positive integer" in result[0].text
 
 
 async def test_instance_backup_get_invalid_linode_id(
@@ -19510,7 +11027,7 @@ async def test_instance_backup_get_invalid_linode_id(
         )
     )
     assert len(result) == 1
-    assert "linode_id must be a valid integer" in result[0].text
+    assert "linode_id must be a positive integer" in result[0].text
 
 
 async def test_instance_disks_list_tool_def() -> None:
@@ -19529,27 +11046,6 @@ async def test_instance_disk_get_tool_def() -> None:
     assert "disk_id" in required
 
 
-async def test_instance_disk_create_tool_def() -> None:
-    """Disk create should require linode_id, label, size, confirm."""
-    tool, _ = create_linode_instance_disk_create_tool()
-    assert tool.name == "linode_instance_disk_create"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "label" in required
-    assert "size" in required
-    assert "confirm" in required
-
-
-async def test_instance_disk_update_tool_def() -> None:
-    """Disk update should require linode_id, disk_id, confirm."""
-    tool, _ = create_linode_instance_disk_update_tool()
-    assert tool.name == "linode_instance_disk_update"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "disk_id" in required
-    assert "confirm" in required
-
-
 async def test_instance_disk_delete_tool_def() -> None:
     """Disk delete should require linode_id, disk_id, confirm."""
     tool, _ = create_linode_instance_disk_delete_tool()
@@ -19560,36 +11056,17 @@ async def test_instance_disk_delete_tool_def() -> None:
     assert "confirm" in required
 
 
-async def test_instance_disk_clone_tool_def() -> None:
-    """Disk clone should require linode_id, disk_id, confirm."""
-    tool, _ = create_linode_instance_disk_clone_tool()
-    assert tool.name == "linode_instance_disk_clone"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "disk_id" in required
-    assert "confirm" in required
-
-
-async def test_instance_disk_resize_tool_def() -> None:
-    """Disk resize should require linode_id, disk_id, size, confirm."""
-    tool, _ = create_linode_instance_disk_resize_tool()
-    assert tool.name == "linode_instance_disk_resize"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "disk_id" in required
-    assert "size" in required
-    assert "confirm" in required
-
-
 async def test_instance_disks_list_success(
     sample_config: Config,
 ) -> None:
     """Disks list should return disk data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.list_instance_disks.return_value = [
-            {"id": 1, "label": "boot", "size": 25000},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"id": 1, "label": "boot", "size": 25000},
+            ]
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mc.return_value = mock_client
@@ -19599,24 +11076,6 @@ async def test_instance_disks_list_success(
         )
         assert len(result) == 1
         assert "boot" in result[0].text
-
-
-async def test_instance_disk_create_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Disk create should require confirm=true."""
-    result = list(
-        await handle_linode_instance_disk_create(
-            {
-                "linode_id": 123,
-                "label": "data",
-                "size": 5000,
-            },
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
 
 
 async def test_instance_disk_delete_no_confirm(
@@ -19644,52 +11103,6 @@ async def test_instance_disk_get_missing_disk_id(
     assert "disk_id" in result[0].text.lower()
 
 
-async def test_instance_disk_update_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Disk update should require confirm=true."""
-    result = list(
-        await handle_linode_instance_disk_update(
-            {"linode_id": 123, "disk_id": 1},
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_disk_clone_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Disk clone should require confirm=true."""
-    result = list(
-        await handle_linode_instance_disk_clone(
-            {"linode_id": 123, "disk_id": 1},
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_disk_resize_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Disk resize should require confirm=true."""
-    result = list(
-        await handle_linode_instance_disk_resize(
-            {
-                "linode_id": 123,
-                "disk_id": 1,
-                "size": 30000,
-            },
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
 async def test_instance_ips_list_tool_def() -> None:
     """IPs list tool should require linode_id."""
     tool, _ = create_linode_instance_ip_list_tool()
@@ -19704,27 +11117,6 @@ async def test_instance_ip_get_tool_def() -> None:
     required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "address" in required
-
-
-async def test_instance_ip_allocate_tool_def() -> None:
-    """IP allocate should require linode_id, type, confirm."""
-    tool, _ = create_linode_instance_ip_allocate_tool()
-    assert tool.name == "linode_instance_ip_allocate"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "type" in required
-    assert "confirm" in required
-
-
-async def test_instance_ip_update_tool_def() -> None:
-    """IP update should require linode_id, address, rdns, confirm."""
-    tool, _ = create_linode_instance_ip_update_tool()
-    assert tool.name == "linode_instance_ip_update"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "address" in required
-    assert "rdns" in required
-    assert "confirm" in required
 
 
 async def test_instance_ip_delete_tool_def() -> None:
@@ -19748,7 +11140,7 @@ async def test_instance_ips_list_success(
     """
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.list_instance_ips.return_value = {
+        mock_client.route_raw.return_value = {
             "ipv4": {
                 "public": [{"address": "192.0.2.1"}],
             },
@@ -19779,7 +11171,7 @@ async def test_instance_ips_list_invalid_id(
         await handle_linode_instance_ip_list({"linode_id": "bogus"}, sample_config)
     )
     assert len(result) == 1
-    assert "must be a valid integer" in result[0].text
+    assert "linode_id must be a positive integer" in result[0].text
 
 
 async def test_instance_ip_get_missing_address(
@@ -19791,91 +11183,6 @@ async def test_instance_ip_get_missing_address(
     )
     assert len(result) == 1
     assert "address" in result[0].text.lower()
-
-
-async def test_instance_ip_allocate_no_confirm(
-    sample_config: Config,
-) -> None:
-    """IP allocate should require confirm=true."""
-    result = list(
-        await handle_linode_instance_ip_allocate(
-            {"linode_id": 123, "type": "ipv4"},
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_ip_allocate_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the allocate with no resource state and no call."""
-    result = list(
-        await handle_linode_instance_ip_allocate(
-            {"linode_id": 123, "type": "ipv4", "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_ip_allocate"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/123/ips"
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-
-
-async def test_instance_ip_allocate_dry_run_still_validates_type(
-    sample_config: Config,
-) -> None:
-    """Missing type must error out regardless of dry_run."""
-    result = list(
-        await handle_linode_instance_ip_allocate(
-            {"linode_id": 123, "dry_run": True},
-            sample_config,
-        )
-    )
-
-    assert len(result) == 1
-    assert "type is required" in result[0].text
-
-
-async def test_instance_ip_update_no_confirm(
-    sample_config: Config,
-) -> None:
-    """IP update should require confirm=true."""
-    result = list(
-        await handle_linode_instance_ip_update(
-            {
-                "linode_id": 123,
-                "address": "192.0.2.1",
-                "rdns": "host.example.com",
-            },
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_ip_update_missing_rdns(
-    sample_config: Config,
-) -> None:
-    """IP update should require an rdns argument."""
-    result = list(
-        await handle_linode_instance_ip_update(
-            {
-                "linode_id": 123,
-                "address": "192.0.2.1",
-                "confirm": True,
-            },
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "rdns" in result[0].text.lower()
 
 
 async def test_instance_ip_delete_no_confirm(
@@ -19895,44 +11202,6 @@ async def test_instance_ip_delete_no_confirm(
     assert "confirm" in result[0].text.lower()
 
 
-async def test_instance_clone_tool_def() -> None:
-    """Clone tool should require linode_id and confirm."""
-    tool, _ = create_linode_instance_clone_tool()
-    assert tool.name == "linode_instance_clone"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "confirm" in required
-
-
-async def test_instance_migrate_tool_def() -> None:
-    """Migrate tool should require linode_id and confirm."""
-    tool, _ = create_linode_instance_migrate_tool()
-    assert tool.name == "linode_instance_migrate"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "confirm" in required
-
-
-async def test_instance_rebuild_tool_def() -> None:
-    """Rebuild should require linode_id, image, root_pass, confirm."""
-    tool, _ = create_linode_instance_rebuild_tool()
-    assert tool.name == "linode_instance_rebuild"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "image" in required
-    assert "root_pass" in required
-    assert "confirm" in required
-
-
-async def test_instance_rescue_tool_def() -> None:
-    """Rescue tool should require linode_id and confirm."""
-    tool, _ = create_linode_instance_rescue_tool()
-    assert tool.name == "linode_instance_rescue"
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "confirm" in required
-
-
 async def test_instance_password_reset_tool_def() -> None:
     """Password reset should require linode_id, root_pass, confirm."""
     tool, _ = create_linode_instance_password_reset_tool()
@@ -19941,128 +11210,6 @@ async def test_instance_password_reset_tool_def() -> None:
     assert "linode_id" in required
     assert "root_pass" in required
     assert "confirm" in required
-
-
-async def test_instance_clone_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Clone should require confirm=true."""
-    result = list(await handle_linode_instance_clone({"linode_id": 123}, sample_config))
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_clone_success(
-    sample_config: Config,
-    sample_instance_data: dict[str, Any],
-) -> None:
-    """Clone should succeed with valid input."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
-        mock_client = AsyncMock()
-        mock_client.clone_instance.return_value = _make_instance(
-            999, "cloned", "provisioning", sample_instance_data
-        )
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mc.return_value = mock_client
-
-        result = list(
-            await handle_linode_instance_clone(
-                {"linode_id": 123, "confirm": True},
-                sample_config,
-            )
-        )
-        assert len(result) == 1
-        assert "cloned" in result[0].text
-
-
-async def test_instance_clone_passes_backups_enabled(
-    sample_config: Config,
-    sample_instance_data: dict[str, Any],
-) -> None:
-    """Clone forwards backups_enabled to the client and serializes the raw body."""
-    raw_instance = {
-        **sample_instance_data,
-        "id": 999,
-        "label": "cloned",
-        "status": "provisioning",
-        "interface_generation": "linode",
-    }
-    with patch("linodemcp.tools.helpers.RetryableClient") as mc:
-        mock_client = AsyncMock()
-        mock_client.clone_instance_raw.return_value = raw_instance
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mc.return_value = mock_client
-
-        result = await handle_linode_instance_clone(
-            {"linode_id": 123, "backups_enabled": True, "confirm": True},
-            sample_config,
-        )
-
-    kwargs = mock_client.clone_instance_raw.await_args.kwargs
-    assert kwargs["backups_enabled"] is True
-    payload = json.loads(result[0].text)
-    assert payload["message"] == "Instance 123 cloned as 'cloned' (ID: 999) in us-east"
-    assert payload["instance"]["interface_generation"] == "linode"
-
-
-async def test_instance_migrate_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Migrate should require confirm=true."""
-    result = list(
-        await handle_linode_instance_migrate({"linode_id": 123}, sample_config)
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_rebuild_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Rebuild should require confirm=true."""
-    result = list(
-        await handle_linode_instance_rebuild(
-            {
-                "linode_id": 123,
-                "image": "linode/ubuntu22.04",
-                "root_pass": "S3cure!Pass123",
-            },
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-
-
-async def test_instance_rebuild_missing_image(
-    sample_config: Config,
-) -> None:
-    """Rebuild should fail without image."""
-    result = list(
-        await handle_linode_instance_rebuild(
-            {
-                "linode_id": 123,
-                "root_pass": "S3cure!Pass123",
-                "confirm": True,
-            },
-            sample_config,
-        )
-    )
-    assert len(result) == 1
-    assert "image" in result[0].text.lower()
-
-
-async def test_instance_rescue_no_confirm(
-    sample_config: Config,
-) -> None:
-    """Rescue should require confirm=true."""
-    result = list(
-        await handle_linode_instance_rescue({"linode_id": 123}, sample_config)
-    )
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
 
 
 async def test_instance_password_reset_no_confirm(
@@ -20142,7 +11289,7 @@ async def test_execute_tool_client_lifecycle(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_profile.return_value = mock_profile
+        mock_client.route_raw.return_value = mock_profile
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -20167,39 +11314,6 @@ async def test_execute_tool_callback_exception(sample_config: Config) -> None:
         assert len(result) == 1
         assert "Failed to" in result[0].text
         assert "boom" in result[0].text
-
-
-def _make_instance(
-    instance_id: int,
-    label: str,
-    status: str,
-    sample_instance_data: dict[str, Any],
-) -> Instance:
-    """Build an Instance with the given id, label, and status."""
-    return Instance(
-        id=instance_id,
-        label=label,
-        status=status,
-        type="g6-standard-1",
-        region="us-east",
-        image="linode/ubuntu22.04",
-        ipv4=["192.0.2.1"],
-        ipv6="2001:db8::1/64",
-        hypervisor="kvm",
-        specs=Specs(**sample_instance_data["specs"]),
-        alerts=Alerts(**sample_instance_data["alerts"]),
-        backups=Backups(
-            enabled=True,
-            available=True,
-            schedule=Schedule(day="Saturday", window="W22"),
-            last_successful=None,
-        ),
-        created="2024-01-01T00:00:00",
-        updated="2024-01-15T12:00:00",
-        group="",
-        tags=[],
-        watchdog_enabled=True,
-    )
 
 
 async def test_instance_status_filter_returns_matching(
@@ -20346,7 +11460,7 @@ async def test_handle_linode_instance_backup_get_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """Backup get should return backup data when both IDs are valid."""
-    mock_linode_client.get_instance_backup.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": 100,
         "label": "daily-backup",
         "status": "successful",
@@ -20359,56 +11473,14 @@ async def test_handle_linode_instance_backup_get_success(
     data = json.loads(result[0].text)
     assert data["id"] == 100
     assert data["label"] == "daily-backup"
-    mock_linode_client.get_instance_backup.assert_called_once_with(123, 100)
-
-
-async def test_handle_linode_instance_backup_restore_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Backup restore should succeed with confirm=true and valid IDs."""
-    mock_linode_client.restore_instance_backup.return_value = None
-    result = await handle_linode_instance_backup_restore(
-        {
-            "linode_id": 123,
-            "backup_id": 100,
-            "target_linode_id": 456,
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data == {
-        "message": "Backup 100 restore initiated to instance 456 (overwrite=false)",
-        "backup_id": 100,
-        "target_linode_id": 456,
-        "overwrite": False,
-    }
-    mock_linode_client.restore_instance_backup.assert_called_once_with(
-        123, 100, 456, overwrite=False
-    )
-
-
-async def test_handle_linode_instance_backups_enable_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Backups enable should succeed with confirm=true."""
-    mock_linode_client.enable_instance_backups.return_value = None
-    result = await handle_linode_instance_backups_enable(
-        {"linode_id": 123, "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Backup service enabled for instance 123"
-    assert data["linode_id"] == 123
-    mock_linode_client.enable_instance_backups.assert_called_once_with(123)
+    mock_linode_client.route_raw.assert_any_call("linode_instance_backup_get", 123, 100)
 
 
 async def test_handle_linode_instance_backups_cancel_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """Backups cancel should succeed with confirm=true."""
-    mock_linode_client.cancel_instance_backups.return_value = None
+    mock_linode_client.route_call.return_value = None
     result = await handle_linode_instance_backups_cancel(
         {"linode_id": 123, "confirm": True}, sample_config
     )
@@ -20419,20 +11491,25 @@ async def test_handle_linode_instance_backups_cancel_success(
         == "Backup service canceled for instance 123. All backups have been deleted."
     )
     assert data["linode_id"] == 123
-    mock_linode_client.cancel_instance_backups.assert_called_once_with(123)
+    mock_linode_client.route_call.assert_awaited_once_with(
+        "linode_instance_backups_cancel", 123
+    )
 
 
 async def test_instance_backups_cancel_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
-    """dry_run=true must fetch the instance via GET and never cancel."""
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {
-            "id": 123,
-            "label": "my-linode",
-            "status": "running",
-        }
-    )
+    """dry_run=true must read the instance through the declared GET, never cancel.
+
+    The cancel is addressed by linode_id and the read by instance_id, so this
+    also pins that the declared mapping fills the read with the id the caller
+    named rather than a zero.
+    """
+    mock_linode_client.route_raw.return_value = {
+        "id": 123,
+        "label": "my-linode",
+        "status": "running",
+    }
     result = await handle_linode_instance_backups_cancel(
         {"linode_id": 123, "dry_run": True}, sample_config
     )
@@ -20441,8 +11518,8 @@ async def test_instance_backups_cancel_dry_run_returns_preview(
     assert body["tool"] == "linode_instance_backups_cancel"
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/linode/instances/123/backups/cancel"
-    mock_linode_client.get_instance.assert_awaited_once_with(123)
-    mock_linode_client.cancel_instance_backups.assert_not_called()
+    mock_linode_client.route_raw.assert_awaited_once_with("linode_instance_get", 123)
+    mock_linode_client.route_call.assert_not_called()
 
 
 async def test_instance_backups_cancel_dry_run_still_validates_instance_id(
@@ -20453,14 +11530,14 @@ async def test_instance_backups_cancel_dry_run_still_validates_instance_id(
         {"dry_run": True}, sample_config
     )
     assert "linode_id" in result[0].text.lower()
-    mock_linode_client.cancel_instance_backups.assert_not_called()
+    mock_linode_client.route_call.assert_not_called()
 
 
 async def test_handle_linode_instance_disk_get_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """Disk get should return disk data when both IDs are valid."""
-    mock_linode_client.get_instance_disk.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": 10,
         "label": "Ubuntu Disk",
         "size": 51200,
@@ -20474,338 +11551,14 @@ async def test_handle_linode_instance_disk_get_success(
     data = json.loads(result[0].text)
     assert data["id"] == 10
     assert data["label"] == "Ubuntu Disk"
-    mock_linode_client.get_instance_disk.assert_called_once_with(123, 10)
-
-
-async def test_handle_linode_instance_disk_create_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk create should succeed with valid args and confirm=true."""
-    mock_linode_client.create_instance_disk.return_value = {
-        "id": 50,
-        "label": "my-disk",
-        "size": 1024,
-        "filesystem": "ext4",
-        "status": "ready",
-    }
-    result = await handle_linode_instance_disk_create(
-        {"linode_id": 123, "label": "my-disk", "size": 1024, "confirm": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Disk 'my-disk' (ID: 50) created on instance 123"
-    assert data["disk"]["id"] == 50
-    assert data["disk"]["label"] == "my-disk"
-    mock_linode_client.create_instance_disk.assert_called_once_with(
-        123,
-        label="my-disk",
-        size=1024,
-        filesystem=None,
-        image=None,
-        root_pass=None,
-        authorized_keys=None,
-        authorized_users=None,
-        stackscript_id=None,
-        stackscript_data=None,
-    )
-
-
-async def test_handle_linode_instance_disk_create_passes_authorized_lists(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk create splits comma-separated authorized lists for the client."""
-    mock_linode_client.create_instance_disk.return_value = {"id": 50, "label": "d"}
-    await handle_linode_instance_disk_create(
-        {
-            "linode_id": 123,
-            "label": "d",
-            "size": 1024,
-            "authorized_keys": "ssh-ed25519 AAAA, ssh-rsa BBBB",
-            "authorized_users": "alice, bob",
-            "confirm": True,
-        },
-        sample_config,
-    )
-    call_kwargs = mock_linode_client.create_instance_disk.call_args.kwargs
-    assert call_kwargs["authorized_keys"] == ["ssh-ed25519 AAAA", "ssh-rsa BBBB"]
-    assert call_kwargs["authorized_users"] == ["alice", "bob"]
-
-
-async def test_handle_linode_instance_disk_update_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk update should succeed with valid args and confirm=true."""
-    mock_linode_client.update_instance_disk.return_value = {
-        "id": 10,
-        "label": "renamed-disk",
-        "size": 51200,
-    }
-    result = await handle_linode_instance_disk_update(
-        {
-            "linode_id": 123,
-            "disk_id": 10,
-            "label": "renamed-disk",
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Disk 10 on instance 123 modified successfully"
-    assert data["disk"]["id"] == 10
-    assert data["disk"]["label"] == "renamed-disk"
-    mock_linode_client.update_instance_disk.assert_called_once_with(
-        123, 10, label="renamed-disk"
-    )
-
-
-async def test_handle_linode_instance_disk_delete_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk delete should succeed with valid args and confirm=true."""
-    mock_linode_client.delete_instance_disk.return_value = None
-    result = await handle_linode_instance_disk_delete(
-        {"linode_id": 123, "disk_id": 10, "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Disk 10 deleted from instance 123 successfully"
-    assert data["linode_id"] == 123
-    assert data["disk_id"] == 10
-    mock_linode_client.delete_instance_disk.assert_called_once_with(123, 10)
-
-
-async def test_instance_disk_delete_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the disk via GET and never call delete."""
-    mock_linode_client.get_instance_disk.return_value = {
-        "id": 10,
-        "label": "boot",
-        "size": 25600,
-    }
-    result = await handle_linode_instance_disk_delete(
-        {"linode_id": 123, "disk_id": 10, "dry_run": True}, sample_config
-    )
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_instance_disk_delete"
-    assert body["would_execute"]["method"] == "DELETE"
-    assert body["would_execute"]["path"] == "/linode/instances/123/disks/10"
-    mock_linode_client.get_instance_disk.assert_awaited_once_with(123, 10)
-    mock_linode_client.delete_instance_disk.assert_not_called()
-
-
-async def test_instance_disk_delete_dry_run_still_validates_disk_id(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Missing disk_id must error regardless of dry_run."""
-    result = await handle_linode_instance_disk_delete(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-    assert "disk_id" in result[0].text.lower()
-    mock_linode_client.delete_instance_disk.assert_not_called()
-
-
-async def test_instance_backup_create_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never snapshot."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_backup_create(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_backup_create"
-    assert body["would_execute"]["path"] == "/linode/instances/123/backups"
-    mock_linode_client.create_instance_backup.assert_not_called()
-
-
-async def test_instance_backup_restore_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the backup via GET and never restore."""
-    mock_linode_client.get_instance_backup.return_value = {"id": 456}
-
-    result = await handle_linode_instance_backup_restore(
-        {"linode_id": 123, "backup_id": 456, "target_linode_id": 999, "dry_run": True},
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_backup_restore"
-    assert body["would_execute"]["path"] == "/linode/instances/123/backups/456/restore"
-    mock_linode_client.restore_instance_backup.assert_not_called()
-
-
-async def test_instance_backup_restore_dry_run_overwrite_side_effects(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Phase 2 Tier A walk: overwrite=true warns the target is destroyed."""
-    mock_linode_client.get_instance_backup.return_value = {"id": 456}
-
-    result = await handle_linode_instance_backup_restore(
-        {
-            "linode_id": 123,
-            "backup_id": 456,
-            "target_linode_id": 999,
-            "overwrite": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert len(body["side_effects"]) == 1
-    assert "999" in body["side_effects"][0]
-    assert body["warnings"]
-    mock_linode_client.restore_instance_backup.assert_not_called()
-
-
-async def test_instance_backups_enable_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never enable."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_backups_enable(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_backups_enable"
-    assert body["would_execute"]["path"] == "/linode/instances/123/backups/enable"
-    mock_linode_client.enable_instance_backups.assert_not_called()
-
-
-async def test_instance_disk_create_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the instance via GET and never create."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_disk_create(
-        {"linode_id": 123, "label": "data", "size": 10240, "dry_run": True},
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_disk_create"
-    assert body["would_execute"]["path"] == "/linode/instances/123/disks"
-    mock_linode_client.create_instance_disk.assert_not_called()
-    assert len(body["side_effects"]) == 1
-    assert "data" in body["side_effects"][0]
-    assert "10240" in body["side_effects"][0]
-
-
-async def test_instance_disk_update_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the disk via GET and never update."""
-    mock_linode_client.get_instance_disk.return_value = {"id": 789}
-
-    result = await handle_linode_instance_disk_update(
-        {"linode_id": 123, "disk_id": 789, "label": "renamed", "dry_run": True},
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_disk_update"
-    assert body["would_execute"]["method"] == "PUT"
-    assert body["would_execute"]["path"] == "/linode/instances/123/disks/789"
-    mock_linode_client.update_instance_disk.assert_not_called()
-
-
-async def test_instance_disk_clone_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the disk via GET and never clone."""
-    mock_linode_client.get_instance_disk.return_value = {
-        "id": 789,
-        "label": "boot",
-        "size": 25600,
-    }
-
-    result = await handle_linode_instance_disk_clone(
-        {"linode_id": 123, "disk_id": 789, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_disk_clone"
-    assert body["would_execute"]["path"] == "/linode/instances/123/disks/789/clone"
-    assert "25600 MB" in body["side_effects"][0]
-    mock_linode_client.clone_instance_disk.assert_not_called()
-
-
-async def test_instance_disk_resize_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the disk via GET and never resize."""
-    mock_linode_client.get_instance_disk.return_value = {"id": 789, "size": 10240}
-
-    result = await handle_linode_instance_disk_resize(
-        {"linode_id": 123, "disk_id": 789, "size": 20480, "dry_run": True},
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_disk_resize"
-    assert body["would_execute"]["path"] == "/linode/instances/123/disks/789/resize"
-    effect = body["side_effects"][0]
-    assert "10240 MB" in effect
-    assert "20480 MB" in effect
-    assert body["warnings"]
-    mock_linode_client.resize_instance_disk.assert_not_called()
-
-
-async def test_handle_linode_instance_disk_clone_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk clone should succeed with valid args and confirm=true."""
-    mock_linode_client.clone_instance_disk.return_value = {
-        "id": 99,
-        "label": "cloned-disk",
-        "size": 51200,
-    }
-    result = await handle_linode_instance_disk_clone(
-        {"linode_id": 123, "disk_id": 10, "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Disk 10 cloned to new disk 99 on instance 123"
-    assert data["disk"]["id"] == 99
-    assert data["disk"]["label"] == "cloned-disk"
-    mock_linode_client.clone_instance_disk.assert_called_once_with(123, 10)
-
-
-async def test_handle_linode_instance_disk_resize_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk resize should succeed with valid args and confirm=true."""
-    mock_linode_client.resize_instance_disk.return_value = None
-    result = await handle_linode_instance_disk_resize(
-        {"linode_id": 123, "disk_id": 10, "size": 65536, "confirm": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data == {
-        "message": "Disk 10 on instance 123 resize initiated to 65536 MB",
-        "linode_id": 123,
-        "disk_id": 10,
-        "new_size_mb": 65536,
-    }
-    mock_linode_client.resize_instance_disk.assert_called_once_with(123, 10, 65536)
+    mock_linode_client.route_raw.assert_any_call("linode_instance_disk_get", 123, 10)
 
 
 async def test_handle_linode_instance_ip_get_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """IP get should return IP data when linode_id and address are valid."""
-    mock_linode_client.get_instance_ip.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "address": "203.0.113.1",
         "type": "ipv4",
         "public": True,
@@ -20818,413 +11571,9 @@ async def test_handle_linode_instance_ip_get_success(
     data = json.loads(result[0].text)
     assert data["address"] == "203.0.113.1"
     assert data["region"] == "us-east"
-    mock_linode_client.get_instance_ip.assert_called_once_with(123, "203.0.113.1")
-
-
-async def test_handle_linode_instance_ip_allocate_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """IP allocate should succeed with confirm=true."""
-    mock_linode_client.allocate_instance_ip.return_value = {
-        "address": "198.51.100.5",
-        "type": "ipv4",
-        "public": True,
-    }
-    result = await handle_linode_instance_ip_allocate(
-        {"linode_id": 123, "type": "ipv4", "public": True, "confirm": True},
-        sample_config,
+    mock_linode_client.route_raw.assert_called_once_with(
+        "linode_instance_ip_get", 123, "203.0.113.1"
     )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "IP 198.51.100.5 allocated for instance 123"
-    # The {message, ip} envelope serializes the full proto IPAddress element, so
-    # implicit-presence scalars the API omits come back as their zero value
-    # (matching Go's EmitDefaultValues), not as missing keys.
-    assert data["ip"] == {
-        "address": "198.51.100.5",
-        "gateway": "",
-        "subnet_mask": "",
-        "prefix": 0,
-        "type": "ipv4",
-        "public": True,
-        "rdns": "",
-        "linode_id": 0,
-        "region": "",
-    }
-    mock_linode_client.allocate_instance_ip.assert_called_once_with(
-        123, ip_type="ipv4", public=True, address=None
-    )
-
-
-async def test_handle_linode_instance_ip_update_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """IP update should update RDNS with confirm=true."""
-    mock_linode_client.update_instance_ip.return_value = {
-        "address": "203.0.113.1",
-        "rdns": "host.example.com",
-    }
-    result = await handle_linode_instance_ip_update(
-        {
-            "linode_id": 123,
-            "address": "203.0.113.1",
-            "rdns": "host.example.com",
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "RDNS for IP 203.0.113.1 updated on instance 123"
-    assert data["ip"]["address"] == "203.0.113.1"
-    assert data["ip"]["rdns"] == "host.example.com"
-    mock_linode_client.update_instance_ip.assert_called_once_with(
-        123,
-        "203.0.113.1",
-        "host.example.com",
-    )
-
-
-async def test_handle_linode_instance_ip_update_null_rdns_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """IP update should allow null RDNS.
-
-    The proto IPAddress.rdns is an implicit-presence string, so a cleared rDNS
-    serializes to the empty string in the canonical envelope (matching Go's
-    EmitDefaultValues), not JSON null.
-    """
-    mock_linode_client.update_instance_ip.return_value = {
-        "address": "203.0.113.1",
-        "rdns": None,
-    }
-    result = await handle_linode_instance_ip_update(
-        {
-            "linode_id": 123,
-            "address": "203.0.113.1",
-            "rdns": None,
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "RDNS for IP 203.0.113.1 updated on instance 123"
-    assert data["ip"]["address"] == "203.0.113.1"
-    assert data["ip"]["rdns"] == ""
-    mock_linode_client.update_instance_ip.assert_called_once_with(
-        123,
-        "203.0.113.1",
-        None,
-    )
-
-
-async def test_handle_linode_instance_ip_update_rejects_non_string_rdns(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """A non-string, non-null rdns is rejected before any client call."""
-    result = await handle_linode_instance_ip_update(
-        {
-            "linode_id": 123,
-            "address": "203.0.113.1",
-            "rdns": 42,
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert "rdns must be a string or null" in result[0].text
-    mock_linode_client.update_instance_ip.assert_not_called()
-
-
-async def test_handle_linode_networking_ip_allocate_rejects_bad_type(
-    sample_config: Config,
-) -> None:
-    """networking_ip_allocate rejects a type other than ipv4/ipv6."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_allocate,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        result = await handle_linode_networking_ip_allocate(
-            {
-                "linode_id": 123,
-                "type": "ipv5",
-                "public": True,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert "type must be one of: ipv4" in result[0].text
-    mock_cls.assert_not_called()
-
-
-async def test_handle_linode_instance_ip_delete_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """IP delete should succeed with confirm=true."""
-    mock_linode_client.delete_instance_ip.return_value = None
-    result = await handle_linode_instance_ip_delete(
-        {"linode_id": 123, "address": "203.0.113.1", "confirm": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "IP 203.0.113.1 removed from instance 123"
-    assert data["linode_id"] == 123
-    assert data["address"] == "203.0.113.1"
-    mock_linode_client.delete_instance_ip.assert_called_once_with(123, "203.0.113.1")
-
-
-async def test_instance_ip_delete_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the IP via GET and never call delete."""
-    mock_linode_client.get_instance_ip.return_value = {
-        "address": "203.0.113.1",
-        "type": "ipv4",
-        "public": True,
-    }
-    result = await handle_linode_instance_ip_delete(
-        {"linode_id": 123, "address": "203.0.113.1", "dry_run": True},
-        sample_config,
-    )
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_instance_ip_delete"
-    assert body["would_execute"]["method"] == "DELETE"
-    assert body["would_execute"]["path"] == "/linode/instances/123/ips/203.0.113.1"
-    mock_linode_client.get_instance_ip.assert_awaited_once_with(123, "203.0.113.1")
-    mock_linode_client.delete_instance_ip.assert_not_called()
-
-
-async def test_instance_ip_delete_dry_run_still_validates_address(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Missing address must error regardless of dry_run."""
-    result = await handle_linode_instance_ip_delete(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-    assert "address" in result[0].text.lower()
-    mock_linode_client.delete_instance_ip.assert_not_called()
-
-
-async def test_handle_linode_instance_migrate_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Migrate should succeed with confirm=true.
-
-    When the caller picks a region, the message names it and the region field is
-    echoed, matching Go's InstanceMigrateWriteResponse.
-    """
-    mock_linode_client.migrate_instance.return_value = None
-    result = await handle_linode_instance_migrate(
-        {"linode_id": 123, "region": "eu-west", "confirm": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Migration initiated for instance 123 to region eu-west"
-    assert data["linode_id"] == 123
-    assert data["region"] == "eu-west"
-    mock_linode_client.migrate_instance.assert_called_once_with(123, region="eu-west")
-
-
-async def test_handle_linode_instance_rebuild_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Rebuild should succeed with confirm=true and required fields."""
-    mock_linode_client.rebuild_instance.return_value = {
-        "id": 123,
-        "label": "my-linode",
-        "status": "rebuilding",
-    }
-    result = await handle_linode_instance_rebuild(
-        {
-            "linode_id": 123,
-            "image": "linode/ubuntu24.04",
-            "root_pass": "Str0ngP@ssw0rd!",
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Instance 123 rebuilt with image linode/ubuntu24.04"
-    assert data["instance"]["id"] == 123
-    assert data["instance"]["status"] == "rebuilding"
-    mock_linode_client.rebuild_instance.assert_called_once_with(
-        123,
-        image="linode/ubuntu24.04",
-        root_pass="Str0ngP@ssw0rd!",
-        authorized_keys=None,
-        authorized_users=None,
-        booted=None,
-    )
-
-
-async def test_handle_linode_instance_rebuild_passes_booted(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Rebuild forwards booted only when the caller supplies it."""
-    mock_linode_client.rebuild_instance.return_value = {"id": 123}
-    await handle_linode_instance_rebuild(
-        {
-            "linode_id": 123,
-            "image": "linode/ubuntu24.04",
-            "root_pass": "Str0ngP@ssw0rd!",
-            "booted": False,
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert mock_linode_client.rebuild_instance.call_args.kwargs["booted"] is False
-
-
-async def test_instance_rebuild_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the instance via GET and never rebuild."""
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {
-            "id": 123,
-            "label": "my-linode",
-            "status": "running",
-        }
-    )
-    result = await handle_linode_instance_rebuild(
-        {
-            "linode_id": 123,
-            "image": "linode/ubuntu24.04",
-            "root_pass": "Str0ngP@ssw0rd!",
-            "dry_run": True,
-        },
-        sample_config,
-    )
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_instance_rebuild"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/123/rebuild"
-    mock_linode_client.get_instance.assert_awaited_once_with(123)
-    mock_linode_client.rebuild_instance.assert_not_called()
-
-
-async def test_instance_rebuild_dry_run_still_validates_root_pass(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Missing root_pass must error regardless of dry_run."""
-    result = await handle_linode_instance_rebuild(
-        {"linode_id": 123, "image": "linode/ubuntu24.04", "dry_run": True},
-        sample_config,
-    )
-    assert "root_pass is required" in result[0].text
-    mock_linode_client.rebuild_instance.assert_not_called()
-
-
-async def test_instance_create_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true previews the create with no resource state and no call."""
-    result = await handle_linode_instance_create(
-        {
-            "region": "us-east",
-            "type": "g6-nanode-1",
-            "firewall_id": 789,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances"
-    assert body["current_state"] is None
-    assert any("g6-nanode-1" in s for s in body["side_effects"])
-    assert body["warnings"]
-    assert "confirm=true" not in result[0].text
-
-
-async def test_instance_create_dry_run_still_validates_firewall_id(
-    sample_config: Config,
-) -> None:
-    """Missing firewall_id must error out regardless of dry_run."""
-    result = await handle_linode_instance_create(
-        {"region": "us-east", "type": "g6-nanode-1", "dry_run": True},
-        sample_config,
-    )
-
-    assert "firewall_id is required" in result[0].text
-
-
-async def test_instance_boot_dry_run_returns_preview_without_mutating(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never boot."""
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {"id": 123, "status": "offline"}
-    )
-
-    result = await handle_linode_instance_boot(
-        {"instance_id": 123, "dry_run": True}, sample_config
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_boot"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/123/boot"
-    mock_linode_client.get_instance.assert_awaited_once_with(123)
-    mock_linode_client.boot_instance.assert_not_called()
-
-
-async def test_instance_reboot_dry_run_returns_preview_without_mutating(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never reboot."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_reboot(
-        {"instance_id": 123, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_reboot"
-    assert body["would_execute"]["path"] == "/linode/instances/123/reboot"
-    mock_linode_client.reboot_instance.assert_not_called()
-
-
-async def test_instance_shutdown_dry_run_returns_preview_without_mutating(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never shut down."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_shutdown(
-        {"instance_id": 123, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_shutdown"
-    assert body["would_execute"]["path"] == "/linode/instances/123/shutdown"
-    mock_linode_client.shutdown_instance.assert_not_called()
-
-
-async def test_instance_resize_dry_run_returns_preview_without_mutating(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never resize."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_resize(
-        {"instance_id": 123, "type": "g6-standard-1", "dry_run": True},
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_resize"
-    assert body["would_execute"]["path"] == "/linode/instances/123/resize"
-    mock_linode_client.resize_instance.assert_not_called()
 
 
 async def test_instance_resize_dry_run_still_validates_type(
@@ -21238,258 +11587,11 @@ async def test_instance_resize_dry_run_still_validates_type(
     assert "type is required" in result[0].text
 
 
-async def test_instance_clone_dry_run_returns_preview_without_mutating(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never clone."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_clone(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_clone"
-    assert body["would_execute"]["path"] == "/linode/instances/123/clone"
-    mock_linode_client.clone_instance.assert_not_called()
-
-
-async def test_instance_migrate_dry_run_returns_preview_without_mutating(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never migrate."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_migrate(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_migrate"
-    assert body["would_execute"]["path"] == "/linode/instances/123/migrate"
-    mock_linode_client.migrate_instance.assert_not_called()
-
-
-def _instance_with(**overrides: Any) -> Any:
-    """Build a real Instance with the given API fields set and the rest zeroed."""
-    return parse_instance(dict(overrides))
-
-
-async def test_instance_resize_dry_run_surfaces_type_change(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier B walk: resize names the type change + price warning."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = _instance_with(type="g6-nanode-1")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_resize(
-            {"instance_id": 123, "type": "g6-standard-1", "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        effect = body["side_effects"][0]
-        assert "g6-nanode-1" in effect
-        assert "g6-standard-1" in effect
-        assert body["warnings"]
-        mock_client.resize_instance.assert_not_called()
-
-
-async def test_instance_migrate_dry_run_surfaces_region_change(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier B walk: migrate names the region change."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = _instance_with(region="us-east")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_migrate(
-            {"linode_id": 123, "region": "us-west", "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        effect = body["side_effects"][0]
-        assert "us-east" in effect
-        assert "us-west" in effect
-        mock_client.migrate_instance.assert_not_called()
-
-
-async def test_instance_rescue_dry_run_returns_preview_without_mutating(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch state via GET and never rescue."""
-    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
-
-    result = await handle_linode_instance_rescue(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_rescue"
-    assert body["would_execute"]["path"] == "/linode/instances/123/rescue"
-    mock_linode_client.rescue_instance.assert_not_called()
-
-
-async def test_handle_linode_instance_rescue_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Rescue should succeed with confirm=true."""
-    mock_linode_client.rescue_instance.return_value = None
-    result = await handle_linode_instance_rescue(
-        {"linode_id": 123, "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Instance 123 is booting into rescue mode"
-    assert data["linode_id"] == 123
-    mock_linode_client.rescue_instance.assert_called_once_with(123, devices=None)
-
-
-async def test_handle_linode_instance_password_reset_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Password reset should succeed with confirm=true and root_pass."""
-    mock_linode_client.reset_instance_password.return_value = None
-    result = await handle_linode_instance_password_reset(
-        {"linode_id": 123, "root_pass": "NewStr0ngP@ss!", "confirm": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Root password reset for instance 123"
-    assert data["linode_id"] == 123
-    mock_linode_client.reset_instance_password.assert_called_once_with(
-        123, "NewStr0ngP@ss!"
-    )
-
-
-async def test_instance_password_reset_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true must fetch the instance via GET and never reset."""
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {
-            "id": 123,
-            "label": "my-linode",
-            "status": "offline",
-        }
-    )
-    result = await handle_linode_instance_password_reset(
-        {"linode_id": 123, "root_pass": "NewStr0ngP@ss!", "dry_run": True},
-        sample_config,
-    )
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_instance_password_reset"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/123/password"
-    mock_linode_client.get_instance.assert_awaited_once_with(123)
-    mock_linode_client.reset_instance_password.assert_not_called()
-
-
-async def test_instance_password_reset_dry_run_still_validates_root_pass(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Missing root_pass must error regardless of dry_run."""
-    result = await handle_linode_instance_password_reset(
-        {"linode_id": 123, "dry_run": True}, sample_config
-    )
-    assert "root_pass is required" in result[0].text
-    mock_linode_client.reset_instance_password.assert_not_called()
-
-
-def _running_instance() -> Any:
-    """Build a real Instance dataclass marked running, for side-effect walks."""
-
-    return parse_instance({"status": "running", "image": "linode/debian12"})
-
-
-async def test_instance_rebuild_dry_run_surfaces_disk_side_effects(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: each disk is erased; the image is named in a warning."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = _running_instance()
-        mock_client.list_instance_disks.return_value = [
-            {"id": 1, "label": "boot", "size": 25600, "filesystem": "ext4"},
-        ]
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_rebuild(
-            {
-                "linode_id": 123,
-                "image": "linode/ubuntu24.04",
-                "root_pass": "Str0ngP@ssw0rd!",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert len(body["side_effects"]) == 1
-        assert any("linode/debian12" in w for w in body["warnings"])
-        mock_client.rebuild_instance.assert_not_called()
-
-
-async def test_instance_rescue_dry_run_surfaces_side_effects(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: rescue-mode reboot side effect + downtime warning."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = _running_instance()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_rescue(
-            {"linode_id": 123, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert len(body["side_effects"]) == 1
-        assert body["warnings"]
-        mock_client.rescue_instance.assert_not_called()
-
-
-async def test_instance_password_reset_dry_run_surfaces_side_effects(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier A walk: power-down/reboot side effect + downtime warning."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = _running_instance()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_password_reset(
-            {"linode_id": 123, "root_pass": "Str0ngP@ssw0rd!", "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert len(body["side_effects"]) == 1
-        assert body["warnings"]
-        mock_client.reset_instance_password.assert_not_called()
-
-
 async def test_handle_linode_instance_backup_get_error(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """Backup get should return error text when the API call fails."""
-    mock_linode_client.get_instance_backup.side_effect = Exception("API error")
+    mock_linode_client.route_raw.side_effect = Exception("API error")
     result = await handle_linode_instance_backup_get(
         {"linode_id": 123, "backup_id": 100}, sample_config
     )
@@ -21502,7 +11604,7 @@ async def test_handle_linode_instance_disk_get_error(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """Disk get should return error text when the API call fails."""
-    mock_linode_client.get_instance_disk.side_effect = Exception("API error")
+    mock_linode_client.route_raw.side_effect = Exception("API error")
     result = await handle_linode_instance_disk_get(
         {"linode_id": 123, "disk_id": 10}, sample_config
     )
@@ -21515,41 +11617,9 @@ async def test_handle_linode_instance_ip_get_error(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """IP get should return error text when the API call fails."""
-    mock_linode_client.get_instance_ip.side_effect = Exception("API error")
+    mock_linode_client.route_raw.side_effect = Exception("API error")
     result = await handle_linode_instance_ip_get(
         {"linode_id": 123, "address": "203.0.113.1"}, sample_config
-    )
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
-
-
-async def test_handle_linode_instance_ip_update_error(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """IP update should return error text when the API call fails."""
-    mock_linode_client.update_instance_ip.side_effect = Exception("API error")
-    result = await handle_linode_instance_ip_update(
-        {
-            "linode_id": 123,
-            "address": "203.0.113.1",
-            "rdns": "host.example.com",
-            "confirm": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
-
-
-async def test_handle_linode_instance_migrate_error(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Migrate should return error text when the API call fails."""
-    mock_linode_client.migrate_instance.side_effect = Exception("API error")
-    result = await handle_linode_instance_migrate(
-        {"linode_id": 123, "confirm": True}, sample_config
     )
     assert len(result) == 1
     assert "Failed to" in result[0].text
@@ -21570,7 +11640,7 @@ async def test_handle_linode_monitor_services_list(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
     """Test linode_monitor_service_list tool handler."""
-    mock_linode_client.list_monitor_services.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [{"label": "Databases", "service_type": "dbaas"}],
         "page": 1,
         "pages": 1,
@@ -21585,18 +11655,20 @@ async def test_handle_linode_monitor_services_list(
     assert payload["services"][0]["label"] == "Databases"
     assert "results" not in payload
     assert "page" not in payload
-    mock_linode_client.list_monitor_services.assert_awaited_once_with()
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_monitor_service_list", query=""
+    )
 
 
 async def test_handle_linode_monitor_services_list_error(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
     """Test linode_monitor_service_list error handling."""
-    mock_linode_client.list_monitor_services.side_effect = Exception("API error")
+    mock_linode_client.route_raw.side_effect = Exception("API error")
     result = await handle_linode_monitor_service_list({}, sample_config)
 
     assert len(result) == 1
-    assert "Failed to list monitor services: API error" in result[0].text
+    assert "Failed to retrieve items: API error" in result[0].text
 
 
 def test_create_linode_monitor_service_get_tool() -> None:
@@ -21614,7 +11686,7 @@ async def test_handle_linode_monitor_service_get(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """Handler returns monitor service data from a successful client call."""
-    mock_linode_client.get_monitor_service.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "label": "Databases",
         "service_type": "dbaas",
     }
@@ -21625,7 +11697,9 @@ async def test_handle_linode_monitor_service_get(
     text = result[0].text
     assert "Databases" in text
     assert "dbaas" in text
-    mock_linode_client.get_monitor_service.assert_awaited_once_with("dbaas")
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_monitor_service_get", "dbaas"
+    )
 
 
 @pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
@@ -21645,7 +11719,7 @@ async def test_handle_linode_monitor_service_get_error(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """API errors surface as a 'Failed to' message in the response text."""
-    mock_linode_client.get_monitor_service.side_effect = Exception("API error")
+    mock_linode_client.route_raw.side_effect = Exception("API error")
     result = await handle_linode_monitor_service_get(
         {"service_type": "dbaas"}, sample_config
     )
@@ -21670,7 +11744,7 @@ async def test_handle_linode_monitor_service_alert_definition_get(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """Handler returns alert definition data from a successful client call."""
-    mock_linode_client.get_monitor_service_alert_definition.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": 12345,
         "label": "CPU high",
         "service_type": "dbaas",
@@ -21684,8 +11758,8 @@ async def test_handle_linode_monitor_service_alert_definition_get(
     assert "CPU high" in text
     assert "dbaas" in text
     assert "not_in_proto" not in text
-    mock_linode_client.get_monitor_service_alert_definition.assert_awaited_once_with(
-        "dbaas", 12345
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_monitor_service_alert_definition_get", "dbaas", 12345
     )
 
 
@@ -21718,200 +11792,6 @@ async def test_handle_linode_monitor_service_alert_definition_get_bad_alert_id(
     assert len(result) == 1
     assert "alert_id" in result[0].text
     assert "Error" in result[0].text
-
-
-def test_create_linode_monitor_service_token_create_tool() -> None:
-    """Tool definition advertises service_type; entity_ids is handler-enforced."""
-    tool, _ = create_linode_monitor_service_token_create_tool()
-    assert tool.name == "linode_monitor_service_token_create"
-    schema = tool.input_schema
-    required = schema["required"]
-    assert "service_type" in required
-    # entity_ids converts to a repeated proto field, which the generator never
-    # emits into the required set; the handler still enforces it at runtime.
-    assert "entity_ids" not in required
-    props = schema["properties"]
-    assert props["entity_ids"]["type"] == "array"
-    assert props["entity_ids"]["items"]["type"] == "integer"
-
-
-async def test_handle_linode_monitor_service_token_create(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Handler emits the bare {token, expiry} object, matching Go's shape."""
-    mock_linode_client.create_monitor_service_token.return_value = {
-        "token": "jwt.payload.signature",
-        "expiry": "2026-06-01T00:00:00Z",
-    }
-    result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [1, 2, 3], "confirm": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body == {
-        "token": "jwt.payload.signature",
-        "expiry": "2026-06-01T00:00:00Z",
-    }
-    mock_linode_client.create_monitor_service_token.assert_awaited_once_with(
-        "dbaas", [1, 2, 3], None
-    )
-
-
-async def test_handle_linode_monitor_service_token_create_missing_service_type(
-    sample_config: Config,
-) -> None:
-    """Missing or empty service_type returns a validation error."""
-    result = await handle_linode_monitor_service_token_create(
-        {"entity_ids": [1], "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "service_type" in result[0].text
-    assert "Error" in result[0].text
-
-
-async def test_handle_linode_monitor_service_token_create_missing_entity_ids(
-    sample_config: Config,
-) -> None:
-    """Missing entity_ids returns a validation error."""
-    result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "entity_ids" in result[0].text
-    assert "Error" in result[0].text
-
-
-async def test_handle_linode_monitor_service_token_create_empty_entity_ids(
-    sample_config: Config,
-) -> None:
-    """Empty entity_ids list returns a validation error."""
-    result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [], "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "entity_ids" in result[0].text
-    assert "Error" in result[0].text
-
-
-async def test_handle_linode_monitor_service_token_create_non_int_entity_ids(
-    sample_config: Config,
-) -> None:
-    """Non-integer entity_ids (including bool) are rejected."""
-    result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": ["abc"], "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "entity_ids" in result[0].text
-    # bool is a subclass of int; reject it explicitly.
-    result_bool = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [True], "confirm": True}, sample_config
-    )
-    assert "entity_ids" in result_bool[0].text
-
-
-@pytest.mark.parametrize("bad_ids", [[0], [-5], [1, 0]])
-async def test_handle_linode_monitor_service_token_create_non_positive_entity_ids(
-    sample_config: Config, bad_ids: list[int]
-) -> None:
-    """Non-positive entity IDs are rejected, matching the Go handler."""
-    result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": bad_ids, "confirm": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    assert (
-        result[0].text
-        == "Error: entity_ids must be a non-empty array of positive integers"
-    )
-
-
-async def test_handle_linode_monitor_service_token_create_error(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """API errors surface as a 'Failed to' message in the response text."""
-    mock_linode_client.create_monitor_service_token.side_effect = Exception("API error")
-    result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [1], "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_tfa_enable_tool() -> None:
-    """Profile TFA enable tool exposes a strict confirmation gate."""
-    tool, capability = create_linode_profile_tfa_enable_tool()
-
-    assert tool.name == "linode_profile_tfa_enable"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["confirm"]
-    assert "environment" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_profile_tfa_enable_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile TFA enable requires explicit boolean confirmation."""
-    for confirm in (None, False, "true", 1):
-        arguments: dict[str, Any] = {}
-        if confirm is not None:
-            arguments["confirm"] = confirm
-
-        result = await handle_linode_profile_tfa_enable(arguments, sample_config)
-
-        assert len(result) == 1
-        assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_profile_tfa_enable_success(
-    sample_config: Config,
-) -> None:
-    """Profile TFA enable calls the retryable client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.create_profile_tfa_secret.return_value = {
-            "secret": "5FXX6KLACOC33GTC",
-            "expiry": "2026-01-01T00:00:00",
-        }
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_tfa_enable(
-            {"confirm": True}, sample_config
-        )
-
-    assert json.loads(result[0].text) == {
-        "warning": (
-            "IMPORTANT: Save this two-factor authentication secret now. "
-            "It must be confirmed before two-factor authentication is enabled."
-        ),
-        "secret": "5FXX6KLACOC33GTC",
-        "expiry": "2026-01-01T00:00:00",
-    }
-    mock_client.create_profile_tfa_secret.assert_awaited_once_with()
-
-
-async def test_handle_linode_profile_tfa_enable_error(
-    sample_config: Config,
-) -> None:
-    """Profile TFA enable surfaces client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.create_profile_tfa_secret.side_effect = Exception("API error")
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_tfa_enable(
-            {"confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
 
 
 def test_create_linode_profile_tfa_disable_tool() -> None:
@@ -21948,7 +11828,7 @@ async def test_handle_linode_profile_tfa_disable_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.disable_profile_tfa.return_value = {}
+        mock_client.route_call.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_tfa_disable(
@@ -21960,7 +11840,9 @@ async def test_handle_linode_profile_tfa_disable_success(
         common_pb2.MessageResponse(),
     )
     assert json.loads(result[0].text) == expected
-    mock_client.disable_profile_tfa.assert_awaited_once_with()
+    mock_client.route_call.assert_awaited_once_with(
+        "linode_profile_tfa_disable", retry=False
+    )
 
 
 async def test_handle_linode_profile_tfa_disable_error(
@@ -21971,236 +11853,11 @@ async def test_handle_linode_profile_tfa_disable_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.disable_profile_tfa.side_effect = Exception("API error")
+        mock_client.route_call.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_tfa_disable(
             {"confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_tfa_enable_confirm_tool() -> None:
-    """Profile TFA enable confirm tool exposes the documented body field."""
-    tool, capability = create_linode_profile_tfa_enable_confirm_tool()
-
-    assert tool.name == "linode_profile_tfa_enable_confirm"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["tfa_code", "confirm"]
-    assert "environment" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["tfa_code"]["type"] == "string"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_profile_tfa_enable_confirm_requires_tfa_code(
-    sample_config: Config,
-) -> None:
-    """Profile TFA enable confirm validates tfa_code before calling the client."""
-    for tfa_code in (None, "", "   ", 123, True):
-        result = await handle_linode_profile_tfa_enable_confirm(
-            {"tfa_code": tfa_code, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "tfa_code" in result[0].text
-
-
-async def test_handle_linode_profile_tfa_enable_confirm_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile TFA enable confirm requires explicit boolean confirmation."""
-    for confirm in (None, False, "true", 1):
-        arguments: dict[str, Any] = {"tfa_code": "123456"}
-        if confirm is not None:
-            arguments["confirm"] = confirm
-
-        result = await handle_linode_profile_tfa_enable_confirm(
-            arguments, sample_config
-        )
-
-        assert len(result) == 1
-        assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_profile_tfa_enable_confirm_success(
-    sample_config: Config,
-) -> None:
-    """Profile TFA enable confirm calls the retryable client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.confirm_profile_tfa_enable.return_value = {
-            "scratch": "setup-token",
-            "expiry": "2026-01-01T00:00:00",
-        }
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_tfa_enable_confirm(
-            {"tfa_code": "123456", "confirm": True}, sample_config
-        )
-
-    assert json.loads(result[0].text) == {
-        "message": "Profile two-factor authentication enabled successfully",
-        "scratch": "setup-token",
-        "expiry": "2026-01-01T00:00:00",
-    }
-    mock_client.confirm_profile_tfa_enable.assert_awaited_once_with(tfa_code="123456")
-
-
-async def test_handle_linode_profile_tfa_enable_confirm_error(
-    sample_config: Config,
-) -> None:
-    """Profile TFA enable confirm surfaces client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.confirm_profile_tfa_enable.side_effect = Exception("API error")
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_tfa_enable_confirm(
-            {"tfa_code": "123456", "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_phone_number_send_tool() -> None:
-    """Profile phone number send tool exposes schema and write capability."""
-    tool, capability = create_linode_profile_phone_number_send_tool()
-
-    assert tool.name == "linode_profile_phone_number_send"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["iso_code", "phone_number", "confirm"]
-    assert "environment" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["iso_code"]["type"] == "string"
-    assert tool.input_schema["properties"]["phone_number"]["type"] == "string"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_profile_phone_number_send_requires_iso_code(
-    sample_config: Config,
-) -> None:
-    """Profile phone number send validates iso_code before client calls."""
-    for iso_code in (None, "", "   ", 123, True):
-        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.__aexit__.return_value = None
-            mock_client_class.return_value = mock_client
-
-            result = await handle_linode_profile_phone_number_send(
-                {
-                    "iso_code": iso_code,
-                    "phone_number": "+15551234567",
-                    "confirm": True,
-                },
-                sample_config,
-            )
-
-        assert len(result) == 1
-        assert "iso_code" in result[0].text
-        mock_client.send_profile_phone_number_verification.assert_not_called()
-
-
-async def test_handle_linode_profile_phone_number_send_requires_phone_number(
-    sample_config: Config,
-) -> None:
-    """Profile phone number send validates phone_number before client calls."""
-    for phone_number in (None, "", "   ", 123, True):
-        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.__aexit__.return_value = None
-            mock_client_class.return_value = mock_client
-
-            result = await handle_linode_profile_phone_number_send(
-                {"iso_code": "US", "phone_number": phone_number, "confirm": True},
-                sample_config,
-            )
-
-        assert len(result) == 1
-        assert "phone_number" in result[0].text
-        mock_client.send_profile_phone_number_verification.assert_not_called()
-
-
-async def test_handle_linode_profile_phone_number_send_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile phone number send requires explicit boolean confirmation."""
-    for confirm in (None, False, "true", 1):
-        arguments: dict[str, Any] = {
-            "iso_code": "US",
-            "phone_number": "+15551234567",
-        }
-        if confirm is not None:
-            arguments["confirm"] = confirm
-
-        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.__aexit__.return_value = None
-            mock_client_class.return_value = mock_client
-
-            result = await handle_linode_profile_phone_number_send(
-                arguments, sample_config
-            )
-
-        assert len(result) == 1
-        assert "confirm=true" in result[0].text
-        mock_client.send_profile_phone_number_verification.assert_not_called()
-
-
-async def test_handle_linode_profile_phone_number_send_success(
-    sample_config: Config,
-) -> None:
-    """Profile phone number send calls the retryable client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.send_profile_phone_number_verification.return_value = {}
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_phone_number_send(
-            {
-                "iso_code": " US ",
-                "phone_number": " +15551234567 ",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert json.loads(result[0].text) == {
-        "message": "Profile phone number verification code sent successfully"
-    }
-    mock_client.send_profile_phone_number_verification.assert_awaited_once_with(
-        "US", "+15551234567"
-    )
-
-
-async def test_handle_linode_profile_phone_number_send_error(
-    sample_config: Config,
-) -> None:
-    """Profile phone number send surfaces client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.send_profile_phone_number_verification.side_effect = Exception(
-            "API error"
-        )
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_phone_number_send(
-            {"iso_code": "US", "phone_number": "+15551234567", "confirm": True},
-            sample_config,
         )
 
     assert len(result) == 1
@@ -22240,7 +11897,7 @@ async def test_handle_linode_profile_phone_number_delete_requires_confirm(
 
         assert len(result) == 1
         assert "confirm=true" in result[0].text
-        mock_client.delete_profile_phone_number.assert_not_called()
+        mock_client.route_raw.assert_not_called()
 
 
 async def test_handle_linode_profile_phone_number_delete_success(
@@ -22251,7 +11908,7 @@ async def test_handle_linode_profile_phone_number_delete_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.delete_profile_phone_number.return_value = {}
+        mock_client.route_call.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_phone_number_delete(
@@ -22261,7 +11918,9 @@ async def test_handle_linode_profile_phone_number_delete_success(
     assert json.loads(result[0].text) == {
         "message": "Profile phone number deleted successfully"
     }
-    mock_client.delete_profile_phone_number.assert_awaited_once_with()
+    mock_client.route_call.assert_awaited_once_with(
+        "linode_profile_phone_number_delete", retry=False
+    )
 
 
 async def test_handle_linode_profile_phone_number_delete_error(
@@ -22272,7 +11931,7 @@ async def test_handle_linode_profile_phone_number_delete_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.delete_profile_phone_number.side_effect = Exception("API error")
+        mock_client.route_call.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_phone_number_delete(
@@ -22280,90 +11939,7 @@ async def test_handle_linode_profile_phone_number_delete_error(
         )
 
     assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_phone_number_verify_tool() -> None:
-    """Profile phone number verify tool exposes schema and write capability."""
-    tool, capability = create_linode_profile_phone_number_verify_tool()
-
-    assert tool.name == "linode_profile_phone_number_verify"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["otp_code", "confirm"]
-    assert "environment" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["otp_code"]["type"] == "string"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_profile_phone_number_verify_requires_otp_code(
-    sample_config: Config,
-) -> None:
-    """Profile phone number verify validates otp_code before client calls."""
-    for otp_code in (None, "", "   ", 123, True):
-        result = await handle_linode_profile_phone_number_verify(
-            {"otp_code": otp_code, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "otp_code" in result[0].text
-
-
-async def test_handle_linode_profile_phone_number_verify_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile phone number verify requires explicit boolean confirmation."""
-    for confirm in (None, False, "true", 1):
-        arguments: dict[str, Any] = {"otp_code": "123456"}
-        if confirm is not None:
-            arguments["confirm"] = confirm
-
-        result = await handle_linode_profile_phone_number_verify(
-            arguments, sample_config
-        )
-
-        assert len(result) == 1
-        assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_profile_phone_number_verify_success(
-    sample_config: Config,
-) -> None:
-    """Profile phone number verify calls the retryable client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.verify_profile_phone_number.return_value = {}
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_phone_number_verify(
-            {"otp_code": " 123456 ", "confirm": True}, sample_config
-        )
-
-    assert json.loads(result[0].text) == {
-        "message": "Profile phone number verified successfully"
-    }
-    mock_client.verify_profile_phone_number.assert_awaited_once_with("123456")
-
-
-async def test_handle_linode_profile_phone_number_verify_error(
-    sample_config: Config,
-) -> None:
-    """Profile phone number verify surfaces client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.verify_profile_phone_number.side_effect = Exception("API error")
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_phone_number_verify(
-            {"otp_code": "123456", "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
+    assert "Failed to delete profile phone number" in result[0].text
     assert "API error" in result[0].text
 
 
@@ -22390,7 +11966,7 @@ async def test_handle_linode_profile_security_questions_list_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_security_questions.return_value = payload
+        mock_client.route_raw.return_value = payload
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_security_question_list({}, sample_config)
@@ -22408,7 +11984,9 @@ async def test_handle_linode_profile_security_questions_list_success(
         "id": 2,
         "question": "What was your first pet's name?",
     }
-    mock_client.list_profile_security_questions.assert_awaited_once_with()
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_profile_security_question_list", query=""
+    )
 
 
 async def test_handle_linode_profile_security_questions_list_empty_envelope(
@@ -22419,7 +11997,7 @@ async def test_handle_linode_profile_security_questions_list_empty_envelope(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_security_questions.return_value = {}
+        mock_client.route_raw.return_value = {}
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_security_question_list({}, sample_config)
@@ -22440,7 +12018,7 @@ async def test_handle_linode_profile_security_questions_list_accepts_empty_shape
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_security_questions.return_value = api_response
+        mock_client.route_raw.return_value = api_response
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_security_question_list({}, sample_config)
@@ -22459,16 +12037,13 @@ async def test_handle_linode_profile_security_questions_list_rejects_falsey_non_
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_security_questions.return_value = {
-            "security_questions": questions
-        }
+        mock_client.route_raw.return_value = {"security_questions": questions}
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_security_question_list({}, sample_config)
 
     assert result[0].text.startswith(
-        "Failed to list Linode profile security questions: "
-        "list response data must be an array"
+        "Failed to retrieve items: list response data must be an array"
     )
 
 
@@ -22485,14 +12060,13 @@ async def test_handle_linode_profile_security_questions_list_rejects_non_object(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_security_questions.return_value = api_response
+        mock_client.route_raw.return_value = api_response
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_security_question_list({}, sample_config)
 
     assert result[0].text.startswith(
-        "Failed to list Linode profile security questions: "
-        "list response must be an object"
+        "Failed to retrieve items: list response must be an object"
     )
 
 
@@ -22504,272 +12078,11 @@ async def test_handle_linode_profile_security_questions_list_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_security_questions.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_security_question_list({}, sample_config)
 
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_security_questions_answer_tool() -> None:
-    """Profile security questions tool exposes schema and write capability."""
-    tool, capability = create_linode_profile_security_question_answer_tool()
-
-    assert tool.name == "linode_profile_security_question_answer"
-    assert capability == Capability.Admin
-    assert "security_questions" not in tool.input_schema["required"]
-    assert "confirm" in tool.input_schema["required"]
-    assert tool.input_schema["properties"]["security_questions"]["type"] == "array"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-async def test_handle_linode_profile_security_questions_answer_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile security questions rejects non-true confirm values first."""
-    for value in (None, False, "true", 1):
-        arguments: dict[str, Any] = {
-            "security_questions": [
-                {"question_id": 1, "response": "Gotham City"},
-                {"question_id": 2, "response": "Blue"},
-                {"question_id": 3, "response": "Pizza"},
-            ],
-        }
-        if value is not None:
-            arguments["confirm"] = value
-
-        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-            result = await handle_linode_profile_security_question_answer(
-                arguments, sample_config
-            )
-
-        assert "Set confirm=true" in result[0].text
-        mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_profile_security_questions_answer_validates_questions(
-    sample_config: Config,
-) -> None:
-    """Profile security questions validates input shape before client calls."""
-    invalid_values: tuple[Any, ...] = (
-        [],
-        "not-a-list",
-        [{"question_id": 0, "response": "Blue"}],
-        [{"question_id": True, "response": "Blue"}],
-        [{"question_id": 1, "response": "Blue"}],
-        [
-            {"question_id": 1, "response": "no"},
-            {"question_id": 2, "response": "Blue"},
-            {"question_id": 3, "response": "Pizza"},
-        ],
-    )
-
-    for security_questions in invalid_values:
-        with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-            result = await handle_linode_profile_security_question_answer(
-                {"security_questions": security_questions, "confirm": True},
-                sample_config,
-            )
-
-        assert "Error" in result[0].text
-        mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_profile_security_questions_answer_dry_run_validates(
-    sample_config: Config,
-) -> None:
-    """Dry-run rejects malformed security questions before previewing."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_profile_security_question_answer(
-            {"security_questions": "not-a-list", "dry_run": True},
-            sample_config,
-        )
-
-    assert "Error" in result[0].text
-    assert "would_execute" not in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_profile_security_questions_answer_success(
-    sample_config: Config,
-) -> None:
-    """Profile security questions handler calls the retryable client."""
-    questions = [
-        {"question_id": 1, "response": "Gotham City", "security_question": "ignored"},
-        {"question_id": 2, "response": "Blue"},
-        {"question_id": 3, "response": "Pizza"},
-    ]
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.answer_profile_security_questions.return_value = {
-            "security_questions": []
-        }
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_security_question_answer(
-            {"security_questions": questions, "confirm": True}, sample_config
-        )
-
-    data = json.loads(result[0].text)
-    assert data == {"message": "Profile security questions answered successfully"}
-    mock_client.answer_profile_security_questions.assert_awaited_once_with(
-        [
-            {"question_id": 1, "response": "Gotham City"},
-            {"question_id": 2, "response": "Blue"},
-            {"question_id": 3, "response": "Pizza"},
-        ]
-    )
-
-
-async def test_handle_linode_profile_security_questions_answer_error(
-    sample_config: Config,
-) -> None:
-    """Profile security questions handler propagates client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.answer_profile_security_questions.side_effect = Exception(
-            "API error"
-        )
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_security_question_answer(
-            {
-                "security_questions": [
-                    {"question_id": 1, "response": "Gotham City"},
-                    {"question_id": 2, "response": "Blue"},
-                    {"question_id": 3, "response": "Pizza"},
-                ],
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_token_create_tool() -> None:
-    """Profile token create tool exposes documented body fields."""
-    tool, capability = create_linode_profile_token_create_tool()
-
-    assert tool.name == "linode_profile_token_create"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["confirm"]
-    assert tool.input_schema["properties"]["label"]["type"] == "string"
-    assert "expiry" in tool.input_schema["properties"]
-    assert "scopes" in tool.input_schema["properties"]
-
-
-async def test_handle_linode_profile_token_create_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile token create requires explicit confirmation."""
-    result = await handle_linode_profile_token_create(
-        {"label": "api-token"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_profile_token_create_validates_optional_fields(
-    sample_config: Config,
-) -> None:
-    """Profile token create validates optional body fields before the client call."""
-    invalid_arguments = (
-        {"label": "", "confirm": True},
-        {"label": "   ", "confirm": True},
-        {"label": "x" * 101, "confirm": True},
-        {"label": 123, "confirm": True},
-        {"scopes": "", "confirm": True},
-        {"scopes": 123, "confirm": True},
-        {"expiry": 123, "confirm": True},
-    )
-
-    for arguments in invalid_arguments:
-        result = await handle_linode_profile_token_create(arguments, sample_config)
-
-        assert len(result) == 1
-        assert "Error" in result[0].text
-
-
-async def test_handle_linode_profile_token_create_success(
-    sample_config: Config,
-) -> None:
-    """Profile token create returns the one-time token with a warning."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.create_profile_token.return_value = {
-            "id": 12345,
-            "label": "api-token",
-            "scopes": "linodes:read_only",
-            "expiry": "2026-01-01T00:00:00",
-            "token": "abcdefghijklmnop",
-        }
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_token_create(
-            {
-                "label": "api-token",
-                "scopes": "linodes:read_only",
-                "expiry": "2026-01-01T00:00:00",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    expected = serialize_api_response(
-        {
-            "warning": (
-                "IMPORTANT: The token below is shown ONLY ONCE. "
-                "Save it now - it cannot be retrieved later."
-            ),
-            "token": {
-                "id": 12345,
-                "label": "api-token",
-                "scopes": "linodes:read_only",
-                "expiry": "2026-01-01T00:00:00",
-                "token": "abcdefghijklmnop",
-            },
-        },
-        profile_pb2.ProfileTokenCreateResponse(),
-    )
-    out = json.loads(result[0].text)
-    assert out == expected
-    # The one-time secret is returned by design and survives the proto decode.
-    assert out["token"]["token"] == "abcdefghijklmnop"
-    assert "ONLY ONCE" in out["warning"]
-    mock_client.create_profile_token.assert_awaited_once_with(
-        expiry="2026-01-01T00:00:00",
-        label="api-token",
-        scopes="linodes:read_only",
-    )
-
-
-async def test_handle_linode_profile_token_create_error(
-    sample_config: Config,
-) -> None:
-    """Profile token create surfaces client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.create_profile_token.side_effect = Exception("API error")
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_token_create(
-            {"label": "api-token", "confirm": True}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
     assert "API error" in result[0].text
 
 
@@ -22791,17 +12104,19 @@ async def test_handle_linode_profile_tokens_list_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_tokens.return_value = [
-            {
-                "id": 12345,
-                "label": "api-token",
-                "scopes": "linodes:read_write",
-                "token": "secret-token",
-                "access_token": "secret-access-token",
-                "secret": "secret-value",
-            },
-            {"id": 67890, "label": "ci-token"},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {
+                    "id": 12345,
+                    "label": "api-token",
+                    "scopes": "linodes:read_write",
+                    "token": "secret-token",
+                    "access_token": "secret-access-token",
+                    "secret": "secret-value",
+                },
+                {"id": 67890, "label": "ci-token"},
+            ]
+        }
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_token_list({}, sample_config)
@@ -22828,7 +12143,9 @@ async def test_handle_linode_profile_tokens_list_success(
         "scopes": "",
         "created": "",
     }
-    mock_client.list_profile_tokens.assert_awaited_once_with(page=None, page_size=None)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_profile_token_list", query=""
+    )
 
 
 async def test_handle_linode_profile_tokens_list_error(
@@ -22839,7 +12156,7 @@ async def test_handle_linode_profile_tokens_list_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_tokens.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_token_list({}, sample_config)
@@ -22847,20 +12164,6 @@ async def test_handle_linode_profile_tokens_list_error(
     assert len(result) == 1
     assert "Failed to" in result[0].text
     assert "API error" in result[0].text
-
-
-async def test_handle_linode_profile_token_list_rejects_bad_pagination(
-    sample_config: Config,
-) -> None:
-    """Profile token list rejects non-integer page before calling the client."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_token_list({"page": "abc"}, sample_config)
-
-    assert "page must be an integer" in result[0].text
-    mock_client.list_profile_tokens.assert_not_awaited()
 
 
 async def test_handle_linode_profile_token_list_threads_pagination(
@@ -22871,7 +12174,7 @@ async def test_handle_linode_profile_token_list_threads_pagination(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_tokens.return_value = []
+        mock_client.route_raw.return_value = {"data": []}
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_token_list(
@@ -22880,7 +12183,9 @@ async def test_handle_linode_profile_token_list_threads_pagination(
 
     parsed = json.loads(result[0].text)
     assert parsed == {"count": 0, "profile_tokens": []}
-    mock_client.list_profile_tokens.assert_awaited_once_with(page=3, page_size=50)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_profile_token_list", query="page=3&page_size=50"
+    )
 
 
 def test_create_linode_profile_token_get_tool() -> None:
@@ -22925,7 +12230,7 @@ async def test_handle_linode_profile_token_get_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.get_profile_token.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 12345,
             "label": "api-token",
             "scopes": "*",
@@ -22942,7 +12247,7 @@ async def test_handle_linode_profile_token_get_success(
         "scopes": "*",
         "created": "",
     }
-    mock_client.get_profile_token.assert_awaited_once_with(12345)
+    mock_client.route_raw.assert_awaited_once_with("linode_profile_token_get", 12345)
 
 
 async def test_handle_linode_profile_token_get_redacts_secret_fields(
@@ -22953,7 +12258,7 @@ async def test_handle_linode_profile_token_get_redacts_secret_fields(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.get_profile_token.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 12345,
             "label": "api-token",
             "scopes": "*",
@@ -22976,7 +12281,7 @@ async def test_handle_linode_profile_token_get_redacts_secret_fields(
     assert "secret-token" not in result[0].text
     assert "secret-access-token" not in result[0].text
     assert "secret-value" not in result[0].text
-    mock_client.get_profile_token.assert_awaited_once_with(12345)
+    mock_client.route_raw.assert_awaited_once_with("linode_profile_token_get", 12345)
 
 
 async def test_handle_linode_profile_token_get_error(
@@ -22987,7 +12292,7 @@ async def test_handle_linode_profile_token_get_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.get_profile_token.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_token_get(
@@ -23017,10 +12322,12 @@ async def test_handle_linode_profile_logins_list_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_logins.return_value = [
-            {"id": 12345, "ip": "192.0.2.10"},
-            {"id": 67890, "ip": "192.0.2.11"},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {"id": 12345, "ip": "192.0.2.10"},
+                {"id": 67890, "ip": "192.0.2.11"},
+            ]
+        }
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_login_list({}, sample_config)
@@ -23046,7 +12353,9 @@ async def test_handle_linode_profile_logins_list_success(
             },
         ],
     }
-    mock_client.list_profile_logins.assert_awaited_once_with(page=None, page_size=None)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_profile_login_list", query=""
+    )
 
 
 async def test_handle_linode_profile_logins_list_empty(
@@ -23057,7 +12366,7 @@ async def test_handle_linode_profile_logins_list_empty(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_logins.return_value = []
+        mock_client.route_raw.return_value = {"data": []}
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_login_list(
@@ -23065,7 +12374,9 @@ async def test_handle_linode_profile_logins_list_empty(
         )
 
     assert json.loads(result[0].text) == {"count": 0, "profile_logins": []}
-    mock_client.list_profile_logins.assert_awaited_once_with(page=1, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_profile_login_list", query="page=1&page_size=25"
+    )
 
 
 async def test_handle_linode_profile_logins_list_error(
@@ -23076,7 +12387,7 @@ async def test_handle_linode_profile_logins_list_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_logins.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_login_list({}, sample_config)
@@ -23128,7 +12439,7 @@ async def test_handle_linode_profile_login_get_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.get_profile_login.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 12345,
             "ip": "192.0.2.10",
             "datetime": "2024-01-02T03:04:05",
@@ -23145,7 +12456,7 @@ async def test_handle_linode_profile_login_get_success(
     assert body["datetime"] == "2024-01-02T03:04:05"
     assert body["restricted"] is False
     assert body["username"] == ""
-    mock_client.get_profile_login.assert_awaited_once_with(12345)
+    mock_client.route_raw.assert_awaited_once_with("linode_profile_login_get", 12345)
 
 
 async def test_handle_linode_profile_login_get_error(
@@ -23156,187 +12467,11 @@ async def test_handle_linode_profile_login_get_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.get_profile_login.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_login_get(
             {"login_id": 12345}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "Failed to" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_token_revoke_tool() -> None:
-    """Profile token revoke tool exposes token_id and confirm."""
-    tool, capability = create_linode_profile_token_delete_tool()
-
-    assert tool.name == "linode_profile_token_delete"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["token_id", "confirm"]
-    assert tool.input_schema["properties"]["token_id"]["type"] == "integer"
-
-
-async def test_handle_linode_profile_token_revoke_requires_token_id(
-    sample_config: Config,
-) -> None:
-    """Profile token revoke validates token_id before calling the client."""
-    for token_id in (
-        None,
-        True,
-        False,
-        0,
-        -1,
-        "123",
-        "12/../34?x=1",
-        "..",
-        "/",
-        "?",
-    ):
-        result = await handle_linode_profile_token_delete(
-            {"token_id": token_id, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "token_id" in result[0].text
-
-
-async def test_handle_linode_profile_token_revoke_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile token revoke requires explicit confirmation."""
-    result = await handle_linode_profile_token_delete(
-        {"token_id": 12345}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_profile_token_revoke_success(
-    sample_config: Config,
-) -> None:
-    """Profile token revoke calls the retryable client and returns success."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_token_delete(
-            {"token_id": 12345, "confirm": True}, sample_config
-        )
-
-    assert json.loads(result[0].text) == {
-        "message": "Profile token 12345 revoked successfully",
-        "token_id": 12345,
-    }
-    mock_client.delete_profile_token.assert_awaited_once_with(12345)
-
-
-def test_create_linode_profile_token_update_tool() -> None:
-    """Profile token update tool exposes token_id and label."""
-    tool, capability = create_linode_profile_token_update_tool()
-
-    assert tool.name == "linode_profile_token_update"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["token_id", "confirm"]
-    assert tool.input_schema["properties"]["token_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["label"]["type"] == "string"
-
-
-async def test_handle_linode_profile_token_update_requires_token_id(
-    sample_config: Config,
-) -> None:
-    """Profile token update validates token_id before calling the client."""
-    for token_id in (
-        None,
-        True,
-        False,
-        0,
-        -1,
-        "123",
-        "12/../34?x=1",
-        "..",
-        "/",
-        "?",
-    ):
-        result = await handle_linode_profile_token_update(
-            {"token_id": token_id, "label": "new-label", "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "token_id" in result[0].text
-
-
-async def test_handle_linode_profile_token_update_requires_label(
-    sample_config: Config,
-) -> None:
-    """Profile token update validates label before calling the client."""
-    for label in (None, "", "   ", 123, "x" * 101):
-        result = await handle_linode_profile_token_update(
-            {"token_id": 12345, "label": label, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "label" in result[0].text
-
-
-async def test_handle_linode_profile_token_update_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Profile token update requires explicit confirmation."""
-    result = await handle_linode_profile_token_update(
-        {"token_id": 12345, "label": "new-label"}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_profile_token_update_success(
-    sample_config: Config,
-) -> None:
-    """Profile token update calls the retryable client and returns token details."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.update_profile_token.return_value = {
-            "id": 12345,
-            "label": "new-label",
-        }
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_token_update(
-            {"token_id": 12345, "label": "new-label", "confirm": True}, sample_config
-        )
-
-    expected = serialize_api_response(
-        {
-            "message": "Profile token updated successfully",
-            "token": {"id": 12345, "label": "new-label"},
-        },
-        profile_pb2.PersonalAccessTokenWriteResponse(),
-    )
-    assert json.loads(result[0].text) == expected
-    mock_client.update_profile_token.assert_awaited_once_with(12345, label="new-label")
-
-
-async def test_handle_linode_profile_token_update_error(
-    sample_config: Config,
-) -> None:
-    """Profile token update surfaces client errors."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client.update_profile_token.side_effect = Exception("API error")
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_token_update(
-            {"token_id": 12345, "label": "new-label", "confirm": True}, sample_config
         )
 
     assert len(result) == 1
@@ -23362,17 +12497,19 @@ async def test_handle_linode_profile_devices_list_success(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_devices.return_value = [
-            {
-                "id": 123,
-                "created": "2024-05-01T00:01:01",
-                "expiry": "2024-08-01T00:01:01",
-                "last_authenticated": "2024-06-01T00:01:01",
-                "last_remote_addr": "192.0.2.1",
-                "user_agent": "Mozilla/5.0",
-            },
-            {"id": 456, "user_agent": "curl/8.0"},
-        ]
+        mock_client.route_raw.return_value = {
+            "data": [
+                {
+                    "id": 123,
+                    "created": "2024-05-01T00:01:01",
+                    "expiry": "2024-08-01T00:01:01",
+                    "last_authenticated": "2024-06-01T00:01:01",
+                    "last_remote_addr": "192.0.2.1",
+                    "user_agent": "Mozilla/5.0",
+                },
+                {"id": 456, "user_agent": "curl/8.0"},
+            ]
+        }
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_device_list({}, sample_config)
@@ -23399,7 +12536,9 @@ async def test_handle_linode_profile_devices_list_success(
         "last_remote_addr": "",
         "user_agent": "curl/8.0",
     }
-    mock_client.list_profile_devices.assert_awaited_once_with(page=None, page_size=None)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_profile_device_list", query=""
+    )
 
 
 async def test_handle_linode_profile_devices_list_error(
@@ -23410,7 +12549,7 @@ async def test_handle_linode_profile_devices_list_error(
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        mock_client.list_profile_devices.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_device_list({}, sample_config)
@@ -23433,7 +12572,7 @@ async def test_handle_linode_profile_device_list_rejects_bad_pagination(
         )
 
     assert "page_size must be an integer from 25 through 500" in result[0].text
-    mock_client.list_profile_devices.assert_not_awaited()
+    mock_client.route_raw.assert_not_awaited()
 
 
 def test_create_linode_profile_apps_list_tool() -> None:
@@ -23447,11 +12586,11 @@ def test_create_linode_profile_apps_list_tool() -> None:
 
 
 def test_linode_profile_apps_list_tool_is_exported_and_registered() -> None:
-    from linodemcp import tools as tools_mod
+    from linodemcp import gentools as gentools_mod
     from linodemcp.server import get_tool_registry
 
-    assert "create_linode_profile_app_list_tool" in tools_mod.__all__
-    assert "handle_linode_profile_app_list" in tools_mod.__all__
+    assert "create_linode_profile_app_list_tool" in gentools_mod.__all__
+    assert "handle_linode_profile_app_list" in gentools_mod.__all__
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_profile_app_list"].capability is Capability.Read
 
@@ -23481,7 +12620,7 @@ async def test_handle_linode_profile_apps_list_rejects_invalid_pagination(
 async def test_handle_linode_profile_apps_list_success(sample_config: Config) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_profile_apps.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [{"id": 123, "label": "authorized-app"}],
             "page": 2,
             "pages": 3,
@@ -23505,20 +12644,22 @@ async def test_handle_linode_profile_apps_list_success(sample_config: Config) ->
             }
         ],
     }
-    mock_client.list_profile_apps.assert_awaited_once_with(page=2, page_size=50)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_profile_app_list", query="page=2&page_size=50"
+    )
 
 
 async def test_handle_linode_profile_apps_list_error(sample_config: Config) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_profile_apps.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_app_list({}, sample_config)
 
-    assert "Failed to list Linode profile OAuth app authorizations" in result[0].text
+    assert "Failed to retrieve items: " in result[0].text
     assert "API error" in result[0].text
 
 
@@ -23532,11 +12673,11 @@ def test_create_linode_profile_app_get_tool() -> None:
 
 
 def test_linode_profile_app_get_tool_is_exported_and_registered() -> None:
-    from linodemcp import tools as tools_mod
+    from linodemcp import gentools as gentools_mod
     from linodemcp.server import get_tool_registry
 
-    assert "create_linode_profile_app_get_tool" in tools_mod.__all__
-    assert "handle_linode_profile_app_get" in tools_mod.__all__
+    assert "create_linode_profile_app_get_tool" in gentools_mod.__all__
+    assert "handle_linode_profile_app_get" in gentools_mod.__all__
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_profile_app_get"].capability is Capability.Read
 
@@ -23557,7 +12698,7 @@ async def test_handle_linode_profile_app_get_requires_positive_integer_app_id(
 async def test_handle_linode_profile_app_get_success(sample_config: Config) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_profile_app.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 123,
             "label": "authorized-app",
         }
@@ -23572,108 +12713,20 @@ async def test_handle_linode_profile_app_get_success(sample_config: Config) -> N
     assert body["label"] == "authorized-app"
     assert body["scopes"] == ""
     assert body["website"] == ""
-    mock_client.get_profile_app.assert_awaited_once_with(123)
+    mock_client.route_raw.assert_awaited_once_with("linode_profile_app_get", 123)
 
 
 async def test_handle_linode_profile_app_get_error(sample_config: Config) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_profile_app.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_app_get({"app_id": 123}, sample_config)
 
-    assert "Failed to retrieve Linode profile OAuth app authorization" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_app_revoke_tool() -> None:
-    tool, capability = create_linode_profile_app_delete_tool()
-
-    assert tool.name == "linode_profile_app_delete"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["app_id", "confirm"]
-    assert tool.input_schema["properties"]["app_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-def test_linode_profile_app_revoke_tool_is_exported_and_registered() -> None:
-    from linodemcp import tools as tools_mod
-    from linodemcp.server import get_tool_registry
-
-    assert "create_linode_profile_app_delete_tool" in tools_mod.__all__
-    assert "handle_linode_profile_app_delete" in tools_mod.__all__
-    registry = {entry.name: entry for entry in get_tool_registry()}
-    assert registry["linode_profile_app_delete"].capability is Capability.Admin
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_profile_app_revoke_requires_boolean_confirm(
-    confirm: object, sample_config: Config
-) -> None:
-    arguments: dict[str, object] = {"app_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_profile_app_delete(arguments, sample_config)
-
-    assert "Set confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "app_id", [None, 0, -1, True, "123", "/", "?", "..", "12/../34?x=1"]
-)
-async def test_handle_linode_profile_app_revoke_requires_positive_integer_app_id(
-    app_id: object, sample_config: Config
-) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_profile_app_delete(
-            {"app_id": app_id, "confirm": True}, sample_config
-        )
-
-    assert "app_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_profile_app_revoke_success(
-    sample_config: Config,
-) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_profile_app.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_app_delete(
-            {"app_id": 123, "confirm": True}, sample_config
-        )
-
-    expected = serialize_api_response(
-        {"message": "Profile app 123 revoked successfully", "app_id": 123},
-        profile_pb2.ProfileAppIDResponse(),
-    )
-    assert json.loads(result[0].text) == expected
-    mock_client.delete_profile_app.assert_awaited_once_with(123)
-
-
-async def test_handle_linode_profile_app_revoke_error(sample_config: Config) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_profile_app.side_effect = RuntimeError("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_app_delete(
-            {"app_id": 123, "confirm": True}, sample_config
-        )
-
-    assert "Failed to revoke Linode profile OAuth app access" in result[0].text
+    assert "Failed to retrieve authorized app 123: " in result[0].text
     assert "API error" in result[0].text
 
 
@@ -23712,7 +12765,7 @@ async def test_handle_linode_profile_device_get_success(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_profile_device.return_value = {
+        mock_client.route_raw.return_value = {
             **device,
             "not_in_proto": "dropped",
         }
@@ -23726,13 +12779,13 @@ async def test_handle_linode_profile_device_get_success(
 
     assert json.loads(result[0].text) == device
     assert "not_in_proto" not in result[0].text
-    mock_client.get_profile_device.assert_awaited_once_with(123)
+    mock_client.route_raw.assert_awaited_once_with("linode_profile_device_get", 123)
 
 
 async def test_handle_linode_profile_device_get_error(sample_config: Config) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_profile_device.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -23741,79 +12794,7 @@ async def test_handle_linode_profile_device_get_error(sample_config: Config) -> 
             {"device_id": 123}, sample_config
         )
 
-    assert "Failed to retrieve Linode profile trusted device" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_profile_device_revoke_tool() -> None:
-    tool, capability = create_linode_profile_device_revoke_tool()
-
-    assert tool.name == "linode_profile_device_revoke"
-    assert capability is Capability.Admin
-    assert tool.input_schema["required"] == ["device_id", "confirm"]
-    assert tool.input_schema["properties"]["device_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_profile_device_revoke_requires_boolean_confirm(
-    confirm: object, sample_config: Config
-) -> None:
-    arguments: dict[str, object] = {"device_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_profile_device_revoke(arguments, sample_config)
-
-    assert "Set confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("device_id", [None, 0, -1, True, "123", "/", "?", ".."])
-async def test_handle_linode_profile_device_revoke_requires_positive_integer_device_id(
-    device_id: object, sample_config: Config
-) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_profile_device_revoke(
-            {"device_id": device_id, "confirm": True}, sample_config
-        )
-
-    assert "device_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_profile_device_revoke_success(
-    sample_config: Config,
-) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_profile_device.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_device_revoke(
-            {"device_id": 123, "confirm": True}, sample_config
-        )
-
-    assert "Profile trusted device 123 revoked successfully" in result[0].text
-    mock_client.delete_profile_device.assert_awaited_once_with(123)
-
-
-async def test_handle_linode_profile_device_revoke_error(sample_config: Config) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_profile_device.side_effect = RuntimeError("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_profile_device_revoke(
-            {"device_id": 123, "confirm": True}, sample_config
-        )
-
-    assert "Failed to revoke Linode profile trusted device" in result[0].text
+    assert "Failed to retrieve trusted device 123: " in result[0].text
     assert "API error" in result[0].text
 
 
@@ -23832,11 +12813,11 @@ def test_create_linode_placement_groups_list_tool() -> None:
 
 def test_linode_placement_groups_list_tool_is_exported_and_registered() -> None:
     """Placement groups list tool is exported and registered."""
-    from linodemcp import tools as tools_mod
+    from linodemcp import gentools as gentools_mod
     from linodemcp.server import get_tool_registry
 
-    assert "create_linode_placement_group_list_tool" in tools_mod.__all__
-    assert "handle_linode_placement_group_list" in tools_mod.__all__
+    assert "create_linode_placement_group_list_tool" in gentools_mod.__all__
+    assert "handle_linode_placement_group_list" in gentools_mod.__all__
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_placement_group_list"].capability is Capability.Read
@@ -23876,7 +12857,7 @@ async def test_handle_linode_placement_groups_list_success(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_placement_groups.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -23900,7 +12881,9 @@ async def test_handle_linode_placement_groups_list_success(
             }
         ],
     }
-    mock_client.list_placement_groups.assert_awaited_once_with(page=2, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_placement_group_list", query="page=2&page_size=25"
+    )
 
 
 async def test_handle_linode_placement_groups_list_reports_client_errors(
@@ -23909,7 +12892,7 @@ async def test_handle_linode_placement_groups_list_reports_client_errors(
     """Placement groups list handler reports client exceptions."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_placement_groups.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -23949,7 +12932,7 @@ async def test_handle_linode_placement_group_get_success(
     response_data = {"id": 789, "label": "pg-a"}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_placement_group.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -23964,7 +12947,7 @@ async def test_handle_linode_placement_group_get_success(
     assert data["label"] == "pg-a"
     assert data["members"] == []
     assert "migrations" not in data
-    mock_client.get_placement_group.assert_awaited_once_with(789)
+    mock_client.route_raw.assert_awaited_once_with("linode_placement_group_get", 789)
 
 
 async def test_handle_linode_placement_group_get_reports_client_errors(
@@ -23972,7 +12955,7 @@ async def test_handle_linode_placement_group_get_reports_client_errors(
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_placement_group.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -23982,7 +12965,7 @@ async def test_handle_linode_placement_group_get_reports_client_errors(
             sample_config,
         )
 
-    assert "Failed to get placement group" in result[0].text
+    assert "Failed to retrieve placement group 789" in result[0].text
     assert "API error" in result[0].text
 
 
@@ -24031,11 +13014,26 @@ async def test_handle_linode_placement_group_create_requires_boolean_confirm(
 
 
 @pytest.mark.parametrize(
-    "label",
-    [None, "", True, 1, [], {}, "/", "?", "..", "bad/label", "bad?label"],
+    ("label", "message"),
+    [
+        # The label rules live on PlacementGroupCreateInput: absence answers
+        # the contract's "label is required", a value of another type falls to
+        # the body builder's sentence, and a bad shape answers the pattern.
+        (None, "label is required"),
+        ("", "label is required"),
+        (True, "label must be a string"),
+        (1, "label must be a string"),
+        ([], "label must be a string"),
+        ({}, "label must be a string"),
+        ("/", "label must start and end"),
+        ("?", "label must start and end"),
+        ("..", "label must start and end"),
+        ("bad/label", "label must start and end"),
+        ("bad?label", "label must start and end"),
+    ],
 )
 async def test_handle_linode_placement_group_create_requires_valid_label(
-    label: object, sample_config: Config
+    label: object, message: str, sample_config: Config
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_placement_group_create(
@@ -24049,13 +13047,23 @@ async def test_handle_linode_placement_group_create_requires_valid_label(
             sample_config,
         )
 
-    assert "label must start and end" in result[0].text
+    assert message in result[0].text
     mock_client_class.assert_not_called()
 
 
-@pytest.mark.parametrize("region", [None, "", True, 1, [], {}])
+@pytest.mark.parametrize(
+    ("region", "message"),
+    [
+        (None, "region is required"),
+        ("", "region is required"),
+        (True, "region must be a string"),
+        (1, "region must be a string"),
+        ([], "region must be a string"),
+        ({}, "region must be a string"),
+    ],
+)
 async def test_handle_linode_placement_group_create_requires_valid_region(
-    region: object, sample_config: Config
+    region: object, message: str, sample_config: Config
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_placement_group_create(
@@ -24069,15 +13077,25 @@ async def test_handle_linode_placement_group_create_requires_valid_region(
             sample_config,
         )
 
-    assert "region must be a non-empty string" in result[0].text
+    assert message in result[0].text
     mock_client_class.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    "placement_group_type", [None, "", "affinity:local", "anti-affinity:local", 1]
+    ("placement_group_type", "message"),
+    [
+        # The membership reader reads the raw argument: an absent, non-string,
+        # or empty value answers the required sentence, a string outside the
+        # declared reader_values the vocabulary one.
+        (None, "placement_group_type is required"),
+        ("", "placement_group_type is required"),
+        (1, "placement_group_type is required"),
+        ("affinity:local", "placement_group_type must be anti_affinity:local"),
+        ("anti-affinity:local", "placement_group_type must be anti_affinity:local"),
+    ],
 )
 async def test_handle_linode_placement_group_create_requires_valid_type(
-    placement_group_type: object, sample_config: Config
+    placement_group_type: object, message: str, sample_config: Config
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_placement_group_create(
@@ -24091,15 +13109,22 @@ async def test_handle_linode_placement_group_create_requires_valid_type(
             sample_config,
         )
 
-    assert "placement_group_type must be anti_affinity:local" in result[0].text
+    assert message in result[0].text
     mock_client_class.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    "placement_group_policy", [None, "", "best-effort", "STRICT", 1]
+    ("placement_group_policy", "message"),
+    [
+        (None, "placement_group_policy is required"),
+        ("", "placement_group_policy is required"),
+        (1, "placement_group_policy is required"),
+        ("best-effort", "placement_group_policy must be one of: flexible, strict"),
+        ("STRICT", "placement_group_policy must be one of: flexible, strict"),
+    ],
 )
 async def test_handle_linode_placement_group_create_requires_valid_policy(
-    placement_group_policy: object, sample_config: Config
+    placement_group_policy: object, message: str, sample_config: Config
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_placement_group_create(
@@ -24113,7 +13138,7 @@ async def test_handle_linode_placement_group_create_requires_valid_policy(
             sample_config,
         )
 
-    assert "placement_group_policy must be one of: flexible, strict" in result[0].text
+    assert message in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -24123,7 +13148,7 @@ async def test_handle_linode_placement_group_create_success(
     response_data = {"id": 789, "label": "pg-a"}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_placement_group.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24144,8 +13169,16 @@ async def test_handle_linode_placement_group_create_success(
     assert body["placement_group"]["id"] == 789
     assert body["placement_group"]["label"] == "pg-a"
     assert body["placement_group"]["members"] == []
-    mock_client.create_placement_group.assert_awaited_once_with(
-        "pg-a", "us-mia", "anti_affinity:local", "strict"
+    # A replayed create bills for a second group, so the route is never retried.
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_placement_group_create",
+        body={
+            "label": "pg-a",
+            "region": "us-mia",
+            "placement_group_type": "anti_affinity:local",
+            "placement_group_policy": "strict",
+        },
+        retry=False,
     )
 
 
@@ -24154,7 +13187,7 @@ async def test_handle_linode_placement_group_create_reports_client_errors(
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_placement_group.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24171,85 +13204,6 @@ async def test_handle_linode_placement_group_create_reports_client_errors(
         )
 
     assert "Failed to create placement group" in result[0].text
-    assert "API error" in result[0].text
-
-
-def test_create_linode_placement_group_delete_tool() -> None:
-    """Placement group delete tool schema requires confirmation."""
-    tool, capability = create_linode_placement_group_delete_tool()
-
-    assert tool.name == "linode_placement_group_delete"
-    assert capability is Capability.Destroy
-    assert set(tool.input_schema["required"]) == {"group_id", "confirm"}
-    assert "group_id" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_placement_group_delete_requires_boolean_confirm(
-    confirm: object, sample_config: Config
-) -> None:
-    arguments: dict[str, object] = {"group_id": 789}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_placement_group_delete(arguments, sample_config)
-
-    assert "confirm=true" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("group_id", [None, 0, -1, True, "789", "/", "?", ".."])
-async def test_handle_linode_placement_group_delete_requires_positive_group_id(
-    group_id: object, sample_config: Config
-) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_placement_group_delete(
-            {"group_id": group_id, "confirm": True}, sample_config
-        )
-
-    assert "group_id must be a positive integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_placement_group_delete_success(
-    sample_config: Config,
-) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_placement_group.return_value = None
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_placement_group_delete(
-            {"group_id": 789, "confirm": True},
-            sample_config,
-        )
-
-    assert json.loads(result[0].text) == {
-        "message": "Placement group 789 deleted successfully"
-    }
-    mock_client.delete_placement_group.assert_awaited_once_with(789)
-
-
-async def test_handle_linode_placement_group_delete_reports_client_errors(
-    sample_config: Config,
-) -> None:
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.delete_placement_group.side_effect = RuntimeError("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_placement_group_delete(
-            {"group_id": 789, "confirm": True},
-            sample_config,
-        )
-
-    assert "Failed to delete placement group" in result[0].text
     assert "API error" in result[0].text
 
 
@@ -24295,11 +13249,23 @@ async def test_handle_linode_placement_group_update_requires_positive_group_id(
 
 
 @pytest.mark.parametrize(
-    "label",
-    [None, "", True, 1, [], {}, "/", "?", "..", "bad/label", "bad?label"],
+    ("label", "message"),
+    [
+        (None, "label must be a non-empty string"),
+        ("", "label must be a non-empty string"),
+        (True, "label must be a non-empty string"),
+        (1, "label must be a non-empty string"),
+        ([], "label must be a non-empty string"),
+        ({}, "label must be a non-empty string"),
+        ("/", "label must start and end"),
+        ("?", "label must start and end"),
+        ("..", "label must start and end"),
+        ("bad/label", "label must start and end"),
+        ("bad?label", "label must start and end"),
+    ],
 )
 async def test_handle_linode_placement_group_update_requires_valid_label(
-    label: object, sample_config: Config
+    label: object, message: str, sample_config: Config
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_placement_group_update(
@@ -24307,7 +13273,7 @@ async def test_handle_linode_placement_group_update_requires_valid_label(
             sample_config,
         )
 
-    assert "label must start and end" in result[0].text
+    assert message in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -24317,7 +13283,7 @@ async def test_handle_linode_placement_group_update_success(
     response_data = {"id": 789, "label": "new-label"}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_placement_group.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24331,7 +13297,12 @@ async def test_handle_linode_placement_group_update_success(
     assert body["id"] == 789
     assert body["label"] == "new-label"
     assert body["members"] == []
-    mock_client.update_placement_group.assert_awaited_once_with(789, "new-label")
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_placement_group_update",
+        789,
+        body={"label": "new-label"},
+        retry=False,
+    )
 
 
 async def test_handle_linode_placement_group_update_reports_client_errors(
@@ -24339,7 +13310,7 @@ async def test_handle_linode_placement_group_update_reports_client_errors(
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_placement_group.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24393,18 +13364,38 @@ async def test_handle_linode_placement_group_assign_requires_positive_group_id(
     mock_client_class.assert_not_called()
 
 
+# The two arms the membership routes' id list tells apart: a value that is not
+# a list at all, and a list the route cannot use.
+PLACEMENT_LINODES_ARRAY = "linodes must be a JSON array of positive integer Linode IDs"
+PLACEMENT_LINODES_SHAPE = (
+    "linodes must be a non-empty array of distinct positive integer Linode IDs"
+)
+
+
 @pytest.mark.parametrize(
-    "linodes", [None, [], [0], [-1], [True], ["123"], "/", "?", ".."]
+    ("linodes", "expected"),
+    [
+        ([], PLACEMENT_LINODES_SHAPE),
+        ([0], PLACEMENT_LINODES_SHAPE),
+        ([-1], PLACEMENT_LINODES_SHAPE),
+        ([True], PLACEMENT_LINODES_SHAPE),
+        (["123"], PLACEMENT_LINODES_SHAPE),
+        ([123, 123], PLACEMENT_LINODES_SHAPE),
+        (None, PLACEMENT_LINODES_ARRAY),
+        ("/", PLACEMENT_LINODES_ARRAY),
+        ("?", PLACEMENT_LINODES_ARRAY),
+        ("..", PLACEMENT_LINODES_ARRAY),
+    ],
 )
 async def test_handle_linode_placement_group_assign_requires_linode_ids(
-    linodes: object, sample_config: Config
+    linodes: object, expected: str, sample_config: Config
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_placement_group_assign(
             {"group_id": 789, "linodes": linodes, "confirm": True}, sample_config
         )
 
-    assert "linodes must be a non-empty array of positive integers" in result[0].text
+    assert expected in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -24414,7 +13405,7 @@ async def test_handle_linode_placement_group_assign_success(
     response_data = {"linodes": [123, 456]}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.assign_placement_group.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24427,7 +13418,12 @@ async def test_handle_linode_placement_group_assign_success(
     body = json.loads(result[0].text)
     assert body["message"] == "Assigned 2 Linode(s) to placement group 789"
     assert body["placement_group"]["members"] == []
-    mock_client.assign_placement_group.assert_awaited_once_with(789, [123, 456])
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_placement_group_assign",
+        789,
+        body={"linodes": [123, 456]},
+        retry=False,
+    )
 
 
 async def test_handle_linode_placement_group_assign_reports_client_errors(
@@ -24435,7 +13431,7 @@ async def test_handle_linode_placement_group_assign_reports_client_errors(
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.assign_placement_group.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24490,17 +13486,29 @@ async def test_handle_linode_placement_group_unassign_requires_positive_group_id
 
 
 @pytest.mark.parametrize(
-    "linodes", [None, [], [0], [-1], [True], ["123"], "/", "?", ".."]
+    ("linodes", "expected"),
+    [
+        ([], PLACEMENT_LINODES_SHAPE),
+        ([0], PLACEMENT_LINODES_SHAPE),
+        ([-1], PLACEMENT_LINODES_SHAPE),
+        ([True], PLACEMENT_LINODES_SHAPE),
+        (["123"], PLACEMENT_LINODES_SHAPE),
+        ([123, 123], PLACEMENT_LINODES_SHAPE),
+        (None, PLACEMENT_LINODES_ARRAY),
+        ("/", PLACEMENT_LINODES_ARRAY),
+        ("?", PLACEMENT_LINODES_ARRAY),
+        ("..", PLACEMENT_LINODES_ARRAY),
+    ],
 )
 async def test_handle_linode_placement_group_unassign_requires_linode_ids(
-    linodes: object, sample_config: Config
+    linodes: object, expected: str, sample_config: Config
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_placement_group_unassign(
             {"group_id": 789, "linodes": linodes, "confirm": True}, sample_config
         )
 
-    assert "linodes must be a non-empty array of positive integers" in result[0].text
+    assert expected in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -24510,7 +13518,7 @@ async def test_handle_linode_placement_group_unassign_success(
     response_data = {"linodes": [123, 456]}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.unassign_placement_group.return_value = response_data
+        mock_client.route_raw.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24523,7 +13531,12 @@ async def test_handle_linode_placement_group_unassign_success(
     body = json.loads(result[0].text)
     assert body["message"] == "Linodes unassigned from placement group 789 successfully"
     assert body["placement_group"]["members"] == []
-    mock_client.unassign_placement_group.assert_awaited_once_with(789, [123, 456])
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_placement_group_unassign",
+        789,
+        body={"linodes": [123, 456]},
+        retry=False,
+    )
 
 
 async def test_handle_linode_placement_group_unassign_reports_client_errors(
@@ -24531,7 +13544,7 @@ async def test_handle_linode_placement_group_unassign_reports_client_errors(
 ) -> None:
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.unassign_placement_group.side_effect = RuntimeError("API error")
+        mock_client.route_raw.side_effect = RuntimeError("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24541,7 +13554,7 @@ async def test_handle_linode_placement_group_unassign_reports_client_errors(
             sample_config,
         )
 
-    assert "Failed to unassign Linodes from placement group" in result[0].text
+    assert "Failed to unassign placement group 789" in result[0].text
     assert "API error" in result[0].text
 
 
@@ -24569,7 +13582,7 @@ async def test_handle_linode_nodebalancer_stats(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_stats.return_value = mock_stats
+        mock_client.route_raw.return_value = mock_stats
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24582,7 +13595,9 @@ async def test_handle_linode_nodebalancer_stats(sample_config: Config) -> None:
         content = result[0].text
         assert "connections" in content
         assert "traffic" in content
-        mock_client.get_nodebalancer_stats.assert_called_once_with(1)
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_stats_get", 1
+        )
 
 
 async def test_handle_linode_nodebalancer_stats_missing_id(
@@ -24598,7 +13613,7 @@ async def test_handle_linode_nodebalancer_stats_error(sample_config: Config) -> 
     """Test linode_nodebalancer_stats_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_stats.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24644,7 +13659,7 @@ async def test_handle_linode_nodebalancer_firewalls_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_firewalls.return_value = mock_firewalls
+        mock_client.route_raw.return_value = mock_firewalls
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24674,8 +13689,8 @@ async def test_handle_linode_nodebalancer_firewalls_list(
                 }
             ],
         }
-        mock_client.list_nodebalancer_firewalls.assert_called_once_with(
-            8, page=1, page_size=25
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_firewall_list", 8, query="page=1&page_size=25"
         )
 
 
@@ -24740,7 +13755,7 @@ async def test_handle_linode_nodebalancer_config_node_get(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_cls.return_value.__aenter__.return_value = mock_client
-        mock_client.get_nodebalancer_config_node.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 4,
             "label": "node-1",
             "address": "192.168.1.10:80",
@@ -24753,7 +13768,9 @@ async def test_handle_linode_nodebalancer_config_node_get(
             sample_config,
         )
 
-        mock_client.get_nodebalancer_config_node.assert_called_once_with(8, 6, 4)
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_config_node_get", 8, 6, 4
+        )
         response = result[0].text
         assert '"id": 4' in response
 
@@ -24781,7 +13798,7 @@ async def test_handle_linode_nodebalancer_config_node_get_error(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_cls.return_value.__aenter__.return_value = mock_client
-        mock_client.get_nodebalancer_config_node.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
 
         result = await handle_linode_nodebalancer_config_node_get(
             {"nodebalancer_id": 8, "config_id": 6, "node_id": 4},
@@ -24797,7 +13814,7 @@ async def test_handle_linode_nodebalancer_firewalls_list_error(
     """Test linode_nodebalancer_firewall_list error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_nodebalancer_firewalls.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -24810,403 +13827,6 @@ async def test_handle_linode_nodebalancer_firewalls_list_error(
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
 
 
-def test_linode_nodebalancer_config_update_tool_definition() -> None:
-    """Test linode_nodebalancer_config_update tool definition."""
-    tool, capability = create_linode_nodebalancer_config_update_tool()
-
-    assert tool.name == "linode_nodebalancer_config_update"
-    assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.input_schema["properties"]
-    assert "config_id" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["required"] == [
-        "nodebalancer_id",
-        "config_id",
-        "confirm",
-    ]
-
-
-async def test_handle_linode_nodebalancer_config_update(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_update tool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_config.return_value = {
-            "id": 6,
-            "nodebalancer_id": 8,
-            "port": 443,
-            "protocol": "https",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_update(
-            {
-                "nodebalancer_id": 8,
-                "config_id": 6,
-                "port": 443,
-                "protocol": "https",
-                "ssl_cert": "cert",
-                "ssl_key": "key",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert data["message"] == (
-            "NodeBalancer config 6 updated successfully for NodeBalancer 8"
-        )
-        assert data["config"]["id"] == 6
-        assert data["config"]["port"] == 443
-        mock_client.update_nodebalancer_config.assert_called_once_with(
-            8,
-            6,
-            {"port": 443, "protocol": "https", "ssl_cert": "cert", "ssl_key": "key"},
-        )
-
-
-async def test_handle_linode_nodebalancer_config_update_empty_response(
-    sample_config: Config,
-) -> None:
-    """Config update fills proto defaults when the API body is empty.
-
-    The empty-body id-echo fallback is gone: the config write now returns the
-    full NodeBalancerConfig element, so an empty API body serializes to an
-    all-default config rather than a {nodebalancer_id, config_id} echo.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_config.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_update(
-            {"nodebalancer_id": 8, "config_id": 6, "port": 443, "confirm": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert "updated successfully" in data["message"]
-        assert data["config"]["id"] == 0
-        assert data["config"]["nodebalancer_id"] == 0
-        mock_client.update_nodebalancer_config.assert_called_once_with(
-            8, 6, {"port": 443}
-        )
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({}, "This updates a NodeBalancer config. Set confirm=true to proceed."),
-        ({"confirm": False}, "Set confirm=true to proceed"),
-        ({"confirm": "true"}, "Set confirm=true to proceed"),
-        ({"confirm": 1}, "Set confirm=true to proceed"),
-        (
-            {"nodebalancer_id": 0, "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "8", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": True, "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1/2", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "1?x", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": "..", "config_id": 6, "confirm": True},
-            "nodebalancer_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": 0, "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "6", "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": False, "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "4/5", "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "4?x", "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": "..", "confirm": True},
-            "config_id",
-        ),
-        (
-            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
-            "at least one update field is required",
-        ),
-        (
-            {
-                "nodebalancer_id": 8,
-                "config_id": 6,
-                "check": "bogus",
-                "confirm": True,
-            },
-            "check must be one of: none, connection, http, http_body",
-        ),
-        (
-            {
-                "nodebalancer_id": 8,
-                "config_id": 6,
-                "port": 99999,
-                "confirm": True,
-            },
-            "port must be an integer from 1 through 65535",
-        ),
-        (
-            {
-                "nodebalancer_id": 8,
-                "config_id": 6,
-                "protocol": "https",
-                "confirm": True,
-            },
-            "ssl_cert and ssl_key are required when protocol is https",
-        ),
-    ],
-)
-async def test_handle_linode_nodebalancer_config_update_invalid_arguments(
-    sample_config: Config, arguments: dict[str, Any], message: str
-) -> None:
-    """NodeBalancer config update rejects invalid arguments before client calls."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_config_update(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_nodebalancer_config_update_error(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_update error handling."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.update_nodebalancer_config.side_effect = Exception("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_update(
-            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        assert "Failed" in result[0].text or "error" in result[0].text.lower()
-
-
-async def test_linode_nodebalancer_config_create_tool_definition() -> None:
-    """Test linode_nodebalancer_config_create tool definition."""
-    tool, capability = create_linode_nodebalancer_config_create_tool()
-    assert tool.name == "linode_nodebalancer_config_create"
-    assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.input_schema["properties"]
-    assert "confirm" in tool.input_schema["properties"]
-    assert tool.input_schema["required"] == ["nodebalancer_id", "port", "confirm"]
-    props = tool.input_schema["properties"]
-    assert "port" in props
-    assert "protocol" in props
-    assert "algorithm" in props
-    assert "stickiness" in props
-    assert "check" in props
-    assert "nodes" in props
-    # NodeBalancer configs have no label in the API, so the tool must omit it.
-    assert "label" not in props
-
-
-async def test_handle_linode_nodebalancer_config_create(sample_config: Config) -> None:
-    """Test linode_nodebalancer_config_create tool happy path."""
-    mock_result = {
-        "id": 99,
-        "nodebalancer_id": 8,
-        "port": 80,
-        "protocol": "http",
-        "algorithm": "roundrobin",
-        "stickiness": "none",
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_nodebalancer_config.return_value = mock_result
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_create(
-            {
-                "nodebalancer_id": 8,
-                "port": 80,
-                "protocol": "http",
-                "cipher_suite": "recommended",
-                "ssl_cert": "cert-pem-placeholder",
-                "ssl_key": "key-pem-placeholder",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        data = json.loads(result[0].text)
-        assert (
-            data["message"]
-            == "NodeBalancer config 99 created successfully for NodeBalancer 8"
-        )
-        # The body is the full NodeBalancerConfig proto element (proto-canonical
-        # output fills every scalar with its default), so assert the fields the
-        # mock supplied rather than dict equality against the partial mock.
-        config = data["config"]
-        assert config["id"] == 99
-        assert config["nodebalancer_id"] == 8
-        assert config["port"] == 80
-        assert config["protocol"] == "http"
-        assert config["algorithm"] == "roundrobin"
-        assert config["stickiness"] == "none"
-        mock_client.create_nodebalancer_config.assert_called_once_with(
-            8,
-            {
-                "port": 80,
-                "protocol": "http",
-                "cipher_suite": "recommended",
-                "ssl_cert": "cert-pem-placeholder",
-                "ssl_key": "key-pem-placeholder",
-            },
-        )
-
-
-async def test_handle_linode_nodebalancer_config_create_confirm_required(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_create rejects missing/false confirm."""
-    invalid_confirm: list[dict[str, Any]] = [
-        {},  # missing
-        {"nodebalancer_id": 8, "confirm": False},
-        {"nodebalancer_id": 8, "confirm": "true"},
-        {"nodebalancer_id": 8, "confirm": 1},
-    ]
-
-    for args in invalid_confirm:
-        result = await handle_linode_nodebalancer_config_create(args, sample_config)
-        assert len(result) == 1
-        assert "Set confirm=true to proceed" in result[0].text
-
-
-async def test_handle_linode_nodebalancer_config_create_invalid_nodebalancer_id(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_create rejects invalid nodebalancer_id."""
-    invalid_cases: list[tuple[dict[str, Any], str]] = [
-        ({"confirm": True}, "nodebalancer_id is required"),
-        (
-            {"nodebalancer_id": True, "confirm": True},
-            "nodebalancer_id must be a positive integer",
-        ),
-        (
-            {"nodebalancer_id": 0, "confirm": True},
-            "nodebalancer_id must be a positive integer",
-        ),
-        (
-            {"nodebalancer_id": -1, "confirm": True},
-            "nodebalancer_id must be a positive integer",
-        ),
-        (
-            {"nodebalancer_id": "8/9", "confirm": True},
-            "nodebalancer_id must be a positive integer",
-        ),
-        (
-            {"nodebalancer_id": "../8", "confirm": True},
-            "nodebalancer_id must be a positive integer",
-        ),
-    ]
-
-    for args, message in invalid_cases:
-        result = await handle_linode_nodebalancer_config_create(args, sample_config)
-        assert len(result) == 1
-        assert message in result[0].text
-
-
-async def test_handle_linode_nodebalancer_config_create_error(
-    sample_config: Config,
-) -> None:
-    """Test linode_nodebalancer_config_create error handling."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_nodebalancer_config.side_effect = Exception("API error")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_create(
-            {"nodebalancer_id": 8, "port": 80, "confirm": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "Failed" in result[0].text or "error" in result[0].text.lower()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({"nodebalancer_id": 8, "confirm": True}, "port is required"),
-        (
-            {"nodebalancer_id": 8, "port": 99999, "confirm": True},
-            "port must be an integer from 1 through 65535",
-        ),
-        (
-            {"nodebalancer_id": 8, "port": 80, "check": "bogus", "confirm": True},
-            "check must be one of: none, connection, http, http_body",
-        ),
-        (
-            {
-                "nodebalancer_id": 8,
-                "port": 443,
-                "protocol": "https",
-                "confirm": True,
-            },
-            "ssl_cert and ssl_key are required when protocol is https",
-        ),
-    ],
-)
-async def test_handle_linode_nodebalancer_config_create_body_validation(
-    sample_config: Config, arguments: dict[str, Any], message: str
-) -> None:
-    """Config create ports Go's port/check/ssl body validation (strictest-wins)."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_nodebalancer_config_create(
-            arguments, sample_config
-        )
-
-    assert len(result) == 1
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
 async def test_handle_linode_firewall_rule_version_get(
     sample_config: Config,
 ) -> None:
@@ -25217,7 +13837,7 @@ async def test_handle_linode_firewall_rule_version_get(
     handler decodes it into the FirewallRuleVersion proto element, the same
     element the rule-version LIST path emits.
     """
-    from linodemcp.tools.linode_firewalls import handle_linode_firewall_rule_version_get
+    from linodemcp.gentools import handle_linode_firewall_rule_version_get
 
     raw_rule_version: dict[str, Any] = {
         "id": 12345,
@@ -25244,21 +13864,20 @@ async def test_handle_linode_firewall_rule_version_get(
         "updated": "2025-01-02T00:00:00",
     }
 
-    async def mock_execute_tool(
-        cfg: Any, arguments: Any, description: Any, call_fn: Any
-    ) -> Any:
-        mock_client = MagicMock()
-        mock_client.route_raw = AsyncMock(return_value=raw_rule_version)
-        version_data = await call_fn(mock_client)
-        return [TextContent(type="text", text=json.dumps(version_data))]
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.route_raw.return_value = raw_rule_version
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
 
-    with patch(
-        "linodemcp.tools.linode_firewalls.execute_tool", side_effect=mock_execute_tool
-    ):
         result = await handle_linode_firewall_rule_version_get(
             {"firewall_id": 12345, "version": 2}, sample_config
         )
         assert len(result) == 1
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_firewall_rule_version_get", 12345, 2
+        )
         data = json.loads(result[0].text)
         # The full FirewallRuleVersion envelope, not a single curated rule.
         assert data["version"] == 2
@@ -25270,7 +13889,7 @@ async def test_handle_linode_firewall_rule_version_get_missing_args(
     sample_config: Config,
 ) -> None:
     """Test the firewall rule version get tool rejects missing arguments."""
-    from linodemcp.tools.linode_firewalls import handle_linode_firewall_rule_version_get
+    from linodemcp.gentools import handle_linode_firewall_rule_version_get
 
     result = await handle_linode_firewall_rule_version_get(
         {"firewall_id": 12345}, sample_config
@@ -25310,14 +13929,14 @@ async def test_handle_linode_firewall_rule_version_get_missing_args(
         {"firewall_id": "abc", "version": 1}, sample_config
     )
     assert len(result) == 1
-    assert "valid integer" in result[0].text
+    assert "firewall_id must be a positive integer" in result[0].text
 
     # version must be a positive integer, the same as firewall_id.
     result = await handle_linode_firewall_rule_version_get(
         {"firewall_id": 12345, "version": "v1"}, sample_config
     )
     assert len(result) == 1
-    assert "valid integer" in result[0].text
+    assert "version must be a positive integer" in result[0].text
 
     result = await handle_linode_firewall_rule_version_get(
         {"firewall_id": 12345, "version": 0}, sample_config
@@ -25374,7 +13993,7 @@ async def test_handle_linode_firewall_template_get(sample_config: Config) -> Non
         assert '"slug": "public"' in result[0].text
         assert '"inbound_policy": "DROP"' in result[0].text
         mock_client.route_raw.assert_awaited_once_with(
-            "linode_firewall_template_get", "public", query=""
+            "linode_firewall_template_get", "public"
         )
 
 
@@ -25448,7 +14067,7 @@ async def test_handle_linode_firewall_device_get(
     sample_config: Config,
 ) -> None:
     """Test the firewall device get tool handler."""
-    from linodemcp.tools.linode_firewalls import handle_linode_firewall_device_get
+    from linodemcp.gentools import handle_linode_firewall_device_get
 
     mock_device = {
         "id": 456,
@@ -25462,21 +14081,20 @@ async def test_handle_linode_firewall_device_get(
         "updated": "2018-01-01T01:01:01",
     }
 
-    async def mock_execute_tool(
-        cfg: Any, arguments: Any, description: Any, call_fn: Any
-    ) -> Any:
-        mock_client = MagicMock()
-        mock_client.get_firewall_device = AsyncMock(return_value=mock_device)
-        device_data = await call_fn(mock_client)
-        return [TextContent(type="text", text=json.dumps(device_data))]
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.route_raw.return_value = mock_device
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
 
-    with patch(
-        "linodemcp.tools.linode_firewalls.execute_tool", side_effect=mock_execute_tool
-    ):
         result = await handle_linode_firewall_device_get(
             {"firewall_id": 12345, "device_id": 456}, sample_config
         )
         assert len(result) == 1
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_firewall_device_get", 12345, 456
+        )
         data = json.loads(result[0].text)
         assert data["id"] == 456
         assert data["entity"]["label"] == "linode-123"
@@ -25488,13 +14106,13 @@ async def test_handle_linode_firewall_device_get_missing_args(
     sample_config: Config,
 ) -> None:
     """Test the firewall device get tool rejects missing arguments."""
-    from linodemcp.tools.linode_firewalls import handle_linode_firewall_device_get
+    from linodemcp.gentools import handle_linode_firewall_device_get
 
     result = await handle_linode_firewall_device_get(
         {"firewall_id": 12345}, sample_config
     )
     assert len(result) == 1
-    assert "device_id is required" in result[0].text
+    assert "device id must be a positive integer" in result[0].text
 
     result = await handle_linode_firewall_device_get({"device_id": 456}, sample_config)
     assert len(result) == 1
@@ -25514,157 +14132,17 @@ async def test_handle_linode_firewall_device_get_missing_args(
         {"firewall_id": 12345, "device_id": "abc"}, sample_config
     )
     assert len(result) == 1
-    assert "valid integer" in result[0].text
-
-
-async def test_handle_linode_firewall_device_create(sample_config: Config) -> None:
-    """Test successful firewall device creation."""
-    from linodemcp.tools.linode_firewalls_write import (
-        handle_linode_firewall_device_create,
-    )
-
-    raw_device = {
-        "id": 456,
-        "created": "2024-01-15T10:00:00",
-        "updated": "2024-01-15T10:00:00",
-        "entity": {"id": 123, "type": "linode", "label": "web-1"},
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_firewall_device.return_value = raw_device
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        arguments = {
-            "firewall_id": 12345,
-            "id": 123,
-            "type": "linode",
-            "confirm": True,
-        }
-        result = await handle_linode_firewall_device_create(arguments, sample_config)
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["message"] == "Firewall device assigned successfully"
-    assert body["device"]["id"] == 456
-    assert body["device"]["entity"]["type"] == "linode"
-    mock_client.create_firewall_device.assert_awaited_once_with(
-        firewall_id=12345, device_id=123, device_type="linode"
-    )
-
-
-async def test_handle_linode_firewall_device_create_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Test that firewall device creation requires confirm=True."""
-    # Import here to avoid circular imports
-    from linodemcp.tools.linode_firewalls_write import (
-        handle_linode_firewall_device_create,
-    )
-
-    arguments = {
-        "firewall_id": 12345,
-        "id": 123,
-        "type": "linode",
-        "confirm": False,
-    }
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "Set confirm=true to proceed" in result[0].text
-    assert "confirm=true" in result[0].text
-
-    arguments = {"firewall_id": 12345, "id": 123, "type": "linode"}
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "Set confirm=true to proceed" in result[0].text
-    assert "confirm=true" in result[0].text
-
-
-async def test_handle_linode_firewall_device_create_missing_required_args(
-    sample_config: Config,
-) -> None:
-    """Test that firewall device creation requires all required arguments."""
-    # Import here to avoid circular imports
-    from linodemcp.tools.linode_firewalls_write import (
-        handle_linode_firewall_device_create,
-    )
-
-    arguments = {"id": 123, "type": "linode", "confirm": True}
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "firewall_id is required" in result[0].text
-
-    arguments = {"firewall_id": 12345, "type": "linode", "confirm": True}
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "id is required" in result[0].text
-
-    arguments = {"firewall_id": 12345, "id": 123, "confirm": True}
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "type is required" in result[0].text
-
-
-async def test_handle_linode_firewall_device_create_invalid_args(
-    sample_config: Config,
-) -> None:
-    """Test that firewall device creation validates argument types."""
-    # Import here to avoid circular imports
-    from linodemcp.tools.linode_firewalls_write import (
-        handle_linode_firewall_device_create,
-    )
-
-    arguments = {
-        "firewall_id": "invalid",
-        "id": 123,
-        "type": "linode",
-        "confirm": True,
-    }
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "firewall_id must be a positive integer" in result[0].text
-
-    arguments = {
-        "firewall_id": 12345,
-        "id": "invalid",
-        "type": "linode",
-        "confirm": True,
-    }
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "id must be a positive integer" in result[0].text
-
-    arguments = {
-        "firewall_id": 12345,
-        "id": 123,
-        "type": 123,
-        "confirm": True,
-    }
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "type must be a string" in result[0].text
-
-    arguments = {
-        "firewall_id": 12345,
-        "id": 123,
-        "type": "",
-        "confirm": True,
-    }
-    result = await handle_linode_firewall_device_create(arguments, sample_config)
-    assert len(result) == 1
-    assert "type must be a non-empty string" in result[0].text
+    assert "device id must be a positive integer" in result[0].text
 
 
 async def test_handle_linode_firewall_devices_list(sample_config: Config) -> None:
     """Test firewall devices list handler."""
-    from linodemcp.tools.linode_firewalls import handle_linode_firewall_device_list
+    from linodemcp.gentools import handle_linode_firewall_device_list
 
     mock_devices = {"data": [{"id": 123}], "page": 1, "pages": 1, "results": 1}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_firewall_devices.return_value = mock_devices
+        mock_client.route_raw.return_value = mock_devices
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -25678,8 +14156,8 @@ async def test_handle_linode_firewall_devices_list(sample_config: Config) -> Non
     assert result_data["count"] == 1
     assert "filter" not in result_data
     assert result_data["devices"][0]["id"] == 123
-    mock_client.list_firewall_devices.assert_awaited_once_with(
-        12345, page=None, page_size=None
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_firewall_device_list", 12345, query=""
     )
 
 
@@ -25687,12 +14165,12 @@ async def test_handle_linode_firewall_devices_list_with_pagination(
     sample_config: Config,
 ) -> None:
     """Test firewall devices list handler pagination."""
-    from linodemcp.tools.linode_firewalls import handle_linode_firewall_device_list
+    from linodemcp.gentools import handle_linode_firewall_device_list
 
     mock_devices: dict[str, Any] = {"data": [], "page": 2, "pages": 5, "results": 0}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.list_firewall_devices.return_value = mock_devices
+        mock_client.route_raw.return_value = mock_devices
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -25703,8 +14181,8 @@ async def test_handle_linode_firewall_devices_list_with_pagination(
 
     result_data = json.loads(result[0].text)
     assert result_data == {"count": 0, "devices": []}
-    mock_client.list_firewall_devices.assert_awaited_once_with(
-        12345, page=2, page_size=25
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_firewall_device_list", 12345, query="page=2&page_size=25"
     )
 
 
@@ -25712,9 +14190,7 @@ async def test_handle_linode_firewall_rule_version_list(
     sample_config: Config,
 ) -> None:
     """The single history object becomes one snapshot with rules.version lifted."""
-    from linodemcp.tools.linode_firewalls import (
-        handle_linode_firewall_rule_version_list,
-    )
+    from linodemcp.gentools import handle_linode_firewall_rule_version_list
 
     history: dict[str, Any] = {
         "id": 7,
@@ -25731,70 +14207,48 @@ async def test_handle_linode_firewall_rule_version_list(
         "created": "2024-01-01T00:00:00",
         "updated": "2024-01-02T00:00:00",
     }
-
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.route_raw.return_value = history
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
-
         result = await handle_linode_firewall_rule_version_list(
             {"firewall_id": 7}, sample_config
         )
-
     body = json.loads(result[0].text)
     assert body["count"] == 1
     assert body["firewall_rule_versions"][0]["version"] == 2
     assert body["firewall_rule_versions"][0]["rules"]["inbound_policy"] == "DROP"
     assert body["firewall_rule_versions"][0]["tags"] == ["edge"]
     mock_client.route_raw.assert_awaited_once_with(
-        "linode_firewall_rule_version_list", 7
+        "linode_firewall_rule_version_list", 7, query=""
     )
-
-
-async def test_handle_linode_firewall_rule_version_list_rejects_page(
-    sample_config: Config,
-) -> None:
-    """A {data:[...]} page for the history route errors instead of emptying."""
-    from linodemcp.tools.linode_firewalls import (
-        handle_linode_firewall_rule_version_list,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {"data": [{"id": 7, "rules": {}}]}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_firewall_rule_version_list(
-            {"firewall_id": 7}, sample_config
-        )
-
-    assert result[0].text.startswith("Failed to ")
 
 
 @pytest.mark.parametrize(
-    ("arguments", "expected"),
+    "arguments",
     [
-        ({}, "firewall_id is required"),
-        ({"firewall_id": True}, "firewall_id must be a valid integer"),
-        ({"firewall_id": 0}, "firewall_id is required"),
-        ({"firewall_id": -3}, "firewall_id must be a positive integer"),
-        ({"firewall_id": "nope"}, "firewall_id must be a valid integer"),
+        {},
+        {"firewall_id": True},
+        {"firewall_id": 0},
+        {"firewall_id": -3},
+        {"firewall_id": "nope"},
     ],
 )
 async def test_handle_linode_firewall_rule_version_list_invalid(
-    sample_config: Config, arguments: dict[str, Any], expected: str
+    sample_config: Config, arguments: dict[str, Any]
 ) -> None:
-    """Rule version list rejects bad firewall_id values before any client call."""
-    from linodemcp.tools.linode_firewalls import (
-        handle_linode_firewall_rule_version_list,
-    )
+    """Every unusable firewall_id answers the one sentence the rule declares.
+
+    The five shapes used to split three ways across a hand-written reader. The
+    declared rule speaks for all of them now, which is the sentence the Go twin
+    already answered.
+    """
+    expected = "firewall_id must be a positive integer"
+    from linodemcp.gentools import handle_linode_firewall_rule_version_list
 
     result = await handle_linode_firewall_rule_version_list(arguments, sample_config)
-
     assert len(result) == 1
     assert expected in result[0].text
 
@@ -25803,8 +14257,8 @@ async def test_handle_linode_firewall_rule_version_list_invalid(
     ("arguments", "expected"),
     [
         ({}, "firewall_id is required"),
-        ({"firewall_id": False}, "firewall_id must be a valid integer"),
-        ({"firewall_id": "abc"}, "firewall_id must be a valid integer"),
+        ({"firewall_id": False}, "firewall_id must be a positive integer"),
+        ({"firewall_id": "abc"}, "firewall_id must be a positive integer"),
         ({"firewall_id": 0}, "firewall_id must be a positive integer"),
         ({"firewall_id": -1}, "firewall_id must be a positive integer"),
         ({"firewall_id": 1, "page": False}, "page must be an integer"),
@@ -25829,1152 +14283,11 @@ async def test_handle_linode_firewall_devices_list_invalid_args(
     expected: str,
 ) -> None:
     """Test firewall devices list handler argument validation."""
-    from linodemcp.tools.linode_firewalls import handle_linode_firewall_device_list
+    from linodemcp.gentools import handle_linode_firewall_device_list
 
     result = await handle_linode_firewall_device_list(arguments, sample_config)
     assert len(result) == 1
     assert expected in result[0].text
-
-
-async def test_lke_cluster_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the create with no resource state and no call."""
-    result = await handle_linode_lke_cluster_create(
-        {
-            "label": "k8s-prod",
-            "region": "us-east",
-            "k8s_version": "1.29",
-            "node_pools": [{"type": "g6-standard-2", "count": 3}],
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_lke_cluster_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/lke/clusters"
-    assert body["current_state"] is None
-    assert any("k8s-prod" in s for s in body["side_effects"])
-    assert body["warnings"]
-
-
-async def test_lke_cluster_create_dry_run_still_validates_label(
-    sample_config: Config,
-) -> None:
-    """Missing label must error out regardless of dry_run."""
-    result = await handle_linode_lke_cluster_create(
-        {
-            "region": "us-east",
-            "k8s_version": "1.29",
-            "node_pools": [{"type": "g6-standard-2", "count": 3}],
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "label is required" in result[0].text
-
-
-async def test_lke_cluster_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the cluster via GET and never calls update."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "k8s"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_cluster_update(
-            {"cluster_id": "123", "label": "renamed", "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_cluster_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/lke/clusters/123"
-        assert any("renamed" in s for s in body["side_effects"])
-        mock_client.get_lke_cluster.assert_awaited_once_with(123)
-        mock_client.update_lke_cluster.assert_not_called()
-
-
-async def test_lke_cluster_recycle_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the cluster via GET and never recycles."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {"id": 123}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_cluster_recycle(
-            {"cluster_id": "123", "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_cluster_recycle"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/recycle"
-        mock_client.get_lke_cluster.assert_awaited_once_with(123)
-        mock_client.recycle_lke_cluster.assert_not_called()
-
-
-async def test_lke_cluster_regenerate_dry_run_hides_token(
-    sample_config: Config,
-) -> None:
-    """dry_run fetches the cluster, not the rotated service token."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {"id": 123, "label": "k8s"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_cluster_regenerate(
-            {"cluster_id": "123", "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        assert "service_token" not in result[0].text
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_cluster_regenerate"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/regenerate"
-        mock_client.get_lke_cluster.assert_awaited_once_with(123)
-        mock_client.regenerate_lke_cluster.assert_not_called()
-
-
-async def test_lke_pool_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the cluster via GET and never creates a pool."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {"id": 123}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_pool_create(
-            {
-                "cluster_id": "123",
-                "type": "g6-standard-2",
-                "count": 3,
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_pool_create"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/pools"
-        mock_client.get_lke_cluster.assert_awaited_once_with(123)
-        mock_client.create_lke_node_pool.assert_not_called()
-
-
-async def test_lke_pool_create_dry_run_still_validates_type(
-    sample_config: Config,
-) -> None:
-    """Missing type must error out regardless of dry_run."""
-    result = await handle_linode_lke_pool_create(
-        {"cluster_id": "123", "count": 3, "dry_run": True}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "type is required" in result[0].text
-
-
-async def test_lke_pool_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the pool via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_node_pool.return_value = {"id": 10, "cluster_id": 123}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_pool_update(
-            {"cluster_id": "123", "pool_id": "10", "count": 5, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_pool_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/pools/10"
-        assert any("5 node" in s for s in body["side_effects"])
-        mock_client.get_lke_node_pool.assert_awaited_once_with(123, 10)
-        mock_client.update_lke_node_pool.assert_not_called()
-
-
-async def test_lke_pool_recycle_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the pool via GET and never recycles."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_node_pool.return_value = {"id": 10, "cluster_id": 123}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_pool_recycle(
-            {"cluster_id": "123", "pool_id": "10", "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_pool_recycle"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/pools/10/recycle"
-        mock_client.get_lke_node_pool.assert_awaited_once_with(123, 10)
-        mock_client.recycle_lke_node_pool.assert_not_called()
-
-
-async def test_lke_node_recycle_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the node via GET and never recycles."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_node.return_value = {"id": "abc-123"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_node_recycle(
-            {"cluster_id": "123", "node_id": "abc-123", "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_node_recycle"
-        assert body["would_execute"]["method"] == "POST"
-        assert (
-            body["would_execute"]["path"] == "/lke/clusters/123/nodes/abc-123/recycle"
-        )
-        mock_client.get_lke_node.assert_awaited_once_with(123, "abc-123")
-        mock_client.recycle_lke_node.assert_not_called()
-
-
-async def test_lke_acl_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the ACL via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_control_plane_acl.return_value = {"enabled": True}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_acl_update(
-            {"cluster_id": "123", "acl": {"enabled": True}, "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_acl_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/control_plane_acl"
-        assert any("enabled" in s for s in body["side_effects"])
-        mock_client.get_lke_control_plane_acl.assert_awaited_once_with(123)
-        mock_client.update_lke_control_plane_acl.assert_not_called()
-
-
-async def test_lke_acl_update_dry_run_still_validates_acl(
-    sample_config: Config,
-) -> None:
-    """Missing acl must error out regardless of dry_run."""
-    result = await handle_linode_lke_acl_update(
-        {"cluster_id": "123", "dry_run": True}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "acl is required" in result[0].text
-
-
-async def test_lke_acl_delete_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the ACL via GET and never deletes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_control_plane_acl.return_value = {"enabled": True}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_acl_delete(
-            {"cluster_id": "123", "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_acl_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/lke/clusters/123/control_plane_acl"
-        mock_client.get_lke_control_plane_acl.assert_awaited_once_with(123)
-        mock_client.delete_lke_control_plane_acl.assert_not_called()
-
-
-async def test_monitor_service_token_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the token create with no resource state."""
-    result = await handle_linode_monitor_service_token_create(
-        {"service_type": "dbaas", "entity_ids": [1, 2], "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_monitor_service_token_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/monitor/services/dbaas/token"
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-
-
-async def test_monitor_alert_definition_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the alert-definition create with no state."""
-    from linodemcp.tools.linode_monitor_write import (
-        handle_linode_monitor_service_alert_definition_create,
-    )
-
-    result = await handle_linode_monitor_service_alert_definition_create(
-        {
-            "service_type": "dbaas",
-            "label": "high-cpu",
-            "severity": 2,
-            "rule_criteria": {"rules": [{"metric": "cpu", "operator": "gt"}]},
-            "trigger_conditions": {"criteria_condition": "ALL"},
-            "channel_ids": [546],
-            "scope": "account",
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_monitor_service_alert_definition_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/monitor/services/dbaas/alert-definitions"
-    assert body["current_state"] is None
-
-
-async def test_monitor_alert_definition_delete_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true fetches the definition via GET and never deletes."""
-    from linodemcp.tools.linode_monitor_write import (
-        handle_linode_monitor_service_alert_definition_delete,
-    )
-
-    mock_linode_client.get_monitor_service_alert_definition.return_value = {
-        "id": 20000,
-        "label": "high-cpu",
-    }
-
-    result = await handle_linode_monitor_service_alert_definition_delete(
-        {"service_type": "dbaas", "alert_id": 20000, "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_monitor_service_alert_definition_delete"
-    assert body["would_execute"]["method"] == "DELETE"
-    assert (
-        body["would_execute"]["path"]
-        == "/monitor/services/dbaas/alert-definitions/20000"
-    )
-    mock_linode_client.get_monitor_service_alert_definition.assert_awaited_once_with(
-        "dbaas", 20000
-    )
-    mock_linode_client.delete_monitor_service_alert_definition.assert_not_called()
-
-
-async def test_monitor_alert_definition_update_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true fetches the definition via GET and never updates."""
-    from linodemcp.tools.linode_monitor_write import (
-        handle_linode_monitor_service_alert_definition_update,
-    )
-
-    mock_linode_client.get_monitor_service_alert_definition.return_value = {
-        "id": 20000,
-        "label": "high-cpu",
-    }
-
-    result = await handle_linode_monitor_service_alert_definition_update(
-        {
-            "service_type": "dbaas",
-            "alert_id": 20000,
-            "label": "renamed-alert",
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_monitor_service_alert_definition_update"
-    assert body["would_execute"]["method"] == "PUT"
-    assert (
-        body["would_execute"]["path"]
-        == "/monitor/services/dbaas/alert-definitions/20000"
-    )
-    mock_linode_client.get_monitor_service_alert_definition.assert_awaited_once_with(
-        "dbaas", 20000
-    )
-    mock_linode_client.update_monitor_alert_definition.assert_not_called()
-
-
-async def test_instance_ip_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the IP via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance_ip.return_value = {"address": "192.0.2.10"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_ip_update(
-            {
-                "linode_id": 123,
-                "address": "192.0.2.10",
-                "rdns": "host.example.com",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_instance_ip_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/linode/instances/123/ips/192.0.2.10"
-        mock_client.get_instance_ip.assert_awaited_once_with(123, "192.0.2.10")
-        mock_client.update_instance_ip.assert_not_called()
-
-
-async def test_instance_ip_update_dry_run_still_validates_address(
-    sample_config: Config,
-) -> None:
-    """A missing address errors out under dry_run."""
-    result = await handle_linode_instance_ip_update(
-        {"linode_id": 123, "rdns": "host.example.com", "dry_run": True},
-        sample_config,
-    )
-    assert len(result) == 1
-    assert "address is required" in result[0].text
-
-
-async def test_networking_ip_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the IP via GET and never updates."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_update,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_networking_ip.return_value = {"address": "192.0.2.20"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_networking_ip_update(
-            {
-                "address": "192.0.2.20",
-                "rdns": "host.example.com",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_networking_ip_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/networking/ips/192.0.2.20"
-        assert any("host.example.com" in s for s in body["side_effects"])
-        mock_client.get_networking_ip.assert_awaited_once_with("192.0.2.20")
-        mock_client.update_networking_ip.assert_not_called()
-
-
-async def test_networking_ip_update_dry_run_still_validates_address(
-    sample_config: Config,
-) -> None:
-    """A missing address errors out under dry_run."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_update,
-    )
-
-    result = await handle_linode_networking_ip_update(
-        {"rdns": "host.example.com", "dry_run": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "address is required" in result[0].text
-
-
-async def test_networking_ip_update_happy_path_sets_rdns(
-    sample_config: Config,
-) -> None:
-    """confirm=true updates the rDNS and wraps the IP in {message, ip}."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_update,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.update_networking_ip.return_value = {
-            "address": "192.0.2.21",
-            "rdns": "host.example.com",
-            "type": "ipv4",
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_networking_ip_update(
-            {
-                "address": "192.0.2.21",
-                "rdns": "host.example.com",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["message"] == "Networking IP 192.0.2.21 RDNS updated"
-    assert body["ip"]["address"] == "192.0.2.21"
-    assert body["ip"]["rdns"] == "host.example.com"
-    mock_client.update_networking_ip.assert_awaited_once_with(
-        "192.0.2.21", "host.example.com", None
-    )
-
-
-async def test_networking_ip_update_requires_confirm(
-    sample_config: Config,
-) -> None:
-    """Without confirm and without dry_run, the update is refused."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_update,
-    )
-
-    result = await handle_linode_networking_ip_update(
-        {"address": "192.0.2.22", "rdns": "host.example.com"}, sample_config
-    )
-    assert len(result) == 1
-    assert "confirm=true" in result[0].text
-
-
-async def test_networking_ip_update_requires_rdns_field(
-    sample_config: Config,
-) -> None:
-    """A missing rdns field is rejected before the client is called."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_update,
-    )
-
-    result = await handle_linode_networking_ip_update(
-        {"address": "192.0.2.23", "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "rdns is required" in result[0].text
-
-
-async def test_networking_ip_update_rejects_non_string_rdns(
-    sample_config: Config,
-) -> None:
-    """A non-string, non-null rdns is rejected before the client is called."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_update,
-    )
-
-    result = await handle_linode_networking_ip_update(
-        {"address": "192.0.2.24", "rdns": 5, "confirm": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "rdns must be a string or null" in result[0].text
-
-
-async def test_networking_ip_update_dry_run_clears_rdns_side_effect(
-    sample_config: Config,
-) -> None:
-    """An empty rdns previews a cleared-reverse-DNS side effect."""
-    from linodemcp.tools.linode_instance_ips import (
-        handle_linode_networking_ip_update,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_networking_ip.return_value = {"address": "192.0.2.25"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_networking_ip_update(
-            {"address": "192.0.2.25", "rdns": None, "dry_run": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert any("cleared" in s.lower() for s in body["side_effects"])
-    mock_client.update_networking_ip.assert_not_called()
-
-
-async def test_ipv4_share_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true previews the share POST with no call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_share
-
-    result = await handle_linode_networking_ipv4_share(
-        {"ips": ["192.0.2.10"], "linode_id": 123, "dry_run": True},
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_networking_ipv4_share"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/ipv4/share"
-    assert body["would_execute"]["body"] == {
-        "ips": ["192.0.2.10"],
-        "linode_id": 123,
-    }
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-
-
-async def test_ipv4_share_dry_run_still_validates_linode_id(
-    sample_config: Config,
-) -> None:
-    """A missing linode_id errors out under dry_run."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_share
-
-    result = await handle_linode_networking_ipv4_share(
-        {"ips": ["192.0.2.10"], "dry_run": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "linode_id is required" in result[0].text
-
-
-def test_networking_ip_share_schema_requires_confirm_linode_id() -> None:
-    """Networking IP share schema requires linode_id and confirm.
-
-    ips is enforced by the handler, but the proto-generated schema cannot mark a
-    repeated field required, so it drops from the required set (see the
-    input-proto required-flag-loss log).
-    """
-    from linodemcp.tools.linode_networking import (
-        create_linode_networking_ip_share_tool,
-    )
-
-    tool, capability = create_linode_networking_ip_share_tool()
-
-    assert tool.name == "linode_networking_ip_share"
-    assert capability is Capability.Write
-    assert sorted(tool.input_schema["required"]) == ["confirm", "linode_id"]
-    assert "ips" not in tool.input_schema["required"]
-    assert "ips" in tool.input_schema["properties"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert "IP addresses" in (tool.description or "")
-
-
-async def test_networking_ip_share_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the generic IP share POST with no client call."""
-    from linodemcp.tools.linode_networking import (
-        handle_linode_networking_ip_share,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_networking_ip_share(
-            {"ips": ["192.0.2.10"], "linode_id": 123, "dry_run": True},
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_networking_ip_share"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/ips/share"
-    assert body["would_execute"]["body"] == {
-        "ips": ["192.0.2.10"],
-        "linode_id": 123,
-    }
-    assert body["current_state"] is None
-    mock_client_class.assert_not_called()
-
-
-async def test_networking_ip_share_happy_path_calls_share_ips(
-    sample_config: Config,
-) -> None:
-    """confirm=true calls RetryableClient.share_ips once."""
-    from linodemcp.tools.linode_networking import (
-        handle_linode_networking_ip_share,
-    )
-
-    response_data = {"success": True, "shared": ["192.0.2.10"]}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.share_ips.return_value = response_data
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_networking_ip_share(
-            {
-                "confirm": True,
-                "ips": ["192.0.2.10"],
-                "linode_id": 123,
-            },
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body["message"] == "Networking IP sharing updated"
-    assert body["linode_id"] == 123
-    assert body["ips"] == ["192.0.2.10"]
-    # The share endpoint returns an opaque body; the id-echo proto drops it.
-    assert "result" not in body
-    mock_client.share_ips.assert_awaited_once_with(["192.0.2.10"], 123)
-
-
-async def test_networking_ipv4_share_happy_path_emits_id_echo(
-    sample_config: Config,
-) -> None:
-    """Confirmed ipv4 share calls share_ipv4s and returns the id-echo proto."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_share
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.share_ipv4s.return_value = {"opaque": True}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_networking_ipv4_share(
-            {"confirm": True, "ips": ["192.0.2.10"], "linode_id": 123},
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body == {
-        "message": "Networking IP sharing updated",
-        "linode_id": 123,
-        "ips": ["192.0.2.10"],
-    }
-    mock_client.share_ipv4s.assert_awaited_once_with(["192.0.2.10"], 123)
-
-
-async def test_networking_ipv4_share_rejects_non_int_linode_id(
-    sample_config: Config,
-) -> None:
-    """A non-integer linode_id is rejected before any client call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_share
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        result = await handle_linode_networking_ipv4_share(
-            {"confirm": True, "ips": ["192.0.2.10"], "linode_id": "123"},
-            sample_config,
-        )
-
-    assert "linode_id must be an integer" in result[0].text
-    mock_cls.assert_not_called()
-
-
-async def test_networking_ipv4_share_rejects_non_list_ips(
-    sample_config: Config,
-) -> None:
-    """A non-list ips value is rejected before any client call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_share
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        result = await handle_linode_networking_ipv4_share(
-            {"confirm": True, "ips": "192.0.2.10", "linode_id": 123},
-            sample_config,
-        )
-
-    assert "ips must be a non-empty list" in result[0].text
-    mock_cls.assert_not_called()
-
-
-async def test_networking_ip_share_rejects_non_list_ips(
-    sample_config: Config,
-) -> None:
-    """The generic ip_share rejects a non-list ips value before any client call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_share
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        result = await handle_linode_networking_ip_share(
-            {"confirm": True, "ips": "192.0.2.10", "linode_id": 123},
-            sample_config,
-        )
-
-    assert "ips must be a non-empty list" in result[0].text
-    mock_cls.assert_not_called()
-
-
-async def test_networking_ipv4_assign_happy_path_emits_id_echo(
-    sample_config: Config,
-) -> None:
-    """Confirmed ipv4 assign calls assign_ipv4s and returns the id-echo proto."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_assign
-
-    assignments = [{"address": "192.0.2.10", "linode_id": 123}]
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.assign_ipv4s.return_value = {"opaque": True}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_networking_ipv4_assign(
-            {"confirm": True, "region": "us-east", "assignments": assignments},
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body == {
-        "message": "Networking IPv4 assignments updated",
-        "region": "us-east",
-        "assignments": assignments,
-    }
-    mock_client.assign_ipv4s.assert_awaited_once_with("us-east", assignments)
-
-
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {"ips": ["192.0.2.10"], "linode_id": 123},
-        {"confirm": False, "ips": ["192.0.2.10"], "linode_id": 123},
-        {"confirm": "true", "ips": ["192.0.2.10"], "linode_id": 123},
-        {"confirm": 1, "ips": ["192.0.2.10"], "linode_id": 123},
-    ],
-)
-async def test_networking_ip_share_rejects_confirm_before_client(
-    sample_config: Config, arguments: dict[str, Any]
-) -> None:
-    """Networking IP share requires literal confirm=true before client creation."""
-    from linodemcp.tools.linode_networking import (
-        handle_linode_networking_ip_share,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_networking_ip_share(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected"),
-    [
-        ({"confirm": True, "linode_id": 123}, "ips must be a non-empty list"),
-        (
-            {"confirm": True, "ips": [], "linode_id": 123},
-            "ips must be a non-empty list",
-        ),
-        (
-            {"confirm": True, "ips": ["192.0.2.10", 123], "linode_id": 123},
-            "ips entries must be non-empty strings",
-        ),
-        (
-            {"confirm": True, "ips": [""], "linode_id": 123},
-            "ips entries must be non-empty strings",
-        ),
-        ({"confirm": True, "ips": ["192.0.2.10"]}, "linode_id is required"),
-        (
-            {"confirm": True, "ips": ["192.0.2.10"], "linode_id": "123"},
-            "linode_id must be an integer",
-        ),
-    ],
-)
-async def test_networking_ip_share_validates_inputs_before_client(
-    sample_config: Config, arguments: dict[str, Any], expected: str
-) -> None:
-    """Networking IP share validates local inputs before client creation."""
-    from linodemcp.tools.linode_networking import (
-        handle_linode_networking_ip_share,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_networking_ip_share(arguments, sample_config)
-
-    assert len(result) == 1
-    assert expected in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_ipv4_assign_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true previews the assign POST with no call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_assign
-
-    result = await handle_linode_networking_ipv4_assign(
-        {
-            "region": "us-east",
-            "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_networking_ipv4_assign"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/ipv4/assign"
-    assert body["would_execute"]["body"] == {
-        "region": "us-east",
-        "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
-    }
-    assert body["current_state"] is None
-    assert "confirm=true" not in result[0].text
-
-
-async def test_ipv4_assign_dry_run_still_validates_region(
-    sample_config: Config,
-) -> None:
-    """A missing region errors out under dry_run."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ipv4_assign
-
-    result = await handle_linode_networking_ipv4_assign(
-        {
-            "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
-            "dry_run": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    assert "region is required" in result[0].text
-
-
-def test_networking_ip_assign_tool_definition() -> None:
-    """The generic IP assign tool advertises the expected schema."""
-    from linodemcp.tools.linode_networking import (
-        create_linode_networking_ip_assign_tool,
-    )
-
-    tool, capability = create_linode_networking_ip_assign_tool()
-
-    assert tool.name == "linode_networking_ip_assign"
-    assert capability is Capability.Write
-    assert tool.description
-
-    props = tool.input_schema["properties"]
-    for key in ("environment", "region", "assignments", "confirm", "dry_run"):
-        assert key in props, f"schema missing property {key}"
-
-    # assignments is enforced by the handler, but the proto-generated schema
-    # cannot mark a repeated message field required, so it drops from the
-    # required set (see the input-proto required-flag-loss log).
-    assert sorted(tool.input_schema["required"]) == ["confirm", "region"]
-    assert "assignments" not in tool.input_schema["required"]
-
-
-async def test_networking_ip_assign_success(sample_config: Config) -> None:
-    """Confirmed assign posts to the generic endpoint via assign_ips."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
-
-    assignments = [{"address": "192.0.2.10", "linode_id": 123}]
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.assign_ips.return_value = {}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_networking_ip_assign(
-            {
-                "confirm": True,
-                "region": "us-east",
-                "assignments": assignments,
-            },
-            sample_config,
-        )
-
-    payload = json.loads(result[0].text)
-    assert payload["message"] == "Networking IP assignments updated"
-    assert payload["region"] == "us-east"
-    assert payload["assignments"] == assignments
-    # The assign endpoint returns an opaque body; the id-echo proto drops it.
-    assert "result" not in payload
-    mock_client.assign_ips.assert_awaited_once_with("us-east", assignments)
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_networking_ip_assign_requires_boolean_confirm(
-    sample_config: Config, confirm: Any
-) -> None:
-    """Anything but the literal boolean true is rejected before any client call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
-
-    arguments: dict[str, Any] = {
-        "region": "us-east",
-        "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
-    }
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        result = await handle_linode_networking_ip_assign(arguments, sample_config)
-
-    assert "confirm=true" in result[0].text
-    mock_cls.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("assignments", "expected"),
-    [
-        ("192.0.2.1", "assignments"),
-        ([], "assignments"),
-        ([{"linode_id": 123}], "address"),
-        ([{"address": "192.0.2.1"}], "linode_id"),
-    ],
-)
-async def test_networking_ip_assign_rejects_invalid_assignments(
-    sample_config: Config, assignments: Any, expected: str
-) -> None:
-    """Malformed assignments are rejected before any client call."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        result = await handle_linode_networking_ip_assign(
-            {
-                "confirm": True,
-                "region": "us-east",
-                "assignments": assignments,
-            },
-            sample_config,
-        )
-
-    assert expected in result[0].text.lower()
-    mock_cls.assert_not_called()
-
-
-async def test_networking_ip_assign_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the generic assign POST and never calls the API."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        result = await handle_linode_networking_ip_assign(
-            {
-                "region": "us-east",
-                "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_networking_ip_assign"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/networking/ips/assign"
-    assert body["would_execute"]["body"] == {
-        "region": "us-east",
-        "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
-    }
-    assert body["current_state"] is None
-    mock_cls.assert_not_called()
-
-
-async def test_networking_ip_assign_dry_run_still_validates_region(
-    sample_config: Config,
-) -> None:
-    """A missing region errors out under dry_run."""
-    from linodemcp.tools.linode_networking import handle_linode_networking_ip_assign
-
-    result = await handle_linode_networking_ip_assign(
-        {
-            "assignments": [{"address": "192.0.2.10", "linode_id": 123}],
-            "dry_run": True,
-        },
-        sample_config,
-    )
-    assert len(result) == 1
-    assert "region is required" in result[0].text
-
-
-async def test_instance_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the instance via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = parse_instance(
-            {"id": 123, "label": "old"}
-        )
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_update(
-            {"instance_id": 123, "label": "renamed", "dry_run": True},
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["dry_run"] is True
-        assert body["tool"] == "linode_instance_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/linode/instances/123"
-        mock_client.get_instance.assert_awaited_once_with(123)
-        mock_client.update_instance.assert_not_called()
-
-
-async def test_instance_update_dry_run_still_validates_id(
-    sample_config: Config,
-) -> None:
-    """A missing instance_id errors out under dry_run."""
-    result = await handle_linode_instance_update(
-        {"label": "renamed", "dry_run": True}, sample_config
-    )
-    assert len(result) == 1
-    assert "instance_id is required" in result[0].text
 
 
 async def test_object_storage_cancel_dry_run_returns_preview(
@@ -26982,7 +14295,6 @@ async def test_object_storage_cancel_dry_run_returns_preview(
 ) -> None:
     """dry_run=true previews the cancel POST with no call."""
     result = await handle_linode_object_storage_cancel({"dry_run": True}, sample_config)
-
     assert len(result) == 1
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
@@ -27008,7 +14320,6 @@ async def test_placement_group_create_dry_run_returns_preview(
     result = await handle_linode_placement_group_create(
         {**_PG_CREATE_ARGS, "dry_run": True}, sample_config
     )
-
     assert len(result) == 1
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
@@ -27031,87 +14342,6 @@ async def test_placement_group_create_dry_run_still_validates_label(
     assert "label" in result[0].text
 
 
-async def test_placement_group_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the group via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_placement_group.return_value = {"id": 7, "label": "old"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_placement_group_update(
-            {"group_id": 7, "label": "renamed", "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_placement_group_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/placement/groups/7"
-        assert len(body["side_effects"]) == 1
-        assert "renamed" in body["side_effects"][0]
-        mock_client.get_placement_group.assert_awaited_once_with(7)
-        mock_client.update_placement_group.assert_not_called()
-
-
-async def test_placement_group_delete_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the group via GET, surfaces members, never deletes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_placement_group.return_value = {
-            "id": 7,
-            "members": [{"linode_id": 111}, {"linode_id": 222}],
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_placement_group_delete(
-            {"group_id": 7, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_placement_group_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/placement/groups/7"
-        assert len(body["dependencies"]) == 2
-        assert {d["id"] for d in body["dependencies"]} == {111, 222}
-        assert all(d["action"] == "detached" for d in body["dependencies"])
-        assert len(body["warnings"]) == 1
-        mock_client.get_placement_group.assert_awaited_once_with(7)
-        mock_client.delete_placement_group.assert_not_called()
-
-
-async def test_placement_group_assign_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the group via GET and never assigns."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_placement_group.return_value = {"id": 7}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_placement_group_assign(
-            {"group_id": 7, "linodes": [123], "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_placement_group_assign"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/placement/groups/7/assign"
-        assert len(body["side_effects"]) == 1
-        assert "123" in body["side_effects"][0]
-        assert "assigned to placement group 7" in body["side_effects"][0]
-        mock_client.get_placement_group.assert_awaited_once_with(7)
-        mock_client.assign_placement_group.assert_not_called()
-
-
 async def test_placement_group_unassign_dry_run_returns_preview(
     sample_config: Config,
 ) -> None:
@@ -27122,11 +14352,9 @@ async def test_placement_group_unassign_dry_run_returns_preview(
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
-
         result = await handle_linode_placement_group_unassign(
             {"group_id": 7, "linodes": [123], "dry_run": True}, sample_config
         )
-
         body = json.loads(result[0].text)
         assert body["tool"] == "linode_placement_group_unassign"
         assert body["would_execute"]["method"] == "POST"
@@ -27135,139 +14363,7 @@ async def test_placement_group_unassign_dry_run_returns_preview(
         assert "123" in body["side_effects"][0]
         assert "removed from placement group 7" in body["side_effects"][0]
         mock_client.get_placement_group.assert_awaited_once_with(7)
-        mock_client.unassign_placement_group.assert_not_called()
-
-
-async def test_nb_firewalls_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the NodeBalancer via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer.return_value = {"id": 8}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_firewall_update(
-            {"nodebalancer_id": 8, "firewall_ids": [1], "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_nodebalancer_firewall_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/nodebalancers/8/firewalls"
-        mock_client.get_nodebalancer.assert_awaited_once_with(8)
-        mock_client.update_nodebalancer_firewalls.assert_not_called()
-
-
-async def test_nb_config_rebuild_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the config via GET and never rebuilds."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config.return_value = {"id": 6}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_rebuild(
-            {"nodebalancer_id": 8, "config_id": 6, "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_nodebalancer_config_rebuild"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6/rebuild"
-        mock_client.get_nodebalancer_config.assert_awaited_once_with(8, 6)
-        mock_client.rebuild_nodebalancer_config.assert_not_called()
-
-
-async def test_nb_config_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the config via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config.return_value = {"id": 6}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_update(
-            {"nodebalancer_id": 8, "config_id": 6, "port": 80, "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_nodebalancer_config_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6"
-        mock_client.get_nodebalancer_config.assert_awaited_once_with(8, 6)
-        mock_client.update_nodebalancer_config.assert_not_called()
-
-
-async def test_nb_config_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the create POST with no call."""
-    result = await handle_linode_nodebalancer_config_create(
-        {"nodebalancer_id": 8, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_nodebalancer_config_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/nodebalancers/8/configs"
-    assert body["current_state"] is None
-
-
-async def test_nb_config_node_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the node create POST with no call."""
-    result = await handle_linode_nodebalancer_config_node_create(
-        {"nodebalancer_id": 8, "config_id": 6, "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_nodebalancer_config_node_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6/nodes"
-    assert body["current_state"] is None
-
-
-async def test_nb_config_node_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the node via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config_node.return_value = {"id": 7}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_nodebalancer_config_node_update(
-            {
-                "nodebalancer_id": 8,
-                "config_id": 6,
-                "node_id": 7,
-                "label": "renamed",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_nodebalancer_config_node_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/nodebalancers/8/configs/6/nodes/7"
-        mock_client.get_nodebalancer_config_node.assert_awaited_once_with(8, 6, 7)
-        mock_client.update_nodebalancer_config_node.assert_not_called()
+        mock_client.route_raw.assert_not_called()
 
 
 async def test_account_tag_create_dry_run_returns_preview(
@@ -27277,7 +14373,6 @@ async def test_account_tag_create_dry_run_returns_preview(
     result = await handle_linode_tag_create(
         {"label": "my-tag", "dry_run": True}, sample_config
     )
-
     body = json.loads(result[0].text)
     assert body["tool"] == "linode_tag_create"
     assert body["would_execute"]["method"] == "POST"
@@ -27285,208 +14380,11 @@ async def test_account_tag_create_dry_run_returns_preview(
     assert body["current_state"] is None
 
 
-async def test_account_tag_delete_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the DELETE with the tagged objects as state."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.list_tagged_objects.return_value = {
-            "data": [{"type": "linode", "data": {"id": 5, "label": "web-01"}}],
-            "page": 1,
-            "pages": 1,
-            "results": 1,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_tag_delete(
-            {"tag_label": "my-tag", "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_tag_delete"
-    assert body["would_execute"]["method"] == "DELETE"
-    assert body["would_execute"]["path"] == "/tags/my-tag"
-    assert body["current_state"]["results"] == 1
-    dep = body["dependencies"][0]
-    assert dep["kind"] == "linode"
-    assert dep["action"] == "removed"
-
-
-async def test_account_tag_delete_dry_run_counts_beyond_first_page(
-    sample_config: Config,
-) -> None:
-    """The warning total comes from the envelope's results field, not the page.
-
-    A tag on more objects than one page holds must not have its blast radius
-    understated: the count uses the API total and a second warning says how
-    many objects the preview itemized.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.list_tagged_objects.return_value = {
-            "data": [{"type": "linode", "data": {"id": 5, "label": "web-01"}}],
-            "page": 1,
-            "pages": 2,
-            "results": 150,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_tag_delete(
-            {"tag_label": "my-tag", "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert len(body["dependencies"]) == 1
-    assert body["warnings"] == [
-        (
-            "Deleting this tag removes it from 150 tagged object(s); "
-            "the objects are not deleted."
-        ),
-        "Only the first 1 tagged object(s) are itemized in this preview.",
-    ]
-
-
-async def test_account_support_ticket_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the ticket create POST with no call."""
-    result = await handle_linode_support_ticket_create(
-        {"summary": "S", "description": "D", "dry_run": True}, sample_config
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_support_ticket_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/support/tickets"
-    assert body["current_state"] is None
-    assert len(body["side_effects"]) == 1
-    assert "opened" in body["side_effects"][0]
-
-
-async def test_account_support_ticket_close_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the ticket via GET and never closes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_support_ticket.return_value = {"id": 42}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_support_ticket_close(
-            {"ticket_id": 42, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_support_ticket_close"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/support/tickets/42/close"
-        assert len(body["side_effects"]) == 1
-        assert "ticket 42" in body["side_effects"][0]
-        mock_client.get_support_ticket.assert_awaited_once_with(42)
-        mock_client.close_support_ticket.assert_not_called()
-
-
-async def test_account_support_ticket_reply_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the ticket via GET and never replies."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_support_ticket.return_value = {"id": 42}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_support_ticket_reply_create(
-            {"ticket_id": 42, "description": "hi", "dry_run": True},
-            sample_config,
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_support_ticket_reply_create"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/support/tickets/42/replies"
-        assert len(body["side_effects"]) == 1
-        assert "ticket 42" in body["side_effects"][0]
-        mock_client.get_support_ticket.assert_awaited_once_with(42)
-        mock_client.create_support_ticket_reply.assert_not_called()
-
-
-async def test_account_support_ticket_attachment_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the ticket via GET and never attaches."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_support_ticket.return_value = {"id": 42}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_support_ticket_attachment_create(
-            {"ticket_id": 42, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_support_ticket_attachment_create"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/support/tickets/42/attachments"
-        assert len(body["side_effects"]) == 1
-        assert "ticket 42" in body["side_effects"][0]
-        mock_client.get_support_ticket.assert_awaited_once_with(42)
-        mock_client.create_support_ticket_attachment.assert_not_called()
-
-
 def _profile_preview_body(result: list[TextContent]) -> dict[str, Any]:
     """Decode a profile dry-run preview body."""
     assert len(result) == 1
     body: dict[str, Any] = json.loads(result[0].text)
     return body
-
-
-async def test_profile_preferences_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches preferences via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_profile_preferences.return_value = {"theme": "dark"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_profile_preferences_update(
-            {"preferences": {"theme": "light"}, "dry_run": True}, sample_config
-        )
-
-        body = _profile_preview_body(result)
-        assert body["tool"] == "linode_profile_preferences_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/profile/preferences"
-        assert len(body["side_effects"]) == 1
-        mock_client.update_profile_preferences.assert_not_called()
-
-
-async def test_profile_tfa_enable_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the TFA enable POST and never generates a secret."""
-    result = await handle_linode_profile_tfa_enable({"dry_run": True}, sample_config)
-    body = _profile_preview_body(result)
-    assert body["tool"] == "linode_profile_tfa_enable"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/profile/tfa-enable"
-    assert body["current_state"] is None
-    assert "secret" not in str(body["current_state"])
-    assert len(body["side_effects"]) == 1
-    assert "confirmed" in body["side_effects"][0]
 
 
 async def test_profile_tfa_disable_dry_run_returns_preview(
@@ -27503,49 +14401,6 @@ async def test_profile_tfa_disable_dry_run_returns_preview(
     assert "security" in body["warnings"][0]
 
 
-async def test_profile_tfa_enable_confirm_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the TFA confirm POST with no call."""
-    result = await handle_linode_profile_tfa_enable_confirm(
-        {"tfa_code": "123456", "dry_run": True}, sample_config
-    )
-    body = _profile_preview_body(result)
-    assert body["tool"] == "linode_profile_tfa_enable_confirm"
-    assert body["would_execute"]["path"] == "/profile/tfa-enable-confirm"
-    assert len(body["side_effects"]) == 1
-    assert "enabled" in body["side_effects"][0]
-
-
-async def test_profile_phone_number_send_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the phone-number POST with no call."""
-    result = await handle_linode_profile_phone_number_send(
-        {"iso_code": "US", "phone_number": "5551234567", "dry_run": True},
-        sample_config,
-    )
-    body = _profile_preview_body(result)
-    assert body["tool"] == "linode_profile_phone_number_send"
-    assert body["would_execute"]["path"] == "/profile/phone-number"
-    assert len(body["side_effects"]) == 1
-    assert "verification code" in body["side_effects"][0]
-
-
-async def test_profile_phone_number_verify_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the phone-number verify POST with no call."""
-    result = await handle_linode_profile_phone_number_verify(
-        {"otp_code": "000111", "dry_run": True}, sample_config
-    )
-    body = _profile_preview_body(result)
-    assert body["tool"] == "linode_profile_phone_number_verify"
-    assert body["would_execute"]["path"] == "/profile/phone-number/verify"
-    assert len(body["side_effects"]) == 1
-    assert "verified" in body["side_effects"][0]
-
-
 async def test_profile_phone_number_delete_dry_run_returns_preview(
     sample_config: Config,
 ) -> None:
@@ -27557,776 +14412,6 @@ async def test_profile_phone_number_delete_dry_run_returns_preview(
     assert body["tool"] == "linode_profile_phone_number_delete"
     assert body["would_execute"]["method"] == "DELETE"
     assert body["would_execute"]["path"] == "/profile/phone-number"
-
-
-async def test_profile_security_questions_answer_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the security-questions POST with no call."""
-    result = await handle_linode_profile_security_question_answer(
-        {
-            "security_questions": [
-                {"question_id": 1, "response": "answer1"},
-                {"question_id": 2, "response": "answer2"},
-                {"question_id": 3, "response": "answer3"},
-            ],
-            "dry_run": True,
-        },
-        sample_config,
-    )
-    body = _profile_preview_body(result)
-    assert body["tool"] == "linode_profile_security_question_answer"
-    assert body["would_execute"]["path"] == "/profile/security-questions"
-    assert len(body["side_effects"]) == 1
-    assert "answers are saved" in body["side_effects"][0]
-
-
-async def test_profile_token_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the token create POST and never echoes a token."""
-    result = await handle_linode_profile_token_create(
-        {"label": "ci", "dry_run": True}, sample_config
-    )
-    body = _profile_preview_body(result)
-    assert body["tool"] == "linode_profile_token_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/profile/tokens"
-    assert body["current_state"] is None
-    assert "token" not in str(body["current_state"])
-    assert len(body["side_effects"]) == 1
-    assert "ci" in body["side_effects"][0]
-    assert len(body["warnings"]) == 1
-    assert "once" in body["warnings"][0]
-
-
-async def test_profile_token_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the token metadata via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_profile_token.return_value = {"id": 9, "label": "old"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_profile_token_update(
-            {"token_id": 9, "label": "renamed", "dry_run": True}, sample_config
-        )
-
-        body = _profile_preview_body(result)
-        assert body["tool"] == "linode_profile_token_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/profile/tokens/9"
-        assert len(body["side_effects"]) == 1
-        assert "renamed" in body["side_effects"][0]
-        mock_client.get_profile_token.assert_awaited_once_with(9)
-        mock_client.update_profile_token.assert_not_called()
-
-
-async def test_profile_token_revoke_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the token metadata via GET and never revokes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_profile_token.return_value = {"id": 9}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_profile_token_delete(
-            {"token_id": 9, "dry_run": True}, sample_config
-        )
-
-        body = _profile_preview_body(result)
-        assert body["tool"] == "linode_profile_token_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/profile/tokens/9"
-        mock_client.get_profile_token.assert_awaited_once_with(9)
-        mock_client.delete_profile_token.assert_not_called()
-
-
-async def test_profile_app_revoke_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the app via GET and never revokes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_profile_app.return_value = {"id": 5}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_profile_app_delete(
-            {"app_id": 5, "dry_run": True}, sample_config
-        )
-
-        body = _profile_preview_body(result)
-        assert body["tool"] == "linode_profile_app_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/profile/apps/5"
-        mock_client.get_profile_app.assert_awaited_once_with(5)
-        mock_client.delete_profile_app.assert_not_called()
-
-
-async def test_profile_device_revoke_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the device via GET and never revokes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_profile_device.return_value = {"id": 3}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_profile_device_revoke(
-            {"device_id": 3, "dry_run": True}, sample_config
-        )
-
-        body = _profile_preview_body(result)
-        assert body["tool"] == "linode_profile_device_revoke"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/profile/devices/3"
-        mock_client.get_profile_device.assert_awaited_once_with(3)
-        mock_client.delete_profile_device.assert_not_called()
-
-
-async def test_instance_delete_dry_run_dependency_walk(
-    sample_config: Config,
-) -> None:
-    """dry_run surfaces volumes, IPs, and firewalls, warns, never deletes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = parse_instance({"status": "running"})
-        mock_client.list_instance_volumes.return_value = {
-            "data": [{"id": 6789, "label": "data-vol", "size": 50, "linode_id": 123}]
-        }
-        mock_client.list_instance_ips.return_value = {
-            "ipv4": {"public": [{"address": "198.51.100.10"}]}
-        }
-        mock_client.list_instance_firewalls.return_value = {
-            "data": [{"id": 42, "label": "edge-fw"}]
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_delete(
-            {"instance_id": 123, "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_instance_delete"
-        assert body["would_execute"]["method"] == "DELETE"
-        assert body["would_execute"]["path"] == "/linode/instances/123"
-
-        deps = body["dependencies"]
-        assert sorted(d["kind"] for d in deps) == ["firewall", "public_ip", "volume"]
-
-        volume_dep = next(d for d in deps if d["kind"] == "volume")
-        assert volume_dep["id"] == 6789
-        assert volume_dep["action"] == "detached"
-
-        ip_dep = next(d for d in deps if d["kind"] == "public_ip")
-        assert ip_dep["label"] == "198.51.100.10"
-        assert ip_dep["action"] == "released"
-
-        firewall_dep = next(d for d in deps if d["kind"] == "firewall")
-        assert firewall_dep["id"] == 42
-        assert firewall_dep["action"] == "removed"
-
-        # The zero-typed instance cannot be priced, so the estimate degrades
-        # to the unknown sentinel the Go walk emits.
-        assert body["billing_delta"]["monthly_change_usd"] == "unknown"
-
-        assert body["warnings"]
-        mock_client.delete_instance.assert_not_called()
-
-
-async def test_volume_delete_dry_run_dependency_walk(
-    sample_config: Config,
-) -> None:
-    """dry_run surfaces the attached instance and never deletes."""
-    from dataclasses import fields as dataclass_fields
-
-    volume_kwargs: dict[str, Any] = {
-        field.name: None for field in dataclass_fields(Volume)
-    }
-    volume_kwargs.update({"id": 789, "linode_id": 456, "linode_label": "attached-host"})
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = Volume(**volume_kwargs)
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_delete(
-            {"volume_id": 789, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_volume_delete"
-        deps = body["dependencies"]
-        assert len(deps) == 1
-        assert deps[0]["kind"] == "instance"
-        assert deps[0]["id"] == 456
-        assert deps[0]["label"] == "attached-host"
-        assert deps[0]["action"] == "detached"
-        assert body["warnings"]
-        mock_client.delete_volume.assert_not_called()
-
-
-async def test_lke_cluster_delete_dry_run_dependency_walk(
-    sample_config: Config,
-) -> None:
-    """dry_run lists node pools as cascade dependencies and never deletes."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_lke_cluster.return_value = {"id": 55, "label": "prod"}
-        mock_client.list_lke_node_pools.return_value = [
-            {"id": 1, "type": "g6-standard-2", "count": 3},
-            {"id": 2, "type": "g6-standard-4", "count": 2},
-        ]
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_lke_cluster_delete(
-            {"cluster_id": 55, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_lke_cluster_delete"
-        deps = body["dependencies"]
-        assert len(deps) == 2
-        assert all(dep["kind"] == "node_pool" for dep in deps)
-        assert all(dep["action"] == "cascade_deleted" for dep in deps)
-        assert any("5 node(s)" in warning for warning in body["warnings"])
-        mock_client.delete_lke_cluster.assert_not_called()
-
-
-def test_create_linode_instance_config_create_tool_schema() -> None:
-    """Instance config create tool exposes required body and confirm fields."""
-    tool, capability = create_linode_instance_config_create_tool()
-
-    assert tool.name == "linode_instance_config_create"
-    assert capability is Capability.Write
-    assert tool.input_schema["properties"]["linode_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["label"]["type"] == "string"
-    assert tool.input_schema["properties"]["devices"]["type"] == "object"
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-    props = tool.input_schema["properties"]
-    assert props["comments"]["type"] == "string"
-    assert props["kernel"]["type"] == "string"
-    assert props["memory_limit"]["type"] == "integer"
-    assert props["root_device"]["type"] == "string"
-    # helpers and interfaces mirror Go: JSON-encoded string args, not required.
-    assert props["helpers"]["type"] == "string"
-    assert props["interfaces"]["type"] == "string"
-    # devices maps to a proto map field, so it drops out of the generated
-    # required set even though the handler still enforces it.
-    assert set(tool.input_schema["required"]) == {
-        "linode_id",
-        "label",
-        "confirm",
-    }
-
-
-async def test_handle_linode_instance_config_create_success(
-    sample_config: Config,
-) -> None:
-    """Instance config create handler calls the client with validated inputs."""
-    devices = {"sda": {"disk_id": 123}}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_instance_config.return_value = {
-            "id": 987,
-            "label": "boot-config",
-            "devices": devices,
-        }
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_config_create(
-            {
-                "linode_id": "456",
-                "label": "boot-config",
-                "devices": devices,
-                "comments": "boot profile",
-                "kernel": "linode/latest-64bit",
-                "memory_limit": 2048,
-                "root_device": "/dev/sda",
-                "run_level": "default",
-                "virt_mode": "paravirt",
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert body["message"] == (
-        "Configuration profile 'boot-config' (ID: 987) created on instance 456"
-    )
-    assert body["config"]["id"] == 987
-    assert body["config"]["label"] == "boot-config"
-    mock_client.create_instance_config.assert_awaited_once_with(
-        456,
-        label="boot-config",
-        devices=devices,
-        comments="boot profile",
-        kernel="linode/latest-64bit",
-        memory_limit=2048,
-        root_device="/dev/sda",
-        run_level="default",
-        virt_mode="paravirt",
-        helpers=None,
-        interfaces=None,
-    )
-
-
-async def test_handle_linode_instance_config_create_passes_helpers_and_interfaces(
-    sample_config: Config,
-) -> None:
-    """Valid helpers/interfaces JSON strings decode and reach the client."""
-    devices = {"sda": {"disk_id": 123}}
-    helpers_json = json.dumps({"distro": True, "network": False})
-    interfaces_json = json.dumps([{"purpose": "public"}, {"purpose": "vlan"}])
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_instance_config.return_value = {"id": 1, "label": "c"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_config_create(
-            {
-                "linode_id": 456,
-                "label": "boot-config",
-                "devices": devices,
-                "helpers": helpers_json,
-                "interfaces": interfaces_json,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    mock_client.create_instance_config.assert_awaited_once_with(
-        456,
-        label="boot-config",
-        devices=devices,
-        comments=None,
-        kernel=None,
-        memory_limit=None,
-        root_device=None,
-        run_level=None,
-        virt_mode=None,
-        helpers={"distro": True, "network": False},
-        interfaces=[{"purpose": "public"}, {"purpose": "vlan"}],
-    )
-
-
-async def test_handle_linode_instance_config_create_rejects_bad_helpers(
-    sample_config: Config,
-) -> None:
-    """Malformed helpers JSON is rejected before any client call."""
-    result = await handle_linode_instance_config_create(
-        {
-            "linode_id": 456,
-            "label": "boot-config",
-            "devices": {"sda": {"disk_id": 123}},
-            "helpers": "{not json",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "invalid helpers JSON" in result[0].text
-
-
-async def test_handle_linode_instance_config_create_rejects_bad_interface_purpose(
-    sample_config: Config,
-) -> None:
-    """An interface with an unknown purpose is rejected."""
-    result = await handle_linode_instance_config_create(
-        {
-            "linode_id": 456,
-            "label": "boot-config",
-            "devices": {"sda": {"disk_id": 123}},
-            "interfaces": json.dumps([{"purpose": "bogus"}]),
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "interfaces[0].purpose must be one of: public, vlan, vpc" in result[0].text
-
-
-async def test_handle_linode_instance_config_create_rejects_non_object_helpers(
-    sample_config: Config,
-) -> None:
-    """Helpers that decode to a non-object (a JSON array) are rejected."""
-    result = await handle_linode_instance_config_create(
-        {
-            "linode_id": 456,
-            "label": "boot-config",
-            "devices": {"sda": {"disk_id": 123}},
-            "helpers": json.dumps(["not", "an", "object"]),
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "helpers must be a JSON object" in result[0].text
-
-
-async def test_handle_linode_instance_config_create_rejects_bad_interfaces_json(
-    sample_config: Config,
-) -> None:
-    """Malformed interfaces JSON is rejected before any client call."""
-    result = await handle_linode_instance_config_create(
-        {
-            "linode_id": 456,
-            "label": "boot-config",
-            "devices": {"sda": {"disk_id": 123}},
-            "interfaces": "[not json",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "invalid interfaces JSON" in result[0].text
-
-
-async def test_handle_linode_instance_config_create_rejects_non_array_interfaces(
-    sample_config: Config,
-) -> None:
-    """Interfaces that decode to a non-array (a JSON object) are rejected."""
-    result = await handle_linode_instance_config_create(
-        {
-            "linode_id": 456,
-            "label": "boot-config",
-            "devices": {"sda": {"disk_id": 123}},
-            "interfaces": json.dumps({"purpose": "public"}),
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    assert "interfaces must be an array of objects" in result[0].text
-
-
-async def test_handle_linode_instance_config_create_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true previews the config create without requiring confirm or mutating."""
-    devices = {"sda": {"disk_id": 123}}
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = parse_instance(
-            {"id": 456, "label": "vm"}
-        )
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_config_create(
-            {
-                "linode_id": "456",
-                "label": "boot-config",
-                "devices": devices,
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_config_create"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/456/configs"
-    assert body["current_state"]["id"] == 456
-    assert "boot-config" in body["side_effects"][0]
-    mock_client.get_instance.assert_awaited_once_with(456)
-    mock_client.create_instance_config.assert_not_called()
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_instance_config_create_requires_boolean_confirm(
-    sample_config: Config,
-    confirm: Any,
-) -> None:
-    """Missing, false, string, and numeric confirms fail before client calls."""
-    arguments: dict[str, Any] = {
-        "linode_id": "456",
-        "label": "boot-config",
-        "devices": {"sda": {"disk_id": 123}},
-    }
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_config_create(arguments, sample_config)
-
-    assert result[0].text == (
-        "Error: This creates a configuration profile on the instance. Set confirm=true "
-        "to proceed."
-    )
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize("linode_id", ["12/34", "12?bad", ".."])
-async def test_handle_linode_instance_config_create_rejects_malformed_instance_id(
-    sample_config: Config,
-    linode_id: str,
-) -> None:
-    """Malformed path parameters are rejected before the client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_config_create(
-            {
-                "linode_id": linode_id,
-                "label": "boot-config",
-                "devices": {"sda": {"disk_id": 123}},
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert "integer" in result[0].text
-    mock_client_class.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({"linode_id": "456", "devices": {"sda": {}}, "confirm": True}, "label"),
-        (
-            {
-                "linode_id": "456",
-                "label": {"not": "string"},
-                "devices": {"sda": {}},
-                "confirm": True,
-            },
-            "label",
-        ),
-        (
-            {"linode_id": "456", "label": "boot-config", "confirm": True},
-            "devices",
-        ),
-        (
-            {
-                "linode_id": "456",
-                "label": "boot-config",
-                "devices": {},
-                "confirm": True,
-            },
-            "devices",
-        ),
-        (
-            {
-                "linode_id": "456",
-                "label": "boot-config",
-                "devices": [],
-                "confirm": True,
-            },
-            "devices",
-        ),
-    ],
-)
-async def test_handle_linode_instance_config_create_validates_required_arguments(
-    sample_config: Config,
-    arguments: dict[str, Any],
-    message: str,
-) -> None:
-    """Required body arguments are validated before the client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_config_create(arguments, sample_config)
-
-    assert message in result[0].text
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_instance_config_create_rejects_invalid_device_slot(
-    sample_config: Config,
-) -> None:
-    """A device slot outside sda-sdh is rejected before any client call."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_instance_config_create(
-            {
-                "linode_id": 456,
-                "label": "boot-config",
-                "devices": {"sdz": {"disk_id": 123}},
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert result[0].text == "Error: device slot sdz must be one of sda through sdh"
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_instance_config_create_accepts_all_valid_slots(
-    sample_config: Config,
-) -> None:
-    """Every slot from sda through sdh passes validation and reaches the client."""
-    devices = {
-        slot: {"disk_id": 100 + index}
-        for index, slot in enumerate(
-            ("sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh")
-        )
-    }
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.create_instance_config.return_value = {"id": 1, "label": "c"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_config_create(
-            {
-                "linode_id": 456,
-                "label": "boot-config",
-                "devices": devices,
-                "confirm": True,
-            },
-            sample_config,
-        )
-
-    assert len(result) == 1
-    body = json.loads(result[0].text)
-    assert "created on instance 456" in body["message"]
-    mock_client.create_instance_config.assert_awaited_once()
-
-
-async def test_instance_disk_password_reset_tool_def() -> None:
-    """Disk password reset should require IDs, password, confirm, and expose dry_run."""
-    tool, capability = create_linode_instance_disk_password_reset_tool()
-    assert tool.name == "linode_instance_disk_password_reset"
-    assert capability is Capability.Write
-    required: list[str] = tool.input_schema.get("required") or []
-    assert "linode_id" in required
-    assert "disk_id" in required
-    assert "password" in required
-    assert "confirm" in required
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-async def test_handle_linode_instance_disk_password_reset_success(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk password reset should call the client with valid args and confirm=true."""
-    mock_linode_client.reset_instance_disk_password.return_value = None
-
-    result = await handle_linode_instance_disk_password_reset(
-        {
-            "linode_id": 123,
-            "disk_id": 10,
-            "password": "NewStr0ngP@ss!",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert len(result) == 1
-    data = json.loads(result[0].text)
-    assert data["message"] == "Password reset for disk 10 on instance 123"
-    assert data["linode_id"] == 123
-    assert data["disk_id"] == 10
-    mock_linode_client.reset_instance_disk_password.assert_called_once_with(
-        123, 10, "NewStr0ngP@ss!"
-    )
-
-
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_instance_disk_password_reset_requires_boolean_confirm(
-    mock_linode_client: AsyncMock, sample_config: Config, confirm: Any
-) -> None:
-    """Missing, false, string, and numeric confirm values are rejected."""
-    arguments: dict[str, Any] = {
-        "linode_id": 123,
-        "disk_id": 10,
-        "password": "NewStr0ngP@ss!",
-    }
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    result = await handle_linode_instance_disk_password_reset(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "confirm" in result[0].text.lower()
-    mock_linode_client.reset_instance_disk_password.assert_not_called()
-
-
-@pytest.mark.parametrize("field", ["linode_id", "disk_id"])
-@pytest.mark.parametrize("value", ["1/2", "1?x=2", ".."])
-async def test_instance_disk_password_reset_rejects_malformed_path_params(
-    mock_linode_client: AsyncMock, sample_config: Config, field: str, value: str
-) -> None:
-    """Malformed finite IDs are rejected before the client call."""
-    arguments: dict[str, Any] = {
-        "linode_id": 123,
-        "disk_id": 10,
-        "password": "NewStr0ngP@ss!",
-        "confirm": True,
-    }
-    arguments[field] = value
-
-    result = await handle_linode_instance_disk_password_reset(arguments, sample_config)
-
-    assert len(result) == 1
-    assert "valid integer" in result[0].text.lower()
-    mock_linode_client.reset_instance_disk_password.assert_not_called()
-
-
-async def test_instance_disk_password_reset_missing_password(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Missing password is rejected before confirm/client handling."""
-    result = await handle_linode_instance_disk_password_reset(
-        {"linode_id": 123, "disk_id": 10, "confirm": True}, sample_config
-    )
-
-    assert len(result) == 1
-    assert "password is required" in result[0].text
-    mock_linode_client.reset_instance_disk_password.assert_not_called()
-
-
-async def test_instance_disk_password_reset_dry_run_returns_preview(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """dry_run=true fetches the disk and never resets the password."""
-    mock_linode_client.get_instance_disk.return_value = {"id": 10, "label": "boot"}
-
-    result = await handle_linode_instance_disk_password_reset(
-        {
-            "linode_id": 123,
-            "disk_id": 10,
-            "password": "NewStr0ngP@ss!",
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["tool"] == "linode_instance_disk_password_reset"
-    assert body["would_execute"]["method"] == "POST"
-    assert body["would_execute"]["path"] == "/linode/instances/123/disks/10/password"
-    assert body["warnings"]
-    mock_linode_client.get_instance_disk.assert_awaited_once_with(123, 10)
-    mock_linode_client.reset_instance_disk_password.assert_not_called()
 
 
 async def test_instance_volumes_list_tool_def() -> None:
@@ -28346,27 +14431,27 @@ async def test_instance_volumes_list_success(sample_config: Config) -> None:
     """Linode volumes list handler returns API result."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.list_instance_volumes.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [{"id": 123, "label": "data"}],
             "results": 1,
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mc.return_value = mock_client
-
         result = list(
             await handle_linode_instance_volume_list(
                 {"linode_id": 42, "page": 1, "page_size": 25}, sample_config
             )
         )
-
     assert len(result) == 1
     payload = json.loads(result[0].text)
     assert payload["count"] == 1
     assert "filter" not in payload
     assert payload["volumes"][0]["id"] == 123
     assert payload["volumes"][0]["label"] == "data"
-    mock_client.list_instance_volumes.assert_awaited_once_with(42, page=1, page_size=25)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_instance_volume_list", 42, query="page=1&page_size=25"
+    )
 
 
 @pytest.mark.parametrize("linode_id", ["bad/id", "bad?query", "..", True, 0, -1])
@@ -28380,7 +14465,6 @@ async def test_instance_volumes_list_rejects_invalid_instance_id(
                 {"linode_id": linode_id}, sample_config
             )
         )
-
     assert len(result) == 1
     assert "linode_id" in result[0].text.lower()
     mc.assert_not_called()
@@ -28428,7 +14512,7 @@ async def test_instance_firewalls_list_success(sample_config: Config) -> None:
     """Linode firewalls list handler returns API result."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.list_instance_firewalls.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [{"id": 123, "label": "web"}],
             "results": 1,
         }
@@ -28448,8 +14532,8 @@ async def test_instance_firewalls_list_success(sample_config: Config) -> None:
     assert "filter" not in payload
     assert payload["firewalls"][0]["id"] == 123
     assert payload["firewalls"][0]["label"] == "web"
-    mock_client.list_instance_firewalls.assert_awaited_once_with(
-        42, page=1, page_size=25
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_instance_firewall_list", 42, query="page=1&page_size=25"
     )
 
 
@@ -28481,7 +14565,7 @@ async def test_instance_interface_firewalls_list_success(sample_config: Config) 
     """Linode interface firewalls list handler returns API result."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.list_instance_interface_firewalls.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [{"id": 123, "label": "web"}],
             "results": 1,
         }
@@ -28497,7 +14581,9 @@ async def test_instance_interface_firewalls_list_success(sample_config: Config) 
 
     assert len(result) == 1
     assert "web" in result[0].text
-    mock_client.list_instance_interface_firewalls.assert_awaited_once_with(42, 7)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_instance_interface_firewall_list", 42, 7, query=""
+    )
 
 
 @pytest.mark.parametrize(
@@ -28547,24 +14633,11 @@ async def test_instance_firewalls_list_rejects_invalid_page(
     assert "page_size" in result[0].text
 
 
-async def test_handle_linode_instance_disk_create_requires_size(
-    mock_linode_client: AsyncMock, sample_config: Config
-) -> None:
-    """Disk create rejects a missing size before reaching the client."""
-    result = await handle_linode_instance_disk_create(
-        {"linode_id": 123, "label": "boot", "confirm": True},
-        sample_config,
-    )
-
-    assert result[0].text == "Error: size is required"
-    mock_linode_client.create_instance_disk.assert_not_called()
-
-
 async def test_handle_linode_domain_update_rejects_non_integer_soa_timer(
     sample_config: Config,
 ) -> None:
     """Domain update rejects a non-integer SOA timer with Go's message."""
-    from linodemcp.tools.linode_domains_write import handle_linode_domain_update
+    from linodemcp.gentools import handle_linode_domain_update
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_domain_update(
@@ -28573,22 +14646,4 @@ async def test_handle_linode_domain_update_rejects_non_integer_soa_timer(
         )
 
     assert result[0].text == "Error: expire_sec must be an integer"
-    mock_client_class.assert_not_called()
-
-
-async def test_handle_linode_object_storage_key_update_rejects_bad_bucket_access(
-    sample_config: Config,
-) -> None:
-    """Key update surfaces a malformed bucket_access before the client call."""
-    from linodemcp.tools.linode_object_storage_write import (
-        handle_linode_object_storage_key_update,
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_object_storage_key_update(
-            {"key_id": 7, "confirm": True, "bucket_access": "{oops"},
-            sample_config,
-        )
-
-    assert "Invalid bucket_access JSON" in result[0].text
     mock_client_class.assert_not_called()

@@ -14,25 +14,19 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from linodemcp.tools.linode_domain_records import handle_linode_domain_record_delete
-from linodemcp.tools.linode_domains_write import handle_linode_domain_delete
-from linodemcp.tools.linode_firewalls_write import handle_linode_firewall_delete
-from linodemcp.tools.linode_images import handle_linode_image_delete
-from linodemcp.tools.linode_instance_disks import handle_linode_instance_disk_delete
-from linodemcp.tools.linode_lke_write import (
+from linodemcp.gentools import (
+    handle_linode_domain_delete,
+    handle_linode_domain_record_delete,
+    handle_linode_firewall_delete,
+    handle_linode_image_delete,
+    handle_linode_instance_disk_delete,
     handle_linode_lke_cluster_delete,
     handle_linode_lke_pool_delete,
-)
-from linodemcp.tools.linode_nodebalancers_write import (
     handle_linode_nodebalancer_delete,
-)
-from linodemcp.tools.linode_placement_groups_write import (
     handle_linode_placement_group_delete,
-)
-from linodemcp.tools.linode_sshkeys_write import handle_linode_sshkey_delete
-from linodemcp.tools.linode_stackscripts import handle_linode_stackscript_delete
-from linodemcp.tools.linode_volumes_write import handle_linode_volume_delete
-from linodemcp.tools.linode_vpc_write import (
+    handle_linode_sshkey_delete,
+    handle_linode_stackscript_delete,
+    handle_linode_volume_delete,
     handle_linode_vpc_delete,
     handle_linode_vpc_subnet_delete,
 )
@@ -51,79 +45,84 @@ if TYPE_CHECKING:
         [dict[str, Any], Config], Awaitable[list[TextContent]]
     ]
 
+# The volume delete is generated, so its removal goes through the routed
+# primitive rather than a typed client method.
 _VOLUME = pytest.param(
     handle_linode_volume_delete,
     "volume_id",
     123,
-    "get_volume",
-    "delete_volume",
+    "route_raw",
+    "route_call",
     id="volume",
 )
 _LKE = pytest.param(
     handle_linode_lke_cluster_delete,
     "cluster_id",
     123,
-    "get_lke_cluster",
-    "delete_lke_cluster",
+    "route_raw",
+    "route_call",
     id="lke_cluster",
 )
 _FIREWALL = pytest.param(
     handle_linode_firewall_delete,
     "firewall_id",
     123,
-    "get_firewall",
-    "delete_firewall",
+    "route_raw",
+    "route_call",
     id="firewall",
 )
 _NODEBALANCER = pytest.param(
     handle_linode_nodebalancer_delete,
     "nodebalancer_id",
     123,
-    "get_nodebalancer",
-    "delete_nodebalancer",
+    "route_raw",
+    "route_call",
     id="nodebalancer",
 )
 _VPC = pytest.param(
-    handle_linode_vpc_delete, "vpc_id", 123, "get_vpc", "delete_vpc", id="vpc"
+    handle_linode_vpc_delete, "vpc_id", 123, "route_raw", "route_call", id="vpc"
 )
+# The generated destroys remove their resource through the routed
+# primitive rather than a typed client method, so route_call is what a
+# completed apply awaits for them.
 _DOMAIN = pytest.param(
     handle_linode_domain_delete,
     "domain_id",
     123,
-    "get_domain",
-    "delete_domain",
+    "route_raw",
+    "route_call",
     id="domain",
 )
 _STACKSCRIPT = pytest.param(
     handle_linode_stackscript_delete,
     "stackscript_id",
     123,
-    "get_stackscript",
-    "delete_stackscript",
+    "route_raw",
+    "route_call",
     id="stackscript",
 )
 _SSHKEY = pytest.param(
     handle_linode_sshkey_delete,
     "ssh_key_id",
     123,
-    "get_ssh_key",
-    "delete_ssh_key",
+    "route_raw",
+    "route_call",
     id="sshkey",
 )
 _PLACEMENT = pytest.param(
     handle_linode_placement_group_delete,
     "group_id",
     123,
-    "get_placement_group",
-    "delete_placement_group",
+    "route_raw",
+    "route_call",
     id="placement_group",
 )
 _IMAGE = pytest.param(
     handle_linode_image_delete,
     "image_id",
     "private/123",
-    "get_image",
-    "delete_image",
+    "route_raw",
+    "route_call",
     id="image",
 )
 
@@ -155,8 +154,11 @@ _COSMETIC_CASES = [
 ]
 
 
-def _state(updated: str) -> dict[str, Any]:
-    return {"id": 123, "status": "active", "updated": updated}
+def _state(updated: str, resource_id: object = 123) -> dict[str, Any]:
+    """The fetched resource a plan hashes. resource_id is the case's own, since
+    an image is addressed by a string where every other resource takes an int.
+    """
+    return {"id": resource_id, "status": "active", "updated": updated}
 
 
 def _stub_walk_calls(client: AsyncMock) -> None:
@@ -180,7 +182,9 @@ async def test_plan_then_apply(
     sample_config: Config,
     mock_linode_client: AsyncMock,
 ) -> None:
-    getattr(mock_linode_client, fetch_attr).return_value = _state("2026-01-01T00:00:00")
+    getattr(mock_linode_client, fetch_attr).return_value = _state(
+        "2026-01-01T00:00:00", id_val
+    )
     _stub_walk_calls(mock_linode_client)
     delete = getattr(mock_linode_client, delete_attr)
 
@@ -246,8 +250,8 @@ _TWO_ID_CASES = [
         handle_linode_instance_disk_delete,
         "linode_id",
         "disk_id",
-        "get_instance_disk",
-        "delete_instance_disk",
+        "route_raw",
+        "route_call",
         "updated",
         "2026-09-09T09:09:09",
         id="instance_disk",
@@ -256,8 +260,8 @@ _TWO_ID_CASES = [
         handle_linode_vpc_subnet_delete,
         "vpc_id",
         "subnet_id",
-        "get_vpc_subnet",
-        "delete_vpc_subnet",
+        "route_raw",
+        "route_call",
         "updated",
         "2026-09-09T09:09:09",
         id="vpc_subnet",
@@ -266,8 +270,8 @@ _TWO_ID_CASES = [
         handle_linode_domain_record_delete,
         "domain_id",
         "record_id",
-        "get_domain_record",
-        "delete_domain_record",
+        "route_raw",
+        "route_call",
         "updated",
         "2026-09-09T09:09:09",
         id="domain_record",
@@ -276,8 +280,8 @@ _TWO_ID_CASES = [
         handle_linode_lke_pool_delete,
         "cluster_id",
         "pool_id",
-        "get_lke_node_pool",
-        "delete_lke_node_pool",
+        "route_raw",
+        "route_call",
         "nodes",
         [{"status": "ready"}],
         id="lke_pool",

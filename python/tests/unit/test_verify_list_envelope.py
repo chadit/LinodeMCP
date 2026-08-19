@@ -7,10 +7,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
-
-    import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -123,15 +123,12 @@ def build(raw):
     assert gate.module_violations(source, "linode_widgets.py") == []
 
 
-def test_baseline_entries_are_still_real() -> None:
-    """A baseline line that no longer matches the tree is stale and must be dropped."""
-    path = REPO_ROOT / "docs" / "contracts" / "list-envelope-baseline.txt"
-    baseline = {
-        line.split("  # ", 1)[0].strip()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.startswith("#")
-    }
-    assert baseline <= set(gate.current_violations())
+def test_the_live_tree_has_no_collapse_and_no_baseline() -> None:
+    """The collapse has no correct use, so the gate keeps no accepted list."""
+    assert gate.current_violations() == []
+    assert not (
+        REPO_ROOT / "docs" / "contracts" / "list-envelope-baseline.txt"
+    ).exists()
 
 
 def test_every_registered_language_declares_coverage() -> None:
@@ -208,13 +205,8 @@ def test_go_exemption_still_matches_the_go_source() -> None:
     assert any(helper in path.read_text(encoding="utf-8") for path in sources)
 
 
-def test_main_fails_on_an_unbaselined_violation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_main_fails_on_any_violation(monkeypatch: pytest.MonkeyPatch) -> None:
     """main must turn a violation into a non-zero exit, not just report it."""
-    baseline = tmp_path / "baseline.txt"
-    baseline.write_text("# empty\n", encoding="utf-8")
-    monkeypatch.setattr(gate, "_BASELINE", baseline)
     monkeypatch.setattr(
         gate, "current_violations", lambda: ["python/new.py:handler._call"]
     )
@@ -222,29 +214,8 @@ def test_main_fails_on_an_unbaselined_violation(
     assert gate.main([]) == 1
 
 
-def test_main_fails_when_a_baseline_entry_is_already_fixed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A stale ratchet line must fail so the baseline shrinks with the fix."""
-    baseline = tmp_path / "baseline.txt"
-    baseline.write_text("python/gone.py:handler._call\n", encoding="utf-8")
-    monkeypatch.setattr(gate, "_BASELINE", baseline)
-    monkeypatch.setattr(gate, "current_violations", list)
-
-    assert gate.main([]) == 1
-
-
-def test_main_passes_when_violations_match_the_baseline(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The accepted-gap state is the one that must stay green."""
-    baseline = tmp_path / "baseline.txt"
-    baseline.write_text("python/kept.py:handler._call\n", encoding="utf-8")
-    monkeypatch.setattr(gate, "_BASELINE", baseline)
-    monkeypatch.setattr(
-        gate, "current_violations", lambda: ["python/kept.py:handler._call"]
-    )
-
+def test_main_passes_on_a_clean_tree() -> None:
+    """The committed state is the one that must stay green."""
     assert gate.main([]) == 0
 
 
@@ -257,3 +228,34 @@ def test_main_fails_on_an_undeclared_language(
     monkeypatch.setattr(gate, "_LANGUAGES", registry)
 
     assert gate.main([]) == 1
+
+
+def test_main_fails_when_a_scanner_reads_no_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty tree cannot hold the collapse, which is why it has to fail.
+
+    Without this, a working dir that moved would report the same clean run as
+    a tree that was actually read.
+    """
+    registry = tmp_path / "languages.txt"
+    registry.write_text("python\tpython\tdump\n", encoding="utf-8")
+    (tmp_path / "python").mkdir()
+    monkeypatch.setattr(gate, "_LANGUAGES", registry)
+    monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
+
+    with pytest.raises(SystemExit, match="covered nothing"):
+        gate.main([])
+
+
+def test_every_scanned_language_declares_its_sources() -> None:
+    """A scanner with no source lister has no zero-measurement trap.
+
+    COVERAGE and SOURCES are separate mappings, so a new scanner could be added
+    to one and forgotten in the other, which is the shape this catches.
+    """
+    scanned = {
+        name for name, entry in gate.COVERAGE.items() if not isinstance(entry, str)
+    }
+
+    assert scanned == set(gate.SOURCES)

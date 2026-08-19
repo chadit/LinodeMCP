@@ -3,112 +3,22 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
 
-from linodemcp.linode import Client, NetworkError, RetryableClient
-from linodemcp.profiles import Capability
-from linodemcp.server import get_tool_registry
-from linodemcp.tools.linode_domains_write import (
+from linodemcp.gentools import (
     create_linode_domain_import_tool,
     handle_linode_domain_import,
 )
+from linodemcp.linode import NetworkError
+from linodemcp.profiles import Capability
+from linodemcp.server import get_tool_registry
 from linodemcp.version import FEATURE_TOOLS_LIST
 
-
-@pytest.mark.asyncio
-async def test_client_import_domain_sends_exact_path_and_body() -> None:
-    """Low-level client sends POST /domains/import with documented body."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "id": 123,
-                "domain": "example.com",
-                "type": "master",
-                "status": "active",
-                "soa_email": "admin@example.com",
-                "created": "2026-01-01T00:00:00",
-                "updated": "2026-01-01T00:00:00",
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.import_domain("example.com", "ns1.example.net")
-    finally:
-        await client.close()
-
-    assert result.domain == "example.com"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "POST"
-    assert request.url.path == "/v4/domains/import"
-    assert request.url.query == b""
-    assert json.loads(request.content) == {
-        "domain": "example.com",
-        "remote_nameserver": "ns1.example.net",
-    }
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("domain", "remote_nameserver", "message"),
-    [
-        ("", "ns1.example.net", "domain is required"),
-        (" example.com", "ns1.example.net", "domain is required"),
-        ("example/com", "ns1.example.net", "label contains invalid character"),
-        ("example.com", "", "remote_nameserver is required"),
-        ("example.com", " ns1.example.net", "remote_nameserver is required"),
-    ],
-)
-async def test_client_import_domain_validates_inputs_before_request(
-    domain: str, remote_nameserver: str, message: str
-) -> None:
-    """Invalid import body fields are rejected before HTTP requests."""
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(ValueError, match=message):
-            await client.import_domain(domain, remote_nameserver)
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_import_domain_does_not_replay_post() -> None:
-    """Domain import delegates once and does not use the generic retry wrapper."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    network_error = NetworkError("ImportDomain", httpx.ConnectTimeout("boom"))
-    mock_import = AsyncMock(side_effect=network_error)
-    cast("Any", retryable.client).import_domain = mock_import
-
-    try:
-        with pytest.raises(NetworkError):
-            await retryable.import_domain("example.com", "ns1.example.net")
-    finally:
-        await retryable.close()
-
-    mock_import.assert_awaited_once_with("example.com", "ns1.example.net")
+if TYPE_CHECKING:
+    from unittest.mock import AsyncMock
 
 
 def test_create_linode_domain_import_tool_schema() -> None:
@@ -183,7 +93,7 @@ async def test_handle_linode_domain_import_dry_run_requires_confirm_and_skips_cl
         "path": "/domains/import",
         "body": {"domain": "example.com", "remote_nameserver": "ns1.example.net"},
     }
-    mock_linode_client.import_domain.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -205,7 +115,7 @@ async def test_handle_linode_domain_import_rejects_non_true_confirm(
     result = await handle_linode_domain_import(arguments, sample_config)
 
     assert result[0].text.startswith("Error: This imports a DNS domain")
-    mock_linode_client.import_domain.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -252,7 +162,7 @@ async def test_handle_linode_domain_import_rejects_invalid_body_fields(
     result = await handle_linode_domain_import(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.import_domain.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio

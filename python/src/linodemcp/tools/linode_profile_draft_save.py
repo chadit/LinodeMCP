@@ -12,30 +12,23 @@ Does NOT change the active profile. After save, the user runs
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent
 
-from linodemcp.config import load_from_file, write_atomic
+from linodemcp.config import ConfigError, get_config_path, load_from_file, write_atomic
 from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
-from linodemcp.profiles import Capability
 from linodemcp.profiles.builder import (
-    DraftNotFoundError,
     compute_diff,
     draft_as_user_profile,
 )
-from linodemcp.tools.linode_profile_draft import (
-    BuilderUnconfiguredError,
-    DraftNameMissingError,
-    get_draft_registry,
+from linodemcp.tools.builderstate import (
+    BUILDER_UNCONFIGURED,
+    builder_state_from_context,
 )
+from linodemcp.tools.helpers import error_response
+from linodemcp.tools.linode_profile_draft import NAME_MISSING, draft_not_found
 from linodemcp.tools.proto_response import serialize_api_response
-from linodemcp.tools.toolschemas import schema
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
 
 # Built-in profile names. Saving a draft to one of these is refused
 # (the entry would silently shadow the built-in in the catalog).
@@ -55,117 +48,67 @@ _BUILTIN_PROFILE_NAMES: frozenset[str] = frozenset(
 )
 
 
-# Bridge for the config path. The server installs ``config.get_config_path``
-# (or equivalent) at startup; tests install a reproducible path via
-# :func:`set_save_config_path_provider`. Phase 8.5 reads from this
-# fresh on every call so concurrent edits don't get stomped.
-_config_path_provider: Callable[[], str] | None = None
-
-
-def set_save_config_path_provider(provider: Callable[[], str] | None) -> None:
-    """Register the function returning the config path. Pass ``None`` to clear."""
-    global _config_path_provider  # noqa: PLW0603 - process-wide bridge
-    _config_path_provider = provider
-
-
-def _resolve_config_path() -> str:
-    """Return the live config path or an empty string when no bridge is set."""
-    if _config_path_provider is None:
-        return ""
-    return _config_path_provider()
-
-
-class ConfirmRequiredError(ValueError):
-    """``confirm=true`` is required for the save."""
-
-    def __init__(self) -> None:
-        super().__init__("confirm=true is required for draft save")
-
-
-class SaveBuiltinNameError(ValueError):
-    """Save target name matches a built-in profile."""
-
-    def __init__(self, name: str) -> None:
-        super().__init__(f"cannot save over built-in profile name: {name}")
-        self.profile_name = name
-
-
-class ConfigPathUnknownError(RuntimeError):
-    """No config path provider is wired."""
-
-    def __init__(self) -> None:
-        super().__init__("config path not configured")
-
-
 _ARG_NAME = "name"
-_ARG_CONFIRM = "confirm"
 
 
-def create_linode_profile_draft_save_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_draft_save`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_profile_draft_save",
-            description=(
-                "Save a profile draft to the config file. Requires "
-                "confirm=true. Computes the diff against the prior "
-                "user-defined profile with the same name (or against "
-                "empty for a new profile) and returns it in the "
-                "response so the model can summarize. Does NOT change "
-                "the active profile; the user runs `linodemcp profile "
-                "use <name>` separately. Saving over a built-in "
-                "profile name is refused."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileDraftSaveInput"),
-        ),
-        Capability.Meta,
-    )
+def _argument_refusal(arguments: dict[str, Any]) -> str:
+    """The refusal the save answers from its arguments alone, or "".
 
-
-async def handle_linode_profile_draft_save(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
-    """Save a draft to the config file and return the diff payload.
-
-    Raises:
-        DraftNameMissingError: ``name`` is empty.
-        ConfirmRequiredError: ``confirm`` is not true.
-        SaveBuiltinNameError: ``name`` matches a built-in profile.
-        DraftNotFoundError: the named draft is not in the registry.
-        ConfigPathUnknownError: no config path provider is wired.
-        BuilderUnconfiguredError: no draft registry is wired.
+    The confirm gate is NOT here: the generated handler runs it from the
+    contract's confirm_message before this is reached, so a copy would be a
+    check no call could get past. A built-in name is refused whether or not a
+    draft carries it, which is why that one is asked ahead of the lookup.
     """
     name = arguments.get(_ARG_NAME, "")
     if not name:
-        raise DraftNameMissingError
-
-    if not arguments.get(_ARG_CONFIRM, False):
-        raise ConfirmRequiredError
+        return NAME_MISSING
 
     if name in _BUILTIN_PROFILE_NAMES:
-        raise SaveBuiltinNameError(name)
+        return f"cannot save over built-in profile name: {name}"
 
-    registry = get_draft_registry()
-    if registry is None:
-        raise BuilderUnconfiguredError
+    return ""
 
-    draft = registry.get(name)
+
+def profile_draft_save_result(arguments: dict[str, Any]) -> list[TextContent]:
+    """Save a draft to the config file and return the diff payload.
+
+    Every refusal is a tool result: an absent name, a missing confirm, a
+    built-in name, a name no draft carries, and a config that cannot be read
+    or written.
+    """
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
+    refusal = _argument_refusal(arguments)
+    if refusal:
+        return error_response(refusal)
+
+    name = arguments[_ARG_NAME]
+    draft = state.drafts.get(name)
     if draft is None:
-        raise DraftNotFoundError(name)
+        return error_response(draft_not_found(name))
 
-    path_str = _resolve_config_path()
-    if not path_str:
-        raise ConfigPathUnknownError
+    # Read fresh on every call so a concurrent edit is not stomped, and read
+    # the path itself at call time so a LINODEMCP_CONFIG_PATH override applies.
+    path = get_config_path()
 
-    path = Path(path_str)
-    cfg = load_from_file(path)
+    try:
+        cfg = load_from_file(path)
+    except (ConfigError, OSError) as exc:
+        return error_response(f"failed to load config from {path}: {exc}")
+
     draft_cfg = draft_as_user_profile(draft)
     existing = cfg.profiles.get(name)
 
     diff = compute_diff(name, draft_cfg, existing)
 
     cfg.profiles[name] = draft_cfg
-    write_atomic(path, cfg)
+
+    try:
+        write_atomic(path, cfg)
+    except (ConfigError, OSError) as exc:
+        return error_response(f"failed to write config to {path}: {exc}")
 
     result = serialize_api_response(
         diff.to_payload(), profile_builder_pb2.ProfileDraftSaveResponse()
@@ -174,10 +117,5 @@ async def handle_linode_profile_draft_save(
 
 
 __all__ = [
-    "ConfigPathUnknownError",
-    "ConfirmRequiredError",
-    "SaveBuiltinNameError",
-    "create_linode_profile_draft_save_tool",
-    "handle_linode_profile_draft_save",
-    "set_save_config_path_provider",
+    "profile_draft_save_result",
 ]

@@ -11,12 +11,17 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from linodemcp.tools.helpers import build_dry_run_response, truncate_string
+from linodemcp.tools.helpers import (
+    build_dry_run_response,
+    meta_response,
+    truncate_string,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -91,6 +96,29 @@ def test_build_dry_run_response_rejects_unserializable_current_state() -> None:
         )
 
 
+def test_meta_response_serializes_the_message_its_contract_names() -> None:
+    """A meta tool's answer is the proto its contract names, canonically.
+
+    The tools that reach no route have no body to decode and no driver to
+    assemble one, so this is the whole serialization step for them: naming the
+    response resolves the generated class, and the members are what the handler
+    read off the call.
+    """
+    answered = meta_response(
+        "linode.mcp.v1.HelloResponse", message="Hello, World! Ready."
+    )
+
+    assert len(answered) == 1
+    assert answered[0].type == "text"
+    assert json.loads(answered[0].text) == {"message": "Hello, World! Ready."}
+
+
+def test_meta_response_names_a_message_the_contract_does_not_declare() -> None:
+    """A response nothing generates fails by name rather than answering empty."""
+    with pytest.raises(Exception, match=re.escape("linode.mcp.v1.NoSuchResponse")):
+        meta_response("linode.mcp.v1.NoSuchResponse", message="never rendered")
+
+
 def test_truncate_string_appends_ellipsis_over_limit() -> None:
     """A value longer than the limit is cut and suffixed with an ellipsis."""
     assert truncate_string("abcdefgh", 3) == "abc..."
@@ -114,7 +142,9 @@ def _capture_retry_max(captured: dict[str, int]) -> Callable[..., AsyncMock]:
     """A RetryableClient stand-in that records the max_retries of the
     RetryConfig it was built with, then behaves as the async-cm client."""
 
-    def _factory(api_url: str, token: str, retry_config: Any) -> AsyncMock:
+    def _factory(
+        api_url: str, token: str, retry_config: Any, object_storage: Any = None
+    ) -> AsyncMock:
         captured["max_retries"] = retry_config.max_retries
         return _cm_client()
 

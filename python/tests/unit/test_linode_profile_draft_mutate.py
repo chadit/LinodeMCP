@@ -13,24 +13,24 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from linodemcp.profiles import Capability
-from linodemcp.profiles.builder import (
-    DraftNotFoundError,
-    Registry,
-)
-from linodemcp.profiles.builtin import ToolDescriptor
-from linodemcp.tools.linode_profile_draft import (
-    DraftNameMissingError,
-    set_draft_registry,
-)
-from linodemcp.tools.linode_profile_draft_mutate import (
+from linodemcp.gentools import (
     create_linode_profile_draft_add_tools_tool,
     create_linode_profile_draft_remove_tools_tool,
     create_linode_profile_draft_set_tool,
-    handle_linode_profile_draft_add_tools,
-    handle_linode_profile_draft_remove_tools,
-    handle_linode_profile_draft_set,
-    set_mutator_catalog_provider,
+)
+from linodemcp.profiles import Capability
+from linodemcp.profiles.builder import Registry
+from linodemcp.profiles.builtin import ToolDescriptor
+from linodemcp.profiles.profile import Profile
+from linodemcp.tools.builderstate import (
+    BuilderState,
+    reset_builder_state,
+    set_builder_state,
+)
+from linodemcp.tools.linode_profile_draft_mutate import (
+    profile_draft_add_tools_result,
+    profile_draft_remove_tools_result,
+    profile_draft_set_result,
 )
 
 if TYPE_CHECKING:
@@ -42,6 +42,8 @@ _TOOL_INSTANCE_BOOT = "linode_instance_boot"
 _TOOL_INSTANCE_REBOOT = "linode_instance_reboot"
 _TOOL_HELLO = "hello"
 _PROD_ENV = "prod"
+_NAME_MISSING = "Error: name argument is required"
+_DRAFT_MISSING = "Error: draft not found: nonexistent"
 
 
 def fixture_catalog() -> list[ToolDescriptor]:
@@ -55,17 +57,26 @@ def fixture_catalog() -> list[ToolDescriptor]:
     ]
 
 
+def _no_profile() -> Profile:
+    """The active-profile reader for the tools that never read one."""
+    return Profile(name="test", description="", allowed_tools=())
+
+
 @pytest.fixture(autouse=True)
 def install_fixtures() -> Iterator[Registry]:
-    """Install registry + catalog bridges; reset after each test."""
+    """Publish a builder state carrying registry + catalog; reset afterwards."""
     registry = Registry()
-    set_draft_registry(registry)
-    set_mutator_catalog_provider(fixture_catalog)
+    token = set_builder_state(
+        BuilderState(
+            drafts=registry,
+            catalog=fixture_catalog,
+            active_profile=_no_profile,
+        )
+    )
 
     yield registry
 
-    set_draft_registry(None)
-    set_mutator_catalog_provider(None)
+    reset_builder_state(token)
 
 
 def _parse_response(text: str) -> dict[str, object]:
@@ -92,7 +103,7 @@ async def test_add_tools_adds_literals(install_fixtures: Registry) -> None:
     """No-wildcard path: literal names match the catalog and land on the draft."""
     install_fixtures.create(_MUTATE_DRAFT_NAME)
 
-    response = await handle_linode_profile_draft_add_tools(
+    response = profile_draft_add_tools_result(
         {"name": _MUTATE_DRAFT_NAME, "tools": [_TOOL_INSTANCE_BOOT, _TOOL_HELLO]},
     )
 
@@ -111,7 +122,7 @@ async def test_add_tools_expands_wildcards(install_fixtures: Registry) -> None:
     """Wildcard path: linode_instance_* expands to boot + reboot + shutdown."""
     install_fixtures.create(_MUTATE_DRAFT_NAME)
 
-    response = await handle_linode_profile_draft_add_tools(
+    response = profile_draft_add_tools_result(
         {"name": _MUTATE_DRAFT_NAME, "tools": ["linode_instance_*"]},
     )
 
@@ -132,10 +143,8 @@ async def test_add_tools_dedupes_against_existing(
     """Second add of the same literal returns an empty added list."""
     install_fixtures.create(_MUTATE_DRAFT_NAME)
 
-    await handle_linode_profile_draft_add_tools(
-        {"name": _MUTATE_DRAFT_NAME, "tools": [_TOOL_HELLO]}
-    )
-    response = await handle_linode_profile_draft_add_tools(
+    profile_draft_add_tools_result({"name": _MUTATE_DRAFT_NAME, "tools": [_TOOL_HELLO]})
+    response = profile_draft_add_tools_result(
         {"name": _MUTATE_DRAFT_NAME, "tools": [_TOOL_HELLO]}
     )
 
@@ -149,18 +158,20 @@ async def test_add_tools_dedupes_against_existing(
 
 @pytest.mark.asyncio
 async def test_add_tools_refuses_unknown_draft() -> None:
-    """Add on a nonexistent draft raises DraftNotFoundError."""
-    with pytest.raises(DraftNotFoundError):
-        await handle_linode_profile_draft_add_tools(
-            {"name": "nonexistent", "tools": [_TOOL_HELLO]}
-        )
+    """Add on a draft the registry does not hold refuses by name."""
+    response = profile_draft_add_tools_result(
+        {"name": "nonexistent", "tools": [_TOOL_HELLO]}
+    )
+
+    assert response[0].text == _DRAFT_MISSING
 
 
 @pytest.mark.asyncio
 async def test_add_tools_refuses_missing_name() -> None:
-    """Empty name raises DraftNameMissingError."""
-    with pytest.raises(DraftNameMissingError):
-        await handle_linode_profile_draft_add_tools({"tools": [_TOOL_HELLO]})
+    """An absent name answers the shared refusal."""
+    response = profile_draft_add_tools_result({"tools": [_TOOL_HELLO]})
+
+    assert response[0].text == _NAME_MISSING
 
 
 def test_remove_tools_registration() -> None:
@@ -178,7 +189,7 @@ async def test_remove_tools_removes_literals(install_fixtures: Registry) -> None
     draft = install_fixtures.create(_MUTATE_DRAFT_NAME)
     draft.allowed_tools = [_TOOL_INSTANCE_BOOT, _TOOL_INSTANCE_REBOOT, _TOOL_HELLO]
 
-    response = await handle_linode_profile_draft_remove_tools(
+    response = profile_draft_remove_tools_result(
         {"name": _MUTATE_DRAFT_NAME, "tools": [_TOOL_HELLO]}
     )
 
@@ -198,7 +209,7 @@ async def test_remove_tools_expands_wildcards_against_draft(
     draft = install_fixtures.create(_MUTATE_DRAFT_NAME)
     draft.allowed_tools = [_TOOL_INSTANCE_BOOT, _TOOL_INSTANCE_REBOOT, _TOOL_HELLO]
 
-    response = await handle_linode_profile_draft_remove_tools(
+    response = profile_draft_remove_tools_result(
         {"name": _MUTATE_DRAFT_NAME, "tools": ["linode_instance_*"]}
     )
 
@@ -221,7 +232,7 @@ async def test_remove_tools_no_match_is_benign(install_fixtures: Registry) -> No
     draft = install_fixtures.create(_MUTATE_DRAFT_NAME)
     draft.allowed_tools = [_TOOL_HELLO]
 
-    response = await handle_linode_profile_draft_remove_tools(
+    response = profile_draft_remove_tools_result(
         {"name": _MUTATE_DRAFT_NAME, "tools": ["nonexistent-tool"]}
     )
 
@@ -235,11 +246,12 @@ async def test_remove_tools_no_match_is_benign(install_fixtures: Registry) -> No
 
 @pytest.mark.asyncio
 async def test_remove_tools_refuses_unknown_draft() -> None:
-    """Remove on a nonexistent draft raises DraftNotFoundError."""
-    with pytest.raises(DraftNotFoundError):
-        await handle_linode_profile_draft_remove_tools(
-            {"name": "nonexistent", "tools": [_TOOL_HELLO]}
-        )
+    """Remove on a draft the registry does not hold refuses by name."""
+    response = profile_draft_remove_tools_result(
+        {"name": "nonexistent", "tools": [_TOOL_HELLO]}
+    )
+
+    assert response[0].text == _DRAFT_MISSING
 
 
 def test_set_registration() -> None:
@@ -259,7 +271,7 @@ async def test_set_environments_only(install_fixtures: Registry) -> None:
     draft.required_token_scopes = ["scope:read"]
     draft.allow_yolo = True
 
-    response = await handle_linode_profile_draft_set(
+    response = profile_draft_set_result(
         {"name": _MUTATE_DRAFT_NAME, "allowed_environments": [_PROD_ENV]}
     )
 
@@ -283,7 +295,7 @@ async def test_set_allow_yolo_flips_cleanly(install_fixtures: Registry) -> None:
     """allow_yolo=true on a draft that started false is a material change."""
     install_fixtures.create(_MUTATE_DRAFT_NAME)
 
-    response = await handle_linode_profile_draft_set(
+    response = profile_draft_set_result(
         {"name": _MUTATE_DRAFT_NAME, "allow_yolo": True}
     )
 
@@ -302,7 +314,7 @@ async def test_set_multiple_fields_at_once(install_fixtures: Registry) -> None:
     """A single call can update every settable field."""
     install_fixtures.create(_MUTATE_DRAFT_NAME)
 
-    response = await handle_linode_profile_draft_set(
+    response = profile_draft_set_result(
         {
             "name": _MUTATE_DRAFT_NAME,
             "allowed_environments": [_PROD_ENV, "dev"],
@@ -322,7 +334,7 @@ async def test_set_empty_call_no_ops(install_fixtures: Registry) -> None:
     """Call with just name returns empty changes and writes no fields."""
     install_fixtures.create(_MUTATE_DRAFT_NAME)
 
-    response = await handle_linode_profile_draft_set({"name": _MUTATE_DRAFT_NAME})
+    response = profile_draft_set_result({"name": _MUTATE_DRAFT_NAME})
 
     payload = _parse_response(response[0].text)
     changes = payload["changes"]
@@ -332,15 +344,15 @@ async def test_set_empty_call_no_ops(install_fixtures: Registry) -> None:
 
 @pytest.mark.asyncio
 async def test_set_refuses_unknown_draft() -> None:
-    """Set on a nonexistent draft raises DraftNotFoundError."""
-    with pytest.raises(DraftNotFoundError):
-        await handle_linode_profile_draft_set(
-            {"name": "nonexistent", "allow_yolo": True}
-        )
+    """Set on a draft the registry does not hold refuses by name."""
+    response = profile_draft_set_result({"name": "nonexistent", "allow_yolo": True})
+
+    assert response[0].text == _DRAFT_MISSING
 
 
 @pytest.mark.asyncio
 async def test_set_refuses_missing_name() -> None:
-    """Empty name raises DraftNameMissingError."""
-    with pytest.raises(DraftNameMissingError):
-        await handle_linode_profile_draft_set({"allow_yolo": True})
+    """An absent name answers the shared refusal."""
+    response = profile_draft_set_result({"allow_yolo": True})
+
+    assert response[0].text == _NAME_MISSING

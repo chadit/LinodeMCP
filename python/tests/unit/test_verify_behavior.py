@@ -14,10 +14,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
-
-    import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -154,21 +154,16 @@ def test_destroy_capability_tool_is_in_scope(
     assert _missing(tmp_path, monkeypatch, "Destroy", [_DECODE_CASE]) == {_TOOL}
 
 
-def test_update_baseline_writes_the_response_shape_ratchet(
+def test_update_baseline_writes_only_the_dry_run_ratchet(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """--update-baseline has to rewrite the new file alongside the older two."""
-    paths = {
-        "_BASELINE": tmp_path / "behavior-baseline.txt",
-        "_DRYRUN_BASELINE": tmp_path / "behavior-dryrun-baseline.txt",
-        "_SHAPE_BASELINE": tmp_path / "behavior-response-shape-baseline.txt",
-    }
-    for attr, path in paths.items():
-        monkeypatch.setattr(gate, attr, path)
+    """The dry-run gap is the one thing left with a file to record it in."""
+    dryrun = tmp_path / "behavior-dryrun-baseline.txt"
+    monkeypatch.setattr(gate, "_DRYRUN_BASELINE", dryrun)
 
-    assert gate._update_baselines(set(), set(), {_TOOL}) == 0
+    assert gate._update_baseline({_TOOL}) == 0
 
-    written = paths["_SHAPE_BASELINE"].read_text(encoding="utf-8")
+    written = dryrun.read_text(encoding="utf-8")
     assert written.startswith("#")
     assert "verify_behavior.py --update-baseline" in written
     assert [
@@ -176,10 +171,59 @@ def test_update_baseline_writes_the_response_shape_ratchet(
     ] == [_TOOL]
 
 
-def test_response_shape_baseline_is_covered_by_the_growth_guard() -> None:
+def test_dryrun_baseline_is_covered_by_the_growth_guard() -> None:
     """An unguarded ratchet could grow silently, which defeats the ratchet."""
     guard = _load_script("verify_baseline_direction")
     contracts = REPO_ROOT / "docs" / "contracts"
     guarded = {path.name for path in guard._guarded_baselines(contracts)}
 
-    assert gate._SHAPE_BASELINE.name in guarded
+    assert gate._DRYRUN_BASELINE.name in guarded
+
+
+def test_the_hardened_rules_keep_no_baseline_file() -> None:
+    """Coverage and the malformed-response rule fail outright now.
+
+    A file for either one would be an acceptance path, and the point of
+    hardening them was that neither class has a legitimate entry left. This
+    fails if one comes back without the gate changing to read it.
+    """
+    contracts = REPO_ROOT / "docs" / "contracts"
+
+    assert not (contracts / "behavior-baseline.txt").exists()
+    assert not (contracts / "behavior-response-shape-baseline.txt").exists()
+
+
+def test_main_fails_on_an_uncovered_tool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manifest tool with no fixture and no exemption is the coverage gap."""
+    manifest = tmp_path / "tools-manifest.txt"
+    manifest.write_text(
+        f"# synthetic surface\n{_TOOL}\nlinode_widget_get\n", encoding="utf-8"
+    )
+
+    # A fixture for the OTHER manifest tool, so the tree is real and only the
+    # create tool is uncovered.
+    def one_other_fixture() -> dict[str, list[dict[str, object]]]:
+        return {"linode_widget_get": [{"name": "reads a widget"}]}
+
+    monkeypatch.setattr(gate, "_MANIFEST", manifest)
+    monkeypatch.setattr(gate, "_EXEMPT", tmp_path / "behavior-exempt.txt")
+    monkeypatch.setattr(gate, "_BEHAVIOR_DIR", tmp_path / "behavior")
+    monkeypatch.setattr(gate, "_load_fixtures", one_other_fixture)
+
+    assert gate.main() == 1
+
+
+def test_main_fails_when_the_fixture_tree_measures_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No fixtures reads exactly like full coverage, so it has to fail.
+
+    It aborts rather than returning, because a scan that covered nothing is a
+    broken gate rather than a finding about the code.
+    """
+    monkeypatch.setattr(gate, "_load_fixtures", dict)
+
+    with pytest.raises(SystemExit, match="covered nothing"):
+        gate.main()

@@ -12,13 +12,13 @@ import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
-from linodemcp.linode import APIError, Domain
-from linodemcp.tools.linode_domains_write import (
+from linodemcp.gentools import (
     handle_linode_domain_clone,
     handle_linode_domain_create,
     handle_linode_domain_delete,
     handle_linode_domain_update,
 )
+from linodemcp.linode import APIError, Domain
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -57,7 +57,7 @@ def _patch_client(**attrs: object) -> AsyncMock:
 async def test_clone_rejects_invalid_label(sample_config: Config) -> None:
     """A clone whose domain name has an illegal character aborts."""
     result = await handle_linode_domain_clone(
-        {"domain_id": 5, "domain": "bad domain!"}, sample_config
+        {"domain_id": 5, "domain": "bad domain!", "confirm": True}, sample_config
     )
     assert "invalid character" in result[0].text
 
@@ -106,7 +106,16 @@ async def test_create_threads_description_into_body(sample_config: Config) -> No
 async def test_update_dry_run_requires_domain_id(sample_config: Config) -> None:
     """A dry-run update validates domain_id before fetching state."""
     result = await handle_linode_domain_update({"dry_run": True}, sample_config)
-    assert "domain_id is required" in result[0].text
+    assert "domain_id must be a positive integer" in result[0].text
+
+
+async def test_update_rejects_negative_domain_id(sample_config: Config) -> None:
+    """A negative id decodes as an int, so only the positivity rule stops it."""
+    result = await handle_linode_domain_update(
+        {"domain_id": -5, "description": "updated desc", "confirm": True},
+        sample_config,
+    )
+    assert "domain_id must be a positive integer" in result[0].text
 
 
 async def test_update_dry_run_reports_name_soa_and_description(
@@ -160,7 +169,7 @@ async def test_update_requires_confirm(sample_config: Config) -> None:
 async def test_update_confirmed_requires_domain_id(sample_config: Config) -> None:
     """confirm=true does not bypass the required domain_id check."""
     result = await handle_linode_domain_update({"confirm": True}, sample_config)
-    assert "domain_id is required" in result[0].text
+    assert "domain_id must be a positive integer" in result[0].text
 
 
 async def test_update_body_omits_absent_and_keeps_present(
@@ -206,7 +215,7 @@ async def test_delete_dry_run_walk_survives_record_list_failure(
     """When listing records fails, the walk degrades to a warning, not an error."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         client = _patch_client(
-            get_domain={},
+            route_raw={},
             list_domain_records=APIError(500, "boom"),
         )
         mock_cls.return_value = client

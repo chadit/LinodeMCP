@@ -2,28 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-from mcp.types import Tool
-
-from linodemcp.genpb.linode.mcp.v1 import placement_pb2
-from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import (
-    error_response,
-    execute_tool,
-    pagination_int_argument,
-)
-from linodemcp.tools.proto_response import (
-    serialize_api_response,
-    serialize_list_response,
-)
-from linodemcp.tools.toolschemas import schema
-
-if TYPE_CHECKING:
-    from mcp.types import TextContent
-
-    from linodemcp.config import Config
-    from linodemcp.linode import RetryableClient
+from typing import Any
 
 
 def _pg_member_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
@@ -66,66 +45,3 @@ def placement_group_to_response_dict(raw: dict[str, Any]) -> dict[str, Any]:
     if migrations is not None:
         body["migrations"] = _pg_migrations_to_dict(migrations)
     return body
-
-
-def _parse_positive_int(value: Any, name: str) -> int | list[TextContent]:
-    """Parse a positive integer argument, rejecting bools and path strings."""
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-        return error_response(f"{name} must be a positive integer")
-    return value
-
-
-def create_linode_placement_group_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_placement_group_list tool."""
-    return Tool(
-        name="linode_placement_group_list",
-        description="Lists placement groups",
-        input_schema=schema("linode.mcp.v1.PlacementGroupListInput"),
-    ), Capability.Read
-
-
-async def handle_linode_placement_group_list(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_placement_group_list tool request."""
-    try:
-        page = pagination_int_argument(arguments, "page", 1)
-        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.list_placement_groups(page=page, page_size=page_size)
-        return serialize_list_response(
-            raw,
-            "placement_groups",
-            placement_pb2.PlacementGroupListResponse(),
-        )
-
-    return await execute_tool(cfg, arguments, "list placement groups", _call)
-
-
-def create_linode_placement_group_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_placement_group_get tool."""
-    return Tool(
-        name="linode_placement_group_get",
-        description="Gets a placement group",
-        input_schema=schema("linode.mcp.v1.PlacementGroupGetInput"),
-    ), Capability.Read
-
-
-async def handle_linode_placement_group_get(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_placement_group_get tool request."""
-    group_id = _parse_positive_int(arguments.get("group_id"), "group_id")
-    if isinstance(group_id, list):
-        return group_id
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        return serialize_api_response(
-            await client.get_placement_group(group_id),
-            placement_pb2.PlacementGroup(),
-        )
-
-    return await execute_tool(cfg, arguments, "get placement group", _call)

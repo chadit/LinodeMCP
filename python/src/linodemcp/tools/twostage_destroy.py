@@ -23,6 +23,7 @@ from linodemcp.genpb.linode.mcp.v1 import dryrun_pb2
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools import helpers
+from linodemcp.tools.declared_state import DeclaredState
 from linodemcp.tools.proto_response import serialize_preview_envelope
 from linodemcp.twostage.store import PlanEntry, PlanExpiredError, PlanNotFoundError
 
@@ -67,6 +68,8 @@ type _DependencyWalk = Callable[
 
 
 def _json_default(obj: object) -> Any:
+    if isinstance(obj, DeclaredState):
+        return obj.fields
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         # Same keyword-escape stripping as the dry-run path, so a plan's
         # current_state carries the wire field names ("in", not "in_").

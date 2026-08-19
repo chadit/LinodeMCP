@@ -11,9 +11,11 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from linodemcp.config import TwoStageConfig
+from linodemcp.gentools import (
+    handle_linode_instance_rebuild,
+    handle_linode_instance_resize,
+)
 from linodemcp.linode import parse_instance
-from linodemcp.tools.linode_instance_actions import handle_linode_instance_rebuild
-from linodemcp.tools.linode_instance_write import handle_linode_instance_resize
 from linodemcp.twostage import reset_plan_store, set_plan_store
 from linodemcp.twostage.store import PlanStore
 
@@ -23,12 +25,20 @@ if TYPE_CHECKING:
     from linodemcp.config import Config
 
 
+def _named_tools(client: AsyncMock) -> list[str]:
+    """The tools route_raw was asked for, in order.
+
+    The rebuild reads its state and runs its write through the same primitive,
+    so a plan-time check has to say which tool was named rather than whether the
+    primitive was touched.
+    """
+    return [call.args[0] for call in client.route_raw.await_args_list if call.args]
+
+
 async def test_rebuild_plan_then_apply(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {"id": 123, "status": "offline"}
-    )
+    mock_linode_client.route_raw.return_value = {"id": 123, "status": "offline"}
     mock_linode_client.list_instance_disks.return_value = []
 
     rebuild_args: dict[str, Any] = {
@@ -48,13 +58,13 @@ async def test_rebuild_plan_then_apply(
         assert plan_id
         # The rebuild walk runs at plan time, so the body reads like a preview.
         assert body["warnings"]
-        mock_linode_client.rebuild_instance.assert_not_awaited()
+        assert _named_tools(mock_linode_client) == ["linode_instance_get"]
 
         result = await handle_linode_instance_rebuild(
             {**rebuild_args, "mode": "apply", "plan_id": plan_id}, sample_config
         )
         assert "Error" not in result[0].text
-        mock_linode_client.rebuild_instance.assert_awaited_once()
+        assert _named_tools(mock_linode_client).count("linode_instance_rebuild") == 1
         assert await store.length() == 0
     finally:
         reset_plan_store(token)
@@ -84,7 +94,7 @@ async def test_resize_plan_then_apply_opted_in(
         effect = body["side_effects"][0]
         assert "g6-nanode-1" in effect
         assert "g6-standard-1" in effect
-        mock_linode_client.resize_instance.assert_not_awaited()
+        mock_linode_client.route_raw.assert_not_awaited()
 
         result = await handle_linode_instance_resize(
             {**resize_args, "mode": "apply", "plan_id": plan_id}, sample_config
@@ -98,7 +108,9 @@ async def test_resize_plan_then_apply_opted_in(
         )
         assert apply_body["instance_id"] == 123
         assert apply_body["new_type"] == "g6-standard-1"
-        mock_linode_client.resize_instance.assert_awaited_once()
+        mock_linode_client.route_raw.assert_awaited_once_with(
+            "linode_instance_resize", 123, body={"type": "g6-standard-1"}
+        )
         assert await store.length() == 0
     finally:
         reset_plan_store(token)
@@ -122,6 +134,33 @@ async def test_resize_default_off_falls_through(
             sample_config,
         )
         assert await store.length() == 0
-        mock_linode_client.resize_instance.assert_not_awaited()
+        mock_linode_client.route_raw.assert_not_awaited()
+    finally:
+        reset_plan_store(token)
+
+
+async def test_resize_plan_refuses_a_bad_argument_before_reading_state(
+    sample_config: Config, mock_linode_client: AsyncMock
+) -> None:
+    """A plan that fetched state for a call it was going to refuse would spend a
+    request saying so, which is why the argument failure is reported first.
+
+    It is also the one order change the migration made on the Go side: its hand
+    handler entered the flow only with both arguments present and otherwise fell
+    through to the confirm gate, so a staged call naming no type used to answer
+    the confirm sentence there. Both languages now answer the argument.
+    """
+    sample_config.two_stage = TwoStageConfig(opt_in={"linode_instance_resize": True})
+
+    store = PlanStore()
+    token = set_plan_store(store)
+    try:
+        result = await handle_linode_instance_resize(
+            {"instance_id": 123, "mode": "plan"}, sample_config
+        )
+
+        assert result[0].text == "Error: type is required"
+        assert await store.length() == 0
+        mock_linode_client.get_instance.assert_not_awaited()
     finally:
         reset_plan_store(token)

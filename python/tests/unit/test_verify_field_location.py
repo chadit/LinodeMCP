@@ -45,6 +45,7 @@ sysparams = _load_script("verify_system_params")
 _PATH = "FIELD_LOCATION_PATH"
 _QUERY = "FIELD_LOCATION_QUERY"
 _LOCAL = "FIELD_LOCATION_LOCAL"
+_TOOL = "FIELD_LOCATION_TOOL"
 _UNSET = "FIELD_LOCATION_UNSPECIFIED"
 
 _MESSAGE = "linode.mcp.v1.TagGetInput"
@@ -158,6 +159,60 @@ def test_the_system_param_parser_reads_annotated_field_lines() -> None:
     ]
 
 
+def _declaration(*hooks: str) -> object:
+    """Stand in for one routed message's declaration with a fixed hook set."""
+    return reader.ToolDeclaration(
+        message=_MESSAGE,
+        route_tool="linode_tag_get",
+        meta_tool="",
+        capability="TOOL_CAPABILITY_READ",
+        hooks=hooks,
+    )
+
+
+def test_a_tool_argument_without_an_execute_hook_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A routed TOOL field with no hook is advertised and then dropped.
+
+    Nothing on a routed tier places one, so the caller reads an argument in the
+    schema that the request never carries and the tool silently ignores.
+    """
+    monkeypatch.setattr(gate._toolroutes, "declarations", lambda: [_declaration()])
+    located = {_MESSAGE: {"label": _PATH, "source_path": _TOOL}}
+
+    assert gate.tool_argument_mismatches(located) == [
+        "TagGetInput.source_path: TOOL on a routed message with no execute hook"
+    ]
+
+
+def test_a_tool_argument_with_an_execute_hook_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hook owns the call, so it is what reads the local path."""
+    monkeypatch.setattr(
+        gate._toolroutes, "declarations", lambda: [_declaration("execute")]
+    )
+    located = {_MESSAGE: {"label": _PATH, "source_path": _TOOL}}
+
+    assert gate.tool_argument_mismatches(located) == []
+
+
+def test_a_meta_message_is_left_to_its_own_tier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A meta tool's whole input is TOOL and it declares no route to check."""
+    meta = reader.ToolDeclaration(
+        message=_MESSAGE,
+        route_tool="",
+        meta_tool="linode_hello",
+        capability="TOOL_CAPABILITY_META",
+    )
+    monkeypatch.setattr(gate._toolroutes, "declarations", lambda: [meta])
+
+    assert gate.tool_argument_mismatches({_MESSAGE: {"name": _TOOL}}) == []
+
+
 def test_the_checked_in_surface_declares_every_location() -> None:
     """The real descriptors carry a location on every routed input field."""
     located = reader.field_locations()
@@ -165,3 +220,4 @@ def test_the_checked_in_surface_declares_every_location() -> None:
     assert gate.unannotated(located) == []
     assert gate.path_mismatches(reader.tool_routes(), located) == []
     assert gate.local_mismatches(located) == []
+    assert gate.tool_argument_mismatches(located) == []

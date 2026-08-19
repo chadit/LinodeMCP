@@ -12,12 +12,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from linodemcp.audit import Capability, Event, Mode, Status
-from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_summary import (
+from linodemcp.config import Config
+from linodemcp.gentools import (
     create_linode_audit_summary_tool,
     handle_linode_audit_summary,
-    set_audit_sqlite_path,
 )
+from linodemcp.profiles import Capability as ProfileCapability
+from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -82,7 +83,7 @@ async def test_counts_by_tool_status(
     body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
-    result = await handle_linode_audit_summary({})
+    result = await handle_linode_audit_summary({}, Config())
     payload = json.loads(result[0].text)
 
     assert payload["total_events"] == 3, "meta event excluded by default"
@@ -92,8 +93,14 @@ async def test_counts_by_tool_status(
 
 
 async def test_invalid_group_by_returns_error() -> None:
-    """An unknown group_by column surfaces as an error message."""
-    result = await handle_linode_audit_summary({"group_by": ["bogus"]})
+    """An unknown group_by column surfaces as an Error: result.
+
+    The shape is pinned rather than only the wording, for the reason the recent
+    tool's malformed-since case pins it: the hand-written handler answered a
+    plain TextContent where Go answered a tool-result error.
+    """
+    result = await handle_linode_audit_summary({"group_by": ["bogus"]}, Config())
 
     assert len(result) == 1
+    assert result[0].text.startswith("Error: ")
     assert "bogus" in result[0].text

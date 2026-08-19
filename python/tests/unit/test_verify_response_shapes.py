@@ -48,7 +48,7 @@ def _violations_for_case(
         gate, "tool_routes", lambda: {"linode_widget_list": ("GET", "/widgets")}
     )
     monkeypatch.setattr(gate, "_FIXTURES", fixtures)
-    return cast("list[str]", gate.current_violations())
+    return cast("list[str]", gate.current_violations().violations)
 
 
 def test_expect_api_error_body_is_not_a_shape_violation(
@@ -132,3 +132,37 @@ def test_case_bodies_checks_success_with_empty_error_fields() -> None:
         },
         routes,
     ) == [("GET", "/widgets", body)]
+
+
+def test_the_live_repo_has_no_shape_divergence_and_no_baseline() -> None:
+    """A wrong-shaped fixture fails outright; there is nothing to accept it.
+
+    The judged count comes with it: a fixture tree that stopped resolving
+    routes would report an empty violation list for the wrong reason.
+    """
+    result = gate.current_violations()
+
+    assert result.violations == []
+    assert result.judged > 0
+    assert not (
+        REPO_ROOT / "docs" / "contracts" / "response-shape-baseline.txt"
+    ).exists()
+
+
+def test_main_fails_on_a_diverging_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """main must turn a divergence into a non-zero exit, not just report it."""
+    monkeypatch.setattr(
+        gate,
+        "current_violations",
+        lambda: gate.Judged(["linode_widget_list: GET /widgets fixture=envelope"], 3),
+    )
+
+    assert gate.main([]) == 1
+
+
+def test_main_fails_when_no_body_was_judged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Judging nothing reads like a tree of correct fixtures."""
+    monkeypatch.setattr(gate, "current_violations", lambda: gate.Judged([], 0))
+
+    with pytest.raises(SystemExit, match="covered nothing"):
+        gate.main([])

@@ -16,18 +16,26 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from linodemcp.profiles import Capability
-from linodemcp.profiles.builtin import ToolDescriptor
-from linodemcp.tools.linode_profile_builder import (
+from linodemcp.config import Config
+from linodemcp.gentools import (
     create_linode_profile_list_categories_tool,
     create_linode_profile_list_tools_tool,
     handle_linode_profile_list_categories,
     handle_linode_profile_list_tools,
-    set_tool_catalog_provider,
+)
+from linodemcp.profiles import Capability
+from linodemcp.profiles.builder import Registry
+from linodemcp.profiles.builtin import ToolDescriptor
+from linodemcp.profiles.profile import Profile
+from linodemcp.tools.builderstate import (
+    BUILDER_UNCONFIGURED,
+    BuilderState,
+    reset_builder_state,
+    set_builder_state,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 # Argument-key constants kept in sync with the production module. Reused
 # across filter tests so the literal-repetition lint doesn't flag.
@@ -50,19 +58,38 @@ def fixture_catalog() -> list[ToolDescriptor]:
     ]
 
 
+def _no_profile() -> Profile:
+    """The active-profile reader for the tools that never read one."""
+    return Profile(name="test", description="", allowed_tools=())
+
+
+def publish_catalog(catalog: Callable[[], list[ToolDescriptor]]) -> None:
+    """Publish a builder state carrying the given catalog for this test."""
+    set_builder_state(
+        BuilderState(
+            drafts=Registry(),
+            catalog=catalog,
+            active_profile=_no_profile,
+        )
+    )
+
+
 @pytest.fixture(autouse=True)
 def install_fixture_catalog() -> Iterator[None]:
-    """Install the reproducible catalog and reset the bridge afterward.
+    """Publish the reproducible catalog and reset the state afterward.
 
-    The module-level bridge state would otherwise bleed across tests
-    (and across files, since the production server module touches the
-    same singleton). ``yield`` shape per ruff PT021. No leading
-    underscore so pyright doesn't flag the auto-applied fixture as an
-    unused private function.
+    ``yield`` shape per ruff PT021. No leading underscore so pyright doesn't
+    flag the auto-applied fixture as an unused private function.
     """
-    set_tool_catalog_provider(fixture_catalog)
+    token = set_builder_state(
+        BuilderState(
+            drafts=Registry(),
+            catalog=fixture_catalog,
+            active_profile=_no_profile,
+        )
+    )
     yield
-    set_tool_catalog_provider(None)
+    reset_builder_state(token)
 
 
 def _parse_envelope_list(payload: str, key: str) -> list[dict[str, object]]:
@@ -86,7 +113,7 @@ async def _call_list_tools(args: dict[str, str]) -> list[dict[str, object]]:
 
     Mirrors the Go-side ``callListTools`` helper.
     """
-    response = await handle_linode_profile_list_tools(args)
+    response = await handle_linode_profile_list_tools(args, Config())
     assert len(response) == 1, "handler must return exactly one TextContent"
     return _parse_envelope_list(response[0].text, "tools")
 
@@ -221,26 +248,27 @@ async def test_list_tools_empty_catalog_returns_empty_array() -> None:
     The model would handle null as 'tool failed'; an empty array is
     the correct 'no tools matched'.
     """
-    set_tool_catalog_provider(list)
+    publish_catalog(list)
 
-    response = await handle_linode_profile_list_tools({})
+    response = await handle_linode_profile_list_tools({}, Config())
 
     assert _parse_envelope_list(response[0].text, "tools") == []
 
 
 @pytest.mark.asyncio
-async def test_list_tools_no_bridge_returns_empty() -> None:
-    """When no bridge is installed the handler returns an empty list.
+async def test_list_tools_without_state_refuses() -> None:
+    """A handler reached with no state refuses rather than answering empty.
 
-    Documented contract: the handler doesn't raise if the server hasn't
-    wired the catalog provider yet, which simplifies test setup and
-    ensures bare imports of the module don't break.
+    An empty catalog and an unwired server read the same to a caller, so the
+    handler says which one it is. Go answers the same sentence.
     """
-    set_tool_catalog_provider(None)
+    token = set_builder_state(None)
+    try:
+        response = await handle_linode_profile_list_tools({}, Config())
+    finally:
+        reset_builder_state(token)
 
-    response = await handle_linode_profile_list_tools({})
-
-    assert _parse_envelope_list(response[0].text, "tools") == []
+    assert response[0].text == f"Error: {BUILDER_UNCONFIGURED}"
 
 
 def test_list_categories_registration() -> None:
@@ -262,7 +290,7 @@ async def test_list_categories_returns_deduplicated_counts() -> None:
     ``compute_actions`` category on the Python side), so the count
     expectations differ from the Go-side test by design.
     """
-    response = await handle_linode_profile_list_categories({})
+    response = await handle_linode_profile_list_categories({}, Config())
     parsed = _parse_envelope_list(response[0].text, "categories")
     counts = {str(e["name"]): e["tool_count"] for e in parsed}
 
@@ -276,13 +304,30 @@ async def test_list_categories_returns_deduplicated_counts() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_tools_sorted_by_name() -> None:
+    """Pin the answer's order.
+
+    The catalog fixture is deliberately NOT in name order, so a dropped sort
+    fails here rather than showing up as two languages listing one menu two
+    ways: Go registers its hand-written tools first and Python registers in
+    name order, which is the divergence this sort closes.
+    """
+    entries = await _call_list_tools({})
+
+    names = [str(entry["name"]) for entry in entries]
+
+    assert len(names) == len(fixture_catalog())
+    assert names == sorted(names)
+
+
+@pytest.mark.asyncio
 async def test_list_categories_sorted_by_name() -> None:
     """Stable output: sorted ascending by name.
 
     A refactor that drops the sort would cause flaky cross-language
     comparison.
     """
-    response = await handle_linode_profile_list_categories({})
+    response = await handle_linode_profile_list_categories({}, Config())
     parsed = _parse_envelope_list(response[0].text, "categories")
     names = [str(e["name"]) for e in parsed]
 
@@ -292,8 +337,8 @@ async def test_list_categories_sorted_by_name() -> None:
 @pytest.mark.asyncio
 async def test_list_categories_empty_catalog_returns_empty_array() -> None:
     """Empty catalog serializes as ``[]`` not ``null``."""
-    set_tool_catalog_provider(list)
+    publish_catalog(list)
 
-    response = await handle_linode_profile_list_categories({})
+    response = await handle_linode_profile_list_categories({}, Config())
 
     assert _parse_envelope_list(response[0].text, "categories") == []

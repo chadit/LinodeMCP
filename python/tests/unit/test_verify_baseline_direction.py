@@ -17,11 +17,11 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
-
-    import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -80,7 +80,9 @@ def test_guarded_baselines_excludes_snapshots_and_adds_exempt_list(
         "api-defaults-baseline.txt",
         "enum-sync-baseline.txt",
         "tool-parity-baseline.txt",
-        "write-proto-baseline.txt",
+        "behavior-dryrun-baseline.txt",
+        "behavior-exempt.txt",
+        "scope-sync-exempt.txt",
     ):
         (contracts / name).write_text("# header\n", encoding="utf-8")
 
@@ -88,10 +90,25 @@ def test_guarded_baselines_excludes_snapshots_and_adds_exempt_list(
 
     assert guarded == {
         "tool-parity-baseline.txt",
-        "write-proto-baseline.txt",
+        "behavior-dryrun-baseline.txt",
         "behavior-exempt.txt",
         "scope-sync-exempt.txt",
     }
+
+
+def test_a_named_exempt_file_that_does_not_exist_fails(tmp_path: Path) -> None:
+    """A hand-named file that went away guards nothing while looking covered.
+
+    The ratchets are globbed, so a baseline that goes away with its gate simply
+    stops being guarded. The exemption files are named in the script, and that
+    list has to be kept in step by hand.
+    """
+    contracts = tmp_path / "contracts"
+    contracts.mkdir()
+    (contracts / "behavior-exempt.txt").write_text("# header\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match=r"scope-sync-exempt\.txt"):
+        guard._guarded_baselines(contracts)
 
 
 def _write_ratchet(tmp_path: Path, body: str) -> Path:

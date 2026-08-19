@@ -170,6 +170,10 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
                 # docs, including /profile/tokens which the docs gate
                 # with account:* rather than a dedicated tokens scope.
                 "linode_profile_",
+                # Resource locks span every lockable family, and the API
+                # gates /locks on account:* rather than on the scope of
+                # the resource a lock protects.
+                "linode_lock_",
             ),
             _CAT_ACCOUNT,
         ),
@@ -296,8 +300,10 @@ def _is_scopeless_route(tool_name: str) -> bool:
         "linode_network_transfer_price_list",
         # Token-only or otherwise scopeless per the spec: betas,
         # maintenance, the caller's own profile, Longview subscription
-        # plans, VPC reads, the OAuth-client thumbnail, and the metrics
-        # query endpoint.
+        # plans, VPC reads, the OAuth-client thumbnail, the metrics
+        # query endpoint, the IAM role catalog, the per-user IAM access
+        # level, and the IDP configuration surface, which the spec
+        # gates on the token alone even for the writes.
         "linode_beta_get",
         "linode_beta_list",
         "linode_maintenance_policy_list",
@@ -311,6 +317,36 @@ def _is_scopeless_route(tool_name: str) -> bool:
         "linode_vpc_subnet_list",
         "linode_account_oauth_client_thumbnail_get",
         "linode_monitor_service_metric_query",
+        "linode_iam_role_permission_list",
+        "linode_iam_user_role_permission_get",
+        "linode_iam_user_role_permission_update",
+        "linode_iam_idp_config_list",
+        "linode_iam_idp_config_get",
+        "linode_iam_idp_config_create",
+        "linode_iam_idp_config_update",
+        "linode_iam_idp_config_delete",
+        "linode_iam_idp_config_certificate_list",
+        "linode_iam_idp_config_certificate_create",
+        "linode_iam_idp_config_certificate_delete",
+        "linode_iam_idp_config_excluded_user_list",
+        "linode_iam_idp_config_excluded_user_update",
+        "linode_iam_idp_config_included_user_list",
+        "linode_iam_idp_config_included_user_update",
+        # The account-delegation surface, which the spec gates on the
+        # token alone for every route including the writes and the
+        # delegate-token mint.
+        "linode_iam_delegation_child_account_list",
+        "linode_iam_delegation_child_account_user_list",
+        "linode_iam_delegation_child_account_user_update",
+        "linode_iam_delegation_default_role_permission_get",
+        "linode_iam_delegation_default_role_permission_update",
+        "linode_iam_delegation_profile_child_account_list",
+        "linode_iam_delegation_profile_child_account_get",
+        "linode_iam_delegation_profile_child_account_token_create",
+        "linode_iam_delegation_user_child_account_list",
+        # The entity catalog the IAM surface grants over, which the
+        # spec gates on the token alone.
+        "linode_entity_list",
     )
 
 
@@ -354,6 +390,10 @@ def _scope_overrides() -> dict[str, list[Scope]]:
         "linode_lke_kubeconfig_get": [Scope.LKEReadWrite],
         "linode_lke_node_get": [Scope.LKEReadWrite],
         "linode_nodebalancer_config_node_get": [Scope.NodeBalancersReadWrite],
+        # The connection-pool collection read is documented as
+        # databases:read_write while the single-pool read beside it
+        # stays databases:read_only.
+        "linode_database_postgresql_connection_pool_list": [Scope.DatabasesReadWrite],
         # The docs put this instance-interface read under the
         # NodeBalancers scope; encoded as documented.
         "linode_instance_interface_firewall_list": [Scope.NodeBalancersReadOnly],

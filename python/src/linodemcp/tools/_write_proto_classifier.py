@@ -44,12 +44,17 @@ from pathlib import Path
 
 _TOOLS_DIR = Path(__file__).resolve().parent
 
-# Emitted factories and handlers that scripts/toolgen_py.py writes from the proto
+# Emitted factories and handlers that go/cmd/toolgen writes from the proto
 # contract, indexed alongside the hand-written tree because a generated handler
 # reaches the proto serializers through the same drivers. Absent before
 # `make proto` has run, which is not an error: a checkout with no generated code
 # has no generated tools to classify.
 _GENTOOLS_DIR = _TOOLS_DIR.parent / "gentools"
+
+# The hand-written steps a contract cannot express, indexed with the two tool
+# trees because a generated handler's path to a proto serializer can run through
+# one: a meta tool's whole answer is its answer hook.
+_HOOKS_PATH = _TOOLS_DIR.parent / "toolhooks.py"
 
 _CAPABILITIES_PATH = (
     _TOOLS_DIR.parents[3] / "docs" / "contracts" / "tools-capabilities.txt"
@@ -170,10 +175,12 @@ def _collect_direct_calls(node: ast.AST) -> set[str]:
 
 
 def _tool_files(tools_dir: Path) -> list[Path]:
-    """Every source file the classifier reads, hand-written then generated."""
+    """Every source file the classifier reads: hand-written, generated, hooks."""
     files = sorted(tools_dir.glob("*.py"))
     if _GENTOOLS_DIR.is_dir():
         files.extend(sorted(_GENTOOLS_DIR.glob("*.py")))
+    if _HOOKS_PATH.is_file():
+        files.append(_HOOKS_PATH)
     return files
 
 

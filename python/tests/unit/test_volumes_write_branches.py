@@ -12,8 +12,7 @@ import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
-from linodemcp.linode import Volume
-from linodemcp.tools.linode_volumes_write import (
+from linodemcp.gentools import (
     handle_linode_volume_attach,
     handle_linode_volume_clone,
     handle_linode_volume_create,
@@ -22,6 +21,7 @@ from linodemcp.tools.linode_volumes_write import (
     handle_linode_volume_resize,
     handle_linode_volume_update,
 )
+from linodemcp.linode import Volume
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -63,7 +63,30 @@ async def test_create_dry_run_notes_attachment(sample_config: Config) -> None:
         sample_config,
     )
     body = json.loads(result[0].text)
-    assert any("attached to instance 42" in s for s in body["side_effects"])
+    assert body["side_effects"] == [
+        'A new 20 GB volume "vol" will be created.',
+        "The volume is attached to instance 42 on creation.",
+    ]
+
+
+async def test_create_dry_run_drops_the_attach_line_for_a_detached_volume(
+    sample_config: Config,
+) -> None:
+    """The attach sentence is a whole line a detached create has nothing to say
+    on, so it is dropped rather than reported with a gap in it. A size left to
+    the API is named by neither wording rather than reported as zero.
+    """
+    result = await handle_linode_volume_create(
+        {"label": "vol", "region": "us-east", "dry_run": True},
+        sample_config,
+    )
+    body = json.loads(result[0].text)
+    assert body["side_effects"] == [
+        'A new volume "vol" will be created in region us-east.'
+    ]
+    assert body["warnings"] == [
+        "Billing for the volume starts immediately on creation."
+    ]
 
 
 async def test_create_confirmed_requires_label(sample_config: Config) -> None:
@@ -125,14 +148,18 @@ async def test_attach_dry_run_requires_linode_id(sample_config: Config) -> None:
 
 
 async def test_attach_requires_volume_id(sample_config: Config) -> None:
-    """A real attach with no volume_id errors before any call."""
-    result = await handle_linode_volume_attach({"linode_id": 42}, sample_config)
+    """A confirmed attach with no volume_id errors before any call."""
+    result = await handle_linode_volume_attach(
+        {"linode_id": 42, "confirm": True}, sample_config
+    )
     assert "volume_id is required" in result[0].text
 
 
 async def test_attach_requires_linode_id(sample_config: Config) -> None:
-    """A real attach with no linode_id errors before any call."""
-    result = await handle_linode_volume_attach({"volume_id": 5}, sample_config)
+    """A confirmed attach with no linode_id errors before any call."""
+    result = await handle_linode_volume_attach(
+        {"volume_id": 5, "confirm": True}, sample_config
+    )
     assert "linode_id is required" in result[0].text
 
 
@@ -154,10 +181,19 @@ async def test_attach_threads_config_id_into_body(sample_config: Config) -> None
     )
 
 
-async def test_detach_requires_volume_id(sample_config: Config) -> None:
-    """A detach with no volume_id errors before any branch."""
-    result = await handle_linode_volume_detach({}, sample_config)
-    assert "volume_id is required" in result[0].text
+async def test_detach_gates_on_confirm_before_it_validates(
+    sample_config: Config,
+) -> None:
+    """A live detach reports the gate first, then the missing id.
+
+    A caller who has not confirmed learns nothing about whether their arguments
+    would have been accepted, which is the order every mutating tool holds.
+    """
+    gated = await handle_linode_volume_detach({}, sample_config)
+    assert "Set confirm=true to proceed." in gated[0].text
+
+    confirmed = await handle_linode_volume_detach({"confirm": True}, sample_config)
+    assert "volume_id is required" in confirmed[0].text
 
 
 async def test_resize_dry_run_requires_volume_id(sample_config: Config) -> None:
@@ -169,11 +205,15 @@ async def test_resize_dry_run_requires_volume_id(sample_config: Config) -> None:
 
 
 async def test_resize_dry_run_requires_size(sample_config: Config) -> None:
-    """A dry-run resize validates size once volume_id is present."""
+    """A dry-run resize validates size once volume_id is present.
+
+    A resize names the new size, so an omitted one reads as a size under the
+    floor rather than a value left to the API.
+    """
     result = await handle_linode_volume_resize(
         {"volume_id": 5, "dry_run": True}, sample_config
     )
-    assert "size is required" in result[0].text
+    assert "volume size must be at least 10 GB" in result[0].text
 
 
 async def test_resize_confirmed_requires_size(sample_config: Config) -> None:
@@ -181,7 +221,7 @@ async def test_resize_confirmed_requires_size(sample_config: Config) -> None:
     result = await handle_linode_volume_resize(
         {"volume_id": 5, "confirm": True}, sample_config
     )
-    assert "size is required" in result[0].text
+    assert "volume size must be at least 10 GB" in result[0].text
 
 
 async def test_resize_rejects_undersized_target(sample_config: Config) -> None:
@@ -211,7 +251,7 @@ async def test_update_dry_run_requires_volume_id(sample_config: Config) -> None:
     result = await handle_linode_volume_update(
         {"label": "x", "dry_run": True}, sample_config
     )
-    assert "volume_id is required" in result[0].text
+    assert "volume_id must be a positive integer" in result[0].text
 
 
 async def test_update_dry_run_reports_label_and_tag_changes(
@@ -261,3 +301,72 @@ async def test_delete_confirmed_requires_volume_id(sample_config: Config) -> Non
     """A confirmed delete still requires volume_id."""
     result = await handle_linode_volume_delete({"confirm": True}, sample_config)
     assert "volume_id is required" in result[0].text
+
+
+async def test_clone_dry_run_describes_a_source_it_could_not_read(
+    sample_config: Config,
+) -> None:
+    """The label the caller asked for is the part they are about to be billed
+    for, so a source the fetch answered with nothing still earns the prose.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_cls.return_value = _mock_client_returning("get_volume", None)
+
+        result = await handle_linode_volume_clone(
+            {"volume_id": 900, "label": "copy", "dry_run": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert body["side_effects"] == [
+        "A new volume labeled 'copy' will be created from the source volume."
+    ]
+    assert body["warnings"] == [
+        "Billing for the cloned volume starts immediately on creation."
+    ]
+
+
+async def test_clone_dry_run_names_the_source_it_read(sample_config: Config) -> None:
+    """A source the fetch named is what tells a caller which volume they copy."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_cls.return_value = _mock_client_returning("get_volume", _volume())
+
+        result = await handle_linode_volume_clone(
+            {"volume_id": 900, "label": "copy", "dry_run": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert body["side_effects"] == [
+        "Volume 900 ('old-label') will be cloned to a new volume labeled 'copy'."
+    ]
+
+
+async def test_update_dry_run_sets_a_label_it_could_not_compare(
+    sample_config: Config,
+) -> None:
+    """A volume the fetch answered without a label reads as a label being set."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_cls.return_value = _mock_client_returning("get_volume", _volume(label=""))
+
+        result = await handle_linode_volume_update(
+            {"volume_id": 900, "label": "renamed", "dry_run": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert body["side_effects"] == ["Label is set to 'renamed'."]
+
+
+async def test_update_dry_run_reports_tags_alone(sample_config: Config) -> None:
+    """An update naming only tags changes no label, so the walk says nothing
+    about one and reports the tag replacement by itself.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_cls.return_value = _mock_client_returning("get_volume", _volume())
+
+        result = await handle_linode_volume_update(
+            {"volume_id": 900, "tags": ["prod"], "dry_run": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert body["side_effects"] == [
+        "The volume's tag set is replaced with the provided tags."
+    ]

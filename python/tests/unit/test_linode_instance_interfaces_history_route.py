@@ -3,138 +3,26 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, TypeVar, cast
-from unittest.mock import AsyncMock
+from typing import TYPE_CHECKING, Any, TypeVar
 
-import httpx
 import pytest
 
-from linodemcp.linode import Client, NetworkError, RetryableClient
-from linodemcp.profiles import Capability
-from linodemcp.server import get_tool_registry
-from linodemcp.tools import (
+from linodemcp.gentools import (
     create_linode_instance_interface_history_list_tool as exported_create_tool,
 )
-from linodemcp.tools.linode_instances import (
+from linodemcp.gentools.instance import (
     create_linode_instance_interface_history_list_tool,
     handle_linode_instance_interface_history_list,
 )
+from linodemcp.profiles import Capability
+from linodemcp.server import get_tool_registry
 from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from unittest.mock import AsyncMock
 
 
 T = TypeVar("T")
-
-
-class _CapturingRetryableClient(RetryableClient):
-    """RetryableClient test double that records retry callbacks."""
-
-    def __init__(self) -> None:
-        super().__init__("https://api.linode.com/v4", "test-token")
-        self.calls: list[Callable[..., Awaitable[Any]]] = []
-
-    async def _execute_with_retry(
-        self, func: Callable[..., Awaitable[T]], *args: Any
-    ) -> T:
-        self.calls.append(func)
-        return await func(*args)
-
-
-@pytest.mark.asyncio
-async def test_client_list_instance_interface_history_sends_exact_request() -> None:
-    """Low-level client sends GET /linode/instances/{linodeId}/interfaces/history."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"linode_id": 123, "action": "interface_create"}],
-                "page": 1,
-                "pages": 1,
-                "results": 1,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_instance_interface_history(123)
-    finally:
-        await client.close()
-
-    assert result["results"] == 1
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == "/v4/linode/instances/123/interfaces/history"
-    assert request.url.query == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-    assert request.content == b""
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, True])
-async def test_client_list_instance_interface_history_rejects_invalid_linode_id(
-    linode_id: Any,
-) -> None:
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(ValueError, match="linode_id must be a positive integer"):
-            await client.list_instance_interface_history(linode_id)
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_client_list_instance_interface_history_translates_http_errors() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ReadTimeout("timeout")
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="ListInstanceInterfaceHistory"):
-            await client.list_instance_interface_history(123)
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_list_instance_interface_history_uses_read_retry() -> (
-    None
-):
-    """Read-only interface history list goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    mock_list = AsyncMock(
-        return_value={"data": [], "page": 1, "pages": 1, "results": 0}
-    )
-    cast("Any", retryable.client).list_instance_interface_history = mock_list
-
-    try:
-        result = await retryable.list_instance_interface_history(123)
-    finally:
-        await retryable.close()
-
-    assert result["results"] == 0
-    assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(123, page=None, page_size=None)
 
 
 def test_create_linode_instance_interfaces_history_list_tool_schema() -> None:
@@ -149,7 +37,7 @@ def test_create_linode_instance_interfaces_history_list_tool_schema() -> None:
 async def test_handle_linode_instance_interfaces_history_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.list_instance_interface_history.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [
             {
                 "interface_history_id": 3,
@@ -175,8 +63,8 @@ async def test_handle_linode_instance_interfaces_history_list_success(
     assert payload["interface_history"][0]["interface_data"] == {
         "mac_address": "22:00:AB:CD:EF:02"
     }
-    mock_linode_client.list_instance_interface_history.assert_awaited_once_with(
-        123, page=None, page_size=None
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_instance_interface_history_list", 123, query=""
     )
 
 
@@ -203,7 +91,7 @@ async def test_handle_linode_instance_interfaces_history_list_rejects_invalid_li
         "Error: linode_id is required",
         "Error: linode_id must be a positive integer",
     )
-    mock_linode_client.list_instance_interface_history.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -237,7 +125,7 @@ async def test_handle_linode_instance_interfaces_history_list_rejects_bad_pagina
     )
 
     assert result[0].text == f"Error: {message}"
-    mock_linode_client.list_instance_interface_history.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_instance_interfaces_history_list_registered_and_exported() -> None:

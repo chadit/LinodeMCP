@@ -12,7 +12,7 @@ import gzip
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import IO, TYPE_CHECKING
 
 from linodemcp.audit.event import Event
 from linodemcp.audit.jsonl import ACTIVE_LOG_FILE_NAME
@@ -182,13 +182,18 @@ def _read_events_from_file(path: Path) -> list[Event]:
     """Decode every JSON line in ``path`` into an Event, oldest first.
 
     Gzipped rotated files are decompressed transparently. Open failures
-    yield an empty list (the scan skips the file); undecodable lines are
-    skipped individually.
+    yield an empty list (the scan skips the file); an error while reading
+    an opened file surfaces, because returning the partial slice would
+    silently drop audit events. Undecodable lines are skipped
+    individually.
     """
     try:
-        raw = _read_file_text(path)
+        handle = _open_log_text(path)
     except OSError:
         return []
+
+    with handle:
+        raw = handle.read()
 
     events: list[Event] = []
 
@@ -205,10 +210,25 @@ def _read_events_from_file(path: Path) -> list[Event]:
     return events
 
 
-def _read_file_text(path: Path) -> str:
-    """Read a log file as text, decompressing .gz rotated files."""
-    if path.name.endswith(".gz"):
-        with gzip.open(path, "rt", encoding="utf-8") as handle:
-            return handle.read()
+# Gzip magic bytes, probed before decompressing a rotated file so a
+# non-gzip file skips like an open failure (mirrors Go's gzip.NewReader
+# header check).
+_GZIP_MAGIC = b"\x1f\x8b"
 
-    return path.read_text(encoding="utf-8")
+
+def _open_log_text(path: Path) -> IO[str]:
+    """Open a log file as text, decompressing .gz rotated files.
+
+    The gzip magic is probed first so a rotated file that is not gzip at
+    all fails at open and the scan skips it, matching the Go reader; a
+    failure past the header surfaces from read.
+    """
+    if not path.name.endswith(".gz"):
+        return path.open(encoding="utf-8")
+
+    with path.open("rb") as probe:
+        if probe.read(2) != _GZIP_MAGIC:
+            msg = f"not a gzip file: {path.name}"
+            raise gzip.BadGzipFile(msg)
+
+    return gzip.open(path, "rt", encoding="utf-8")

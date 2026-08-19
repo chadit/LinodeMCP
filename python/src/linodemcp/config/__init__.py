@@ -116,6 +116,30 @@ class ResilienceConfig:
 
 
 @dataclass
+class ObjectStorageConfig:
+    """Object Storage data-plane settings.
+
+    These transfers do not go through the API client's request path: they follow
+    a presigned URL, so neither the per-request timeout nor the retry policy
+    that governs v4 calls applies to them.
+
+    Every default here matches Go's, because a divergent one would send the two
+    implementations down different paths for the same file and leave the
+    behavior fixtures pinning neither. ``transfer_timeout`` holds seconds as a
+    float, the way the other duration fields in this file do.
+
+    ``filesystem_root`` has no default on purpose. An empty value confines
+    nothing, which is what the stdio deployment this feature exists for needs:
+    it reads the operator's own paths, and a default root would refuse them.
+    """
+
+    filesystem_root: str = ""
+    max_single_part_bytes: int = 5 * 1024 * 1024 * 1024
+    transfer_timeout: float = 1800.0
+    presign_ttl_seconds: int = 3600
+
+
+@dataclass
 class LoggingConfig:
     """Logging configuration."""
 
@@ -307,6 +331,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
     resilience: ResilienceConfig = field(default_factory=ResilienceConfig)
+    object_storage: ObjectStorageConfig = field(default_factory=ObjectStorageConfig)
     environments: dict[str, EnvironmentConfig] = field(
         default_factory=dict[str, EnvironmentConfig]
     )
@@ -763,6 +788,19 @@ def _data_to_config(data: dict[str, Any]) -> Config:
         pool_keepalive_expiry=float(resilience_data.get("poolKeepaliveExpiry", 30.0)),
     )
 
+    object_storage_data = data.get("objectStorage", {})
+    object_storage = ObjectStorageConfig(
+        filesystem_root=object_storage_data.get("filesystemRoot", ""),
+        max_single_part_bytes=object_storage_data.get(
+            "maxSinglePartBytes", 5 * 1024 * 1024 * 1024
+        ),
+        transfer_timeout=_parse_duration_seconds(
+            object_storage_data.get("transferTimeout", 1800),
+            "objectStorage.transferTimeout",
+        ),
+        presign_ttl_seconds=object_storage_data.get("presignTtlSeconds", 3600),
+    )
+
     environments: dict[str, EnvironmentConfig] = {}
     for env_name, env_data in data.get("environments", {}).items():
         linode_data = env_data.get("linode", {})
@@ -782,6 +820,7 @@ def _data_to_config(data: dict[str, Any]) -> Config:
         server=server,
         observability=observability,
         resilience=resilience,
+        object_storage=object_storage,
         environments=environments,
         active_profile=active_profile,
         profiles=_parse_user_profiles(data.get("profiles")),

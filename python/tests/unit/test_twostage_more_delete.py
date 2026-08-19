@@ -16,38 +16,25 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from linodemcp.linode import parse_instance
-from linodemcp.tools.linode_account import handle_linode_tag_delete
-from linodemcp.tools.linode_databases import (
+from linodemcp.gentools import (
     handle_linode_database_mysql_instance_delete,
     handle_linode_database_postgresql_instance_delete,
-)
-from linodemcp.tools.linode_firewalls_write import (
     handle_linode_firewall_device_delete,
-)
-from linodemcp.tools.linode_images import (
     handle_linode_image_sharegroup_delete,
     handle_linode_image_sharegroup_token_delete,
-)
-from linodemcp.tools.linode_instance_actions import (
-    handle_linode_instance_password_reset,
-)
-from linodemcp.tools.linode_instance_backups import (
     handle_linode_instance_backups_cancel,
-)
-from linodemcp.tools.linode_instance_ips import handle_linode_instance_ip_delete
-from linodemcp.tools.linode_lke_write import (
+    handle_linode_instance_ip_delete,
+    handle_linode_instance_password_reset,
+    handle_linode_ipv6_range_delete,
     handle_linode_lke_kubeconfig_delete,
     handle_linode_lke_node_delete,
     handle_linode_lke_service_token_delete,
-)
-from linodemcp.tools.linode_networking import handle_linode_vlan_delete
-from linodemcp.tools.linode_object_storage_write import (
     handle_linode_object_storage_bucket_delete,
     handle_linode_object_storage_key_delete,
     handle_linode_object_storage_ssl_delete,
+    handle_linode_tag_delete,
+    handle_linode_vlan_delete,
 )
-from linodemcp.tools.linode_vpc_write import handle_linode_ipv6_range_delete
 from linodemcp.twostage import reset_plan_store, set_plan_store
 from linodemcp.twostage.store import PlanStore
 
@@ -74,134 +61,121 @@ _CASES = [
     pytest.param(
         handle_linode_database_mysql_instance_delete,
         {"instance_id": 123},
-        "get_database_mysql_instance",
+        "route_raw",
         {"id": 123, "label": "db", "updated": "2026-01-01T00:00:00"},
-        "delete_mysql_database_instance",
+        "route_call",
         "deleted",
         id="database_mysql",
     ),
     pytest.param(
         handle_linode_database_postgresql_instance_delete,
         {"instance_id": 123},
-        "get_database_postgresql_instance",
+        "route_raw",
         {"id": 123, "label": "pg", "updated": "2026-01-01T00:00:00"},
-        "delete_postgresql_database_instance",
+        "route_call",
         "deleted",
         id="database_postgresql",
     ),
     pytest.param(
         handle_linode_image_sharegroup_delete,
         {"sharegroup_id": 3},
-        "get_image_sharegroup",
+        "route_raw",
         {
             "uuid": "22222222-2222-2222-2222-222222222222",
             "label": "share",
             "updated": "2026-01-01T00:00:00",
         },
-        "delete_image_sharegroup",
+        "route_call",
         "removed successfully",
         id="image_sharegroup",
     ),
     pytest.param(
         handle_linode_image_sharegroup_token_delete,
         {"token_uuid": _TOKEN_UUID},
-        "get_image_sharegroup_by_token",
+        "route_raw",
         {"uuid": "sg-uuid", "label": "share", "updated": "2026-01-01T00:00:00"},
-        "delete_image_sharegroup_token",
+        "route_call",
         "removed successfully",
         id="image_sharegroup_token",
     ),
     pytest.param(
         handle_linode_instance_backups_cancel,
         {"linode_id": 123},
-        "get_instance",
-        parse_instance(
-            {"id": 123, "status": "running", "updated": "2026-01-01T00:00:00"}
-        ),
-        "cancel_instance_backups",
+        "route_raw",
+        {"id": 123, "status": "running", "updated": "2026-01-01T00:00:00"},
+        "route_call",
         "canceled",
         id="instance_backups_cancel",
     ),
     pytest.param(
-        handle_linode_instance_password_reset,
-        {"linode_id": 123, "root_pass": "Sup3rSecretPass99"},
-        "get_instance",
-        parse_instance(
-            {"id": 123, "status": "offline", "updated": "2026-01-01T00:00:00"}
-        ),
-        "reset_instance_password",
-        "reset",
-        id="instance_password_reset",
-    ),
-    pytest.param(
         handle_linode_instance_ip_delete,
         {"linode_id": 123, "address": "203.0.113.7"},
-        "get_instance_ip",
+        "route_raw",
         {"address": "203.0.113.7", "type": "ipv4", "public": True},
-        "delete_instance_ip",
+        "route_call",
         "removed from instance",
         id="instance_ip",
     ),
     pytest.param(
         handle_linode_ipv6_range_delete,
         {"range": "2001:db8::/64"},
-        "get_ipv6_range",
+        "route_raw",
         {"range": "2001:db8::", "region": "us-east", "prefix": 64},
-        "delete_ipv6_range",
+        "route_call",
         "deleted",
         id="ipv6_range",
     ),
     pytest.param(
         handle_linode_lke_node_delete,
         {"cluster_id": 123, "node_id": "node-xyz"},
-        "get_lke_node",
+        "route_raw",
         {"id": "node-xyz", "instance_id": 456, "status": "ready"},
-        "delete_lke_node",
+        "route_call",
         "deleted",
         id="lke_node",
     ),
     pytest.param(
         handle_linode_lke_kubeconfig_delete,
         {"cluster_id": 123},
-        "get_lke_cluster",
+        "route_raw",
         {"id": 123, "label": "lke", "updated": "2026-01-01T00:00:00"},
-        "delete_lke_kubeconfig",
+        "route_call",
         "regenerated",
         id="lke_kubeconfig",
     ),
     pytest.param(
         handle_linode_lke_service_token_delete,
         {"cluster_id": 123},
-        "get_lke_cluster",
+        "route_raw",
         {"id": 123, "label": "lke", "updated": "2026-01-01T00:00:00"},
-        "delete_lke_service_token",
+        "route_call",
         "deleted",
         id="lke_service_token",
     ),
     pytest.param(
         handle_linode_object_storage_bucket_delete,
         {"region": _REGION, "label": _BUCKET},
-        "get_object_storage_bucket",
+        "route_raw",
         {"label": _BUCKET, "region": _REGION, "objects": 0},
-        "delete_object_storage_bucket",
+        "route_call",
         "removed successfully",
         id="object_storage_bucket",
     ),
     pytest.param(
         handle_linode_object_storage_key_delete,
         {"key_id": 123},
-        "get_object_storage_key",
+        "route_raw",
         {"id": 123, "label": "ci-key", "access_key": "AK"},
-        "delete_object_storage_key",
+        "route_call",
         "revoked",
         id="object_storage_key",
     ),
     pytest.param(
         handle_linode_object_storage_ssl_delete,
         {"region": _REGION, "label": _BUCKET},
-        "get_bucket_ssl",
+        "route_raw",
         {"ssl": True},
-        "delete_bucket_ssl",
+        "route_call",
         "deleted",
         id="object_storage_ssl",
     ),
@@ -210,7 +184,7 @@ _CASES = [
         {"tag_label": "prod"},
         "list_tagged_objects",
         {"data": [], "page": 1, "pages": 1, "results": 0},
-        "delete_tag",
+        "route_call",
         "deleted",
         id="account_tag",
     ),
@@ -222,21 +196,13 @@ _TWO_ID_CASES = [
         handle_linode_firewall_device_delete,
         "firewall_id",
         "device_id",
-        "get_firewall_device",
+        "route_raw",
         {"id": 20, "status": "ready", "updated": "2026-01-01T00:00:00"},
-        "delete_firewall_device",
+        "route_call",
         "removed",
         id="firewall_device",
     ),
 ]
-
-
-def _stub_db_delete_returns(client: AsyncMock) -> None:
-    """The database delete handlers return the client's delete response, so the
-    mock must return a JSON-serializable dict (the AsyncMock default is not).
-    """
-    client.delete_mysql_database_instance.return_value = {"deleted": True}
-    client.delete_postgresql_database_instance.return_value = {"deleted": True}
 
 
 @pytest.mark.parametrize(
@@ -254,7 +220,6 @@ async def test_plan_then_apply(
     mock_linode_client: AsyncMock,
 ) -> None:
     getattr(mock_linode_client, fetch_attr).return_value = fetch_return
-    _stub_db_delete_returns(mock_linode_client)
     execute = getattr(mock_linode_client, exec_attr)
 
     store = PlanStore()
@@ -335,7 +300,7 @@ async def test_vlan_plan_then_apply(
     mock_linode_client.list_vlans.return_value = [
         {"region": "us-east", "label": "vl-app", "linodes": []}
     ]
-    delete = mock_linode_client.delete_vlan
+    delete = mock_linode_client.route_call
 
     store = PlanStore()
     token = set_plan_store(store)
@@ -353,6 +318,47 @@ async def test_vlan_plan_then_apply(
         )
         assert "deleted" in apply_result[0].text
         delete.assert_awaited_once()
+        assert await store.length() == 0
+    finally:
+        reset_plan_store(token)
+
+
+async def test_password_reset_plan_then_apply(
+    sample_config: Config, mock_linode_client: AsyncMock
+) -> None:
+    """The reset reads its state and runs its write through the same primitive,
+    so the plan-time claim is which tool was named rather than whether the
+    primitive was touched.
+    """
+    mock_linode_client.route_raw.return_value = {
+        "id": 123,
+        "status": "offline",
+        "updated": "2026-01-01T00:00:00",
+    }
+    args = {"linode_id": 123, "root_pass": "Sup3rSecretPass99"}
+
+    store = PlanStore()
+    token = set_plan_store(store)
+    try:
+        plan_result = await handle_linode_instance_password_reset(
+            {**args, "mode": "plan"}, sample_config
+        )
+        plan_id = json.loads(plan_result[0].text)["plan_id"]
+        assert plan_id
+        named = [
+            c.args[0] for c in mock_linode_client.route_raw.await_args_list if c.args
+        ]
+        assert named == ["linode_instance_get"]
+        assert await store.length() == 1
+
+        apply_result = await handle_linode_instance_password_reset(
+            {**args, "mode": "apply", "plan_id": plan_id}, sample_config
+        )
+        assert "reset" in apply_result[0].text
+        named = [
+            c.args[0] for c in mock_linode_client.route_raw.await_args_list if c.args
+        ]
+        assert named.count("linode_instance_password_reset") == 1
         assert await store.length() == 0
     finally:
         reset_plan_store(token)

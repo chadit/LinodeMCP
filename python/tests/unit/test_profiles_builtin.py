@@ -720,3 +720,99 @@ def test_json_roundtrip() -> None:
         assert entry["required_token_scopes"] == list(profile.required_token_scopes)
         assert entry["allow_yolo"] == profile.allow_yolo
         assert entry["disabled"] == profile.disabled
+
+
+def test_iam_tools_map_to_the_iam_category() -> None:
+    """IAM tools carry the iam category, mirroring Go's Categories()."""
+    assert categories("linode_iam_idp_config_delete") == ["iam"]
+    assert categories("linode_iam_delegation_child_account_list") == ["iam"]
+    assert categories("linode_iam_role_permission_list") == ["iam"]
+
+
+def test_iam_removal_resolves_in_the_wildcard_profiles() -> None:
+    """An IAM destroy is served by full-access and emergency, and nowhere else.
+
+    The category is what lets a future IAM-scoped admin profile reach it at
+    all: without one, the wildcard profiles are the only ones that can, which
+    is what ``make profile-resolution`` fails a category-less mutator on.
+    """
+    tool_name = "linode_iam_idp_config_delete"
+    profiles = builtin_profiles([ToolDescriptor(tool_name, Capability.Destroy)])
+
+    serving = {name for name, p in profiles.items() if tool_name in p.allowed_tools}
+    assert serving == {"full-access", "emergency"}
+
+
+def test_network_admin_serves_reserved_ip_writes() -> None:
+    """Reserved IPs are networking surface, so network-admin serves them.
+
+    Go filed them under no category at all, which made network-admin two
+    different profiles depending on which client the caller ran.
+    """
+    catalog = [
+        ToolDescriptor("linode_networking_reserved_ip_create", Capability.Write),
+        ToolDescriptor("linode_networking_reserved_ip_update", Capability.Write),
+        ToolDescriptor("linode_networking_reserved_ip_delete", Capability.Destroy),
+    ]
+    allowed = set(builtin_profiles(catalog)["network-admin"].allowed_tools)
+
+    assert allowed == {tool.name for tool in catalog}
+
+
+def test_storage_admin_serves_instance_backup_switches() -> None:
+    """Enabling and canceling backups is the surface storage-admin exists for."""
+    catalog = [
+        ToolDescriptor("linode_instance_backups_enable", Capability.Write),
+        ToolDescriptor("linode_instance_backups_cancel", Capability.Destroy),
+    ]
+    allowed = set(builtin_profiles(catalog)["storage-admin"].allowed_tools)
+
+    assert allowed == {tool.name for tool in catalog}
+
+
+def test_category_less_mutator_resolves_only_in_wildcard_profiles() -> None:
+    """A mutator in no category reaches only the profiles elevating every one.
+
+    Before the wildcard marker landed here it reached nothing in Python while
+    Go's short-circuit served it, so the same call succeeded in one language
+    and failed as an unknown tool in the other.
+    """
+    tool_name = "linode_unmapped_thing_create"
+    profiles = builtin_profiles([ToolDescriptor(tool_name, Capability.Write)])
+
+    serving = {name for name, p in profiles.items() if tool_name in p.allowed_tools}
+    assert serving == {"full-access", "emergency"}
+
+
+def test_multi_category_tool_is_served_from_either_of_its_categories() -> None:
+    """Every category a tool falls in counts, not just the first one listed."""
+    tool_name = "linode_instance_backup_create"
+    assert categories(tool_name) == ["compute_deep", "compute"]
+
+    profiles = builtin_profiles([ToolDescriptor(tool_name, Capability.Write)])
+    for name in ("storage-admin", "compute-admin"):
+        assert tool_name in profiles[name].allowed_tools
+
+
+def test_account_gated_tools_are_in_the_account_category() -> None:
+    """What the API gates on account:* is what an account-admin would elevate.
+
+    Core is the four tools a session starts from; naming the rest core left
+    them in a bucket no profile can lift.
+    """
+    for tool_name in (
+        "linode_account_payment_create",
+        "linode_beta_list",
+        "linode_lock_create",
+        "linode_maintenance_policy_list",
+        "linode_managed_service_create",
+        "linode_profile_grants_get",
+        "linode_profile_login_get",
+        "linode_profile_update",
+        "linode_support_ticket_get",
+        "linode_tag_object_list",
+    ):
+        assert categories(tool_name) == ["account"], tool_name
+
+    for tool_name in ("hello", "version", "linode_profile_get", "linode_account_get"):
+        assert categories(tool_name) == ["core"], tool_name

@@ -7,13 +7,18 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from linodemcp.profiles import Capability, Profile
-from linodemcp.profiles.builtin import ToolDescriptor
-from linodemcp.tools.linode_profile_can_run import (
+from linodemcp.config import Config
+from linodemcp.gentools import (
     create_linode_profile_can_run_tool,
     handle_linode_profile_can_run,
-    set_can_run_active_profile_provider,
-    set_can_run_catalog_provider,
+)
+from linodemcp.profiles import Capability, Profile
+from linodemcp.profiles.builder import Registry
+from linodemcp.profiles.builtin import ToolDescriptor
+from linodemcp.tools.builderstate import (
+    BuilderState,
+    reset_builder_state,
+    set_builder_state,
 )
 
 if TYPE_CHECKING:
@@ -45,20 +50,24 @@ def _fixture_profile(environments: tuple[str, ...] = ("prod",)) -> Profile:
 
 @pytest.fixture
 def wired(request: pytest.FixtureRequest) -> Iterator[None]:
-    """Install fixture bridges; clear them on teardown to avoid state bleed.
+    """Publish the fixture state; reset it on teardown to avoid state bleed.
 
     The optional indirect param overrides the profile's allowed_environments.
     """
     environments: tuple[str, ...] = getattr(request, "param", ("prod",))
-    set_can_run_catalog_provider(_fixture_catalog)
-    set_can_run_active_profile_provider(lambda: _fixture_profile(environments))
+    token = set_builder_state(
+        BuilderState(
+            drafts=Registry(),
+            catalog=_fixture_catalog,
+            active_profile=lambda: _fixture_profile(environments),
+        )
+    )
     yield
-    set_can_run_catalog_provider(None)
-    set_can_run_active_profile_provider(None)
+    reset_builder_state(token)
 
 
 async def _run(calls: list[dict[str, Any]]) -> dict[str, Any]:
-    result = await handle_linode_profile_can_run({"calls": calls})
+    result = await handle_linode_profile_can_run({"calls": calls}, Config())
     parsed: dict[str, Any] = json.loads(result[0].text)
     return parsed
 
@@ -133,3 +142,40 @@ async def test_unrestricted_environments_allow_any(wired: None) -> None:
     assert wired is None
     body = await _run([{"tool": _READ_TOOL, "args": {"environment": "dev"}}])
     assert body["results"][0]["allowed"] is True
+
+
+async def test_remedies_match_the_go_wording(wired: None) -> None:
+    """The four remedy sentences are an exact-match contract with Go.
+
+    The reason strings above were already pinned on both sides and the remedies
+    were not, so a one-sided reword read as green in both languages.
+    """
+    assert wired is None
+    body = await _run(
+        [
+            {"tool": _READ_TOOL},
+            {"tool": _READ_TOOL, "args": {"environment": "dev"}},
+            {"tool": _WRITE_TOOL},
+            {"tool": _DESTROY_TOOL},
+            {"tool": _UNKNOWN_TOOL},
+        ]
+    )
+
+    results = body["results"]
+    assert results[1]["remedy"] == (
+        "target an environment in the profile's allowed_environments, or "
+        "switch to a profile that permits this environment"
+    )
+    assert results[2]["remedy"] == (
+        "switch to a profile that permits linode_instance_create, or add it to "
+        "the current profile"
+    )
+    assert results[3]["remedy"] == (
+        "switch to a profile that permits linode_instance_delete, or use yolo "
+        "on a profile that allows it"
+    )
+    assert results[4]["remedy"] == (
+        "check spelling or call linode_profile_list_tools to discover "
+        "the registered tool surface"
+    )
+    assert "remedy" not in results[0]

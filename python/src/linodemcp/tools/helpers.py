@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import dataclasses
-import ipaddress
 import json
 import keyword
 import logging
+import math
+import re
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 from urllib.parse import urlencode
 
@@ -21,14 +23,27 @@ from linodemcp.linode import (
     RetryableClient,
     RetryConfig,
 )
-from linodemcp.tools.proto_response import serialize_preview_envelope
+from linodemcp.linode.routes import message_class
+from linodemcp.tools.declared_state import DeclaredState
+from linodemcp.tools.proto_response import (
+    proto_to_canonical_dict,
+    serialize_preview_envelope,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Mapping
 
     from linodemcp.config import Config
 
 logger = logging.getLogger(__name__)
+
+# strconv.Atoi's legal set, which is what Go reads a string id with.
+_ATOI = re.compile(r"[+-]?[0-9]+")
+
+# The largest integer a JSON number carries exactly. Past it the value a route
+# receives is not the one the caller wrote, which is why an id above it is
+# refused rather than sent. Go spells the same number tools.MaxJSONSafeID.
+MAX_JSON_SAFE_ID = 9007199254740991
 
 SSH_KEY_TRUNCATE_LIMIT = 50
 DESCRIPTION_TRUNCATE_LIMIT = 100
@@ -82,14 +97,6 @@ PLAN_ID_PROP: dict[str, Any] = {
 TWO_STAGE_NOTE = (
     ' Supports two-stage writes: mode="plan" returns a plan_id; mode="apply" '
     "with that plan_id re-checks for drift, then executes."
-)
-
-# Variant for a tool whose two-stage flow is off until an operator enables it
-# (e.g. instance_resize, a CapWrite tool that does not opt in by default).
-TWO_STAGE_OPT_IN_NOTE = (
-    ' Supports two-stage writes when enabled in the two_stage config: mode="plan"'
-    ' returns a plan_id; mode="apply" with that plan_id re-checks for drift, then'
-    " executes."
 )
 
 
@@ -156,7 +163,13 @@ def _dataclass_json_default(obj: Any) -> Any:
     the ``Instance`` returned by ``get_instance``) as plain dicts. Without
     this, a dry-run whose ``current_state`` is a dataclass would raise
     "Object of type X is not JSON serializable".
+
+    A declared fetch's state answers the projected object, which is the bare
+    resource the preview reports and the plan hashes, never a wrapper naming
+    the read it came from.
     """
+    if isinstance(obj, DeclaredState):
+        return obj.fields
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return dataclasses.asdict(obj, dict_factory=keyword_escape_dict_factory)
     msg = f"Object of type {type(obj).__name__} is not JSON serializable"
@@ -295,8 +308,14 @@ def _select_environment(cfg: Config, environment: str) -> EnvironmentConfig:
     return cfg.select_environment("default")
 
 
-def _validate_linode_config(env: EnvironmentConfig) -> None:
-    """Validate Linode configuration."""
+def _linode_config_complete(env: EnvironmentConfig) -> None:
+    """Check that an environment carries what a client needs.
+
+    Named apart from the argument readers on purpose: this judges the
+    deployment's own configuration rather than anything a caller sent, and the
+    hand-validator scan counts by that naming convention. Go spells it
+    linodeConfigComplete.
+    """
     if not env.linode.api_url or not env.linode.token:
         msg = "linode configuration is incomplete: check your API URL and token"
         raise ValueError(msg)
@@ -321,11 +340,12 @@ async def execute_tool(
     environment = arguments.get("environment", "")
     try:
         selected_env = _select_environment(cfg, environment)
-        _validate_linode_config(selected_env)
+        _linode_config_complete(selected_env)
         async with RetryableClient(
             selected_env.linode.api_url,
             selected_env.linode.token,
             _retry_config_from(cfg),
+            cfg.object_storage,
         ) as client:
             response = await callback(client)
             return [TextContent(type="text", text=json.dumps(response, indent=2))]
@@ -354,11 +374,12 @@ async def with_client[T](
     """
     environment = arguments.get("environment", "")
     selected_env = _select_environment(cfg, environment)
-    _validate_linode_config(selected_env)
+    _linode_config_complete(selected_env)
     async with RetryableClient(
         selected_env.linode.api_url,
         selected_env.linode.token,
         _retry_config_from(cfg),
+        cfg.object_storage,
     ) as client:
         return await callback(client)
 
@@ -390,11 +411,12 @@ async def execute_dry_run(
     environment = arguments.get("environment", "")
     try:
         selected_env = _select_environment(cfg, environment)
-        _validate_linode_config(selected_env)
+        _linode_config_complete(selected_env)
         async with RetryableClient(
             selected_env.linode.api_url,
             selected_env.linode.token,
             _retry_config_from(cfg),
+            cfg.object_storage,
         ) as client:
             current_state = await fetch_state(client)
             details: DryRunDetails = {}
@@ -438,11 +460,12 @@ async def execute_tool_list(
     environment = arguments.get("environment", "")
     try:
         selected_env = _select_environment(cfg, environment)
-        _validate_linode_config(selected_env)
+        _linode_config_complete(selected_env)
         async with RetryableClient(
             selected_env.linode.api_url,
             selected_env.linode.token,
             _retry_config_from(cfg),
+            cfg.object_storage,
         ) as client:
             response = await callback(client)
             return [TextContent(type="text", text=json.dumps(response, indent=2))]
@@ -460,6 +483,114 @@ def error_response(message: str) -> list[TextContent]:
     return [TextContent(type="text", text=f"Error: {message}")]
 
 
+def meta_response(response: str, **members: Any) -> list[TextContent]:
+    """Answer a meta tool with the message its contract names.
+
+    A meta tool reaches no Linode route, so nothing decodes a body into its
+    answer and no driver assembles one: the members are what the handler read
+    off the call. Serializing here rather than in each generated handler is what
+    keeps that answer canonical, the way Go's MarshalProtoToolResponse does.
+    """
+    message = message_class(response)(**members)
+    return [
+        TextContent(
+            type="text", text=json.dumps(proto_to_canonical_dict(message), indent=2)
+        )
+    ]
+
+
+def path_int(value: object) -> int:
+    """Read a numeric path argument, answering 0 for anything that is not one.
+
+    This is Go's request.GetInt for the generated handlers: it answers the
+    absent value rather than raising, so a caller who sent "abc" for an id gets
+    the tool's own "<name> is required" sentence from the check that follows.
+    Coercing with int() instead raised out of the handler, which reached the
+    caller as an unhandled failure in one language only.
+
+    A bool is not an id. Python counts it as an int, so True would otherwise
+    address resource 1.
+
+    A removal reads its ids through destroy_id instead, which refuses what this
+    one reads past, the way Go's own destroy tier does.
+    """
+    if isinstance(value, bool):
+        return 0
+
+    if isinstance(value, int):
+        return value
+
+    # Go's GetInt truncates a float64, so 42.0 addresses resource 42 there;
+    # answering 0 here sent the two languages to different resources.
+    if isinstance(value, float):
+        # Go's JSON decoder refuses NaN and Infinity, so only this language can
+        # reach int() with one, where it raises out of the handler.
+        return int(value) if math.isfinite(value) else 0
+
+    if isinstance(value, str):
+        # Go reads a string id with strconv.Atoi, which allows a sign and ASCII
+        # digits and nothing else; int() also took " 5 ", "4_5", and non-ASCII
+        # digits, which addressed a resource Go answered as absent.
+        return int(value) if _ATOI.fullmatch(value) else 0
+
+    return 0
+
+
+def path_str(value: object) -> str:
+    """Read a text path argument, answering "" for anything that is not text.
+
+    This is Go's request.GetString: a wrong-typed value reads as absent, so the
+    caller gets the tool's own "<name> is required" sentence. Reading the
+    argument raw instead spliced a number the caller sent into the path, where
+    Go had already refused the call.
+    """
+    return value if isinstance(value, str) else ""
+
+
+def destroy_id(arguments: Mapping[str, Any], name: str) -> tuple[int, str]:
+    """Read one integer id a removal is addressed by, and the sentence it fails on.
+
+    Mirrors Go's tools.DestroyID rather than path_int: a removal refuses a value
+    that is not a whole positive number instead of reading past it, since
+    truncating 456.5 or coercing "456" would remove resource 456 in one language
+    while the other refused the call. Answers ``(0, sentence)`` on refusal.
+    """
+    if name not in arguments:
+        return 0, f"{name} is required"
+
+    value = _whole_number(arguments[name])
+    if value is None or value < 0:
+        return 0, f"{name} must be a positive integer"
+
+    if value == 0:
+        return 0, f"{name} is required"
+
+    return value, ""
+
+
+def _whole_number(value: object) -> int | None:
+    """The whole number a value is, or None when it is not one.
+
+    Mirrors Go's numberArgToInt: a string is never a number here, and a float
+    counts only when it carries no fraction.
+    """
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float):
+        # False for a fraction and for the infinities and NaN alike, so int()
+        # is only ever reached with a value it can convert.
+        if not value.is_integer():
+            return None
+
+        return int(value)
+
+    return None
+
+
 def required_int_id(arguments: dict[str, Any], name: str) -> tuple[int | None, str]:
     """Validate a required positive-integer id path argument (Option B).
 
@@ -467,33 +598,490 @@ def required_int_id(arguments: dict[str, Any], name: str) -> tuple[int | None, s
     the Go requiredIDArgument helper's ``(int, string)`` pair so callers can guard
     with ``if id is None:`` and still hand the message straight to
     ``error_response``. Absent key -> ``"<name> is required"``; present but not a
-    positive integer (bool, non-int, zero, negative) -> ``"<name> must be a
+    positive integer (bool, non-number, zero, negative) -> ``"<name> must be a
     positive integer"``. A present-but-null value is treated as invalid (matches
     Go, which reaches its numeric parser for an explicit null).
+
+    The number test is Go's own, so a whole float counts: refusing 5.0 here
+    rejected a call Go addressed resource 5 with.
+    """
+    return declared_int_id(arguments, name, 0, "", "")
+
+
+def declared_or(declared: str, own: str) -> str:
+    """The sentence a declaration words for one refusal arm, or the reader's own.
+
+    Mirrors Go's declaredOr. A declaration that words nothing reads exactly as
+    it did before `reader_message` existed.
+    """
+    return declared or own
+
+
+def declared_int_id(
+    arguments: dict[str, Any], name: str, maximum: int, absent: str, refused: str
+) -> tuple[int | None, str]:
+    """The id reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredIDArgument. A maximum of 0 leaves the id unbounded,
+    and an empty arm falls back to the pair required_int_id documents.
     """
     if name not in arguments:
-        return None, f"{name} is required"
-    value = arguments[name]
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        return None, f"{name} must be a positive integer"
+        return None, declared_or(absent, f"{name} is required")
+
+    value = _whole_number(arguments[name])
+    if value is None or value < 1 or (maximum > 0 and value > maximum):
+        return None, declared_or(refused, f"{name} must be a positive integer")
+
     return value, ""
 
 
-def valid_ipv6_prefix(value: str) -> bool:
-    """Return whether value is a masked IPv6 CIDR prefix.
+def required_bounded_int_id(
+    arguments: dict[str, Any], name: str
+) -> tuple[int | None, str]:
+    """required_int_id plus the largest id JSON carries exactly, as a ceiling.
 
-    Mirrors Go's ipv6RangeFromTool (netip.ParsePrefix + Is6 + prefix==Masked):
-    the value must carry an explicit ``/bits`` suffix, parse as an IPv6 network,
-    and have no host bits set below the prefix length (strict). Ported so both
-    languages reject a malformed range locally instead of sending it on the wire.
+    Mirrors Go's RequiredBoundedIDArgument with MaxJSONSafeID. Past 2**53 - 1 a
+    JSON number stops round-tripping, so the id reaching the route is not the one
+    the caller wrote; Go has refused that since these parsers were written and
+    Python accepted it, which is the divergence this closes.
+
+    The ceiling reuses "<name> must be a positive integer" rather than wording
+    itself, because that is the sentence Go answers for an oversized id too.
     """
-    if "/" not in value:
-        return False
+    return declared_int_id(arguments, name, MAX_JSON_SAFE_ID, "", "")
+
+
+def member_choice(
+    arguments: dict[str, Any],
+    name: str,
+    required: bool,
+    members: tuple[str, ...],
+) -> tuple[str, str]:
+    """Hold one raw text argument to the member names its contract declares.
+
+    Mirrors Go's MemberChoiceArgument, for the fields whose vocabulary a rule
+    cannot see: an enum argument naming no member decodes to the enum's zero,
+    the same as an absent one. The generated handlers pass the names, sentinel
+    excluded, in enum-number order.
+
+    An absent, non-string, or empty argument answers "<name> is required" when
+    the field is required and is accepted when it is optional. Any other string
+    outside the members answers "<name> must be one of: a, b", or
+    "<name> must be <a>" for a vocabulary of one.
+    """
+    return declared_member_choice(arguments, name, required, "", "", members)
+
+
+def declared_member_choice(
+    arguments: dict[str, Any],
+    name: str,
+    required: bool,
+    absent: str,
+    refused: str,
+    members: tuple[str, ...],
+) -> tuple[str, str]:
+    """The membership reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredMemberChoice: a declared ``refused`` stands in for the
+    sentence built from the member names, which is how a vocabulary of one keeps
+    a "must be one of:" wording a caller has always read.
+    """
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value:
+        if required:
+            return "", declared_or(absent, f"{name} is required")
+
+        return "", ""
+
+    if value in members:
+        return value, ""
+
+    if refused:
+        return "", refused
+
+    if len(members) == 1:
+        return "", f"{name} must be {members[0]}"
+
+    return "", f"{name} must be one of: {', '.join(members)}"
+
+
+def required_present(arguments: dict[str, Any], name: str) -> tuple[None, str]:
+    """Whether the caller sent an argument at all, apart from whether it is usable.
+
+    Mirrors Go's RequiredPresentArgument. A repeated body field cannot be asked
+    this through the message: proto3 reads an absent list and an empty one alike,
+    and an empty list is a legal value on the routes that use this, meaning
+    "remove every one". The answer is None because presence says nothing about
+    the value, which the body builder reads for itself.
+    """
+    if name not in arguments:
+        return None, f"{name} is required"
+
+    return None, ""
+
+
+def present_text(
+    arguments: dict[str, Any], name: str, required: bool
+) -> tuple[None, str]:
+    """One text argument every unusable shape of which answers "is required".
+
+    Mirrors Go's PresentTextArgument: the hooks this replaces never told a
+    missing value from one sent as a number or as spaces. required is False
+    for an ``optional`` field, where only a present-but-unusable value is
+    refused.
+    """
+    return declared_present_text(arguments, name, required, "", "")
+
+
+def declared_present_text(
+    arguments: dict[str, Any], name: str, required: bool, absent: str, unusable: str
+) -> tuple[None, str]:
+    """The text reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredPresentText. Wording the two arms apart is what lets a
+    tool that has always answered "<name> must be a non-empty string" to a blank
+    value keep saying it while an absent one still reads as missing.
+    """
+    if name not in arguments:
+        if required:
+            return None, declared_or(absent, f"{name} is required")
+        return None, ""
+
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value.strip():
+        return None, declared_or(unusable, f"{name} is required")
+
+    return None, ""
+
+
+def present_bool(
+    arguments: dict[str, Any], name: str, required: bool
+) -> tuple[None, str]:
+    """One argument the caller must have sent as a boolean.
+
+    Mirrors Go's PresentBoolArgument: an implicit-presence bool reads absent
+    and false alike, so the argument map is what the question is asked of.
+    required is False for an ``optional`` field, where an absent flag is
+    accepted and only a present non-boolean is refused.
+    """
+    return declared_present_bool(arguments, name, required, "", "")
+
+
+def declared_present_bool(
+    arguments: dict[str, Any], name: str, required: bool, absent: str, unusable: str
+) -> tuple[None, str]:
+    """The boolean reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredPresentBool, for the tools that tell a caller who sent
+    no flag from one who sent something that is not a flag.
+    """
+    if name not in arguments:
+        if required:
+            return None, declared_or(absent, f"{name} must be a boolean")
+        return None, ""
+
+    if not isinstance(arguments.get(name), bool):
+        return None, declared_or(unusable, f"{name} must be a boolean")
+
+    return None, ""
+
+
+def require_any_argument(arguments: dict[str, Any], sentence: str, *names: str) -> str:
+    """Answer sentence when the caller sent none of the named arguments.
+
+    Mirrors Go's RequireAnyArgument, reading the map because the updates that
+    ask this accept a field's zero as a real change (an empty tags list clears
+    the tags), so absent and empty conflate anywhere later.
+    """
+    if any(name in arguments for name in names):
+        return ""
+
+    return sentence
+
+
+def present_string(
+    arguments: dict[str, Any], name: str, required: bool
+) -> tuple[None, str]:
+    """One argument the caller must have sent as a string, blank included.
+
+    Mirrors Go's PresentStringArgument. present_text's sibling over the wider
+    set: a blank string is a value on the routes that declare this, so refusing
+    it would refuse the call that clears a setting. required is False for an
+    ``optional`` field, where an absent argument is accepted.
+    """
+    return declared_present_string(arguments, name, required, "", "")
+
+
+def declared_present_string(
+    arguments: dict[str, Any], name: str, required: bool, absent: str, unusable: str
+) -> tuple[None, str]:
+    """The string reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredPresentString.
+    """
+    if name not in arguments:
+        if required:
+            return None, declared_or(absent, f"{name} must be a string")
+        return None, ""
+
+    if not isinstance(arguments.get(name), str):
+        return None, declared_or(unusable, f"{name} must be a string")
+
+    return None, ""
+
+
+def id_list(arguments: dict[str, Any], name: str) -> tuple[None, str]:
+    """Hold one argument to being a list of distinct positive ids."""
+    return declared_id_list(arguments, name, "", "", "")
+
+
+def declared_id_list(
+    arguments: dict[str, Any], name: str, absent: str, unusable: str, refused: str
+) -> tuple[None, str]:
+    """The id-list reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredIDList. It reads the argument map because proto3 reads
+    an absent list and an empty one as the same empty list, and the routes
+    declaring this answer those two differently.
+    """
+    if name not in arguments:
+        return None, declared_or(absent, f"{name} is required")
+
+    raw = arguments[name]
+    if not isinstance(raw, list):
+        return None, declared_or(
+            unusable, f"{name} must be a JSON array of positive integers"
+        )
+
+    entries = cast("list[object]", raw)
+
+    shape = declared_or(
+        refused, f"{name} must be a non-empty array of distinct positive integers"
+    )
+    if not entries:
+        return None, shape
+
+    seen: set[int] = set()
+    for entry in entries:
+        value = _whole_number(entry)
+        if value is None or value < 1 or value in seen:
+            return None, shape
+        seen.add(value)
+
+    return None, ""
+
+
+def refused_arguments(
+    arguments: dict[str, Any], sentence: str, names: tuple[str, ...]
+) -> str:
+    """Answer for any of the named arguments the caller set.
+
+    Mirrors Go's RefusedArguments. The names never reach the input message, so
+    the argument map is the only place a caller's value is still visible.
+    """
+    supplied = sorted(name for name in names if name in arguments)
+    if not supplied:
+        return ""
+
+    return _fill_refused_names(sentence, supplied)
+
+
+def unknown_arguments(
+    arguments: dict[str, Any], sentence: str, declared: tuple[str, ...]
+) -> str:
+    """Answer for any argument the tool's input message does not declare.
+
+    Mirrors Go's UnknownArguments.
+    """
+    unknown = sorted(name for name in arguments if name not in declared)
+    if not unknown:
+        return ""
+
+    return _fill_refused_names(sentence, unknown)
+
+
+def _fill_refused_names(sentence: str, names: list[str]) -> str:
+    """Write the refused names into a declared sentence, sorted by the caller."""
+    filled = sentence.replace("{fields}", ", ".join(names))
+
+    return filled.replace("{field}", names[0])
+
+
+# The declared argument rewrites. A tool names its transforms through
+# normalize_fields and the generated handler calls the one below that renders
+# it, before anything reads an argument, so every later read sees one value.
+
+
+def trim_arguments(arguments: dict[str, Any], *names: str) -> None:
+    """Drop surrounding whitespace from the named text arguments in place.
+
+    Mirrors Go's TrimArguments. A value that arrived as anything else is left
+    alone, so the body builder still refuses it by type rather than reading one
+    this rewrote.
+    """
+    for name in names:
+        value = arguments.get(name)
+        if isinstance(value, str):
+            arguments[name] = value.strip()
+
+
+def trim_list_drop_blank(arguments: dict[str, Any], *names: str) -> None:
+    """Trim every entry of the named list arguments and drop the blanks.
+
+    Mirrors Go's TrimListDropBlank. A list holding anything but text is left
+    whole: the body builder words that refusal for the whole surface alike.
+    """
+    for name in names:
+        value = arguments.get(name)
+        if not isinstance(value, list):
+            continue
+
+        entries = cast("list[object]", value)
+        if all(isinstance(entry, str) for entry in entries):
+            arguments[name] = [
+                trimmed for entry in entries if (trimmed := cast("str", entry).strip())
+            ]
+
+
+# The named format readers, one body per member, reached from generated code
+# through the argument_reader each field declares. Go spells the same three in
+# tools/format_readers.go.
+_SERVICE_TYPE_SLUG_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
+_REGION_SLUG_PATTERN = re.compile(r"^[a-z0-9-]+$")
+_BETA_SLUG_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def service_type_slug(arguments: dict[str, Any], name: str) -> tuple[str, str]:
+    """Read a monitoring service type, carried as a bare path segment."""
+    return declared_service_type_slug(arguments, name, "", "", "")
+
+
+def declared_service_type_slug(
+    arguments: dict[str, Any], name: str, absent: str, unusable: str, refused: str
+) -> tuple[str, str]:
+    """The service-type reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredServiceTypeSlug. Surrounding space is refused rather
+    than trimmed, because a trimmed value addresses a different route than the
+    caller spelled.
+    """
+    if name not in arguments:
+        return "", declared_or(absent, f"{name} is required")
+
+    value = arguments[name]
+    if not isinstance(value, str):
+        return "", declared_or(unusable, f"{name} must be a string")
+
+    if _SERVICE_TYPE_SLUG_PATTERN.fullmatch(value) is None:
+        return "", declared_or(
+            refused, f"{name} must be a single non-empty service type slug"
+        )
+
+    return value, ""
+
+
+def region_slug(arguments: dict[str, Any], name: str) -> tuple[str, str]:
+    """Read a region id, which Linode spells as a lowercase slug."""
+    return declared_region_slug(arguments, name, "", "", "")
+
+
+def declared_region_slug(
+    arguments: dict[str, Any], name: str, absent: str, unusable: str, refused: str
+) -> tuple[str, str]:
+    """The region reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredRegionSlug. The accepted set is exactly what the
+    refusal names, so the stricter spellings these routes grew apart into are
+    gone: no sentence ever told a caller that a region may not begin with a
+    hyphen.
+    """
+    value, message = _non_blank_text(arguments, name, absent, unusable)
+    if message:
+        return "", message
+
+    if _REGION_SLUG_PATTERN.fullmatch(value) is None:
+        return "", declared_or(
+            refused,
+            f"{name} must be a lowercase region slug containing only letters,"
+            " numbers, and hyphens",
+        )
+
+    return value, ""
+
+
+def beta_slug(arguments: dict[str, Any], name: str) -> tuple[str, str]:
+    """Read a beta program id, which the API spells as a slug not a number."""
+    return declared_beta_slug(arguments, name, "", "", "")
+
+
+def declared_beta_slug(
+    arguments: dict[str, Any], name: str, absent: str, unusable: str, refused: str
+) -> tuple[str, str]:
+    """The beta-program reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredBetaSlug. Wider than the region member by case and the
+    underscore, which is the whole difference between the two.
+    """
+    value, message = _non_blank_text(arguments, name, absent, unusable)
+    if message:
+        return "", message
+
+    if value != value.strip() or _BETA_SLUG_PATTERN.fullmatch(value) is None:
+        return "", declared_or(
+            refused,
+            f"{name} must contain only letters, numbers, underscores, and hyphens",
+        )
+
+    return value, ""
+
+
+def free_text(arguments: dict[str, Any], name: str) -> tuple[str, str]:
+    """Read a path segment whose shape the message's own rules judge."""
+    return declared_free_text(arguments, name, "", "")
+
+
+def declared_free_text(
+    arguments: dict[str, Any], name: str, absent: str, unusable: str
+) -> tuple[str, str]:
+    """The free-text reader answering the sentences one declaration words.
+
+    Mirrors Go's DeclaredFreeText. It refuses nothing a rule can see; what it
+    adds is the answer for a caller who sent a non-string, which no rule reaches
+    because a message that cannot be built evaluates none.
+    """
+    return _non_blank_text(arguments, name, absent, unusable)
+
+
+def _non_blank_text(
+    arguments: dict[str, Any], name: str, absent: str, unusable: str
+) -> tuple[str, str]:
+    """The two arms the slug readers share before they judge a charset."""
+    if name not in arguments:
+        return "", declared_or(absent, f"{name} is required")
+
+    value = arguments[name]
+    if not isinstance(value, str) or not value.strip():
+        return "", declared_or(unusable, f"{name} must be a non-empty string")
+
+    return value, ""
+
+
+def parse_optional_time(value: str, param: str = "") -> datetime | None:
+    """Parse an RFC 3339 timestamp, or None for an empty value.
+
+    Raises ``ValueError`` for a non-empty but unparseable value, naming
+    ``param`` when the caller gave one: the recent and summary tools have always
+    said which of their two bounds failed and the export tool has not.
+    """
+    if not value:
+        return None
+
     try:
-        network = ipaddress.ip_network(value, strict=True)
-    except ValueError:
-        return False
-    return isinstance(network, ipaddress.IPv6Network)
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        named = f" '{param}'" if param else ""
+        msg = f"invalid{named} timestamp: expected RFC 3339, got {value!r}: {exc}"
+        raise ValueError(msg) from exc
 
 
 # Tag-validation messages, held identical to Go's ErrTagsMustBeJSONStringArray

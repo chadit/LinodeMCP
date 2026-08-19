@@ -1,14 +1,9 @@
 """Version tool - server version and build information."""
 
-import json
 from typing import Any
 
-from mcp.types import TextContent, Tool
-
 from linodemcp.genpb.linode.mcp.v1 import version_pb2
-from linodemcp.profiles import Capability
 from linodemcp.tools.proto_response import proto_to_canonical_dict
-from linodemcp.tools.toolschemas import schema
 from linodemcp.version import get_version_info
 
 # Machine names Python's platform.machine() reports mapped to Go's GOARCH so the
@@ -19,15 +14,6 @@ _ARCH_ALIASES = {
     "i386": "386",
     "i686": "386",
 }
-
-
-def create_version_tool() -> tuple[Tool, Capability]:
-    """Create the version tool."""
-    return Tool(
-        name="version",
-        description="Returns LinodeMCP server version and build information",
-        input_schema=schema("linode.mcp.v1.VersionInput"),
-    ), Capability.Meta
 
 
 def _normalized_platform(raw: str) -> str:
@@ -58,10 +44,3 @@ def version_response_dict() -> dict[str, Any]:
         platform=_normalized_platform(info.platform),
     )
     return proto_to_canonical_dict(message)
-
-
-async def handle_version(_arguments: dict[str, Any]) -> list[TextContent]:
-    """Handle version tool request."""
-    return [
-        TextContent(type="text", text=json.dumps(version_response_dict(), indent=2))
-    ]

@@ -8,10 +8,11 @@ Three MCP tools wrap the in-memory draft registry from Phase 8.1:
 - ``linode_profile_draft_discard``: remove a draft. Idempotent.
 
 All three carry ``Capability.Meta`` so the profile filter always
-admits them; they never touch the Linode API. Handlers read the live
-registry and profile resolver through module-level bridges the server
-installs at startup. Tests inject reproducible stand-ins via
-:func:`set_draft_registry` and :func:`set_profile_resolver`.
+admits them; they never touch the Linode API. The generator owns their
+registration; what is left here is the body each one's answer hook calls. They
+read the live registry off the builder state the server publishes for the call
+(:mod:`linodemcp.tools.builderstate`); the clone source resolves against
+the running config and that same state's catalog.
 """
 
 from __future__ import annotations
@@ -19,114 +20,40 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent
 
 from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
-from linodemcp.profiles import Capability
 from linodemcp.profiles.builder import (
     Draft,
     DraftExistsError,
-    Registry,
 )
+from linodemcp.profiles.loader import lookup_profile
+from linodemcp.tools.builderstate import (
+    BUILDER_UNCONFIGURED,
+    builder_state_from_context,
+)
+from linodemcp.tools.helpers import error_response
 from linodemcp.tools.proto_response import serialize_api_response
-from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
+    from linodemcp.config import Config
     from linodemcp.profiles.profile import Profile
 
 
-# Bridges. ``None`` is the default; the server installs concrete values
-# during ``Server.__init__``; tests install stand-ins via the setters.
-_draft_registry: Registry | None = None
-_profile_resolver: Callable[[str], Profile | None] | None = None
+# The sentences the draft tools answer. Go spells them the same way, so a
+# caller reads one refusal whichever binary served it.
+NAME_MISSING = "name argument is required"
 
 
-def set_draft_registry(registry: Registry | None) -> None:
-    """Register the live draft registry. Pass ``None`` to clear."""
-    global _draft_registry  # noqa: PLW0603 - process-wide bridge
-    _draft_registry = registry
-
-
-def get_draft_registry() -> Registry | None:
-    """Return the registered draft registry, or ``None`` if unset.
-
-    Phase 8.4 mutator handlers read the registry through this getter
-    rather than touching the module-private ``_draft_registry``
-    directly; pyright strict's reportPrivateUsage flags the
-    underscore-prefixed name when imported from outside this module.
-    """
-    return _draft_registry
-
-
-def set_profile_resolver(
-    resolver: Callable[[str], Profile | None] | None,
-) -> None:
-    """Register the profile-by-name resolver. Pass ``None`` to clear.
-
-    The resolver should return the materialized ``Profile`` for the
-    given name (built-in or user-defined) or ``None`` if no such
-    profile exists. The Phase 8.3 ``_draft_new`` handler uses it to
-    seed clones via the ``clone_from`` argument.
-    """
-    global _profile_resolver  # noqa: PLW0603 - process-wide bridge
-    _profile_resolver = resolver
-
-
-# Ruff N818 enforces the ``Error`` suffix on the names below.
-
-
-class DraftNameMissingError(ValueError):
-    """The ``name`` argument was empty."""
-
-    def __init__(self) -> None:
-        super().__init__("name argument is required")
-
-
-class CloneSourceMissingError(ValueError):
-    """``clone_from`` named a profile that doesn't exist."""
-
-    def __init__(self, name: str) -> None:
-        super().__init__(f"clone_from profile not found: {name}")
-        self.profile_name = name
-
-
-class DraftNotFoundError(LookupError):
-    """The named draft is not in the registry.
-
-    Distinct from :class:`linodemcp.profiles.builder.DraftExistsError`
-    which fires on Create. This one fires on Show.
-    """
-
-    def __init__(self, name: str) -> None:
-        super().__init__(f"draft not found: {name}")
-        self.draft_name = name
-
-
-class BuilderUnconfiguredError(RuntimeError):
-    """No draft registry is wired.
-
-    The server installs the bridge in ``Server.__init__``. This
-    exception fires only when the handlers are invoked before the
-    bridge is set; in production paths it should never trigger.
-    """
-
-    def __init__(self) -> None:
-        super().__init__("draft registry not configured")
+def draft_not_found(name: str) -> str:
+    """The sentence every builder tool answers for a name no draft carries."""
+    return f"draft not found: {name}"
 
 
 # Argument-key constants. Used both in the schema and the handler so
 # they can't drift.
 _ARG_NAME = "name"
 _ARG_CLONE_FROM = "clone_from"
-
-
-def _require_registry() -> Registry:
-    """Return the live registry or raise BuilderUnconfiguredError."""
-    if _draft_registry is None:
-        raise BuilderUnconfiguredError
-    return _draft_registry
 
 
 def _draft_to_payload(draft: Draft) -> dict[str, Any]:
@@ -147,59 +74,37 @@ def _draft_to_payload(draft: Draft) -> dict[str, Any]:
     }
 
 
-def create_linode_profile_draft_new_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_draft_new`` MCP tool definition.
-
-    Schema mirrors the Go side: required ``name`` and optional
-    ``clone_from``.
-    """
-    return (
-        Tool(
-            name="linode_profile_draft_new",
-            description=(
-                "Start a new profile draft in the server's in-memory "
-                "builder registry. Optional clone_from seeds the draft "
-                "from an existing built-in or user-defined profile. The "
-                "draft persists only for this server's lifetime; use "
-                "linode_profile_draft_save (Phase 8.5) to write it to "
-                "the config file."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileDraftNewInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_profile_draft_new(
+def profile_draft_new_result(
     arguments: dict[str, Any],
+    cfg: Config,
 ) -> list[TextContent]:
     """Create a new draft and return its JSON representation.
 
-    Raises:
-        DraftNameMissingError: ``name`` argument is empty.
-        CloneSourceMissingError: ``clone_from`` is non-empty but no
-            profile by that name exists.
-        DraftExistsError: a draft with that name already lives in the
-            registry. The user must discard first.
+    Refuses with a tool result, the way every other tool reports a bad
+    argument, when the name is empty, the clone source resolves to nothing, or
+    a draft already holds the name.
     """
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
     name = arguments.get(_ARG_NAME, "")
     if not name:
-        raise DraftNameMissingError
+        return error_response(NAME_MISSING)
 
     clone_from = arguments.get(_ARG_CLONE_FROM, "")
 
     source: Profile | None = None
 
     if clone_from:
-        if _profile_resolver is None:
-            raise BuilderUnconfiguredError
-
-        source = _profile_resolver(clone_from)
+        source = lookup_profile(clone_from, cfg, state.catalog())
         if source is None:
-            raise CloneSourceMissingError(clone_from)
+            return error_response(f"clone_from profile not found: {clone_from}")
 
-    registry = _require_registry()
-    draft = registry.create(name, source)
+    try:
+        draft = state.drafts.create(name, source)
+    except DraftExistsError:
+        return error_response(f"draft already exists: {name}")
 
     result = serialize_api_response(
         _draft_to_payload(draft), profile_builder_pb2.ProfileDraftResponse()
@@ -207,40 +112,23 @@ async def handle_linode_profile_draft_new(
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-def create_linode_profile_draft_show_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_draft_show`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_profile_draft_show",
-            description=(
-                "Show the current state of a profile draft. Returns "
-                "name, description, allowed tools, allowed "
-                "environments, required token scopes, and the "
-                "allow_yolo flag."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileDraftShowInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_profile_draft_show(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def profile_draft_show_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Read a draft and return its JSON representation.
 
-    Raises:
-        DraftNameMissingError: ``name`` argument is empty.
-        DraftNotFoundError: no draft by that name exists.
+    A missing name and a name no draft carries both refuse with a tool result
+    the model can correct from.
     """
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
     name = arguments.get(_ARG_NAME, "")
     if not name:
-        raise DraftNameMissingError
+        return error_response(NAME_MISSING)
 
-    registry = _require_registry()
-    draft = registry.get(name)
+    draft = state.drafts.get(name)
     if draft is None:
-        raise DraftNotFoundError(name)
+        return error_response(draft_not_found(name))
 
     result = serialize_api_response(
         _draft_to_payload(draft), profile_builder_pb2.ProfileDraftResponse()
@@ -248,40 +136,21 @@ async def handle_linode_profile_draft_show(
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-def create_linode_profile_draft_discard_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_draft_discard`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_profile_draft_discard",
-            description=(
-                "Discard a profile draft. Idempotent: returns "
-                '{"discarded": false} when the draft does not exist '
-                "(no error), so the model can call it from cleanup "
-                "paths without first checking existence."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileDraftDiscardInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_profile_draft_discard(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def profile_draft_discard_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Remove a draft. Returns ``{name, discarded}``.
 
-    ``discarded`` is True if the draft existed; False if not. Either
-    case returns a normal response (no exception).
-
-    Raises:
-        DraftNameMissingError: ``name`` argument is empty.
+    ``discarded`` is True if the draft existed; False if not. Either case
+    returns a normal response, so only an absent name refuses.
     """
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
     name = arguments.get(_ARG_NAME, "")
     if not name:
-        raise DraftNameMissingError
+        return error_response(NAME_MISSING)
 
-    registry = _require_registry()
-    removed = registry.discard(name)
+    removed = state.drafts.discard(name)
 
     result = serialize_api_response(
         {"name": name, "discarded": removed},
@@ -290,22 +159,10 @@ async def handle_linode_profile_draft_discard(
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-# Re-export DraftExistsError so tests can match without importing from
-# the builder package directly. The handler propagates it from
-# Registry.create unchanged.
 __all__ = [
-    "BuilderUnconfiguredError",
-    "CloneSourceMissingError",
-    "DraftExistsError",
-    "DraftNameMissingError",
-    "DraftNotFoundError",
-    "create_linode_profile_draft_discard_tool",
-    "create_linode_profile_draft_new_tool",
-    "create_linode_profile_draft_show_tool",
-    "get_draft_registry",
-    "handle_linode_profile_draft_discard",
-    "handle_linode_profile_draft_new",
-    "handle_linode_profile_draft_show",
-    "set_draft_registry",
-    "set_profile_resolver",
+    "NAME_MISSING",
+    "draft_not_found",
+    "profile_draft_discard_result",
+    "profile_draft_new_result",
+    "profile_draft_show_result",
 ]

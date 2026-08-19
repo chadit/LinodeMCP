@@ -9,49 +9,38 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from linodemcp.linode import APIError, Client, NetworkError, RetryableClient
-from linodemcp.profiles import Capability, Scope, required_scopes
-from linodemcp.server import get_tool_registry
-from linodemcp.tools.linode_images import (
+from linodemcp.gentools import (
     create_linode_image_delete_tool,
     create_linode_image_sharegroup_by_image_list_tool,
     create_linode_image_sharegroup_by_token_get_tool,
-    create_linode_image_sharegroup_create_tool,
-    create_linode_image_sharegroup_image_add_tool,
     create_linode_image_sharegroup_image_delete_tool,
     create_linode_image_sharegroup_image_list_tool,
-    create_linode_image_sharegroup_image_update_tool,
     create_linode_image_sharegroup_list_tool,
-    create_linode_image_sharegroup_member_add_tool,
     create_linode_image_sharegroup_member_list_tool,
     create_linode_image_sharegroup_member_token_delete_tool,
     create_linode_image_sharegroup_member_token_get_tool,
-    create_linode_image_sharegroup_member_token_update_tool,
     create_linode_image_sharegroup_token_delete_tool,
     create_linode_image_sharegroup_token_get_tool,
     create_linode_image_sharegroup_token_image_list_tool,
     create_linode_image_sharegroup_token_list_tool,
-    create_linode_image_sharegroup_token_update_tool,
     handle_linode_image_delete,
     handle_linode_image_sharegroup_by_image_list,
     handle_linode_image_sharegroup_by_token_get,
-    handle_linode_image_sharegroup_create,
-    handle_linode_image_sharegroup_image_add,
     handle_linode_image_sharegroup_image_delete,
     handle_linode_image_sharegroup_image_list,
     handle_linode_image_sharegroup_image_update,
     handle_linode_image_sharegroup_list,
-    handle_linode_image_sharegroup_member_add,
     handle_linode_image_sharegroup_member_list,
     handle_linode_image_sharegroup_member_token_delete,
     handle_linode_image_sharegroup_member_token_get,
-    handle_linode_image_sharegroup_member_token_update,
     handle_linode_image_sharegroup_token_delete,
     handle_linode_image_sharegroup_token_get,
     handle_linode_image_sharegroup_token_image_list,
     handle_linode_image_sharegroup_token_list,
-    handle_linode_image_sharegroup_token_update,
 )
+from linodemcp.linode import Client, RetryableClient
+from linodemcp.profiles import Capability, Scope, required_scopes
+from linodemcp.server import get_tool_registry
 from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
@@ -59,20 +48,6 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
-
-INVALID_ADD_IMAGE_SHAREGROUP_IMAGES_CASES: list[tuple[object, str]] = [
-    (None, "images must be a non-empty list of image objects"),
-    ([], "images must be a non-empty list of image objects"),
-    ("private/ubuntu", "images must be a non-empty list of image objects"),
-    (["private/ubuntu"], "images must contain objects"),
-    ([{}], "images[].id must be a non-empty string"),
-    ([{"id": ""}], "images[].id must be a non-empty string"),
-    ([{"id": "private/ubuntu", "label": 1}], "images[].label must be a string"),
-    (
-        [{"id": "private/ubuntu", "description": 1}],
-        "images[].description must be a string",
-    ),
-]
 
 
 class _CapturingRetryableClient(RetryableClient):
@@ -87,228 +62,6 @@ class _CapturingRetryableClient(RetryableClient):
     ) -> T:
         self.calls.append(func)
         return await func(*args)
-
-
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroups_by_image_sends_exact_path() -> None:
-    """Low-level client sends GET /images/{imageId}/sharegroups."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"id": "share-1", "label": "shared images"}],
-                "page": 1,
-                "pages": 1,
-                "results": 1,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_image_sharegroups_by_image("private/12345")
-    finally:
-        await client.close()
-
-    assert result["data"][0]["id"] == "share-1"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == "/v4/images/private/12345/sharegroups"
-    assert request.url.raw_path == b"/v4/images/private%2F12345/sharegroups"
-    assert request.url.query == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("image_id", "expected_raw_path"),
-    [
-        ("linode/ubuntu/24.04", b"/v4/images/linode%2Fubuntu%2F24.04/sharegroups"),
-    ],
-)
-async def test_client_list_image_sharegroups_by_image_encodes_path_param(
-    image_id: str, expected_raw_path: bytes
-) -> None:
-    """Low-level client encodes the image ID as one path segment."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200, json={"data": [], "page": 1, "pages": 1, "results": 0}
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_image_sharegroups_by_image(image_id)
-    finally:
-        await client.close()
-
-    assert result["results"] == 0
-    assert len(seen) == 1
-    assert seen[0].method == "GET"
-    assert seen[0].url.raw_path == expected_raw_path
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "image_id", ["", " ", 12345, ["linode/ubuntu"], "linode/..", "linode/ubuntu?x=1"]
-)
-async def test_client_list_image_sharegroups_by_image_rejects_malformed_path_param(
-    image_id: object,
-) -> None:
-    """Low-level client rejects non-string, empty, query, and traversal image IDs."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise AssertionError("client should reject malformed image_id before request")
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        bad_image_id: Any = image_id
-        with pytest.raises(ValueError, match="image_id"):
-            await client.list_image_sharegroups_by_image(bad_image_id)
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroups_sends_exact_path_and_query() -> None:
-    """Low-level client sends GET /images/sharegroups with pagination."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"id": "share-1", "label": "shared images"}],
-                "page": 2,
-                "pages": 3,
-                "results": 7,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_image_sharegroups(page=2, page_size=50)
-    finally:
-        await client.close()
-
-    assert result["data"][0]["id"] == "share-1"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == "/v4/images/sharegroups"
-    assert request.url.query == b"page=2&page_size=50"
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_member_token_accepts_no_content() -> None:
-    """Low-level client accepts 204 No Content delete responses."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(204)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image_sharegroup_member_token(
-            "22222222-2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        )
-    finally:
-        await client.close()
-
-    assert len(seen) == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
-        ({"page": 0}, "page must be an integer at least 1"),
-        ({"page": "2"}, "page must be an integer at least 1"),
-        ({"page": True}, "page must be an integer at least 1"),
-        ({"page_size": 24}, "page_size must be an integer between 25 and 500"),
-        ({"page_size": 501}, "page_size must be an integer between 25 and 500"),
-        ({"page_size": "50"}, "page_size must be an integer between 25 and 500"),
-        ({"page_size": False}, "page_size must be an integer between 25 and 500"),
-    ],
-)
-async def test_client_list_image_sharegroups_validates_pagination_before_request(
-    kwargs: dict[str, Any], message: str
-) -> None:
-    """Invalid pagination is rejected locally before an HTTP request."""
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={"data": []})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(ValueError, match=message):
-            await client.list_image_sharegroups(**kwargs)
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_retryable_list_image_sharegroups_by_image_uses_retry() -> None:
-    """Read-only image share groups by image list goes through retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    mock_list = AsyncMock(
-        return_value={"data": [], "page": 1, "pages": 1, "results": 0}
-    )
-    cast("Any", retryable.client).list_image_sharegroups_by_image = mock_list
-
-    try:
-        result = await retryable.list_image_sharegroups_by_image("private/12345")
-    finally:
-        await retryable.close()
-
-    assert result["results"] == 0
-    assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with("private/12345", page=None, page_size=None)
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_list_image_sharegroups_uses_read_retry() -> None:
-    """Read-only image share groups list goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    mock_list = AsyncMock(
-        return_value={"data": [], "page": 1, "pages": 1, "results": 0}
-    )
-    cast("Any", retryable.client).list_image_sharegroups = mock_list
-
-    try:
-        result = await retryable.list_image_sharegroups(page=1, page_size=25)
-    finally:
-        await retryable.close()
-
-    assert result["results"] == 0
-    assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(page=1, page_size=25)
 
 
 def test_create_linode_image_sharegroups_by_image_list_tool_schema() -> None:
@@ -326,7 +79,7 @@ async def test_handle_linode_image_sharegroups_by_image_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler returns share groups for an image."""
-    mock_linode_client.list_image_sharegroups_by_image.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [
             {
                 "id": 4242,
@@ -362,8 +115,8 @@ async def test_handle_linode_image_sharegroups_by_image_list_success(
             }
         ],
     }
-    mock_linode_client.list_image_sharegroups_by_image.assert_awaited_once_with(
-        "private/12345", page=None, page_size=None
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_by_image_list", "private/12345", query=""
     )
 
 
@@ -389,7 +142,7 @@ async def test_handle_linode_image_sharegroups_by_image_list_rejects_bad_image_i
     )
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.list_image_sharegroups_by_image.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -410,7 +163,7 @@ async def test_handle_linode_image_sharegroups_by_image_list_rejects_invalid_pag
     )
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.list_image_sharegroups_by_image.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_image_sharegroups_by_image_list_registered() -> None:
@@ -446,7 +199,7 @@ async def test_handle_linode_images_sharegroups_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler returns image share groups in the proto list envelope."""
-    mock_linode_client.list_image_sharegroups.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [
             {
                 "id": 4242,
@@ -482,8 +235,8 @@ async def test_handle_linode_images_sharegroups_list_success(
             }
         ],
     }
-    mock_linode_client.list_image_sharegroups.assert_awaited_once_with(
-        page=2, page_size=50
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_list", query="page=2&page_size=50"
     )
 
 
@@ -507,7 +260,7 @@ async def test_handle_linode_images_sharegroups_list_rejects_invalid_pagination(
     result = await handle_linode_image_sharegroup_list(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.list_image_sharegroups.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_images_sharegroups_list_registered() -> None:
@@ -527,485 +280,11 @@ def test_linode_images_sharegroups_list_scopes_to_images_read() -> None:
     assert scopes == [Scope.ImagesReadOnly]
 
 
-@pytest.mark.asyncio
-async def test_client_create_image_sharegroup_sends_exact_body() -> None:
-    """Low-level client sends POST /images/sharegroups with documented body."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        body = json.loads(request.content)
-        assert body == {
-            "label": "shared images",
-            "description": "team image pool",
-            "images": [
-                {
-                    "id": "private/7",
-                    "label": "Linux Debian",
-                    "description": "Official Debian Linux image",
-                }
-            ],
-        }
-        return httpx.Response(
-            200,
-            json={
-                "id": 1,
-                "uuid": "123e4567-e89b-12d3-a456-426614174000",
-                "label": "shared images",
-                "description": "team image pool",
-                "images_count": 1,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.create_image_sharegroup(
-            label="shared images",
-            description="team image pool",
-            images=[
-                {
-                    "id": "private/7",
-                    "label": "Linux Debian",
-                    "description": "Official Debian Linux image",
-                }
-            ],
-        )
-    finally:
-        await client.close()
-
-    assert result["label"] == "shared images"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "POST"
-    assert request.url.path == "/v4/images/sharegroups"
-    assert request.url.query == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_create_image_sharegroup_maps_http_error() -> None:
-    """Low-level client maps HTTP errors to a NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="CreateImageShareGroup"):
-            await client.create_image_sharegroup(label="shared images")
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_create_image_sharegroup_does_not_retry() -> None:
-    """Mutating image share group create delegates once without retry replay."""
-    retryable = _CapturingRetryableClient()
-    mock_create = AsyncMock(return_value={"label": "shared images"})
-    cast("Any", retryable.client).create_image_sharegroup = mock_create
-
-    try:
-        result = await retryable.create_image_sharegroup(label="shared images")
-    finally:
-        await retryable.close()
-
-    assert result["label"] == "shared images"
-    assert retryable.calls == []
-    mock_create.assert_awaited_once_with(
-        label="shared images", description=None, images=None
-    )
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_update_image_sharegroup_delegates_once() -> None:
-    """Mutating image share group update delegates once without retry replay."""
-    retryable = _CapturingRetryableClient()
-    mock_update = AsyncMock(return_value={"id": 7, "label": "renamed"})
-    cast("Any", retryable.client).update_image_sharegroup = mock_update
-
-    try:
-        result = await retryable.update_image_sharegroup("7", label="renamed")
-    finally:
-        await retryable.close()
-
-    assert result == {"id": 7, "label": "renamed"}
-    assert retryable.calls == []
-    mock_update.assert_awaited_once_with("7", label="renamed", description=None)
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_update_image_sharegroup_requires_a_field() -> None:
-    """Update without label or description raises before the client call."""
-    retryable = _CapturingRetryableClient()
-    mock_update = AsyncMock()
-    cast("Any", retryable.client).update_image_sharegroup = mock_update
-
-    try:
-        with pytest.raises(ValueError, match="at least one of label or description"):
-            await retryable.update_image_sharegroup("7")
-    finally:
-        await retryable.close()
-
-    mock_update.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_maps_http_error() -> None:
-    """Low-level client maps HTTP failures on update to a NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="UpdateImageSharegroup"):
-            await client.update_image_sharegroup("7", label="renamed")
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_create_image_sharegroup_token_delegates_once() -> None:
-    """Mutating token create delegates once without retry replay."""
-    retryable = _CapturingRetryableClient()
-    mock_create = AsyncMock(return_value={"token_uuid": "tok-1"})
-    cast("Any", retryable.client).create_image_sharegroup_token = mock_create
-
-    try:
-        result = await retryable.create_image_sharegroup_token(
-            valid_for_sharegroup_uuid="sg-1", label="partner"
-        )
-    finally:
-        await retryable.close()
-
-    assert result == {"token_uuid": "tok-1"}
-    assert retryable.calls == []
-    mock_create.assert_awaited_once_with(
-        valid_for_sharegroup_uuid="sg-1", label="partner"
-    )
-
-
-def test_create_linode_image_sharegroup_create_tool_schema() -> None:
-    """Create tool schema exposes label, images, confirm, and dry_run."""
-    tool, capability = create_linode_image_sharegroup_create_tool()
-
-    assert tool.name == "linode_image_sharegroup_create"
-    assert capability is Capability.Write
-    schema = tool.input_schema
-    assert schema["required"] == ["label", "confirm"]
-    assert schema["properties"]["label"]["type"] == "string"
-    # The images item detail is preserved via the named ImageShareGroupImageSpec
-    # message rather than an inline object with a required list.
-    assert schema["properties"]["images"]["type"] == "array"
-    assert (
-        schema["properties"]["images"]["items"]["$ref"]
-        == "linode.mcp.v1.ImageShareGroupImageSpec.schema.strict.json"
-    )
-    assert schema["properties"]["confirm"]["type"] == "boolean"
-    assert schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_image_sharegroup_create_success(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler creates a share group with validated documented body fields."""
-    mock_linode_client.create_image_sharegroup.return_value = {
-        "id": 1,
-        "label": "shared images",
-        "images_count": 1,
-    }
-
-    result = await handle_linode_image_sharegroup_create(
-        {
-            "label": "shared images",
-            "description": "team image pool",
-            "images": [{"id": "private/7", "label": "Linux Debian"}],
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": "Image share group 'shared images' (1) created successfully",
-        "sharegroup": {
-            "id": 1,
-            "uuid": "",
-            "label": "shared images",
-            "is_suspended": False,
-            "created": "",
-            "images_count": 1,
-            "members_count": 0,
-        },
-    }
-    mock_linode_client.create_image_sharegroup.assert_awaited_once_with(
-        label="shared images",
-        description="team image pool",
-        images=[{"id": "private/7", "label": "Linux Debian"}],
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
-async def test_handle_linode_image_sharegroup_create_requires_literal_confirm(
-    confirm_value: Any, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Missing, false, string, and numeric confirm values stop before client calls."""
-    arguments = {"label": "shared images"}
-    if confirm_value is not None:
-        arguments["confirm"] = confirm_value
-
-    result = await handle_linode_image_sharegroup_create(arguments, sample_config)
-
-    assert result[0].text == (
-        "Error: This creates an image share group. Set confirm=true to proceed."
-    )
-    mock_linode_client.create_image_sharegroup.assert_not_called()
-
-
-IMAGE_SHAREGROUP_CREATE_INVALID_PAYLOAD_CASES: list[tuple[dict[str, Any], str]] = [
-    ({"confirm": True}, "label must be a non-empty string"),
-    ({"confirm": True, "label": ""}, "label must be a non-empty string"),
-    ({"confirm": True, "label": "   "}, "label must be a non-empty string"),
-    (
-        {"confirm": True, "label": "shared images", "description": 7},
-        "description must be a string",
-    ),
-    (
-        {"confirm": True, "label": "shared images", "images": "private/7"},
-        "images must be a list of image objects",
-    ),
-    (
-        {"confirm": True, "label": "shared images", "images": ["private/7"]},
-        "images must contain objects",
-    ),
-    (
-        {"confirm": True, "label": "shared images", "images": [{}]},
-        "images[].id must be a non-empty string",
-    ),
-    (
-        {
-            "confirm": True,
-            "label": "shared images",
-            "images": [{"id": "private/7", "label": 7}],
-        },
-        "images[].label must be a string",
-    ),
-    (
-        {
-            "confirm": True,
-            "label": "shared images",
-            "images": [{"id": "private/7", "description": 7}],
-        },
-        "images[].description must be a string",
-    ),
-]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("arguments", "message"), IMAGE_SHAREGROUP_CREATE_INVALID_PAYLOAD_CASES
-)
-async def test_handle_linode_image_sharegroup_create_rejects_invalid_payload(
-    arguments: dict[str, Any],
-    message: str,
-    sample_config: Any,
-    mock_linode_client: AsyncMock,
-) -> None:
-    """Handler validates body shape before client calls."""
-    result = await handle_linode_image_sharegroup_create(arguments, sample_config)
-
-    assert result[0].text == f"Error: {message}"
-    mock_linode_client.create_image_sharegroup.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_image_sharegroup_create_dry_run(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Dry-run reports exact POST path and body without calling the client."""
-    result = await handle_linode_image_sharegroup_create(
-        {
-            "label": "shared images",
-            "description": "team image pool",
-            "images": [{"id": "private/7"}],
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload["dry_run"] is True
-    assert payload["tool"] == "linode_image_sharegroup_create"
-    assert payload["would_execute"] == {
-        "method": "POST",
-        "path": "/images/sharegroups",
-        "body": {
-            "label": "shared images",
-            "description": "team image pool",
-            "images": [{"id": "private/7"}],
-        },
-    }
-    mock_linode_client.create_image_sharegroup.assert_not_called()
-
-
-def test_linode_image_sharegroup_create_registered() -> None:
-    """Dynamic registry exports the create tool and handler pair."""
-    entries = {entry.name: entry for entry in get_tool_registry()}
-
-    entry = entries["linode_image_sharegroup_create"]
-    assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_image_sharegroup_create"
-    assert entry.handle_fn is handle_linode_image_sharegroup_create
-
-
 def test_linode_image_sharegroup_create_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the create route in the Images write category."""
     scopes = required_scopes("linode_image_sharegroup_create", Capability.Write)
 
     assert scopes == [Scope.ImagesReadWrite]
-
-
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroup_tokens_sends_exact_path() -> None:
-    """Low-level client sends GET /images/sharegroups/tokens with no query/body."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "data": [
-                    {
-                        "id": "sharegroup-record-1",
-                        "created": "2026-01-01T00:00:00",
-                    }
-                ],
-                "page": 1,
-                "pages": 1,
-                "results": 1,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_image_sharegroup_tokens()
-    finally:
-        await client.close()
-
-    assert result["data"][0]["id"] == "sharegroup-record-1"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == "/v4/images/sharegroups/tokens"
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_list_image_sharegroup_tokens_uses_read_retry() -> None:
-    """Read-only image share group tokens list goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    mock_list = AsyncMock(
-        return_value={"data": [], "page": 1, "pages": 1, "results": 0}
-    )
-    cast("Any", retryable.client).list_image_sharegroup_tokens = mock_list
-
-    try:
-        result = await retryable.list_image_sharegroup_tokens()
-    finally:
-        await retryable.close()
-
-    assert result["results"] == 0
-    assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(page=None, page_size=None)
-
-
-@pytest.mark.asyncio
-async def test_client_get_image_sharegroup_token_sends_exact_encoded_path() -> None:
-    """Low-level client sends GET /images/sharegroups/tokens/{tokenUuid}."""
-    seen: list[httpx.Request] = []
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "id": "sharegroup-record-1",
-                "token_uuid": token_uuid,
-                "created": "2026-01-01T00:00:00",
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.get_image_sharegroup_token(token_uuid)
-    finally:
-        await client.close()
-
-    assert result["token_uuid"] == token_uuid
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == f"/v4/images/sharegroups/tokens/{token_uuid}"
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_get_image_sharegroup_token_encodes_path_param() -> None:
-    """Low-level client URL-encodes token_uuid at the path boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"id": "encoded"})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.get_image_sharegroup_token("token/with?separator")
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/tokens/token%2Fwith%3Fseparator"
-    )
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_get_image_sharegroup_token_uses_read_retry() -> None:
-    """Read-only image share group token get goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_get = AsyncMock(return_value={"id": "sharegroup-record-1"})
-    cast("Any", retryable.client).get_image_sharegroup_token = mock_get
-
-    try:
-        result = await retryable.get_image_sharegroup_token(token_uuid)
-    finally:
-        await retryable.close()
-
-    assert result["id"] == "sharegroup-record-1"
-    assert len(retryable.calls) == 1
-    mock_get.assert_awaited_once_with(token_uuid)
 
 
 def test_create_linode_images_sharegroups_token_get_tool_schema() -> None:
@@ -1024,14 +303,14 @@ async def test_handle_linode_images_sharegroups_token_get_success(
 ) -> None:
     """Handler returns a single image share group token."""
     token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.get_image_sharegroup_token.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": "sharegroup-record-1",
         "token_uuid": token_uuid,
         "created": "2026-01-01T00:00:00",
     }
 
     result = await handle_linode_image_sharegroup_token_get(
-        {"token_uuid": f" {token_uuid} "}, sample_config
+        {"token_uuid": token_uuid}, sample_config
     )
 
     payload = json.loads(result[0].text)
@@ -1040,7 +319,9 @@ async def test_handle_linode_images_sharegroups_token_get_success(
     assert payload["status"] == ""
     assert "id" not in payload
     assert "updated" not in payload
-    mock_linode_client.get_image_sharegroup_token.assert_awaited_once_with(token_uuid)
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_token_get", token_uuid
+    )
 
 
 @pytest.mark.asyncio
@@ -1064,7 +345,7 @@ async def test_handle_linode_images_sharegroups_token_get_rejects_invalid_token_
     result = await handle_linode_image_sharegroup_token_get(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.get_image_sharegroup_token.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_images_sharegroups_token_get_registered() -> None:
@@ -1176,13 +457,13 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_get_success(
 ) -> None:
     """Handler returns the share group associated with a token."""
     token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.get_image_sharegroup_by_token.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "uuid": "22222222-2222-4222-8222-222222222222",
         "label": "shared-images",
     }
 
     result = await handle_linode_image_sharegroup_by_token_get(
-        {"token_uuid": f" {token_uuid} "}, sample_config
+        {"token_uuid": token_uuid}, sample_config
     )
 
     payload = json.loads(result[0].text)
@@ -1190,8 +471,8 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_get_success(
     assert payload["label"] == "shared-images"
     assert payload["id"] == 0
     assert "description" not in payload
-    mock_linode_client.get_image_sharegroup_by_token.assert_awaited_once_with(
-        token_uuid
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_by_token_get", token_uuid
     )
 
 
@@ -1215,7 +496,7 @@ async def test_handle_token_sharegroup_get_rejects_invalid_uuid(
     result = await handle_linode_image_sharegroup_by_token_get(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.get_image_sharegroup_by_token.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_images_sharegroups_token_sharegroup_get_registered() -> None:
@@ -1240,84 +521,6 @@ def test_linode_images_sharegroups_token_sharegroup_get_in_version_features() ->
     assert "linode_image_sharegroup_by_token_get" in FEATURE_TOOLS_LIST.split(",")
 
 
-@pytest.mark.asyncio
-async def test_client_list_images_by_token_sends_exact_encoded_path() -> None:
-    """Low-level client sends GET images-by-token route."""
-    seen: list[httpx.Request] = []
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"id": "private/ubuntu", "label": "Private Ubuntu"}],
-                "page": 1,
-                "pages": 1,
-                "results": 1,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_image_sharegroup_images_by_token(token_uuid)
-    finally:
-        await client.close()
-
-    assert result["data"][0]["id"] == "private/ubuntu"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == (
-        f"/v4/images/sharegroups/tokens/{token_uuid}/sharegroup/images"
-    )
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_list_images_by_token_encodes_path_param() -> None:
-    """Low-level client URL-encodes token_uuid before appending /sharegroup/images."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"data": []})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.list_image_sharegroup_images_by_token("token/with?separator")
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/tokens/token%2Fwith%3Fseparator/sharegroup/images"
-    )
-
-
-@pytest.mark.asyncio
-async def test_retryable_list_images_by_token_uses_read_retry() -> None:
-    """Read-only images by token list goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_list = AsyncMock(return_value={"data": [{"id": "private/ubuntu"}]})
-    cast("Any", retryable.client).list_image_sharegroup_images_by_token = mock_list
-
-    try:
-        result = await retryable.list_image_sharegroup_images_by_token(token_uuid)
-    finally:
-        await retryable.close()
-
-    assert result["data"][0]["id"] == "private/ubuntu"
-    assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(token_uuid, page=None, page_size=None)
-
-
 def test_create_token_sharegroup_images_list_tool_schema() -> None:
     """Tool schema requires the documented token UUID path param."""
     tool, capability = create_linode_image_sharegroup_token_image_list_tool()
@@ -1339,7 +542,7 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_images_list_suc
 ) -> None:
     """Handler returns images associated with a share group token."""
     token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.list_image_sharegroup_images_by_token.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [{"id": "private/ubuntu", "label": "Private Ubuntu"}],
         "page": 1,
         "pages": 1,
@@ -1347,7 +550,7 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_images_list_suc
     }
 
     result = await handle_linode_image_sharegroup_token_image_list(
-        {"token_uuid": f" {token_uuid} "}, sample_config
+        {"token_uuid": token_uuid}, sample_config
     )
 
     payload = json.loads(result[0].text)
@@ -1371,8 +574,8 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_images_list_suc
             }
         ],
     }
-    mock_linode_client.list_image_sharegroup_images_by_token.assert_awaited_once_with(
-        token_uuid, page=None, page_size=None
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_token_image_list", token_uuid, query=""
     )
 
 
@@ -1398,7 +601,7 @@ async def test_handle_token_sharegroup_images_list_rejects_invalid_uuid(
     )
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.list_image_sharegroup_images_by_token.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_images_sharegroups_token_sharegroup_images_list_registered() -> None:
@@ -1427,101 +630,6 @@ def test_token_sharegroup_images_list_in_version_features() -> None:
     assert "linode_image_sharegroup_token_image_list" in features
 
 
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroup_members_sends_exact_encoded_path() -> None:
-    """Low-level client sends GET /images/sharegroups/{sharegroupId}/members."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"username": "alice", "status": "accepted"}],
-                "page": 1,
-                "pages": 1,
-                "results": 1,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_image_sharegroup_members(sharegroup_id)
-    finally:
-        await client.close()
-
-    assert result["data"][0]["username"] == "alice"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == f"/v4/images/sharegroups/{sharegroup_id}/members"
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroup_members_encodes_path_param() -> None:
-    """Low-level client URL-encodes sharegroup_id before appending /members."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"data": []})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.list_image_sharegroup_members("sharegroup/with?separator")
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator/members"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroup_members_maps_http_error() -> None:
-    """Low-level client maps HTTP failures to NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="ListImageSharegroupMembers"):
-            await client.list_image_sharegroup_members(
-                "22222222-2222-4222-8222-222222222222"
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_list_image_sharegroup_members_uses_read_retry() -> None:
-    """Read-only members by share group list goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    mock_list = AsyncMock(return_value={"data": [{"username": "alice"}]})
-    cast("Any", retryable.client).list_image_sharegroup_members = mock_list
-
-    try:
-        result = await retryable.list_image_sharegroup_members(sharegroup_id)
-    finally:
-        await retryable.close()
-
-    assert result["data"][0]["username"] == "alice"
-    assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(sharegroup_id, page=None, page_size=None)
-
-
 def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
     """Tool schema requires the documented sharegroup UUID path param."""
     tool, capability = create_linode_image_sharegroup_member_list_tool()
@@ -1545,7 +653,7 @@ async def test_handle_linode_images_sharegroup_members_list_success(
 ) -> None:
     """Handler returns members in the proto list envelope."""
     sharegroup_id = 3
-    mock_linode_client.list_image_sharegroup_members.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [
             {
                 "token_uuid": "11112222-3333-4444-5555-666677778888",
@@ -1575,8 +683,8 @@ async def test_handle_linode_images_sharegroup_members_list_success(
             }
         ],
     }
-    mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
-        str(sharegroup_id), page=None, page_size=None
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_member_list", 3, query=""
     )
 
 
@@ -1586,7 +694,7 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
 ) -> None:
     """Handler returns an empty proto envelope for sparse API responses."""
     sharegroup_id = 3
-    mock_linode_client.list_image_sharegroup_members.return_value = {}
+    mock_linode_client.route_raw.return_value = {}
 
     result = await handle_linode_image_sharegroup_member_list(
         {"sharegroup_id": sharegroup_id}, sample_config
@@ -1597,8 +705,8 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
         "count": 0,
         "image_sharegroup_members": [],
     }
-    mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
-        str(sharegroup_id), page=None, page_size=None
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_member_list", sharegroup_id, query=""
     )
 
 
@@ -1622,7 +730,7 @@ async def test_handle_linode_images_sharegroup_members_list_rejects_invalid_uuid
     result = await handle_linode_image_sharegroup_member_list(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.list_image_sharegroup_members.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_images_sharegroup_members_list_registered() -> None:
@@ -1645,114 +753,6 @@ def test_linode_images_sharegroup_members_list_scopes_to_images_read() -> None:
 def test_linode_images_sharegroup_members_list_in_version_features() -> None:
     """Version metadata advertises the members by share group tool."""
     assert "linode_image_sharegroup_member_list" in FEATURE_TOOLS_LIST.split(",")
-
-
-@pytest.mark.asyncio
-async def test_client_get_image_sharegroup_member_token_sends_exact_encoded_path() -> (
-    None
-):
-    """Low-level client sends GET /images/sharegroups/{id}/members/{tokenUuid}."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "id": "member-token-record-1",
-                "token_uuid": token_uuid,
-                "created": "2026-01-01T00:00:00",
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.get_image_sharegroup_member_token(
-            sharegroup_id, token_uuid
-        )
-    finally:
-        await client.close()
-
-    assert result["token_uuid"] == token_uuid
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == (
-        f"/v4/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
-    )
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_get_image_sharegroup_member_token_encodes_path_params() -> None:
-    """Low-level client URL-encodes both path params at the boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"id": "encoded"})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.get_image_sharegroup_member_token(
-            "sharegroup/with?separator", "token/with?separator"
-        )
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator"
-        b"/members/token%2Fwith%3Fseparator"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_get_image_sharegroup_member_token_maps_http_error() -> None:
-    """Low-level client maps HTTP failures to NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="GetImageSharegroupMemberToken"):
-            await client.get_image_sharegroup_member_token(
-                "22222222-2222-4222-8222-222222222222",
-                "11111111-1111-4111-8111-111111111111",
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_get_image_sharegroup_member_token_uses_read_retry() -> None:
-    """Read-only member token get goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_get = AsyncMock(return_value={"id": "member-token-record-1"})
-    cast("Any", retryable.client).get_image_sharegroup_member_token = mock_get
-
-    try:
-        result = await retryable.get_image_sharegroup_member_token(
-            sharegroup_id, token_uuid
-        )
-    finally:
-        await retryable.close()
-
-    assert result["id"] == "member-token-record-1"
-    assert len(retryable.calls) == 1
-    mock_get.assert_awaited_once_with(sharegroup_id, token_uuid)
 
 
 def test_create_linode_images_sharegroup_member_token_get_tool_schema() -> None:
@@ -1780,14 +780,14 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
     """Handler returns a membership token associated with a share group."""
     sharegroup_id = 3
     token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.get_image_sharegroup_member_token.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": "member-token-record-1",
         "token_uuid": token_uuid,
         "created": "2026-01-01T00:00:00",
     }
 
     result = await handle_linode_image_sharegroup_member_token_get(
-        {"sharegroup_id": sharegroup_id, "token_uuid": f" {token_uuid} "},
+        {"sharegroup_id": sharegroup_id, "token_uuid": token_uuid},
         sample_config,
     )
 
@@ -1798,9 +798,32 @@ async def test_handle_linode_images_sharegroup_member_token_get_success(
         "label": "",
         "created": "2026-01-01T00:00:00",
     }
-    mock_linode_client.get_image_sharegroup_member_token.assert_awaited_once_with(
-        str(sharegroup_id), token_uuid
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_member_token_get",
+        3,
+        token_uuid,
     )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_images_sharegroup_member_token_get_refuses_padding(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """A padded token_uuid is refused rather than trimmed.
+
+    This language used to strip it and send the trimmed value; the raw reading
+    is Go's, and trimming rewrites a credential before sending it.
+    """
+    result = await handle_linode_image_sharegroup_member_token_get(
+        {
+            "sharegroup_id": 3,
+            "token_uuid": " 11111111-1111-4111-8111-111111111111 ",
+        },
+        sample_config,
+    )
+
+    assert "token_uuid must be a UUID" in result[0].text
+    mock_linode_client.route_raw.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -1832,7 +855,7 @@ async def test_member_token_get_rejects_invalid_path_params(
     )
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.get_image_sharegroup_member_token.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_images_sharegroup_member_token_get_registered() -> None:
@@ -1859,347 +882,6 @@ def test_linode_images_sharegroup_member_token_get_in_version_features() -> None
     assert "linode_image_sharegroup_member_token_get" in FEATURE_TOOLS_LIST.split(",")
 
 
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_member_token_sends_exact_path_body() -> (
-    None
-):
-    """Low-level client sends PUT /images/sharegroups/{id}/members/{tokenUuid}."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "id": "member-token-record-1",
-                "token_uuid": token_uuid,
-                "label": "renamed-member",
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.update_image_sharegroup_member_token(
-            sharegroup_id, token_uuid, label="renamed-member"
-        )
-    finally:
-        await client.close()
-
-    assert result["label"] == "renamed-member"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "PUT"
-    assert request.url.path == (
-        f"/v4/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
-    )
-    assert request.url.query == b""
-    assert json.loads((await request.aread()).decode()) == {"label": "renamed-member"}
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_member_token_encodes_path_params() -> (
-    None
-):
-    """Low-level client URL-encodes both path params at the boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"id": "encoded", "label": "renamed"})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.update_image_sharegroup_member_token(
-            "sharegroup/with?separator", "token/with?separator", label="renamed"
-        )
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator"
-        b"/members/token%2Fwith%3Fseparator"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("bad_label", ["", "   "])
-async def test_client_update_image_sharegroup_member_token_rejects_blank_label(
-    bad_label: str,
-) -> None:
-    """Low-level client rejects blank labels before request creation."""
-    calls = 0
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(ValueError, match="label must be a non-empty string"):
-            await client.update_image_sharegroup_member_token(
-                "22222222-2222-4222-8222-222222222222",
-                "11111111-1111-4111-8111-111111111111",
-                label=bad_label,
-            )
-    finally:
-        await client.close()
-
-    assert calls == 0
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_member_token_maps_http_error() -> None:
-    """Low-level client maps HTTP failures to NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="UpdateImageSharegroupMemberToken"):
-            await client.update_image_sharegroup_member_token(
-                "22222222-2222-4222-8222-222222222222",
-                "11111111-1111-4111-8111-111111111111",
-                label="renamed-member",
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_member_token_update_delegates_once() -> None:
-    """Retryable update wrapper should not replay member token updates after errors."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    mock_update = AsyncMock(side_effect=httpx.HTTPError("temporary"))
-    cast("Any", retryable.client).update_image_sharegroup_member_token = mock_update
-
-    try:
-        with pytest.raises(httpx.HTTPError):
-            await retryable.update_image_sharegroup_member_token(
-                "22222222-2222-4222-8222-222222222222",
-                "11111111-1111-4111-8111-111111111111",
-                label="renamed-member",
-            )
-    finally:
-        await retryable.close()
-
-    mock_update.assert_awaited_once_with(
-        "22222222-2222-4222-8222-222222222222",
-        "11111111-1111-4111-8111-111111111111",
-        label="renamed-member",
-    )
-
-
-def test_create_linode_images_sharegroup_member_token_update_tool_schema() -> None:
-    """Tool schema requires both path params, label, and confirm."""
-    tool, capability = create_linode_image_sharegroup_member_token_update_tool()
-
-    assert tool.name == "linode_image_sharegroup_member_token_update"
-    assert capability is Capability.Write
-    assert tool.input_schema["required"] == [
-        "sharegroup_id",
-        "token_uuid",
-        "label",
-        "confirm",
-    ]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["token_uuid"]["type"] == "string"
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_member_token_update_success(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler updates a member token label through the client."""
-    sharegroup_id = 3
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.update_image_sharegroup_member_token.return_value = {
-        "id": "member-token-record-1",
-        "token_uuid": token_uuid,
-        "label": "renamed-member",
-    }
-
-    result = await handle_linode_image_sharegroup_member_token_update(
-        {
-            "sharegroup_id": sharegroup_id,
-            "token_uuid": f" {token_uuid} ",
-            "label": " renamed-member ",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": (
-            f"Image share group member token '{token_uuid}' updated successfully"
-        ),
-        "member": {
-            "token_uuid": token_uuid,
-            "status": "",
-            "label": "renamed-member",
-            "created": "",
-        },
-    }
-    mock_linode_client.update_image_sharegroup_member_token.assert_awaited_once_with(
-        str(sharegroup_id), token_uuid, label="renamed-member"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
-async def test_member_token_update_requires_true_confirm(
-    bad_confirm: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects non-true confirm values before the client call."""
-    arguments: dict[str, Any] = {
-        "sharegroup_id": 3,
-        "token_uuid": "11111111-1111-4111-8111-111111111111",
-        "label": "renamed-member",
-    }
-    if bad_confirm is not None:
-        arguments["confirm"] = bad_confirm
-
-    result = await handle_linode_image_sharegroup_member_token_update(
-        arguments, sample_config
-    )
-
-    assert result[0].text.startswith("Error: ")
-    assert "confirm=true" in result[0].text
-    mock_linode_client.update_image_sharegroup_member_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("sharegroup_id", "token_uuid"),
-    [
-        (None, "11111111-1111-4111-8111-111111111111"),
-        ("not-an-integer", "11111111-1111-4111-8111-111111111111"),
-        (0, "11111111-1111-4111-8111-111111111111"),
-        (-1, "11111111-1111-4111-8111-111111111111"),
-        (3, None),
-        (3, ""),
-        (3, "not-a-uuid"),
-        (3, "11111111/1111-4111-8111-111111111111"),
-        (3, "11111111?1111-4111-8111-111111111111"),
-        (3, ".."),
-        (3, 123),
-    ],
-)
-async def test_member_token_update_rejects_invalid_path_params(
-    sharegroup_id: Any,
-    token_uuid: Any,
-    sample_config: Any,
-    mock_linode_client: AsyncMock,
-) -> None:
-    """Handler rejects malformed path params before the client call."""
-    result = await handle_linode_image_sharegroup_member_token_update(
-        {
-            "sharegroup_id": sharegroup_id,
-            "token_uuid": token_uuid,
-            "label": "renamed-member",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert result[0].text.startswith("Error: ")
-    mock_linode_client.update_image_sharegroup_member_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("bad_label", [None, "", "   ", 123, True])
-async def test_member_token_update_rejects_invalid_label(
-    bad_label: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler requires a non-empty label before the client call."""
-    result = await handle_linode_image_sharegroup_member_token_update(
-        {
-            "sharegroup_id": 3,
-            "token_uuid": "11111111-1111-4111-8111-111111111111",
-            "label": bad_label,
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert result[0].text.startswith("Error: ")
-    assert "label" in result[0].text
-    mock_linode_client.update_image_sharegroup_member_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_image_sharegroup_member_token_update_dry_run_previews_without_confirm(
-    sample_config: Any,
-) -> None:
-    """Dry-run previews without requiring the confirm gate."""
-    result = await handle_linode_image_sharegroup_member_token_update(
-        {
-            "sharegroup_id": 3,
-            "token_uuid": "11111111-1111-4111-8111-111111111111",
-            "label": "renamed-member",
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert '"dry_run": true' in result[0].text
-
-
-@pytest.mark.asyncio
-async def test_image_sharegroup_member_token_update_dry_run_returns_encoded_preview(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """dry_run=true previews member token update without calling the client."""
-    sharegroup_id = 3
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    result = await handle_linode_image_sharegroup_member_token_update(
-        {
-            "sharegroup_id": sharegroup_id,
-            "token_uuid": token_uuid,
-            "label": "renamed-member",
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_image_sharegroup_member_token_update"
-    assert body["would_execute"]["method"] == "PUT"
-    assert body["would_execute"]["path"] == (
-        f"/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
-    )
-    assert body["would_execute"]["body"] == {"label": "renamed-member"}
-    mock_linode_client.update_image_sharegroup_member_token.assert_not_called()
-
-
-def test_linode_images_sharegroup_member_token_update_registered() -> None:
-    """Dynamic registry exports the member token update tool and handler pair."""
-    entries = {entry.name: entry for entry in get_tool_registry()}
-
-    entry = entries["linode_image_sharegroup_member_token_update"]
-    assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_image_sharegroup_member_token_update"
-    assert entry.handle_fn is handle_linode_image_sharegroup_member_token_update
-
-
 def test_linode_images_sharegroup_member_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = required_scopes(
@@ -2213,108 +895,6 @@ def test_linode_images_sharegroup_member_token_update_in_version_features() -> N
     """Version metadata advertises the member token update tool."""
     assert "linode_image_sharegroup_member_token_update" in FEATURE_TOOLS_LIST.split(
         ","
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_member_token_sends_exact_path() -> None:
-    """Low-level client sends DELETE /images/sharegroups/{id}/members/{tokenUuid}."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image_sharegroup_member_token(sharegroup_id, token_uuid)
-    finally:
-        await client.close()
-
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "DELETE"
-    assert request.url.path == (
-        f"/v4/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
-    )
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_member_token_encodes_path_params() -> (
-    None
-):
-    """Low-level client URL-encodes both path params at the boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image_sharegroup_member_token(
-            "sharegroup/with?separator", "token/with?separator"
-        )
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator"
-        b"/members/token%2Fwith%3Fseparator"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_member_token_maps_http_error() -> None:
-    """Low-level client maps httpx transport failures to NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.HTTPError("temporary")
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="DeleteImageSharegroupMemberToken"):
-            await client.delete_image_sharegroup_member_token(
-                "22222222-2222-4222-8222-222222222222",
-                "11111111-1111-4111-8111-111111111111",
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_member_token_delete_delegates_once() -> None:
-    """Destructive member token revoke should not replay mapped client errors."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    mapped_error = NetworkError(
-        "DeleteImageSharegroupMemberToken", httpx.HTTPError("temporary")
-    )
-    mock_delete = AsyncMock(side_effect=mapped_error)
-    cast("Any", retryable.client).delete_image_sharegroup_member_token = mock_delete
-
-    try:
-        with pytest.raises(NetworkError, match="DeleteImageSharegroupMemberToken"):
-            await retryable.delete_image_sharegroup_member_token(
-                "22222222-2222-4222-8222-222222222222",
-                "11111111-1111-4111-8111-111111111111",
-            )
-    finally:
-        await retryable.close()
-
-    mock_delete.assert_awaited_once_with(
-        "22222222-2222-4222-8222-222222222222",
-        "11111111-1111-4111-8111-111111111111",
     )
 
 
@@ -2346,7 +926,7 @@ async def test_handle_linode_images_sharegroup_member_token_delete_success(
     result = await handle_linode_image_sharegroup_member_token_delete(
         {
             "sharegroup_id": sharegroup_id,
-            "token_uuid": f" {token_uuid} ",
+            "token_uuid": token_uuid,
             "confirm": True,
         },
         sample_config,
@@ -2354,72 +934,17 @@ async def test_handle_linode_images_sharegroup_member_token_delete_success(
 
     assert json.loads(result[0].text) == {
         "message": (
-            f"Image share group member token {token_uuid} "
-            f"revoked from share group {sharegroup_id} successfully"
+            "Image share group member token "
+            "11111111-1111-4111-8111-111111111111 "
+            "revoked from share group 3 successfully"
         )
     }
-    mock_linode_client.delete_image_sharegroup_member_token.assert_awaited_once_with(
-        str(sharegroup_id), token_uuid
+    mock_linode_client.route_call.assert_awaited_once_with(
+        "linode_image_sharegroup_member_token_delete",
+        sharegroup_id,
+        token_uuid,
+        retry=False,
     )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
-async def test_member_token_delete_requires_true_confirm(
-    bad_confirm: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects non-true confirm values before the client call."""
-    arguments: dict[str, Any] = {
-        "sharegroup_id": 3,
-        "token_uuid": "11111111-1111-4111-8111-111111111111",
-    }
-    if bad_confirm is not None:
-        arguments["confirm"] = bad_confirm
-
-    result = await handle_linode_image_sharegroup_member_token_delete(
-        arguments, sample_config
-    )
-
-    assert result[0].text.startswith("Error: ")
-    assert "confirm=true" in result[0].text
-    mock_linode_client.delete_image_sharegroup_member_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("sharegroup_id", "token_uuid"),
-    [
-        (None, "11111111-1111-4111-8111-111111111111"),
-        ("not-an-integer", "11111111-1111-4111-8111-111111111111"),
-        (0, "11111111-1111-4111-8111-111111111111"),
-        (-1, "11111111-1111-4111-8111-111111111111"),
-        (3, None),
-        (3, ""),
-        (3, "not-a-uuid"),
-        (3, "11111111/1111-4111-8111-111111111111"),
-        (3, "11111111?1111-4111-8111-111111111111"),
-        (3, ".."),
-        (3, 123),
-    ],
-)
-async def test_member_token_delete_rejects_invalid_path_params(
-    sharegroup_id: Any,
-    token_uuid: Any,
-    sample_config: Any,
-    mock_linode_client: AsyncMock,
-) -> None:
-    """Handler rejects malformed path params before the client call."""
-    result = await handle_linode_image_sharegroup_member_token_delete(
-        {
-            "sharegroup_id": sharegroup_id,
-            "token_uuid": token_uuid,
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert result[0].text.startswith("Error: ")
-    mock_linode_client.delete_image_sharegroup_member_token.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -2427,7 +952,7 @@ async def test_image_sharegroup_member_token_delete_dry_run_previews_without_con
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
-    mock_linode_client.get_image_sharegroup.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": 3,
         "label": "share",
     }
@@ -2441,38 +966,6 @@ async def test_image_sharegroup_member_token_delete_dry_run_previews_without_con
     )
 
     assert '"dry_run": true' in result[0].text
-
-
-@pytest.mark.asyncio
-async def test_image_sharegroup_member_token_delete_dry_run_returns_encoded_preview(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """dry_run=true previews the member token revoke without deleting."""
-    sharegroup_id = 3
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.get_image_sharegroup.return_value = {
-        "id": 3,
-        "label": "share",
-    }
-
-    result = await handle_linode_image_sharegroup_member_token_delete(
-        {
-            "sharegroup_id": sharegroup_id,
-            "token_uuid": token_uuid,
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_image_sharegroup_member_token_delete"
-    assert body["would_execute"] == {
-        "method": "DELETE",
-        "path": f"/images/sharegroups/{sharegroup_id}/members/{token_uuid}",
-    }
-    mock_linode_client.delete_image_sharegroup_member_token.assert_not_called()
 
 
 def test_linode_images_sharegroup_member_token_delete_registered() -> None:
@@ -2499,163 +992,6 @@ def test_linode_images_sharegroup_member_token_delete_in_version_features() -> N
     assert "linode_image_sharegroup_member_token_delete" in FEATURE_TOOLS_LIST.split(
         ","
     )
-
-
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroup_images_sends_exact_encoded_path() -> None:
-    """Low-level client sends GET /images/sharegroups/{sharegroupId}/images."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"id": "private/ubuntu", "label": "Private Ubuntu"}],
-                "page": 1,
-                "pages": 1,
-                "results": 1,
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.list_image_sharegroup_images(sharegroup_id)
-    finally:
-        await client.close()
-
-    assert result["data"][0]["id"] == "private/ubuntu"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == f"/v4/images/sharegroups/{sharegroup_id}/images"
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_list_image_sharegroup_images_encodes_path_param() -> None:
-    """Low-level client URL-encodes sharegroup_id before appending /images."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"data": []})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.list_image_sharegroup_images("sharegroup/with?separator")
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator/images"
-    )
-
-
-@pytest.mark.asyncio
-async def test_retryable_list_image_sharegroup_images_uses_read_retry() -> None:
-    """Read-only images by share group list goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    mock_list = AsyncMock(return_value={"data": [{"id": "private/ubuntu"}]})
-    cast("Any", retryable.client).list_image_sharegroup_images = mock_list
-
-    try:
-        result = await retryable.list_image_sharegroup_images(sharegroup_id)
-    finally:
-        await retryable.close()
-
-    assert result["data"][0]["id"] == "private/ubuntu"
-    assert len(retryable.calls) == 1
-    mock_list.assert_awaited_once_with(sharegroup_id, page=None, page_size=None)
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_image_sends_exact_path() -> None:
-    """Low-level client sends DELETE to the documented share-group image path."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image_sharegroup_image("123", "456")
-    finally:
-        await client.close()
-
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "DELETE"
-    assert request.url.raw_path == b"/v4/images/sharegroups/123/images/456"
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_image_encodes_path_params() -> None:
-    """Low-level client URL-encodes both path params at the boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image_sharegroup_image("12/../?x=1", "34?y=2")
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/12%2F..%2F%3Fx%3D1/images/34%3Fy%3D2"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_image_maps_http_error() -> None:
-    """Low-level client maps HTTP failures to NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="DeleteImageSharegroupImage"):
-            await client.delete_image_sharegroup_image("123", "456")
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_delete_image_sharegroup_image_delegates_once() -> None:
-    """Destructive image revocation delegates once without retry replay."""
-    retryable = _CapturingRetryableClient()
-    mock_delete = AsyncMock(return_value=None)
-    cast("Any", retryable.client).delete_image_sharegroup_image = mock_delete
-
-    try:
-        await retryable.delete_image_sharegroup_image("123", "456")
-    finally:
-        await retryable.close()
-
-    assert retryable.calls == []
-    mock_delete.assert_awaited_once_with("123", "456")
 
 
 def test_create_linode_images_sharegroup_image_delete_tool_schema() -> None:
@@ -2685,25 +1021,9 @@ async def test_handle_linode_images_sharegroup_image_delete_success(
     assert json.loads(result[0].text) == {
         "message": "Shared image 456 removed from image share group 123 successfully"
     }
-    mock_linode_client.delete_image_sharegroup_image.assert_awaited_once_with(
-        "123", "456"
+    mock_linode_client.route_call.assert_awaited_once_with(
+        "linode_image_sharegroup_image_delete", 123, 456, retry=False
     )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_images_sharegroup_image_delete_rejects_non_true_confirm(
-    sample_config: Any, mock_linode_client: AsyncMock, confirm: object
-) -> None:
-    """Handler requires literal confirm=True before client calls."""
-    arguments: dict[str, object] = {"sharegroup_id": 123, "image_id": 456}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    result = await handle_linode_image_sharegroup_image_delete(arguments, sample_config)
-
-    assert "confirm=true is required to remove the shared image" in result[0].text
-    mock_linode_client.delete_image_sharegroup_image.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -2720,7 +1040,7 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_non_true_con
         ),
         (
             {"sharegroup_id": 0, "image_id": 456, "confirm": True},
-            "sharegroup_id must be a positive integer",
+            "sharegroup_id is required",
         ),
         (
             {"sharegroup_id": True, "image_id": 456, "confirm": True},
@@ -2728,18 +1048,18 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_non_true_con
         ),
         (
             {"sharegroup_id": 123, "confirm": True},
-            "image_id must be a positive integer",
-        ),
-        (
-            {"sharegroup_id": 123, "image_id": "456", "confirm": True},
-            "image_id must be a positive integer",
+            "image_id is required",
         ),
         (
             {"sharegroup_id": 123, "image_id": 0, "confirm": True},
-            "image_id must be a positive integer",
+            "image_id is required",
         ),
         (
             {"sharegroup_id": 123, "image_id": False, "confirm": True},
+            "image_id must be a positive integer",
+        ),
+        (
+            {"sharegroup_id": 123, "image_id": -5, "confirm": True},
             "image_id must be a positive integer",
         ),
     ],
@@ -2754,30 +1074,7 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_invalid_path
     result = await handle_linode_image_sharegroup_image_delete(arguments, sample_config)
 
     assert expected_error in result[0].text
-    mock_linode_client.delete_image_sharegroup_image.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_image_delete_dry_run(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Dry run previews the destructive request without deleting."""
-    mock_linode_client.get_image_sharegroup.return_value = {
-        "id": 123,
-        "label": "share",
-    }
-    result = await handle_linode_image_sharegroup_image_delete(
-        {"sharegroup_id": 123, "image_id": 456, "confirm": True, "dry_run": True},
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_image_sharegroup_image_delete"
-    assert payload["would_execute"] == {
-        "method": "DELETE",
-        "path": "/images/sharegroups/123/images/456",
-    }
-    mock_linode_client.delete_image_sharegroup_image.assert_not_called()
+    mock_linode_client.route_call.assert_not_called()
 
 
 def test_linode_images_sharegroup_image_delete_registered() -> None:
@@ -2802,291 +1099,6 @@ def test_linode_images_sharegroup_image_delete_in_version_features() -> None:
     assert "linode_image_sharegroup_image_delete" in FEATURE_TOOLS_LIST.split(",")
 
 
-@pytest.mark.asyncio
-async def test_client_add_image_sharegroup_images_sends_exact_path_and_body() -> None:
-    """Low-level client sends POST /images/sharegroups/{sharegroupId}/images."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    images = [
-        {"id": "private/ubuntu", "label": "Private Ubuntu", "description": "Ubuntu"}
-    ]
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"images": images})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.add_image_sharegroup_images(sharegroup_id, images)
-    finally:
-        await client.close()
-
-    assert result == {"images": images}
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "POST"
-    assert request.url.path == f"/v4/images/sharegroups/{sharegroup_id}/images"
-    assert request.url.query == b""
-    assert json.loads((await request.aread()).decode()) == {"images": images}
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_add_image_sharegroup_images_encodes_path_param() -> None:
-    """Low-level client URL-encodes sharegroup_id before appending /images."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"images": []})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.add_image_sharegroup_images(
-            "sharegroup/with?separator", [{"id": "private/ubuntu"}]
-        )
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator/images"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_add_image_sharegroup_images_rejects_empty_images() -> None:
-    """Low-level client rejects an empty required body before the request."""
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(ValueError, match="images must be a non-empty"):
-            await client.add_image_sharegroup_images(
-                "22222222-2222-4222-8222-222222222222", []
-            )
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_client_add_image_sharegroup_images_maps_http_error() -> None:
-    """Low-level client maps HTTP transport failures."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary failure", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="AddImageSharegroupImages"):
-            await client.add_image_sharegroup_images(
-                "22222222-2222-4222-8222-222222222222",
-                [{"id": "private/ubuntu"}],
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_add_image_sharegroup_images_delegates_once() -> None:
-    """Mutating add-images route delegates once without retry replay."""
-    retryable = _CapturingRetryableClient()
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    images = [{"id": "private/ubuntu"}]
-    mock_add = AsyncMock(return_value={"images": images})
-    cast("Any", retryable.client).add_image_sharegroup_images = mock_add
-
-    try:
-        result = await retryable.add_image_sharegroup_images(sharegroup_id, images)
-    finally:
-        await retryable.close()
-
-    assert result == {"images": images}
-    assert retryable.calls == []
-    mock_add.assert_awaited_once_with(sharegroup_id, images)
-
-
-def test_create_linode_images_sharegroup_images_add_tool_schema() -> None:
-    """Tool schema requires UUID path, images body, and confirm."""
-    tool, capability = create_linode_image_sharegroup_image_add_tool()
-
-    assert tool.name == "linode_image_sharegroup_image_add"
-    assert capability is Capability.Write
-    assert set(tool.input_schema["properties"]) == {
-        "environment",
-        "sharegroup_id",
-        "images",
-        "confirm",
-        "dry_run",
-    }
-    # images is required at runtime but a repeated proto field cannot be marked
-    # required in the generated schema, so it drops from the required list.
-    assert tool.input_schema["required"] == ["sharegroup_id", "confirm"]
-    assert tool.input_schema["properties"]["images"]["type"] == "array"
-    assert tool.input_schema["properties"]["sharegroup_id"]["type"] == "integer"
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_images_add_success(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler adds images to a share group."""
-    sharegroup_id = 3
-    images = [{"id": "private/ubuntu", "label": "Private Ubuntu"}]
-    mock_linode_client.add_image_sharegroup_images.return_value = {
-        "id": "private/ubuntu",
-        "label": "Private Ubuntu",
-    }
-
-    result = await handle_linode_image_sharegroup_image_add(
-        {"sharegroup_id": sharegroup_id, "images": images, "confirm": True},
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": (
-            "Added image set to image share group 3; "
-            "last returned image: 'private/ubuntu'"
-        ),
-        "image": {
-            "id": "private/ubuntu",
-            "label": "Private Ubuntu",
-            "description": "",
-            "type": "",
-            "vendor": "",
-            "status": "",
-            "created": "",
-            "created_by": "",
-            "capabilities": [],
-            "tags": [],
-            "size": 0,
-            "is_public": False,
-            "deprecated": False,
-        },
-    }
-    mock_linode_client.add_image_sharegroup_images.assert_awaited_once_with(
-        str(sharegroup_id), images
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_images_sharegroup_images_add_requires_literal_confirm(
-    confirm: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects omitted and non-literal confirm before the client call."""
-    arguments: dict[str, Any] = {
-        "sharegroup_id": 3,
-        "images": [{"id": "private/ubuntu"}],
-    }
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    result = await handle_linode_image_sharegroup_image_add(arguments, sample_config)
-
-    assert result[0].text.startswith("Error: This adds images")
-    mock_linode_client.add_image_sharegroup_images.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {},
-        {"sharegroup_id": ""},
-        {"sharegroup_id": "not-a-uuid"},
-        {"sharegroup_id": "22222222/2222-4222-8222-222222222222"},
-        {"sharegroup_id": "22222222?2222-4222-8222-222222222222"},
-        {"sharegroup_id": ".."},
-        {"sharegroup_id": 0},
-    ],
-)
-async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_uuid(
-    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects malformed sharegroup UUIDs before the client call."""
-    arguments = {**arguments, "images": [{"id": "private/ubuntu"}], "confirm": True}
-
-    result = await handle_linode_image_sharegroup_image_add(arguments, sample_config)
-
-    assert result[0].text.startswith("Error: ")
-    mock_linode_client.add_image_sharegroup_images.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("images", "message"), INVALID_ADD_IMAGE_SHAREGROUP_IMAGES_CASES
-)
-async def test_handle_linode_images_sharegroup_images_add_rejects_invalid_body(
-    images: object, message: str, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects invalid images payloads before confirm/client calls."""
-    result = await handle_linode_image_sharegroup_image_add(
-        {
-            "sharegroup_id": 3,
-            "images": images,
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert result[0].text == f"Error: {message}"
-    mock_linode_client.add_image_sharegroup_images.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_images_add_dry_run(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Dry run previews the encoded mutating request without client call."""
-    sharegroup_id = 3
-    images = [{"id": "private/ubuntu"}]
-
-    result = await handle_linode_image_sharegroup_image_add(
-        {
-            "sharegroup_id": sharegroup_id,
-            "images": images,
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_image_sharegroup_image_add"
-    assert payload["would_execute"]["method"] == "POST"
-    assert payload["would_execute"]["path"] == (
-        f"/images/sharegroups/{sharegroup_id}/images"
-    )
-    assert payload["would_execute"]["body"] == {"images": images}
-    mock_linode_client.add_image_sharegroup_images.assert_not_called()
-
-
-def test_linode_images_sharegroup_images_add_registered() -> None:
-    """Dynamic registry exports the add-images tool and handler pair."""
-    entries = {entry.name: entry for entry in get_tool_registry()}
-
-    entry = entries["linode_image_sharegroup_image_add"]
-    assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_image_sharegroup_image_add"
-    assert entry.handle_fn is handle_linode_image_sharegroup_image_add
-
-
 def test_linode_images_sharegroup_images_add_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = required_scopes("linode_image_sharegroup_image_add", Capability.Write)
@@ -3099,310 +1111,6 @@ def test_linode_images_sharegroup_images_add_in_version_features() -> None:
     assert "linode_image_sharegroup_image_add" in FEATURE_TOOLS_LIST.split(",")
 
 
-@pytest.mark.asyncio
-async def test_client_add_members_exact_path_and_body() -> None:
-    """Low-level client sends POST /images/sharegroups/{sharegroupId}/members."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"member": {"label": "team-a"}})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.add_members_to_image_sharegroup(
-            sharegroup_id, label="team-a", token="share-token"
-        )
-    finally:
-        await client.close()
-
-    assert result == {"member": {"label": "team-a"}}
-    request = seen[0]
-    assert request.method == "POST"
-    assert request.url.path == f"/v4/images/sharegroups/{sharegroup_id}/members"
-    assert request.url.query == b""
-    assert json.loads((await request.aread()).decode()) == {
-        "label": "team-a",
-        "token": "share-token",
-    }
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_add_members_to_image_sharegroup_encodes_path_param() -> None:
-    """Low-level client URL-encodes sharegroup_id before appending /members."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.add_members_to_image_sharegroup(
-            "sharegroup/with?separator", label="team-a", token="share-token"
-        )
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/sharegroup%2Fwith%3Fseparator/members"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_add_members_rejects_empty_body_fields() -> None:
-    """Low-level client rejects empty required body fields before the request."""
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(ValueError, match="label must be a non-empty string"):
-            await client.add_members_to_image_sharegroup(
-                "22222222-2222-4222-8222-222222222222", label="", token="share-token"
-            )
-        with pytest.raises(ValueError, match="token must be a non-empty string"):
-            await client.add_members_to_image_sharegroup(
-                "22222222-2222-4222-8222-222222222222", label="team-a", token=""
-            )
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_client_add_members_to_image_sharegroup_maps_http_error() -> None:
-    """Low-level client maps HTTP transport failures."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary failure", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="AddMembersToImageSharegroup"):
-            await client.add_members_to_image_sharegroup(
-                "22222222-2222-4222-8222-222222222222",
-                label="team-a",
-                token="share-token",
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_add_members_to_image_sharegroup_delegates_once() -> None:
-    """Mutating add-members route delegates once without retry replay."""
-    retryable = _CapturingRetryableClient()
-    sharegroup_id = "22222222-2222-4222-8222-222222222222"
-    mock_add = AsyncMock(return_value={"member": {"label": "team-a"}})
-    cast("Any", retryable.client).add_members_to_image_sharegroup = mock_add
-
-    try:
-        result = await retryable.add_members_to_image_sharegroup(
-            sharegroup_id, label="team-a", token="share-token"
-        )
-    finally:
-        await retryable.close()
-
-    assert result == {"member": {"label": "team-a"}}
-    assert retryable.calls == []
-    mock_add.assert_awaited_once_with(
-        sharegroup_id, label="team-a", token="share-token"
-    )
-
-
-def test_create_linode_images_sharegroup_members_add_tool_schema() -> None:
-    """Tool schema requires UUID path, label/token body, and confirm."""
-    tool, capability = create_linode_image_sharegroup_member_add_tool()
-
-    assert tool.name == "linode_image_sharegroup_member_add"
-    assert capability is Capability.Write
-    assert set(tool.input_schema["properties"]) == {
-        "environment",
-        "sharegroup_id",
-        "label",
-        "token",
-        "confirm",
-        "dry_run",
-    }
-    assert tool.input_schema["required"] == [
-        "sharegroup_id",
-        "label",
-        "token",
-        "confirm",
-    ]
-    sharegroup_schema = tool.input_schema["properties"]["sharegroup_id"]
-    assert sharegroup_schema["type"] == "integer"
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_members_add_success(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler adds members to a share group."""
-    sharegroup_id = 3
-    mock_linode_client.add_members_to_image_sharegroup.return_value = {
-        "id": 3,
-        "label": "team pool",
-        "members_count": 2,
-    }
-
-    result = await handle_linode_image_sharegroup_member_add(
-        {
-            "sharegroup_id": sharegroup_id,
-            "label": "team-a",
-            "token": "share-token",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": "Added members to image share group 3",
-        "sharegroup": {
-            "id": 3,
-            "uuid": "",
-            "label": "team pool",
-            "is_suspended": False,
-            "created": "",
-            "images_count": 0,
-            "members_count": 2,
-        },
-    }
-    mock_linode_client.add_members_to_image_sharegroup.assert_awaited_once_with(
-        str(sharegroup_id), label="team-a", token="share-token"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_handle_linode_images_sharegroup_members_add_requires_literal_confirm(
-    confirm: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects omitted and non-literal confirm before the client call."""
-    arguments: dict[str, Any] = {
-        "sharegroup_id": 3,
-        "label": "team-a",
-        "token": "share-token",
-    }
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    result = await handle_linode_image_sharegroup_member_add(arguments, sample_config)
-
-    assert result[0].text.startswith("Error: This adds members")
-    mock_linode_client.add_members_to_image_sharegroup.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {},
-        {"sharegroup_id": ""},
-        {"sharegroup_id": "not-a-uuid"},
-        {"sharegroup_id": "22222222/2222-4222-8222-222222222222"},
-        {"sharegroup_id": "22222222?2222-4222-8222-222222222222"},
-        {"sharegroup_id": ".."},
-        {"sharegroup_id": 0},
-    ],
-)
-async def test_handle_linode_images_sharegroup_members_add_rejects_invalid_uuid(
-    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects malformed sharegroup UUIDs before the client call."""
-    arguments = {
-        **arguments,
-        "label": "team-a",
-        "token": "share-token",
-        "confirm": True,
-    }
-
-    result = await handle_linode_image_sharegroup_member_add(arguments, sample_config)
-
-    assert result[0].text.startswith("Error: ")
-    mock_linode_client.add_members_to_image_sharegroup.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({"token": "share-token"}, "label must be a non-empty string"),
-        ({"label": "", "token": "share-token"}, "label must be a non-empty string"),
-        ({"label": 1, "token": "share-token"}, "label must be a non-empty string"),
-        ({"label": "team-a"}, "token must be a non-empty string"),
-        ({"label": "team-a", "token": ""}, "token must be a non-empty string"),
-        ({"label": "team-a", "token": 1}, "token must be a non-empty string"),
-    ],
-)
-async def test_handle_linode_images_sharegroup_members_add_rejects_invalid_body(
-    arguments: dict[str, Any],
-    message: str,
-    sample_config: Any,
-    mock_linode_client: AsyncMock,
-) -> None:
-    """Handler rejects invalid label/token body fields before client calls."""
-    result = await handle_linode_image_sharegroup_member_add(
-        {
-            "sharegroup_id": 3,
-            "confirm": True,
-            **arguments,
-        },
-        sample_config,
-    )
-
-    assert result[0].text == f"Error: {message}"
-    mock_linode_client.add_members_to_image_sharegroup.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_members_add_dry_run(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Dry run previews the encoded mutating request without client call."""
-    sharegroup_id = 3
-
-    result = await handle_linode_image_sharegroup_member_add(
-        {
-            "sharegroup_id": sharegroup_id,
-            "label": "team-a",
-            "token": "share-token",
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_image_sharegroup_member_add"
-    assert payload["would_execute"]["method"] == "POST"
-    assert payload["would_execute"]["path"] == (
-        f"/images/sharegroups/{sharegroup_id}/members"
-    )
-    assert payload["would_execute"]["body"] == {
-        "label": "team-a",
-        "token": "share-token",
-    }
-    mock_linode_client.add_members_to_image_sharegroup.assert_not_called()
-
-
 def test_linode_images_sharegroup_members_add_registered() -> None:
     """Dynamic registry exports the add-members tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
@@ -3410,7 +1118,6 @@ def test_linode_images_sharegroup_members_add_registered() -> None:
     entry = entries["linode_image_sharegroup_member_add"]
     assert entry.capability is Capability.Write
     assert entry.tool.name == "linode_image_sharegroup_member_add"
-    assert entry.handle_fn is handle_linode_image_sharegroup_member_add
 
 
 def test_linode_images_sharegroup_members_add_scopes_to_images_write() -> None:
@@ -3448,7 +1155,7 @@ async def test_handle_linode_images_sharegroup_images_list_success(
 ) -> None:
     """Handler returns images associated with a share group."""
     sharegroup_id = 3
-    mock_linode_client.list_image_sharegroup_images.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [{"id": "private/ubuntu", "label": "Private Ubuntu"}],
         "page": 1,
         "pages": 1,
@@ -3480,8 +1187,8 @@ async def test_handle_linode_images_sharegroup_images_list_success(
             }
         ],
     }
-    mock_linode_client.list_image_sharegroup_images.assert_awaited_once_with(
-        str(sharegroup_id), page=None, page_size=None
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_image_list", 3, query=""
     )
 
 
@@ -3508,7 +1215,7 @@ async def test_handle_linode_images_sharegroup_images_list_rejects_bad_paginatio
 
     assert len(result) == 1
     assert message in result[0].text
-    mock_linode_client.list_image_sharegroup_images.assert_not_awaited()
+    mock_linode_client.route_raw.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -3537,7 +1244,7 @@ async def test_handle_linode_images_token_images_list_rejects_bad_pagination(
 
     assert len(result) == 1
     assert message in result[0].text
-    mock_linode_client.list_image_sharegroup_images_by_token.assert_not_awaited()
+    mock_linode_client.route_raw.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -3563,7 +1270,7 @@ async def test_handle_linode_images_by_image_list_rejects_bad_pagination(
 
     assert len(result) == 1
     assert message in result[0].text
-    mock_linode_client.list_image_sharegroups_by_image.assert_not_awaited()
+    mock_linode_client.route_raw.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -3586,7 +1293,7 @@ async def test_handle_linode_images_sharegroup_images_list_rejects_invalid_uuid(
     result = await handle_linode_image_sharegroup_image_list(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.list_image_sharegroup_images.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 def test_linode_images_sharegroup_images_list_registered() -> None:
@@ -3611,294 +1318,6 @@ def test_linode_images_sharegroup_images_list_in_version_features() -> None:
     assert "linode_image_sharegroup_image_list" in FEATURE_TOOLS_LIST.split(",")
 
 
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_token_sends_exact_path_and_body() -> None:
-    """Low-level client sends PUT /images/sharegroups/tokens/{tokenUuid}."""
-    seen: list[httpx.Request] = []
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "id": "sharegroup-record-1",
-                "token_uuid": token_uuid,
-                "label": "renamed-token",
-            },
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.update_image_sharegroup_token(
-            token_uuid=token_uuid, label="renamed-token"
-        )
-    finally:
-        await client.close()
-
-    assert result["label"] == "renamed-token"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "PUT"
-    assert request.url.path == f"/v4/images/sharegroups/tokens/{token_uuid}"
-    assert request.url.query == b""
-    assert json.loads((await request.aread()).decode()) == {"label": "renamed-token"}
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_token_encodes_path_param() -> None:
-    """Low-level client URL-encodes token_uuid at the path boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"id": "encoded", "label": "renamed"})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.update_image_sharegroup_token(
-            token_uuid="token/with?separator", label="renamed"
-        )
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/tokens/token%2Fwith%3Fseparator"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_create_image_sharegroup_token_maps_http_error() -> None:
-    """Low-level client maps HTTP failures on token create to a NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="CreateImageSharegroupToken"):
-            await client.create_image_sharegroup_token(
-                valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
-                label="partner-token",
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_token_maps_http_error() -> None:
-    """Low-level client maps HTTP failures on token update to a NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="UpdateImageSharegroupToken"):
-            await client.update_image_sharegroup_token(
-                token_uuid="11111111-1111-4111-8111-111111111111",
-                label="renamed-token",
-            )
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_update_image_sharegroup_token_delegates_once() -> None:
-    """Retryable update wrapper should not replay token updates after errors."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    mock_update = AsyncMock(side_effect=httpx.HTTPError("temporary"))
-    cast("Any", retryable.client).update_image_sharegroup_token = mock_update
-
-    try:
-        with pytest.raises(httpx.HTTPError):
-            await retryable.update_image_sharegroup_token(
-                token_uuid="11111111-1111-4111-8111-111111111111",
-                label="renamed-token",
-            )
-    finally:
-        await retryable.close()
-
-    mock_update.assert_awaited_once_with(
-        token_uuid="11111111-1111-4111-8111-111111111111",
-        label="renamed-token",
-    )
-
-
-def test_create_linode_images_sharegroups_token_update_tool_schema() -> None:
-    """Tool schema requires token UUID, label, and confirm."""
-    tool, capability = create_linode_image_sharegroup_token_update_tool()
-
-    assert tool.name == "linode_image_sharegroup_token_update"
-    assert capability is Capability.Write
-    assert tool.input_schema["required"] == ["token_uuid", "label", "confirm"]
-    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroups_token_update_success(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler updates a token label through the client."""
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.update_image_sharegroup_token.return_value = {
-        "id": "sharegroup-record-1",
-        "token_uuid": token_uuid,
-        "label": "renamed-token",
-    }
-
-    result = await handle_linode_image_sharegroup_token_update(
-        {"token_uuid": f" {token_uuid} ", "label": " renamed-token ", "confirm": True},
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": f"Image share group token '{token_uuid}' updated successfully",
-        "token": {
-            "token": "",
-            "token_uuid": token_uuid,
-            "status": "",
-            "label": "renamed-token",
-            "created": "",
-            "valid_for_sharegroup_uuid": "",
-            "sharegroup_uuid": "",
-            "sharegroup_label": "",
-        },
-    }
-    mock_linode_client.update_image_sharegroup_token.assert_awaited_once_with(
-        token_uuid=token_uuid, label="renamed-token"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
-async def test_handle_linode_images_sharegroups_token_update_requires_true_confirm(
-    bad_confirm: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects non-true confirm values before the client call."""
-    arguments: dict[str, Any] = {
-        "token_uuid": "11111111-1111-4111-8111-111111111111",
-        "label": "renamed-token",
-    }
-    if bad_confirm is not None:
-        arguments["confirm"] = bad_confirm
-
-    result = await handle_linode_image_sharegroup_token_update(arguments, sample_config)
-
-    assert result[0].text.startswith("Error: ")
-    assert "confirm=true" in result[0].text
-    mock_linode_client.update_image_sharegroup_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "bad_uuid",
-    [
-        {},
-        {"token_uuid": ""},
-        {"token_uuid": "not-a-uuid"},
-        {"token_uuid": "11111111/1111-4111-8111-111111111111"},
-        {"token_uuid": "11111111?1111-4111-8111-111111111111"},
-        {"token_uuid": ".."},
-        {"token_uuid": 123},
-    ],
-)
-async def test_handle_linode_images_sharegroups_token_update_rejects_invalid_token_uuid(
-    bad_uuid: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects malformed token UUIDs before the client call."""
-    arguments = {"label": "renamed-token", "confirm": True, **bad_uuid}
-
-    result = await handle_linode_image_sharegroup_token_update(arguments, sample_config)
-
-    assert result[0].text.startswith("Error: ")
-    mock_linode_client.update_image_sharegroup_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("bad_label", [None, "", "   ", 123, True])
-async def test_handle_linode_images_sharegroups_token_update_rejects_invalid_label(
-    bad_label: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler requires a non-empty label before the client call."""
-    result = await handle_linode_image_sharegroup_token_update(
-        {
-            "token_uuid": "11111111-1111-4111-8111-111111111111",
-            "label": bad_label,
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert result[0].text.startswith("Error: ")
-    assert "label" in result[0].text
-    mock_linode_client.update_image_sharegroup_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_image_sharegroup_token_update_dry_run_previews_without_confirm(
-    sample_config: Any,
-) -> None:
-    """Dry-run previews without requiring the confirm gate."""
-    result = await handle_linode_image_sharegroup_token_update(
-        {
-            "token_uuid": "11111111-1111-4111-8111-111111111111",
-            "label": "renamed-token",
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    assert '"dry_run": true' in result[0].text
-
-
-@pytest.mark.asyncio
-async def test_image_sharegroup_token_update_dry_run_returns_encoded_preview(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """dry_run=true previews token update without calling the client."""
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    result = await handle_linode_image_sharegroup_token_update(
-        {
-            "token_uuid": token_uuid,
-            "label": "renamed-token",
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_image_sharegroup_token_update"
-    assert body["would_execute"]["method"] == "PUT"
-    assert body["would_execute"]["path"] == f"/images/sharegroups/tokens/{token_uuid}"
-    assert body["would_execute"]["body"] == {"label": "renamed-token"}
-    mock_linode_client.update_image_sharegroup_token.assert_not_called()
-
-
-def test_linode_images_sharegroups_token_update_registered() -> None:
-    """Dynamic registry exports the token update tool and handler pair."""
-    entries = {entry.name: entry for entry in get_tool_registry()}
-
-    entry = entries["linode_image_sharegroup_token_update"]
-    assert entry.capability is Capability.Write
-    assert entry.tool.name == "linode_image_sharegroup_token_update"
-    assert entry.handle_fn is handle_linode_image_sharegroup_token_update
-
-
 def test_linode_images_sharegroups_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = required_scopes("linode_image_sharegroup_token_update", Capability.Write)
@@ -3909,75 +1328,6 @@ def test_linode_images_sharegroups_token_update_scopes_to_images_write() -> None
 def test_linode_images_sharegroups_token_update_in_version_features() -> None:
     """Version metadata advertises the token update tool."""
     assert "linode_image_sharegroup_token_update" in FEATURE_TOOLS_LIST.split(",")
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_token_sends_exact_path() -> None:
-    """Low-level client sends DELETE /images/sharegroups/tokens/{tokenUuid}."""
-    seen: list[httpx.Request] = []
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image_sharegroup_token(token_uuid=token_uuid)
-    finally:
-        await client.close()
-
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "DELETE"
-    assert request.url.path == f"/v4/images/sharegroups/tokens/{token_uuid}"
-    assert request.url.query == b""
-    assert (await request.aread()) == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sharegroup_token_encodes_path_param() -> None:
-    """Low-level client URL-encodes token_uuid at the path boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image_sharegroup_token(token_uuid="token/with?separator")
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/tokens/token%2Fwith%3Fseparator"
-    )
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_delete_image_sharegroup_token_delegates_once() -> None:
-    """Retryable delete wrapper should not replay deletes after errors."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    mock_delete = AsyncMock(side_effect=httpx.HTTPError("temporary"))
-    cast("Any", retryable.client).delete_image_sharegroup_token = mock_delete
-
-    try:
-        with pytest.raises(httpx.HTTPError):
-            await retryable.delete_image_sharegroup_token(
-                token_uuid="11111111-1111-4111-8111-111111111111"
-            )
-    finally:
-        await retryable.close()
-
-    mock_delete.assert_awaited_once_with(
-        token_uuid="11111111-1111-4111-8111-111111111111"
-    )
 
 
 def test_create_linode_images_sharegroups_token_delete_tool_schema() -> None:
@@ -3999,58 +1349,33 @@ async def test_handle_linode_images_sharegroups_token_delete_success(
     token_uuid = "11111111-1111-4111-8111-111111111111"
 
     result = await handle_linode_image_sharegroup_token_delete(
-        {"token_uuid": f" {token_uuid} ", "confirm": True}, sample_config
+        {"token_uuid": token_uuid, "confirm": True}, sample_config
     )
 
     payload = json.loads(result[0].text)
     assert payload == {"message": "Image share group token removed successfully"}
-    mock_linode_client.delete_image_sharegroup_token.assert_awaited_once_with(
-        token_uuid=token_uuid
+    mock_linode_client.route_call.assert_awaited_once_with(
+        "linode_image_sharegroup_token_delete", token_uuid, retry=False
     )
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
-async def test_handle_linode_images_sharegroups_token_delete_requires_true_confirm(
-    bad_confirm: object, sample_config: Any, mock_linode_client: AsyncMock
+async def test_handle_linode_images_sharegroups_token_delete_refuses_a_padded_uuid(
+    sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler rejects non-true confirm values before the client call."""
-    arguments: dict[str, Any] = {
-        "token_uuid": "11111111-1111-4111-8111-111111111111",
-    }
-    if bad_confirm is not None:
-        arguments["confirm"] = bad_confirm
+    """A padded token_uuid is refused rather than trimmed.
 
-    result = await handle_linode_image_sharegroup_token_delete(arguments, sample_config)
+    The hand handlers stripped it and sent the trimmed value; the contract's
+    rule reads the argument as it arrived, so both languages now answer the
+    same refusal instead of one of them silently rewriting a credential.
+    """
+    result = await handle_linode_image_sharegroup_token_delete(
+        {"token_uuid": " 11111111-1111-4111-8111-111111111111 ", "confirm": True},
+        sample_config,
+    )
 
-    assert result[0].text.startswith("Error: ")
-    assert "confirm=true" in result[0].text
-    mock_linode_client.delete_image_sharegroup_token.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "bad_uuid",
-    [
-        {},
-        {"token_uuid": ""},
-        {"token_uuid": "not-a-uuid"},
-        {"token_uuid": "11111111/1111-4111-8111-111111111111"},
-        {"token_uuid": "11111111?1111-4111-8111-111111111111"},
-        {"token_uuid": ".."},
-        {"token_uuid": 123},
-    ],
-)
-async def test_handle_linode_images_sharegroups_token_delete_rejects_invalid_token_uuid(
-    bad_uuid: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects malformed token UUIDs before the client call."""
-    arguments = {"confirm": True, **bad_uuid}
-
-    result = await handle_linode_image_sharegroup_token_delete(arguments, sample_config)
-
-    assert result[0].text.startswith("Error: ")
-    mock_linode_client.delete_image_sharegroup_token.assert_not_called()
+    assert "token_uuid must be a UUID" in result[0].text
+    mock_linode_client.route_call.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -4058,7 +1383,7 @@ async def test_image_sharegroup_token_delete_dry_run_previews_without_confirm(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
-    mock_linode_client.get_image_sharegroup_by_token.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": 3,
         "label": "share",
     }
@@ -4071,34 +1396,6 @@ async def test_image_sharegroup_token_delete_dry_run_previews_without_confirm(
     )
 
     assert '"dry_run": true' in result[0].text
-
-
-@pytest.mark.asyncio
-async def test_image_sharegroup_token_delete_dry_run_returns_encoded_preview(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """dry_run=true previews the token delete without deleting."""
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_linode_client.get_image_sharegroup_by_token.return_value = {
-        "id": 3,
-        "label": "share",
-    }
-
-    result = await handle_linode_image_sharegroup_token_delete(
-        {
-            "token_uuid": token_uuid,
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    body = json.loads(result[0].text)
-    assert body["dry_run"] is True
-    assert body["tool"] == "linode_image_sharegroup_token_delete"
-    assert body["would_execute"]["method"] == "DELETE"
-    assert body["would_execute"]["path"] == f"/images/sharegroups/tokens/{token_uuid}"
-    mock_linode_client.delete_image_sharegroup_token.assert_not_called()
 
 
 def test_linode_images_sharegroups_token_delete_registered() -> None:
@@ -4142,7 +1439,7 @@ async def test_handle_linode_images_sharegroups_tokens_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler returns image share group tokens in the proto list envelope."""
-    mock_linode_client.list_image_sharegroup_tokens.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "data": [
             {
                 "token": "tok_abcdef1234567890",
@@ -4178,8 +1475,8 @@ async def test_handle_linode_images_sharegroups_tokens_list_success(
             }
         ],
     }
-    mock_linode_client.list_image_sharegroup_tokens.assert_awaited_once_with(
-        page=None, page_size=None
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_image_sharegroup_token_list", query=""
     )
 
 
@@ -4205,391 +1502,6 @@ def test_linode_images_sharegroups_tokens_list_in_version_features() -> None:
     assert "linode_image_sharegroup_token_list" in FEATURE_TOOLS_LIST.split(",")
 
 
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_image_sends_exact_path_and_body() -> None:
-    """Low-level client sends PUT to the documented shared-image route."""
-    seen: list[httpx.Request] = []
-    sharegroup_id = "123"
-    image_id = "1234"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"id": str(image_id), "label": "new-label"})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.update_image_sharegroup_image(
-            sharegroup_id, image_id, label="new-label", description="new description"
-        )
-    finally:
-        await client.close()
-
-    assert result == {"id": str(image_id), "label": "new-label"}
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "PUT"
-    assert request.url.raw_path.decode() == ("/v4/images/sharegroups/123/images/1234")
-    assert json.loads(request.content) == {
-        "label": "new-label",
-        "description": "new description",
-    }
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_image_encodes_path_params() -> None:
-    """Low-level client URL-encodes both path params at the boundary."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"id": "shared-image"})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.update_image_sharegroup_image(
-            "group/one", "image?one", label="new-label"
-        )
-    finally:
-        await client.close()
-
-    assert (
-        seen[0].url.raw_path.decode()
-        == "/v4/images/sharegroups/group%2Fone/images/image%3Fone"
-    )
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_image_rejects_empty_body() -> None:
-    """Empty update bodies are rejected before HTTP."""
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(
-            ValueError, match="at least one of label or description must be provided"
-        ):
-            await client.update_image_sharegroup_image("sharegroup", "image")
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_image_rejects_empty_strings() -> None:
-    """Low-level client rejects weak body fields before HTTP."""
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(ValueError, match="label must be a non-empty string"):
-            await client.update_image_sharegroup_image("123", "1234", label=" ")
-        with pytest.raises(ValueError, match="description must be a non-empty string"):
-            await client.update_image_sharegroup_image("123", "1234", description="")
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_client_update_image_sharegroup_image_wraps_http_errors() -> None:
-    """HTTP transport failures are mapped to route-specific NetworkError."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("temporary failure", request=request)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="UpdateImageSharegroupImage"):
-            await client.update_image_sharegroup_image("123", "1234", label="x")
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_update_image_sharegroup_image_delegates_once() -> None:
-    """Mutating shared-image update does not use generic retry replay."""
-    retryable = _CapturingRetryableClient()
-    mock_update = AsyncMock(return_value={"id": "shared-image"})
-    cast("Any", retryable.client).update_image_sharegroup_image = mock_update
-
-    try:
-        result = await retryable.update_image_sharegroup_image(
-            "sharegroup", "image", label="new-label"
-        )
-    finally:
-        await retryable.close()
-
-    assert result == {"id": "shared-image"}
-    assert retryable.calls == []
-    mock_update.assert_awaited_once_with(
-        "sharegroup", "image", label="new-label", description=None
-    )
-
-
-@pytest.mark.asyncio
-async def test_retryable_update_sharegroup_image_requires_a_field() -> None:
-    """Shared-image update without label or description raises before the call."""
-    retryable = _CapturingRetryableClient()
-    mock_update = AsyncMock()
-    cast("Any", retryable.client).update_image_sharegroup_image = mock_update
-
-    try:
-        with pytest.raises(ValueError, match="at least one of label or description"):
-            await retryable.update_image_sharegroup_image("sharegroup", "image")
-    finally:
-        await retryable.close()
-
-    mock_update.assert_not_called()
-
-
-def test_create_linode_images_sharegroup_image_update_tool_schema() -> None:
-    """Tool schema exposes both path params, body fields, confirm, and dry_run."""
-    tool, capability = create_linode_image_sharegroup_image_update_tool()
-
-    assert tool.name == "linode_image_sharegroup_image_update"
-    assert capability is Capability.Write
-    assert tool.input_schema["required"] == ["sharegroup_id", "image_id", "confirm"]
-    assert tool.input_schema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert tool.input_schema["properties"]["image_id"]["type"] == "string"
-    assert "dry_run" in tool.input_schema["properties"]
-    assert "label" in tool.input_schema["properties"]
-    assert "description" in tool.input_schema["properties"]
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_image_update_success(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler updates one shared image and returns the response."""
-    sharegroup_id = 123
-    image_id = "shared/1234"
-    mock_linode_client.update_image_sharegroup_image.return_value = {
-        "id": str(image_id),
-        "label": "new-label",
-    }
-
-    result = await handle_linode_image_sharegroup_image_update(
-        {
-            "sharegroup_id": sharegroup_id,
-            "image_id": image_id,
-            "label": " new-label ",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": (
-            f"Shared image '{image_id}' in image share group "
-            f"{sharegroup_id} updated successfully"
-        ),
-        "image": {
-            "id": str(image_id),
-            "label": "new-label",
-            "description": "",
-            "type": "",
-            "vendor": "",
-            "status": "",
-            "created": "",
-            "created_by": "",
-            "capabilities": [],
-            "tags": [],
-            "size": 0,
-            "is_public": False,
-            "deprecated": False,
-        },
-    }
-    mock_linode_client.update_image_sharegroup_image.assert_awaited_once_with(
-        str(sharegroup_id), str(image_id), label="new-label", description=None
-    )
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_image_update_description_only_success(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler accepts a description-only update body."""
-    mock_linode_client.update_image_sharegroup_image.return_value = {
-        "id": "1234",
-        "description": "new description",
-    }
-
-    result = await handle_linode_image_sharegroup_image_update(
-        {
-            "sharegroup_id": 123,
-            "image_id": "shared/1234",
-            "description": " new description ",
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload == {
-        "message": (
-            "Shared image '1234' in image share group 123 updated successfully"
-        ),
-        "image": {
-            "id": "1234",
-            "label": "",
-            "description": "new description",
-            "type": "",
-            "vendor": "",
-            "status": "",
-            "created": "",
-            "created_by": "",
-            "capabilities": [],
-            "tags": [],
-            "size": 0,
-            "is_public": False,
-            "deprecated": False,
-        },
-    }
-    mock_linode_client.update_image_sharegroup_image.assert_awaited_once_with(
-        "123", "shared/1234", label=None, description="new description"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
-async def test_handle_linode_images_sharegroup_image_update_requires_literal_confirm(
-    confirm_value: object, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Missing, false, string, and numeric confirm are rejected before client call."""
-    arguments: dict[str, object] = {
-        "sharegroup_id": 123,
-        "image_id": "shared/1234",
-        "label": "new-label",
-    }
-    if confirm_value is not None:
-        arguments["confirm"] = confirm_value
-
-    result = await handle_linode_image_sharegroup_image_update(arguments, sample_config)
-
-    assert result[0].text == (
-        "Error: This updates a shared image. Set confirm=true to proceed."
-    )
-    mock_linode_client.update_image_sharegroup_image.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {"sharegroup_id": 0, "image_id": "shared/1234"},
-        {"sharegroup_id": "123", "image_id": "shared/1234"},
-        {"sharegroup_id": True, "image_id": "shared/1234"},
-        {"sharegroup_id": "123/4", "image_id": "shared/1234"},
-        {"sharegroup_id": "123?4", "image_id": "shared/1234"},
-        {"sharegroup_id": "..", "image_id": "shared/1234"},
-        {"sharegroup_id": 123, "image_id": 1234},
-        {"sharegroup_id": 123, "image_id": True},
-        {"sharegroup_id": 123, "image_id": "1234"},
-        {"sharegroup_id": 123, "image_id": "123/4"},
-        {"sharegroup_id": 123, "image_id": "123?4"},
-        {"sharegroup_id": 123, "image_id": ".."},
-        {"sharegroup_id": 123, "image_id": "shared/0"},
-    ],
-)
-async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_path_params(
-    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects malformed share group and shared image IDs."""
-    result = await handle_linode_image_sharegroup_image_update(
-        {**arguments, "label": "new-label", "confirm": True}, sample_config
-    )
-
-    assert result[0].text.startswith("Error: ")
-    mock_linode_client.update_image_sharegroup_image.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("arguments", "message"),
-    [
-        ({}, "at least one of label or description must be provided"),
-        ({"label": ""}, "label must be a non-empty string when provided"),
-        ({"label": 1}, "label must be a non-empty string when provided"),
-        ({"description": ""}, "description must be a non-empty string when provided"),
-        (
-            {"description": False},
-            "description must be a non-empty string when provided",
-        ),
-    ],
-)
-async def test_handle_linode_images_sharegroup_image_update_rejects_invalid_body(
-    arguments: dict[str, Any],
-    message: str,
-    sample_config: Any,
-    mock_linode_client: AsyncMock,
-) -> None:
-    """Handler rejects invalid body fields before confirm/client calls."""
-    result = await handle_linode_image_sharegroup_image_update(
-        {
-            "sharegroup_id": 123,
-            "image_id": "shared/1234",
-            **arguments,
-            "confirm": True,
-        },
-        sample_config,
-    )
-
-    assert result[0].text == f"Error: {message}"
-    mock_linode_client.update_image_sharegroup_image.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_images_sharegroup_image_update_dry_run(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Dry run previews the encoded mutating request without client call."""
-    sharegroup_id = 123
-    image_id = "shared/1234"
-
-    result = await handle_linode_image_sharegroup_image_update(
-        {
-            "sharegroup_id": sharegroup_id,
-            "image_id": image_id,
-            "description": "new description",
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_image_sharegroup_image_update"
-    assert payload["would_execute"]["method"] == "PUT"
-    assert payload["would_execute"]["path"] == (
-        "/images/sharegroups/123/images/shared%2F1234"
-    )
-    assert payload["would_execute"]["body"] == {"description": "new description"}
-    mock_linode_client.update_image_sharegroup_image.assert_not_called()
-
-
 def test_linode_images_sharegroup_image_update_registered() -> None:
     """Dynamic registry exports the shared-image update tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
@@ -4610,61 +1522,6 @@ def test_linode_images_sharegroup_image_update_scopes_to_images_write() -> None:
 def test_linode_images_sharegroup_image_update_in_version_features() -> None:
     """Version metadata advertises the shared-image update tool."""
     assert "linode_image_sharegroup_image_update" in FEATURE_TOOLS_LIST.split(",")
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_sends_exact_path() -> None:
-    """Low-level client sends DELETE to the documented image path."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_image("private/123")
-    finally:
-        await client.close()
-
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "DELETE"
-    assert request.url.raw_path == b"/v4/images/private%2F123"
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_delete_image_raises_api_error() -> None:
-    """Low-level client raises APIError for DELETE image HTTP failures."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(404, json={"errors": [{"reason": "Not found"}]})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(APIError):
-            await client.delete_image("private/404")
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_delete_image_delegates_once() -> None:
-    """Destructive image delete delegates once without retry replay."""
-    client = _CapturingRetryableClient()
-    client.client.delete_image = AsyncMock()  # type: ignore[method-assign]
-
-    await client.delete_image("private/123")
-
-    client.client.delete_image.assert_awaited_once_with("private/123")
-    assert client.calls == []
 
 
 def test_linode_image_delete_tool_schema_requires_confirm() -> None:
@@ -4689,77 +1546,9 @@ async def test_handle_linode_image_delete_success(
     assert json.loads(result[0].text) == {
         "message": "Image private/123 deleted successfully"
     }
-    mock_linode_client.delete_image.assert_awaited_once_with("private/123")
-
-
-@pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
-@pytest.mark.asyncio
-async def test_handle_linode_image_delete_requires_literal_confirm(
-    confirm_value: Any, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Missing, false, string, and numeric confirm stop before client calls."""
-    arguments: dict[str, Any] = {"image_id": "private/123"}
-    if confirm_value is not None:
-        arguments["confirm"] = confirm_value
-
-    result = await handle_linode_image_delete(arguments, sample_config)
-
-    assert result[0].text == "Error: confirm=true is required to delete the image"
-    mock_linode_client.delete_image.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("image_id", "message"),
-    [
-        (None, "image_id must be a non-empty string"),
-        ("", "image_id must be a non-empty string"),
-        ("public/debian", "image_id must be a private image ID like private/<id>"),
-        ("foo/bar/baz", "image_id must be a private image ID like private/<id>"),
-        ("private/", "image_id must be a private image ID like private/<id>"),
-        ("/private/123", "image_id must be a private image ID like private/<id>"),
-        ("private/123/extra", "image_id must be a private image ID like private/<id>"),
-        ("private?123", "image_id must be a private image ID like private/<id>"),
-        ("private/..", "image_id must be a private image ID like private/<id>"),
-    ],
-)
-@pytest.mark.asyncio
-async def test_handle_linode_image_delete_rejects_malformed_image_id(
-    image_id: Any, message: str, sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Handler rejects malformed image IDs before the client call."""
-    result = await handle_linode_image_delete(
-        {"image_id": image_id, "confirm": True}, sample_config
+    mock_linode_client.route_call.assert_awaited_once_with(
+        "linode_image_delete", "private/123", retry=False
     )
-
-    assert result[0].text == f"Error: {message}"
-    mock_linode_client.delete_image.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_handle_linode_image_delete_dry_run(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    """Dry-run reports the raw DELETE path without deleting.
-
-    The preview path is display metadata and stays unescaped like the Go
-    builder's; the client still percent-encodes the real request.
-    """
-    mock_linode_client.get_image.return_value = {
-        "id": "private/123",
-        "label": "backup-image",
-    }
-    result = await handle_linode_image_delete(
-        {"image_id": "private/123", "confirm": True, "dry_run": True},
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload["tool"] == "linode_image_delete"
-    assert payload["would_execute"] == {
-        "method": "DELETE",
-        "path": "/images/private/123",
-    }
-    mock_linode_client.delete_image.assert_not_called()
 
 
 def test_linode_image_delete_is_registered() -> None:

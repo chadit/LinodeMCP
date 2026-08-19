@@ -27,6 +27,7 @@ from linodemcp.genpb.linode.mcp.v1 import (
     bucket_access_pb2,
     bucket_ssl_pb2,
     common_pb2,
+    database_connection_pool_pb2,
     database_engine_pb2,
     database_instance_pb2,
     database_pb2,
@@ -36,6 +37,9 @@ from linodemcp.genpb.linode.mcp.v1 import (
     dryrun_pb2,
     firewall_device_pb2,
     firewall_pb2,
+    iam_delegation_pb2,
+    iam_idp_config_pb2,
+    iam_pb2,
     image_pb2,
     image_sharegroup_member_pb2,
     image_sharegroup_pb2,
@@ -52,10 +56,12 @@ from linodemcp.genpb.linode.mcp.v1 import (
     lke_pool_pb2,
     lke_tier_version_pb2,
     lke_version_pb2,
+    lock_pb2,
     longview_pb2,
     managed_issue_pb2,
     managed_pb2,
     monitor_pb2,
+    monitor_stream_pb2,
     nodebalancer_config_node_pb2,
     nodebalancer_config_pb2,
     nodebalancer_pb2,
@@ -180,6 +186,9 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
     "linode.mcp.v1.ConfigInterfaceWriteResponse": (
         instance_pb2.ConfigInterfaceWriteResponse
     ),
+    "linode.mcp.v1.DatabaseConnectionPoolWriteResponse": (
+        database_connection_pool_pb2.DatabaseConnectionPoolWriteResponse
+    ),
     "linode.mcp.v1.DatabaseCredentials": database_instance_pb2.DatabaseCredentials,
     "linode.mcp.v1.DatabaseEngine": database_engine_pb2.DatabaseEngine,
     "linode.mcp.v1.DatabaseEngineListResponse": (
@@ -252,6 +261,24 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
     "linode.mcp.v1.IPv6RangeDeleteResponse": ip_pb2.IPv6RangeDeleteResponse,
     "linode.mcp.v1.IPv6RangeListResponse": ip_pb2.IPv6RangeListResponse,
     "linode.mcp.v1.IPv6RangeWriteResponse": ip_pb2.IPv6RangeWriteResponse,
+    "linode.mcp.v1.IamDelegationChildAccountTokenWriteResponse": (
+        iam_delegation_pb2.IamDelegationChildAccountTokenWriteResponse
+    ),
+    "linode.mcp.v1.IamDelegationChildAccountUsers": (
+        iam_delegation_pb2.IamDelegationChildAccountUsers
+    ),
+    "linode.mcp.v1.IamDelegationDefaultRolePermissionsWriteResponse": (
+        iam_delegation_pb2.IamDelegationDefaultRolePermissionsWriteResponse
+    ),
+    "linode.mcp.v1.IamIdpConfigCertificateWriteResponse": (
+        iam_idp_config_pb2.IamIdpConfigCertificateWriteResponse
+    ),
+    "linode.mcp.v1.IamIdpConfigWriteResponse": (
+        iam_idp_config_pb2.IamIdpConfigWriteResponse
+    ),
+    "linode.mcp.v1.IamUserRolePermissionsWriteResponse": (
+        iam_pb2.IamUserRolePermissionsWriteResponse
+    ),
     "linode.mcp.v1.Image": image_pb2.Image,
     "linode.mcp.v1.ImageDeleteResponse": image_pb2.ImageDeleteResponse,
     "linode.mcp.v1.ImageListResponse": image_pb2.ImageListResponse,
@@ -402,6 +429,7 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
     "linode.mcp.v1.LKETypeListResponse": type_pb2.LKETypeListResponse,
     "linode.mcp.v1.LKEVersion": lke_version_pb2.LKEVersion,
     "linode.mcp.v1.LKEVersionListResponse": lke_version_pb2.LKEVersionListResponse,
+    "linode.mcp.v1.LockWriteResponse": lock_pb2.LockWriteResponse,
     "linode.mcp.v1.LongviewClient": longview_pb2.LongviewClient,
     "linode.mcp.v1.LongviewClientCreateWriteResponse": (
         longview_pb2.LongviewClientCreateWriteResponse
@@ -457,8 +485,14 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
         managed_pb2.ManagedServiceWriteResponse
     ),
     "linode.mcp.v1.MessageResponse": common_pb2.MessageResponse,
+    "linode.mcp.v1.MonitorAlertChannelAlertListResponse": (
+        monitor_pb2.MonitorAlertChannelAlertListResponse
+    ),
     "linode.mcp.v1.MonitorAlertChannelListResponse": (
         monitor_pb2.MonitorAlertChannelListResponse
+    ),
+    "linode.mcp.v1.MonitorAlertChannelWriteResponse": (
+        monitor_pb2.MonitorAlertChannelWriteResponse
     ),
     "linode.mcp.v1.MonitorAlertDefinitionDeleteResponse": (
         monitor_pb2.MonitorAlertDefinitionDeleteResponse
@@ -488,6 +522,12 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
     ),
     "linode.mcp.v1.MonitorServiceTokenCreateResponse": (
         monitor_pb2.MonitorServiceTokenCreateResponse
+    ),
+    "linode.mcp.v1.MonitorStreamDestinationWriteResponse": (
+        monitor_stream_pb2.MonitorStreamDestinationWriteResponse
+    ),
+    "linode.mcp.v1.MonitorStreamWriteResponse": (
+        monitor_stream_pb2.MonitorStreamWriteResponse
     ),
     "linode.mcp.v1.NetworkTransferPriceListResponse": (
         type_pb2.NetworkTransferPriceListResponse
@@ -571,6 +611,9 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
         object_storage_pb2.ObjectStorageEndpointListResponse
     ),
     "linode.mcp.v1.ObjectStorageKey": object_storage_pb2.ObjectStorageKey,
+    "linode.mcp.v1.ObjectStorageKeyCreateResponse": (
+        object_storage_pb2.ObjectStorageKeyCreateResponse
+    ),
     "linode.mcp.v1.ObjectStorageKeyDeleteResponse": (
         object_storage_pb2.ObjectStorageKeyDeleteResponse
     ),
@@ -619,6 +662,7 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
     "linode.mcp.v1.PlanResponse": dryrun_pb2.PlanResponse,
     "linode.mcp.v1.PresignedURLResponse": object_storage_pb2.PresignedURLResponse,
     "linode.mcp.v1.Profile": profile_pb2.Profile,
+    "linode.mcp.v1.ProfileWriteResponse": profile_pb2.ProfileWriteResponse,
     "linode.mcp.v1.ProfileApp": profile_pb2.ProfileApp,
     "linode.mcp.v1.ProfileAppIDResponse": profile_pb2.ProfileAppIDResponse,
     "linode.mcp.v1.ProfileAppListResponse": profile_pb2.ProfileAppListResponse,

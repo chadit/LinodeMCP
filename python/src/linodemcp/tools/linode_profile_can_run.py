@@ -7,32 +7,28 @@ each call's tool name and optional ``environment`` arg against the active
 profile; it never checks resource IDs, token scope, resource existence, or
 rate limits. Pre-check is advice, not a transactional plan.
 
-The handler reads the live tool catalog and the active profile through two
-module-level bridges the server installs at startup. Tests inject
-reproducible fixtures via :func:`set_can_run_catalog_provider` and
-:func:`set_can_run_active_profile_provider`. The bridges live on a small
-holder object so the setters mutate an attribute rather than rebinding a
-module global (no ``global`` statement, no lint suppression needed).
+The generator owns this tool's registration; what is left here is the body its
+answer hook calls. It reads the live tool catalog and the active profile off
+the builder state the server publishes for the call
+(:mod:`linodemcp.tools.builderstate`), both through callables read at call
+time, so a profile reload reaches this already-registered tool.
 """
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent
 
 from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
 from linodemcp.profiles import Capability
+from linodemcp.tools.builderstate import (
+    BUILDER_UNCONFIGURED,
+    builder_state_from_context,
+)
+from linodemcp.tools.helpers import error_response
 from linodemcp.tools.proto_response import serialize_api_response
-from linodemcp.tools.toolschemas import schema
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from linodemcp.profiles import Profile
-    from linodemcp.profiles.builtin import ToolDescriptor
-
 
 # Reason strings: an exact-match contract with the Go side and the spec. The
 # summary bucketing keys off them, so they must not drift.
@@ -50,46 +46,6 @@ _ENTRY_TOOL = "tool"
 _ENTRY_ARGS = "args"
 _ENTRY_ENV = "environment"
 _ENV_WILDCARD = "*"
-
-
-class _Bridges:
-    """Holds the catalog and active-profile providers the server installs.
-
-    Mutating attributes on a single module-level instance avoids a ``global``
-    rebind in the setters (and the lint suppression that would require).
-    """
-
-    catalog: Callable[[], list[ToolDescriptor]] | None = None
-    active_profile: Callable[[], Profile] | None = None
-
-
-_bridges = _Bridges()
-
-
-def set_can_run_catalog_provider(
-    provider: Callable[[], list[ToolDescriptor]] | None,
-) -> None:
-    """Register the function returning the live tool catalog (or clear it)."""
-    _bridges.catalog = provider
-
-
-def set_can_run_active_profile_provider(
-    provider: Callable[[], Profile] | None,
-) -> None:
-    """Register the function returning the active profile (or clear it)."""
-    _bridges.active_profile = provider
-
-
-def _resolve_catalog() -> list[ToolDescriptor]:
-    """Return the live catalog, or an empty list when no bridge is set."""
-    provider = _bridges.catalog
-    return provider() if provider is not None else []
-
-
-def _resolve_active_profile() -> Profile | None:
-    """Return the active profile, or None when no bridge is set."""
-    provider = _bridges.active_profile
-    return provider() if provider is not None else None
 
 
 def _permits_all_environments(envs: list[str]) -> bool:
@@ -116,25 +72,6 @@ def _entry_environment(entry: dict[str, Any]) -> tuple[str, bool]:
         return "", False
 
     return env, True
-
-
-def create_linode_profile_can_run_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_can_run`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_profile_can_run",
-            description=(
-                "Pre-check whether the active profile would permit a sequence "
-                "of tool calls before executing any of them. Returns a "
-                "per-call allowed/blocked verdict with a reason and remedy, "
-                "plus a summary. Inspects only the tool name and optional "
-                "environment arg, not resource IDs. Advice only; it does not "
-                "execute anything."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileCanRunInput"),
-        ),
-        Capability.Meta,
-    )
 
 
 def _evaluate_call(
@@ -192,18 +129,16 @@ def _evaluate_call(
     return result, ""
 
 
-async def handle_linode_profile_can_run(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def profile_can_run_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Pre-check the requested call sequence against the active profile."""
-    profile = _resolve_active_profile()
-    registered = {entry.name: entry.capability for entry in _resolve_catalog()}
-    allowed_tools: set[str] = (
-        set(profile.allowed_tools) if profile is not None else set()
-    )
-    allowed_envs: list[str] = (
-        list(profile.allowed_environments) if profile is not None else []
-    )
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
+    profile = state.active_profile()
+    registered = {entry.name: entry.capability for entry in state.catalog()}
+    allowed_tools: set[str] = set(profile.allowed_tools)
+    allowed_envs: list[str] = list(profile.allowed_environments)
     all_envs = _permits_all_environments(allowed_envs)
 
     raw_calls = arguments.get(_ARG_CALLS)
@@ -247,7 +182,7 @@ async def handle_linode_profile_can_run(
             buckets[bucket] += 1
 
     response = {
-        "active_profile": profile.name if profile is not None else "",
+        "active_profile": profile.name,
         "results": results,
         "summary": {
             "total": len(results),

@@ -3,20 +3,22 @@
 from __future__ import annotations
 
 import json
-from typing import Any
-from unittest.mock import AsyncMock
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
 
-from linodemcp.linode import Client, NetworkError, RetryableClient
-from linodemcp.profiles import Capability
-from linodemcp.server import get_tool_registry
-from linodemcp.tools.linode_stackscripts import (
+from linodemcp.gentools import (
     create_linode_stackscript_update_tool,
     handle_linode_stackscript_update,
 )
+from linodemcp.linode import NetworkError
+from linodemcp.profiles import Capability
+from linodemcp.server import get_tool_registry
 from linodemcp.version import FEATURE_TOOLS_LIST
+
+if TYPE_CHECKING:
+    from unittest.mock import AsyncMock
 
 
 def _stackscript_json() -> dict[str, Any]:
@@ -36,112 +38,6 @@ def _stackscript_json() -> dict[str, Any]:
         "script": "#!/bin/bash\necho ok",
         "user_defined_fields": [],
     }
-
-
-@pytest.mark.asyncio
-async def test_client_update_stackscript_sends_exact_path_and_body() -> None:
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json=_stackscript_json())
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.update_stackscript(
-            123,
-            label="updated-script",
-            images=["linode/debian12"],
-            script="#!/bin/bash\necho ok",
-            description="updated description",
-            is_public=False,
-            rev_note="route test",
-        )
-    finally:
-        await client.close()
-
-    assert result.label == "updated-script"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "PUT"
-    assert request.url.path == "/v4/linode/stackscripts/123"
-    assert request.url.query == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-    assert json.loads(request.content) == {
-        "label": "updated-script",
-        "images": ["linode/debian12"],
-        "script": "#!/bin/bash\necho ok",
-        "description": "updated description",
-        "is_public": False,
-        "rev_note": "route test",
-    }
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("stackscript_id", ["1/2", "1?x=2", "..", 0, -1, True])
-async def test_client_update_stackscript_rejects_invalid_stackscript_id(
-    stackscript_id: Any,
-) -> None:
-    called = False
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal called
-        called = True
-        return httpx.Response(200, json={})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(
-            ValueError, match="stackscript_id must be a positive integer"
-        ):
-            await client.update_stackscript(stackscript_id, label="updated-script")
-    finally:
-        await client.close()
-
-    assert called is False
-
-
-@pytest.mark.asyncio
-async def test_client_update_stackscript_translates_http_errors() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ReadTimeout("timeout")
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        with pytest.raises(NetworkError, match="UpdateStackScript"):
-            await client.update_stackscript(123, label="updated-script")
-    finally:
-        await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_update_stackscript_does_not_replay_put() -> None:
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    network_error = NetworkError("UpdateStackScript", httpx.ConnectTimeout("boom"))
-    mock_update = AsyncMock(side_effect=network_error)
-    object.__setattr__(retryable.client, "update_stackscript", mock_update)
-
-    try:
-        with pytest.raises(NetworkError):
-            await retryable.update_stackscript(123, label="updated-script")
-    finally:
-        await retryable.close()
-
-    mock_update.assert_awaited_once_with(
-        123,
-        label="updated-script",
-        images=None,
-        script=None,
-        description=None,
-        is_public=None,
-        rev_note=None,
-    )
 
 
 def test_create_linode_stackscript_update_tool_schema() -> None:
@@ -195,6 +91,7 @@ async def test_handle_linode_stackscript_update_success(
             "is_public": False,
             "rev_note": "route test",
         },
+        retry=False,
     )
 
 
@@ -202,6 +99,7 @@ async def test_handle_linode_stackscript_update_success(
 async def test_handle_linode_stackscript_update_dry_run_skips_client(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
+    mock_linode_client.get_stackscript.return_value = {"id": 123, "label": "before"}
     result = await handle_linode_stackscript_update(
         {
             "stackscript_id": 123,
@@ -220,7 +118,7 @@ async def test_handle_linode_stackscript_update_dry_run_skips_client(
         "body": {"label": "updated-script"},
     }
     assert len(payload["side_effects"]) == 1
-    mock_linode_client.update_stackscript.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -235,7 +133,7 @@ async def test_handle_linode_stackscript_update_rejects_non_true_confirm(
     result = await handle_linode_stackscript_update(arguments, sample_config)
 
     assert result[0].text.startswith("Error: This updates a StackScript")
-    mock_linode_client.update_stackscript.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -262,7 +160,7 @@ async def test_handle_linode_stackscript_update_rejects_invalid_arguments(
     result = await handle_linode_stackscript_update(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    mock_linode_client.update_stackscript.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()
 
 
 @pytest.mark.asyncio

@@ -95,6 +95,27 @@ func (c *Client) makeRouteRequestContentType(
 
 	return c.makeRequestWithContentType(ctx, method, endpoint, body)
 }
+
+// routedGet is the generic typed read: it resolves its route from the proto
+// and reaches makeRequest one hop down, the same skip the other routed
+// primitives earn.
+func routedGet[T any](
+	ctx context.Context, client *Client, operation, tool string, values ...any,
+) (*T, error) {
+	method, endpoint, err := routedRequest(tool, "", values)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, client.makeRequest(ctx, method, endpoint, nil)
+}
+
+// fetchList is the plumbing tuple's entry: its endpoints only ever arrive
+// contract-resolved from the routed fetchers, so its one hop to makeRequest
+// must not count either.
+func fetchList(ctx context.Context, client *Client, operation, endpoint string) error {
+	return client.makeRequest(ctx, http.MethodGet, endpoint, nil)
+}
 """
 
 # Two hand-built call sites (one of them through the content-type primitive)
@@ -124,6 +145,10 @@ func (c *Client) uploadThumbnail(ctx context.Context, id int, body io.Reader) er
 		ctx, "linode_thing_thumbnail_update", "image/png", body, id,
 	)
 }
+
+func (c *Client) getTypedThing(ctx context.Context, id int) (*Thing, error) {
+	return routedGet[Thing](ctx, c, "GetThing", "linode_thing_get", id)
+}
 """
 
 GO_TEST = """
@@ -139,14 +164,19 @@ class Client:
     async def make_request(self, method, endpoint, body=None):
         return await self.client.request(method, self.base_url + endpoint, json=body)
 
-    async def make_file_request(self, method, endpoint, blob):
-        return await self.client.request(method, endpoint, content=blob)
-
     async def make_route_request(self, tool, *values, body=None):
         method, endpoint = resolve(tool, *values)
         if body is None:
             return await self.make_request(method, endpoint)
         return await self.make_request(method, endpoint, body)
+
+    async def make_route_request_content_type(self, tool, *values, content=None):
+        # The second routed primitive: it reaches httpx directly to send a
+        # prepared non-JSON body, and that hop must stay out of the count.
+        method, endpoint = resolve(tool, *values)
+        return await self.client.request(
+            method, self.base_url + endpoint, content=content
+        )
 """
 
 PY_METHODS = """
@@ -155,7 +185,9 @@ class Things(Client):
         return await self.make_request('GET', f'/things/{thing_id}')
 
     async def upload_thing(self, thing_id, blob):
-        return await self.make_file_request('POST', f'/things/{thing_id}', blob)
+        return await self.make_route_request_content_type(
+            'linode_thing_upload', thing_id, content=blob
+        )
 
     async def get_thumbnail(self, thing_id):
         # self.make_request('GET', ...) was the old shape.
@@ -167,8 +199,9 @@ class Things(Client):
 
 # What the two fixture clients measure: the calls in the methods files only.
 GO_HANDBUILT = 2
-GO_ROUTED = 3
-PY_HANDBUILT = 3
+GO_ROUTED = 4
+PY_HANDBUILT = 2
+PY_ROUTED = 2
 MEASURED_COUNTS = f"go {GO_HANDBUILT}\npython {PY_HANDBUILT}\n"
 
 REGISTRY = "# registry\ngo\tgoclient\tdump\npython\tpyclient\tdump\n"
@@ -226,9 +259,10 @@ def test_scan_counts_go_call_sites_and_skips_plumbing(
 
     counts = _scan(tmp_path, "go", "goclient")
 
-    # Three primitive bodies reach makeRequest and none of them counts: a routed
-    # primitive has to reach the hand-built one to send anything, and counting
-    # that hop would leave a remainder no migration could clear.
+    # Four bodies reach makeRequest (three routed primitives plus the fetchList
+    # plumbing) and none of them counts: each has to reach the hand-built one
+    # to send anything, and counting that hop would leave a remainder no
+    # migration could clear.
     assert counts.handbuilt == GO_HANDBUILT
     assert counts.routed == GO_ROUTED
     assert counts.undeclared == ()
@@ -242,7 +276,7 @@ def test_scan_counts_python_call_sites_and_skips_plumbing(
     counts = _scan(tmp_path, "python", "pyclient")
 
     assert counts.handbuilt == PY_HANDBUILT
-    assert counts.routed == 1
+    assert counts.routed == PY_ROUTED
     assert counts.undeclared == ()
 
 
@@ -307,18 +341,26 @@ def test_scan_names_a_renamed_content_type_primitive(
 
 
 def test_each_language_declares_the_routed_primitives_it_counts() -> None:
-    """Pin the routed set per language, so a dropped entry fails by name here.
+    """Pin the routed and plumbing sets, so a dropped entry fails by name here.
 
-    Python is a single name on purpose: make_route_request took a query keyword
-    rather than growing a second primitive, and route_raw reaches it rather than
-    make_request, so it adds no primitive call site to skip.
+    Python's query keyword lives on make_route_request rather than a separate
+    primitive, so its routed pair is the base primitive plus the content-type
+    one that carries a prepared non-JSON body. Go's fetchList is plumbing, not
+    routed: it takes an endpoint, and every endpoint it takes was resolved from
+    the proto by the routed list fetchers above it.
     """
     assert gate._CLIENTS["go"].routed == (
         "makeRouteRequest",
         "makeRouteRequestQuery",
         "makeRouteRequestContentType",
+        "routedGet",
     )
-    assert gate._CLIENTS["python"].routed == ("make_route_request",)
+    assert gate._CLIENTS["go"].plumbing == ("fetchList",)
+    assert gate._CLIENTS["python"].routed == (
+        "make_route_request",
+        "make_route_request_content_type",
+    )
+    assert gate._CLIENTS["python"].plumbing == ()
 
 
 def test_read_counts_skips_comments_and_parses_values(tmp_path: Path) -> None:
@@ -368,7 +410,9 @@ def test_unchanged_counts_pass(
 def test_a_new_hand_built_call_site_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _fixture_repo(tmp_path, monkeypatch, f"go {GO_HANDBUILT - 1}\npython 3\n")
+    _fixture_repo(
+        tmp_path, monkeypatch, f"go {GO_HANDBUILT - 1}\npython {PY_HANDBUILT}\n"
+    )
 
     assert gate.main([]) == 1
 
@@ -381,7 +425,9 @@ def test_a_migrated_call_site_fails_until_the_line_is_lowered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Shrinking below the line fails the same way a fixed ratchet entry does."""
-    _fixture_repo(tmp_path, monkeypatch, f"go {GO_HANDBUILT + 3}\npython 3\n")
+    _fixture_repo(
+        tmp_path, monkeypatch, f"go {GO_HANDBUILT + 3}\npython {PY_HANDBUILT}\n"
+    )
 
     assert gate.main([]) == 1
 
@@ -420,6 +466,26 @@ def test_recorded_line_without_a_registered_language_fails_by_name(
 
     assert gate.main([]) == 1
     assert "rust has a line" in capsys.readouterr().err
+
+
+def test_a_renamed_plumbing_helper_fails_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A renamed fetchList must not put its transport hop back in the count.
+
+    The rename would first surface as one new hand-built call site, which reads
+    like a migration going backwards rather than like the rename it is, so the
+    declaration check names it instead.
+    """
+    _fixture_repo(tmp_path, monkeypatch, MEASURED_COUNTS)
+    _write(
+        tmp_path / "goclient" / "client.go",
+        GO_CLIENT.replace("fetchList", "fetchPage"),
+    )
+
+    counts = _scan(tmp_path, "go", "goclient")
+
+    assert counts.undeclared == ("fetchList",)
 
 
 def test_a_renamed_primitive_fails_before_the_ratchet(

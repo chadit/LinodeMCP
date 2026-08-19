@@ -22,7 +22,7 @@ from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent
 
 from linodemcp.audit import (
     MAX_EXPORT_RECORDS,
@@ -41,11 +41,9 @@ from linodemcp.config import (
     parse_duration_seconds,
 )
 from linodemcp.genpb.linode.mcp.v1 import audit_pb2
-from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response
 from linodemcp.tools.linode_audit_summary import audit_sqlite_path
 from linodemcp.tools.proto_response import serialize_api_response
-from linodemcp.tools.toolschemas import schema
 
 # Module bridge for the reports map. main installs the catalog from
 # the loaded config; an unset bridge returns an empty dict (no reports
@@ -66,40 +64,17 @@ def audit_reports() -> dict[str, ReportConfig]:
     return _audit_reports
 
 
-def create_linode_audit_report_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_audit_report`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_audit_report",
-            description=(
-                "Run a named custom audit report from config (audit.reports). "
-                "Reads SQLite when enabled, else the JSONL log. Returns a "
-                "summary of counts or a list of matching events depending on "
-                "the report's output mode."
-            ),
-            input_schema=schema("linode.mcp.v1.AuditReportInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_audit_report(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def audit_report_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Resolve the named report, run it, and return summary or list output.
 
-    Failures use the standard Error:-prefixed shape (``error_response``) so
-    they read as tool-level errors everywhere Go's ``NewToolResultError``
-    does: the cross-language behavior runner and the CLI's exit-code mapping
-    both key on that convention.
+    The name's requiredness is the contract's rule, so by here it is set. The
+    quoting on an unknown name matches Go's %q, which is the reference.
     """
     name = str(arguments.get("name", ""))
-    if not name:
-        return error_response("report name is required")
 
     report = audit_reports().get(name)
     if report is None:
-        return error_response(f"unknown report: {name!r}")
+        return error_response(f"unknown report: {json.dumps(name)}")
 
     try:
         payload = _run_report(name, report, datetime.now(UTC))

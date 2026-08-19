@@ -12,11 +12,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from linodemcp.audit import Capability, Event, Mode, Status
-from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_health import (
+from linodemcp.config import Config
+from linodemcp.gentools import (
     create_linode_audit_health_tool,
     handle_linode_audit_health,
 )
+from linodemcp.profiles import Capability as ProfileCapability
 from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
@@ -74,7 +75,7 @@ async def test_reports_jsonl(
         encoding="utf-8",
     )
 
-    result = await handle_linode_audit_health({})
+    result = await handle_linode_audit_health({}, Config())
     report = json.loads(result[0].text)
 
     assert report["jsonl_path"] == str(audit_dir / "audit.log")

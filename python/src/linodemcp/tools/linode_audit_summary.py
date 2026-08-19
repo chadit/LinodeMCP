@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime
 from typing import Any
 
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent
 
 from linodemcp.audit import (
     UnknownGroupByColumnError,
@@ -31,9 +30,8 @@ from linodemcp.audit import (
     validate_group_by,
 )
 from linodemcp.genpb.linode.mcp.v1 import audit_pb2
-from linodemcp.profiles import Capability
+from linodemcp.tools.helpers import error_response, parse_optional_time
 from linodemcp.tools.proto_response import serialize_api_response
-from linodemcp.tools.toolschemas import schema
 
 # Module bridge for the SQLite path. main installs the path when the
 # SQLite sink is enabled; empty string (the default) selects the JSONL
@@ -62,35 +60,17 @@ def audit_sqlite_path() -> str:
     return _audit_sqlite_path
 
 
-def create_linode_audit_summary_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_audit_summary`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_audit_summary",
-            description=(
-                "Count audit events grouped by tool and status (or other "
-                "columns) over a time window. Reads SQLite when enabled, else "
-                "the JSONL log."
-            ),
-            input_schema=schema("linode.mcp.v1.AuditSummaryInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_audit_summary(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def audit_summary_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Aggregate audit events and return the count table as JSON.
 
-    A malformed since timestamp or an unknown group_by column returns an
-    error message rather than silently dropping the filter.
+    A malformed since timestamp and an unknown group_by column both answer as
+    tool-result errors, the way the Go hook's do.
     """
     try:
-        since = _parse_optional_time(arguments.get(_ARG_SINCE, ""))
+        since = parse_optional_time(arguments.get(_ARG_SINCE, ""), _ARG_SINCE)
         group_by = validate_group_by(arguments.get(_ARG_GROUP_BY))
     except (ValueError, UnknownGroupByColumnError) as exc:
-        return [TextContent(type="text", text=str(exc))]
+        return error_response(str(exc))
 
     include_meta = bool(arguments.get(_ARG_INCLUDE_META, False))
 
@@ -100,6 +80,7 @@ async def handle_linode_audit_summary(
         since,
         include_meta,
     )
+
     rows = summarize(events, group_by)
 
     payload = {
@@ -108,15 +89,3 @@ async def handle_linode_audit_summary(
     }
     result = serialize_api_response(payload, audit_pb2.AuditSummaryResponse())
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
-
-
-def _parse_optional_time(value: str) -> datetime | None:
-    """Parse an RFC 3339 timestamp, or None for an empty value."""
-    if not value:
-        return None
-
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError as exc:
-        msg = f"invalid 'since' timestamp: expected RFC 3339, got {value!r}: {exc}"
-        raise ValueError(msg) from exc

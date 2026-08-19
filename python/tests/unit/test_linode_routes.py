@@ -18,7 +18,6 @@ import pytest
 from linodemcp.linode import (
     Client,
     LinodeError,
-    NetworkError,
     RetryableClient,
     RetryConfig,
 )
@@ -26,10 +25,14 @@ from linodemcp.linode.routes import (
     Route,
     RouteError,
     all_routes,
+    base_for,
     contract_for,
+    echo_argument,
     index_routes,
     input_descriptor,
+    response_descriptor,
     route_for,
+    surface_segment,
     validate,
 )
 
@@ -222,29 +225,6 @@ async def test_make_route_request_sends_body_when_given() -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_domain_sends_the_same_url_as_before_the_migration() -> None:
-    """The migrated call site still puts DELETE /v4/domains/4242 on the wire."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(204)
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.delete_domain(4242)
-    finally:
-        await client.close()
-
-    assert len(seen) == 1
-    assert seen[0].method == "DELETE"
-    assert seen[0].url.path == "/v4/domains/4242"
-    assert seen[0].url.query == b""
-
-
-@pytest.mark.asyncio
 async def test_a_route_defect_reaches_the_caller_as_an_argument_error() -> None:
     """A bad path value is the caller's defect, so it is not a LinodeError.
 
@@ -270,71 +250,6 @@ async def test_a_route_defect_reaches_the_caller_as_an_argument_error() -> None:
     assert isinstance(raised.value, ValueError)
     assert not isinstance(raised.value, LinodeError)
     assert seen == []
-
-
-@pytest.mark.asyncio
-async def test_delete_domain_route_defect_is_not_a_network_error() -> None:
-    """The one migrated call site keeps route defects out of NetworkError."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda _request: httpx.Response(204))
-    )
-
-    try:
-        with pytest.raises(RouteError) as raised:
-            await client.delete_domain(_UNTYPED_EMPTY_ID)
-    finally:
-        await client.close()
-
-    assert not isinstance(raised.value, NetworkError)
-
-
-@pytest.mark.asyncio
-async def test_the_retry_layer_never_replays_a_route_defect() -> None:
-    """Replaying a wrong argument would just build the wrong path again."""
-    retryable = RetryableClient(
-        "https://api.linode.com/v4", "test-token", _retry_config()
-    )
-    retryable.client.client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda _request: httpx.Response(204))
-    )
-    attempt = AsyncMock(side_effect=retryable.client.delete_domain)
-
-    try:
-        with (
-            patch.object(retryable.client, "delete_domain", attempt),
-            pytest.raises(RouteError),
-        ):
-            await retryable.delete_domain(_UNTYPED_EMPTY_ID)
-    finally:
-        await retryable.close()
-
-    assert attempt.await_count == 1
-
-
-@pytest.mark.asyncio
-async def test_the_retry_layer_still_replays_a_transport_failure() -> None:
-    """A dropped connection through the routed path retries as it always did."""
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        msg = "connection refused"
-        raise httpx.ConnectError(msg, request=request)
-
-    config = _retry_config()
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token", config)
-    retryable.client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    attempt = AsyncMock(side_effect=retryable.client.delete_domain)
-
-    try:
-        with (
-            patch.object(retryable.client, "delete_domain", attempt),
-            pytest.raises(NetworkError),
-        ):
-            await retryable.delete_domain(4242)
-    finally:
-        await retryable.close()
-
-    assert attempt.await_count == config.max_retries + 1
 
 
 @pytest.mark.asyncio
@@ -478,3 +393,183 @@ def test_input_descriptor_rejects_a_message_that_is_not_generated() -> None:
         pytest.raises(RouteError, match="which is not generated"),
     ):
         input_descriptor("linode_domain_get")
+
+
+# The response members the shipped surface fills from a differently spelled
+# argument, as {response message: {member: argument}}. Each reports what the
+# resource becomes rather than what the tool was given: the resize answer names
+# the plan the instance moves to (`type`), the disk resize answer carries the
+# unit in its own name (`size`), and the SSL delete keys the bucket label under
+# `bucket` to match the shape that tool has always answered with.
+_ECHO_ALIASES = {
+    "InstanceResizeWriteResponse": {"new_type": "type"},
+    "InstanceDiskResizeWriteResponse": {"new_size_mb": "size"},
+    "ObjectStorageSSLDeleteResponse": {"bucket": "label"},
+}
+
+
+def test_echo_alias_resolves_across_the_shipped_surface() -> None:
+    """Every response member is filled by its own name, or by its declared alias.
+
+    Reading them all is what keeps a declared alias from being read only in the
+    emitter: both mutation drivers resolve their echo through this at runtime,
+    so a member the alias does not reach would answer with a zero.
+    """
+    seen = 0
+    for route in all_routes():
+        if not contract_for(route.tool).response:
+            continue
+        response = response_descriptor(route.tool)
+        aliases = _ECHO_ALIASES.get(response.name, {})
+        for member in response.fields:
+            assert echo_argument(member) == aliases.get(member.name, member.name)
+            seen += 1
+
+    assert seen > 0, "no response member was read, so this proves nothing"
+
+
+def test_echo_alias_names_the_resize_argument() -> None:
+    """The one declared alias resolves, so the table above cannot go stale by
+    silently matching nothing."""
+    member = response_descriptor("linode_instance_resize").fields_by_name["new_type"]
+
+    assert echo_argument(member) == "type"
+
+
+@pytest.mark.parametrize(
+    ("base", "segment", "want"),
+    [
+        # The canonical deployment is the only shape that gets re-pointed.
+        ("https://api.linode.com/v4", "v4beta", "https://api.linode.com/v4beta"),
+        (
+            "https://proxy.example/linode/v4",
+            "v4beta",
+            "https://proxy.example/linode/v4beta",
+        ),
+        # Every row below is a configured apiUrl that wins as written.
+        ("https://api.linode.com/v4beta", "v4beta", "https://api.linode.com/v4beta"),
+        ("http://127.0.0.1:8080", "v4beta", "http://127.0.0.1:8080"),
+        ("https://api.linode.com/v4/", "v4beta", "https://api.linode.com/v4/"),
+        ("https://v4.example.com", "v4beta", "https://v4.example.com"),
+        ("https://api.linode.com/v4", "v4", "https://api.linode.com/v4"),
+    ],
+)
+def test_base_for_repoints_only_a_default_suffixed_base(
+    base: str, segment: str, want: str
+) -> None:
+    """The whole override rule, matching Go's BaseFor table row for row.
+
+    A surface picks among versions of one deployment; it never picks the
+    deployment, so anything that is not the canonical suffix is left alone.
+    """
+    assert base_for(base, segment) == want
+
+
+def test_surface_segment_names_every_surface() -> None:
+    """An undeclared surface reads as the zero value, so it must answer v4."""
+    assert [surface_segment(value) for value in (0, 1, 2)] == ["v4", "v4", "v4beta"]
+
+
+def test_surface_segment_refuses_an_unknown_surface() -> None:
+    """Fail closed: a surface this build cannot address is never defaulted."""
+    with pytest.raises(RouteError, match="unknown API surface"):
+        surface_segment(99)
+
+
+@pytest.mark.asyncio
+async def test_make_route_request_sends_a_beta_route_to_the_beta_base() -> None:
+    """A route on another surface reaches that base, path unchanged.
+
+    Driven through a patched route because nothing is annotated yet: the client
+    half has to be proven before a family moves, or the annotation slot would be
+    landing the contract and the transport at once.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+    beta = Route(
+        tool="linode_fake_list",
+        method="GET",
+        template="/fake",
+        slots=(),
+        surface=2,
+    )
+
+    with (
+        patch("linodemcp.linode.route_for", return_value=beta),
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+    ):
+        await client.make_route_request("linode_fake_list")
+
+    mock_request.assert_awaited_once_with(
+        "GET", "/fake", base="https://api.linode.com/v4beta"
+    )
+
+
+@pytest.mark.asyncio
+async def test_make_route_request_sends_a_beta_write_body_to_the_beta_base() -> None:
+    """A beta route carrying a body reaches the same base as one without.
+
+    The body and the base are chosen on separate branches, so a write is the
+    case that proves the second one forwards both.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+    beta = Route(
+        tool="linode_fake_create",
+        method="POST",
+        template="/fake",
+        slots=(),
+        surface=2,
+    )
+    body = {"label": "example"}
+
+    with (
+        patch("linodemcp.linode.route_for", return_value=beta),
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+    ):
+        await client.make_route_request("linode_fake_create", body=body)
+
+    mock_request.assert_awaited_once_with(
+        "POST", "/fake", body, base="https://api.linode.com/v4beta"
+    )
+
+
+@pytest.mark.asyncio
+async def test_content_type_route_request_sends_a_beta_route_to_the_beta_base() -> None:
+    """The content-type primitive re-points a beta route the same way.
+
+    It reaches httpx directly rather than through make_request, so the base
+    choice is its own branch and needs its own proof.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+    beta = Route(
+        tool="linode_fake_thumbnail_update",
+        method="PUT",
+        template="/fake/thumbnail",
+        slots=(),
+        surface=2,
+    )
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+
+    with (
+        patch("linodemcp.linode.route_for", return_value=beta),
+        patch.object(client.client, "request", new_callable=AsyncMock) as mock_request,
+    ):
+        mock_request.return_value = mock_response
+
+        await client.make_route_request_content_type(
+            "linode_fake_thumbnail_update",
+            content_type="image/png",
+            content=b"png",
+        )
+
+    mock_request.assert_awaited_once_with(
+        "PUT",
+        "https://api.linode.com/v4beta/fake/thumbnail",
+        headers={
+            "Authorization": "Bearer test-token",
+            "Content-Type": "image/png",
+            "User-Agent": "LinodeMCP/1.0",
+        },
+        content=b"png",
+    )
+    await client.close()

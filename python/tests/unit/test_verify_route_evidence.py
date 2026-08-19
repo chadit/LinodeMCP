@@ -422,28 +422,44 @@ def test_every_registered_language_has_a_route_scanner() -> None:
     assert gate.undeclared_languages(languages) == []
 
 
-def test_baseline_entries_are_still_real() -> None:
-    """A baseline line that no longer matches the tree is stale and must go.
+def test_python_builds_every_contracted_route_and_keeps_no_baseline() -> None:
+    """Python must resolve the whole contract: there is no accepted-gap file.
 
-    Only the Python half is recomputed here; Go's surface is pinned by the
-    command's own tests, so this checks its entries name contracted routes
-    rather than re-running the toolchain.
+    Only the Python half runs here; Go's surface comes from cmd/route-dump,
+    which its own tests pin, and re-running the toolchain from a unit test
+    would be the slow way to learn the same thing.
     """
-    baseline = {
-        line.split("  # ", 1)[0].strip()
-        for line in (REPO_ROOT / "docs" / "contracts" / "route-evidence-baseline.txt")
-        .read_text(encoding="utf-8")
-        .splitlines()
-        if line.strip() and not line.startswith("#")
-    }
     routes = gate.contract_routes()
-    contracted = {f"go missing {tool}: {route}" for tool, route in routes.items()}
-    python_gaps = set(
-        gate.language_gaps("python", routes, gate.python_evidence(REPO_ROOT / "python"))
+    gaps = gate.language_gaps(
+        "python", routes, gate.python_evidence(REPO_ROOT / "python")
     )
 
-    assert {entry for entry in baseline if entry.startswith("python ")} <= python_gaps
-    assert {entry for entry in baseline if entry.startswith("go ")} <= contracted
+    assert gaps == []
+    assert not (
+        REPO_ROOT / "docs" / "contracts" / "route-evidence-baseline.txt"
+    ).exists()
+
+
+def test_a_scanner_that_resolves_nothing_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty route surface would report the whole contract as missing.
+
+    That is a wall of findings pointing at the scanner rather than at the code,
+    so it fails as the one thing it is. The Python scanner refuses a tree with
+    no HTTP call of its own (ScannerError), which leaves this for the scanners
+    that answer without raising, such as a recorded Go dump.
+    """
+    empty: Any = routescan.Evidence(routes=set(), unresolved=[])
+
+    def scan_nothing(_workdir: Path) -> Any:
+        return empty
+
+    def one_empty_scanner(_go_routes: str | None = None) -> dict[str, Any]:
+        return {"go": scan_nothing}
+
+    monkeypatch.setattr(gate, "coverage", one_empty_scanner)
+
+    with pytest.raises(SystemExit, match="covered nothing"):
+        gate.current_gaps(routes={"linode_tag_list": "GET /tags"})
 
 
 def test_resolves_a_route_raw_call_that_names_its_tool(tmp_path: Path) -> None:

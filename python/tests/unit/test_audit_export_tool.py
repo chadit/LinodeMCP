@@ -14,11 +14,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from linodemcp.audit import Capability, Event, Mode, Status
-from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_export import (
+from linodemcp.config import Config
+from linodemcp.gentools import (
     create_linode_audit_export_tool,
     handle_linode_audit_export,
 )
+from linodemcp.profiles import Capability as ProfileCapability
 from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
@@ -76,7 +77,7 @@ async def test_writes_ndjson(
     )
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
-    result = await handle_linode_audit_export({"format": "ndjson"})
+    result = await handle_linode_audit_export({"format": "ndjson"}, Config())
     payload = json.loads(result[0].text)
 
     assert payload["format"] == "ndjson"
@@ -92,7 +93,7 @@ async def test_writes_ndjson(
 
 async def test_unknown_format_returns_error() -> None:
     """An unsupported format surfaces as an error message, no file."""
-    result = await handle_linode_audit_export({"format": "xml"})
+    result = await handle_linode_audit_export({"format": "xml"}, Config())
 
     assert len(result) == 1
     assert "format must be one of: json, csv, ndjson" in result[0].text

@@ -12,9 +12,10 @@ draft registry:
   (allowed_environments, required_token_scopes, allow_yolo).
 
 All three carry ``Capability.Meta`` so the profile filter always
-admits them. Handlers read the live registry through the Phase 8.3
-bridge (``set_draft_registry``) and the live catalog through a new
-catalog-snapshot bridge installed at server startup.
+admits them. The generator owns their registration; what is left here is the
+body each one's answer hook calls. They read the live registry and catalog off
+the builder state the server publishes for the call
+(:mod:`linodemcp.tools.builderstate`).
 """
 
 from __future__ import annotations
@@ -22,49 +23,20 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, cast
 
-from mcp.types import TextContent, Tool
+from mcp.types import TextContent
 
 from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
-from linodemcp.profiles import Capability
-from linodemcp.tools.linode_profile_draft import (
-    BuilderUnconfiguredError,
-    DraftNameMissingError,
-    get_draft_registry,
+from linodemcp.profiles.builder import DraftNotFoundError
+from linodemcp.tools.builderstate import (
+    BUILDER_UNCONFIGURED,
+    builder_state_from_context,
 )
+from linodemcp.tools.helpers import error_response
+from linodemcp.tools.linode_profile_draft import NAME_MISSING, draft_not_found
 from linodemcp.tools.proto_response import serialize_api_response
-from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from linodemcp.profiles.builder import Registry
-    from linodemcp.profiles.builtin import ToolDescriptor
-
-
-# Bridge module state for the catalog snapshot. The server installs
-# this during ``Server.__init__``; tests install stand-ins via
-# :func:`set_mutator_catalog_provider`. Phase 8.2 has its own catalog
-# bridge for ``_list_tools``/``_list_categories``; this is a separate
-# pointer so the two test fixtures don't have to share lifetime.
-_catalog_provider: Callable[[], list[ToolDescriptor]] | None = None
-
-
-def set_mutator_catalog_provider(
-    provider: Callable[[], list[ToolDescriptor]] | None,
-) -> None:
-    """Register the function returning the live tool catalog.
-
-    Pass ``None`` to clear (used by tests during teardown).
-    """
-    global _catalog_provider  # noqa: PLW0603 - process-wide bridge
-    _catalog_provider = provider
-
-
-def _resolve_catalog() -> list[ToolDescriptor]:
-    """Return the live catalog or an empty list when no bridge is set."""
-    if _catalog_provider is None:
-        return []
-    return _catalog_provider()
 
 
 # Argument-key constants. Hoisted so the schema and handler agree.
@@ -76,14 +48,6 @@ _ARG_TOOLS = "tools"
 _ARG_ALLOWED_ENVIRONMENTS = "allowed_environments"
 _ARG_REQUIRED_TOKEN_SCOPES = "required_" + "token_scopes"
 _ARG_ALLOW_YOLO = "allow_yolo"
-
-
-def _require_registry() -> Registry:
-    """Return the Phase 8.3 draft registry or raise BuilderUnconfiguredError."""
-    registry = get_draft_registry()
-    if registry is None:
-        raise BuilderUnconfiguredError
-    return registry
 
 
 def _string_array_arg(arguments: dict[str, Any], key: str) -> list[str]:
@@ -102,35 +66,50 @@ def _string_array_arg(arguments: dict[str, Any], key: str) -> list[str]:
     return [str(entry) for entry in typed]
 
 
-def create_linode_profile_draft_add_tools_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_draft_add_tools`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_profile_draft_add_tools",
-            description=(
-                "Add tools to a profile draft. Accepts literal tool names "
-                "and wildcards (shell-glob, only '*' is special). Wildcards "
-                "expand against the live tool catalog at call time. Names "
-                "already on the draft are not duplicated and are not "
-                "reported in the response."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileDraftAddToolsInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_profile_draft_add_tools(
+def _apply_draft_settings(
+    drafts: Registry,
+    name: str,
     arguments: dict[str, Any],
-) -> list[TextContent]:
+    changes: dict[str, Any],
+) -> None:
+    """Apply every settable field the call named, recording what changed.
+
+    Split out of the handler because each setter can report a draft the
+    registry does not hold, and one try around the three keeps the handler's
+    nesting flat.
+    """
+    if _ARG_ALLOWED_ENVIRONMENTS in arguments:
+        envs = _string_array_arg(arguments, _ARG_ALLOWED_ENVIRONMENTS)
+        drafts.set_allowed_environments(name, envs)
+        changes[_ARG_ALLOWED_ENVIRONMENTS] = envs
+
+    if _ARG_REQUIRED_TOKEN_SCOPES in arguments:
+        scopes = _string_array_arg(arguments, _ARG_REQUIRED_TOKEN_SCOPES)
+        drafts.set_required_token_scopes(name, scopes)
+        changes[_ARG_REQUIRED_TOKEN_SCOPES] = scopes
+
+    if _ARG_ALLOW_YOLO in arguments:
+        yolo = bool(arguments[_ARG_ALLOW_YOLO])
+        drafts.set_allow_yolo(name, yolo)
+        changes[_ARG_ALLOW_YOLO] = yolo
+
+
+def profile_draft_add_tools_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Expand patterns + merge into the draft. Returns the added names."""
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
     name = arguments.get(_ARG_NAME, "")
     if not name:
-        raise DraftNameMissingError
+        return error_response(NAME_MISSING)
 
     patterns = _string_array_arg(arguments, _ARG_TOOLS)
-    registry = _require_registry()
-    added = registry.add_tools(name, patterns, _resolve_catalog())
+
+    try:
+        added = state.drafts.add_tools(name, patterns, state.catalog())
+    except DraftNotFoundError:
+        return error_response(draft_not_found(name))
 
     result = serialize_api_response(
         {"name": name, "added": added},
@@ -139,34 +118,22 @@ async def handle_linode_profile_draft_add_tools(
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-def create_linode_profile_draft_remove_tools_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_draft_remove_tools`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_profile_draft_remove_tools",
-            description=(
-                "Remove tools from a profile draft. Accepts literal tool "
-                "names and wildcards (shell-glob, only '*' is special). "
-                "Patterns match against the draft's current allowed_tools "
-                "list, not the live catalog."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileDraftRemoveToolsInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_profile_draft_remove_tools(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def profile_draft_remove_tools_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Match patterns against the draft and remove. Returns the removed names."""
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
     name = arguments.get(_ARG_NAME, "")
     if not name:
-        raise DraftNameMissingError
+        return error_response(NAME_MISSING)
 
     patterns = _string_array_arg(arguments, _ARG_TOOLS)
-    registry = _require_registry()
-    removed = registry.remove_tools(name, patterns)
+
+    try:
+        removed = state.drafts.remove_tools(name, patterns)
+    except DraftNotFoundError:
+        return error_response(draft_not_found(name))
 
     result = serialize_api_response(
         {"name": name, "removed": removed},
@@ -175,49 +142,22 @@ async def handle_linode_profile_draft_remove_tools(
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-def create_linode_profile_draft_set_tool() -> tuple[Tool, Capability]:
-    """Build the ``linode_profile_draft_set`` MCP tool definition."""
-    return (
-        Tool(
-            name="linode_profile_draft_set",
-            description=(
-                "Set draft settings. Each field is optional; missing "
-                "fields are left unchanged. Settable: "
-                "allowed_environments (array of environment names), "
-                "required_token_scopes (array of Linode scope strings), "
-                "allow_yolo (boolean opt-in to the yolo execution path)."
-            ),
-            input_schema=schema("linode.mcp.v1.ProfileDraftSetInput"),
-        ),
-        Capability.Meta,
-    )
-
-
-async def handle_linode_profile_draft_set(
-    arguments: dict[str, Any],
-) -> list[TextContent]:
+def profile_draft_set_result(arguments: dict[str, Any]) -> list[TextContent]:
     """Set the optional draft settings. Returns the changes that were applied."""
+    state = builder_state_from_context()
+    if state is None:
+        return error_response(BUILDER_UNCONFIGURED)
+
     name = arguments.get(_ARG_NAME, "")
     if not name:
-        raise DraftNameMissingError
+        return error_response(NAME_MISSING)
 
-    registry = _require_registry()
     changes: dict[str, Any] = {}
 
-    if _ARG_ALLOWED_ENVIRONMENTS in arguments:
-        envs = _string_array_arg(arguments, _ARG_ALLOWED_ENVIRONMENTS)
-        registry.set_allowed_environments(name, envs)
-        changes[_ARG_ALLOWED_ENVIRONMENTS] = envs
-
-    if _ARG_REQUIRED_TOKEN_SCOPES in arguments:
-        scopes = _string_array_arg(arguments, _ARG_REQUIRED_TOKEN_SCOPES)
-        registry.set_required_token_scopes(name, scopes)
-        changes[_ARG_REQUIRED_TOKEN_SCOPES] = scopes
-
-    if _ARG_ALLOW_YOLO in arguments:
-        yolo = bool(arguments[_ARG_ALLOW_YOLO])
-        registry.set_allow_yolo(name, yolo)
-        changes[_ARG_ALLOW_YOLO] = yolo
+    try:
+        _apply_draft_settings(state.drafts, name, arguments, changes)
+    except DraftNotFoundError:
+        return error_response(draft_not_found(name))
 
     result = serialize_api_response(
         {"name": name, "changes": changes},
@@ -227,11 +167,7 @@ async def handle_linode_profile_draft_set(
 
 
 __all__ = [
-    "create_linode_profile_draft_add_tools_tool",
-    "create_linode_profile_draft_remove_tools_tool",
-    "create_linode_profile_draft_set_tool",
-    "handle_linode_profile_draft_add_tools",
-    "handle_linode_profile_draft_remove_tools",
-    "handle_linode_profile_draft_set",
-    "set_mutator_catalog_provider",
+    "profile_draft_add_tools_result",
+    "profile_draft_remove_tools_result",
+    "profile_draft_set_result",
 ]

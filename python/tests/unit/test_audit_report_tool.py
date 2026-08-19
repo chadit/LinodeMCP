@@ -16,15 +16,16 @@ from linodemcp.audit import Capability, Event, Mode, Status
 from linodemcp.config import (
     REPORT_OUTPUT_LIST,
     REPORT_OUTPUT_SUMMARY,
+    Config,
     ReportConfig,
     ReportFilter,
 )
-from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_report import (
+from linodemcp.gentools import (
     create_linode_audit_report_tool,
     handle_linode_audit_report,
-    set_audit_reports,
 )
+from linodemcp.profiles import Capability as ProfileCapability
+from linodemcp.tools.linode_audit_report import set_audit_reports
 from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
@@ -76,7 +77,7 @@ async def test_unknown_report_returns_error() -> None:
     """
     set_audit_reports({})
 
-    result = await handle_linode_audit_report({"name": "does-not-exist"})
+    result = await handle_linode_audit_report({"name": "does-not-exist"}, Config())
     assert result[0].text.startswith("Error: unknown report:")
     assert "does-not-exist" in result[0].text
 
@@ -85,7 +86,7 @@ async def test_missing_name_returns_error() -> None:
     """An absent name is rejected with the Error: shape, mirroring Go."""
     set_audit_reports({})
 
-    result = await handle_linode_audit_report({})
+    result = await handle_linode_audit_report({}, Config())
     assert result[0].text == "Error: report name is required"
 
 
@@ -111,7 +112,7 @@ async def test_bad_group_by_returns_error(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "bad-group"})
+    result = await handle_linode_audit_report({"name": "bad-group"}, Config())
     assert result[0].text.startswith("Error: failed to run report:")
 
 
@@ -143,7 +144,7 @@ async def test_summary_counts_with_capability_in(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "destroys"})
+    result = await handle_linode_audit_report({"name": "destroys"}, Config())
     payload = json.loads(result[0].text)
 
     assert payload["name"] == "destroys"
@@ -181,7 +182,7 @@ async def test_list_output_capped_at_limit(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "recent-reads"})
+    result = await handle_linode_audit_report({"name": "recent-reads"}, Config())
     payload = json.loads(result[0].text)
 
     assert payload["output"] == REPORT_OUTPUT_LIST

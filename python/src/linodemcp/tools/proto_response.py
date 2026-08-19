@@ -18,7 +18,7 @@ from google.protobuf import json_format, struct_pb2
 from google.protobuf.descriptor import FieldDescriptor
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping, Sequence
 
     from google.protobuf.message import Message
 
@@ -171,6 +171,43 @@ def serialize_api_response(raw: dict[str, Any], message: Message) -> dict[str, A
     return proto_to_canonical_dict(message)
 
 
+def restore_explicit_nulls(
+    raw: Mapping[str, Any],
+    serialized: dict[str, Any],
+    names: Sequence[str],
+    descriptor: Any,
+) -> dict[str, Any]:
+    """Write back the named keys the raw API body sent as an explicit null.
+
+    The serializer emits no member for an unset optional scalar or an absent
+    sub-message, so a documented "gateway": null comes back missing and a
+    caller cannot tell "no gateway" from "the API said nothing about one".
+    Rebuilding in declared field order is what keeps the restored key where the
+    serializer would have put it, and only a key the raw body carried as null
+    is written, so no key the API never sent is invented. Mirrors Go's
+    MarshalProtoToolResponseRestoringNulls.
+
+    descriptor is typed Any for the reason _is_freeform is: the runtime
+    descriptor comes from the C (upb) backend, which pyright cannot unify with
+    the pure-Python Descriptor stub.
+    """
+    restore = {
+        name
+        for name in names
+        if name not in serialized and name in raw and raw[name] is None
+    }
+    if not restore:
+        return serialized
+
+    rebuilt: dict[str, Any] = {}
+    for entry in descriptor.fields:
+        if entry.name in serialized:
+            rebuilt[entry.name] = serialized[entry.name]
+        elif entry.name in restore:
+            rebuilt[entry.name] = None
+    return rebuilt
+
+
 def _sorted_deep(value: Any) -> Any:
     """Canonicalize a free-form subtree: sort keys, collapse integral floats.
 
@@ -261,6 +298,7 @@ def serialize_list_response(
     *,
     filter_value: str | None = None,
     item_filter: Callable[[dict[str, Any]], bool] | None = None,
+    extras: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the project list envelope from a raw Linode page and serialize it.
 
@@ -299,6 +337,10 @@ def serialize_list_response(
     wrapper: dict[str, Any] = {"count": len(items), key: items}
     if filter_value:
         wrapper["filter"] = filter_value
+    # The members a shape carries beyond the page: a marker-paged answer reports
+    # the cursor its caller resumes from here.
+    if extras:
+        wrapper.update(extras)
 
     return serialize_api_response(wrapper, message)
 

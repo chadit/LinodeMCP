@@ -19,7 +19,6 @@ import linodemcp.gentools as gentools_module
 import linodemcp.tools as tools_module
 from linodemcp.audit import Capability as AuditCapability
 from linodemcp.audit import Mode, NoopSink, Sink, Status, new_event
-from linodemcp.config import get_config_path
 from linodemcp.linode import RetryableClient
 from linodemcp.linode.metrics import reset_api_recorder, set_api_recorder
 from linodemcp.linode.routes import validate as validate_tool_contract
@@ -31,26 +30,15 @@ from linodemcp.profiles import (
     ScopeValidationResult,
     TokenNotConfiguredError,
     ToolDescriptor,
-    lookup_profile,
     resolve_active_profile,
     validate_scopes,
 )
 from linodemcp.profiles.builder import Registry as DraftRegistry
-from linodemcp.tools import (
-    handle_hello,
-    handle_version,
+from linodemcp.tools.builderstate import (
+    BuilderState,
+    reset_builder_state,
+    set_builder_state,
 )
-from linodemcp.tools.linode_profile_builder import set_tool_catalog_provider
-from linodemcp.tools.linode_profile_can_run import (
-    set_can_run_active_profile_provider,
-    set_can_run_catalog_provider,
-)
-from linodemcp.tools.linode_profile_draft import (
-    set_draft_registry,
-    set_profile_resolver,
-)
-from linodemcp.tools.linode_profile_draft_mutate import set_mutator_catalog_provider
-from linodemcp.tools.linode_profile_draft_save import set_save_config_path_provider
 from linodemcp.twostage import reset_plan_store, set_plan_store
 from linodemcp.twostage.store import PlanStore
 from linodemcp.version import VERSION as LINODEMCP_VERSION
@@ -98,7 +86,7 @@ def _build_tool_registry() -> list[ToolEntry]:
     from a registration module; there is intentionally no per-route table here.
     Two modules are scanned because a tool is either hand-written in
     ``linodemcp.tools`` or emitted into ``linodemcp.gentools`` by
-    scripts/toolgen_py.py from the proto contract. Reading both the same way is
+    go/cmd/toolgen from the proto contract. Reading both the same way is
     what lets a tool move between them without this module changing.
     """
     create_fns: dict[str, ToolFactory] = {}
@@ -325,29 +313,19 @@ class Server:
         # Both raise RouteError.
         validate_tool_contract()
         validate_registered(entry.name for entry in _TOOL_REGISTRY)
-        # Wired before profile resolution so any handler fired during startup
-        # sees the live catalog. The descriptor list is immutable after
-        # construction, so the closure and every handler read the same list.
-        set_tool_catalog_provider(lambda: self._descriptors)
-        # One Registry per server process, shared by the _draft_new/_show/
-        # _discard handlers. Drafts do not persist across restarts.
+        # One Registry per server process, shared by every draft handler.
+        # Drafts do not persist across restarts.
         self._draft_registry = DraftRegistry()
-        set_draft_registry(self._draft_registry)
-        set_profile_resolver(
-            lambda name: lookup_profile(name, config, self._descriptors)
-        )
-        # _draft_add_tools expands wildcards against the live catalog at call
-        # time.
-        set_mutator_catalog_provider(lambda: self._descriptors)
-        # Save re-reads from disk on every call so it does not stomp concurrent
-        # edits. The provider is a lambda so LINODEMCP_CONFIG_PATH overrides
-        # apply at call time.
-        set_save_config_path_provider(lambda: str(get_config_path()))
-        # The active-profile lambda reads self._active_profile at call time, so
-        # the pre-check tool reflects reload_profile.
-        set_can_run_catalog_provider(lambda: self._descriptors)
-        set_can_run_active_profile_provider(lambda: self._active_profile)
         self._active_profile = resolve_active_profile(config, self._descriptors)
+        # Built once and kept, so every dispatch publishes the same state and a
+        # draft started by one call is there for the next. The catalog and
+        # active-profile members are read at call time, so reload_profile
+        # reaches an already-registered tool.
+        self._builder_state = BuilderState(
+            drafts=self._draft_registry,
+            catalog=lambda: self._descriptors,
+            active_profile=lambda: self._active_profile,
+        )
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         # _allowed_entries and _config_handlers are declared inside
         # _apply_active_profile so their annotations live in one place; reload
@@ -417,6 +395,7 @@ class Server:
         event.set_mode(self._execution_mode(arguments), "")
 
         plan_store_token = set_plan_store(self._plan_store)
+        builder_state_token = set_builder_state(self._builder_state)
         # Bound per dispatch so the client records each Linode API round trip
         # it makes. Mirrors the Go WithAPIRecorder context value.
         api_recorder_token = set_api_recorder(self._metrics)
@@ -442,6 +421,7 @@ class Server:
             raise
         finally:
             reset_api_recorder(api_recorder_token)
+            reset_builder_state(builder_state_token)
             reset_plan_store(plan_store_token)
             self._inflight -= 1
             if self._inflight == 0:
@@ -526,18 +506,13 @@ class Server:
     async def _dispatch_inner(self, name: str, arguments: dict[str, Any]) -> list[Any]:
         """Resolve a tool name to its handler and await the result.
 
-        ``hello`` and ``version`` keep their direct fast path because they
-        take no config argument; they still go through the allow list so a
-        profile that omits them cannot reach them via ``dispatch``.
+        Every tool reaches its handler through the registry, and the allow list
+        is what a profile that omits one is refused by.
         """
         if name not in self._allowed_tool_names:
             msg = f"Unknown tool: {name}"
             raise ValueError(msg)
         match name:
-            case "hello":
-                return await handle_hello(arguments)
-            case "version":
-                return await handle_version(arguments)
             case _ if name in self._config_handlers:
                 two_stage_mode = arguments.get("mode") in ("plan", "apply")
                 gated = (

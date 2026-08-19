@@ -1,37 +1,12 @@
 """Tests for Longview tools."""
 
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import pytest
 
+from linodemcp import gentools as gentools_mod
+from linodemcp.gentools import longview as longview_gen
 from linodemcp.profiles import Capability
-from linodemcp.tools import linode_longview
-
-
-class _FakeClient:
-    def __init__(self) -> None:
-        self.get_longview_plan = AsyncMock(
-            return_value={"label": "Longview Pro", "clients_included": 40}
-        )
-        self.list_longview_clients = AsyncMock(
-            return_value={"data": [{"id": 123}], "page": 2, "pages": 3}
-        )
-        self.get_longview_client = AsyncMock(
-            return_value={
-                "id": 123,
-                "label": "prod-longview",
-                "api_key": "secret",
-                "install_code": "install",
-            }
-        )
-        self.list_longview_subscriptions = AsyncMock(
-            return_value={"data": [{"id": "longview-3"}], "page": 2, "pages": 3}
-        )
-        self.list_longview_types = AsyncMock(
-            return_value={"data": [{"id": "g6-standard-2", "label": "2GB"}]}
-        )
-        self.delete_longview_client = AsyncMock(return_value=None)
 
 
 def _text(result: list[Any]) -> str:
@@ -39,7 +14,7 @@ def _text(result: list[Any]) -> str:
 
 
 def test_longview_client_delete_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_client_delete_tool()
+    tool, capability = gentools_mod.create_linode_longview_client_delete_tool()
 
     assert tool.name == "linode_longview_client_delete"
     assert capability is Capability.Destroy
@@ -50,97 +25,8 @@ def test_longview_client_delete_tool_schema() -> None:
     assert tool.input_schema["required"] == ["client_id", "confirm"]
 
 
-@pytest.mark.asyncio
-async def test_longview_client_delete_handler_calls_client(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake = _FakeClient()
-
-    async def fake_execute_tool(
-        cfg: object, arguments: dict[str, Any], action: str, call: Any
-    ) -> list[Any]:
-        assert action == "delete Longview client"
-        payload = await call(fake)
-        return [type("Text", (), {"text": str(payload)})()]
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_client_delete(
-        {"client_id": 123, "confirm": True}, cast("Any", object())
-    )
-
-    fake.delete_longview_client.assert_awaited_once_with(123)
-    assert "Longview client deleted successfully" in _text(result)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("confirm", [None, False, "true", 1])
-async def test_longview_client_delete_handler_requires_boolean_confirm(
-    monkeypatch: pytest.MonkeyPatch, confirm: object
-) -> None:
-    fake = _FakeClient()
-
-    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
-        raise AssertionError("execute_tool should not be called")
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    arguments: dict[str, Any] = {"client_id": 123}
-    if confirm is not None:
-        arguments["confirm"] = confirm
-
-    result = await linode_longview.handle_linode_longview_client_delete(
-        arguments, cast("Any", object())
-    )
-
-    fake.delete_longview_client.assert_not_awaited()
-    assert "Set confirm=true to proceed" in _text(result)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("client_id", [None, 0, -1, True, "123", "1/2", "1?x=2", ".."])
-async def test_longview_client_delete_handler_rejects_invalid_client_id(
-    monkeypatch: pytest.MonkeyPatch, client_id: object
-) -> None:
-    fake = _FakeClient()
-
-    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
-        raise AssertionError("execute_tool should not be called")
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    arguments: dict[str, Any] = {"confirm": True}
-    if client_id is not None:
-        arguments["client_id"] = client_id
-
-    result = await linode_longview.handle_linode_longview_client_delete(
-        arguments, cast("Any", object())
-    )
-
-    fake.delete_longview_client.assert_not_awaited()
-    assert "client_id" in _text(result)
-
-
-@pytest.mark.asyncio
-async def test_longview_client_delete_handler_dry_run_does_not_call_client(
-    sample_config: Any, mock_linode_client: Any
-) -> None:
-    mock_linode_client.get_longview_client.return_value = {
-        "id": 123,
-        "label": "lv-client",
-    }
-
-    result = await linode_longview.handle_linode_longview_client_delete(
-        {"client_id": 123, "confirm": True, "dry_run": True}, sample_config
-    )
-
-    mock_linode_client.delete_longview_client.assert_not_awaited()
-    text = _text(result)
-    assert "linode_longview_client_delete" in text
-    assert "DELETE" in text
-    assert "/longview/clients/123" in text
-    assert '"label": "lv-client"' in text
-
-
 def test_longview_client_get_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_client_get_tool()
+    tool, capability = gentools_mod.create_linode_longview_client_get_tool()
 
     assert tool.name == "linode_longview_client_get"
     assert capability is Capability.Read
@@ -150,23 +36,22 @@ def test_longview_client_get_tool_schema() -> None:
 
 @pytest.mark.asyncio
 async def test_longview_client_get_handler_sanitizes_sensitive_fields(
-    monkeypatch: pytest.MonkeyPatch,
+    sample_config: Any, mock_linode_client: Any
 ) -> None:
-    fake = _FakeClient()
+    mock_linode_client.route_raw.return_value = {
+        "id": 123,
+        "label": "prod-longview",
+        "api_key": "secret",
+        "install_code": "install",
+    }
 
-    async def fake_execute_tool(
-        cfg: object, arguments: dict[str, Any], action: str, call: Any
-    ) -> list[Any]:
-        assert action == "retrieve Longview client"
-        payload = await call(fake)
-        return [type("Text", (), {"text": str(payload)})()]
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_client_get(
-        {"client_id": 123}, cast("Any", object())
+    result = await gentools_mod.handle_linode_longview_client_get(
+        {"client_id": 123}, sample_config
     )
 
-    fake.get_longview_client.assert_awaited_once_with(123)
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_longview_client_get", 123
+    )
     text = _text(result)
     assert "prod-longview" in text
     assert "api_key" not in text
@@ -180,15 +65,15 @@ async def test_longview_client_get_handler_sanitizes_sensitive_fields(
 async def test_longview_client_get_handler_rejects_invalid_client_id(
     monkeypatch: pytest.MonkeyPatch, client_id: object
 ) -> None:
-    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
-        raise AssertionError("execute_tool should not be called")
+    async def fake_run_get_tool(*args: Any, **kwargs: Any) -> list[Any]:
+        raise AssertionError("run_get_tool should not be called")
 
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(longview_gen, "run_get_tool", fake_run_get_tool)
     arguments: dict[str, Any] = {}
     if client_id is not None:
         arguments["client_id"] = client_id
 
-    result = await linode_longview.handle_linode_longview_client_get(
+    result = await gentools_mod.handle_linode_longview_client_get(
         arguments, cast("Any", object())
     )
 
@@ -196,7 +81,7 @@ async def test_longview_client_get_handler_rejects_invalid_client_id(
 
 
 def test_longview_plan_get_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_plan_get_tool()
+    tool, capability = gentools_mod.create_linode_longview_plan_get_tool()
 
     assert tool.name == "linode_longview_plan_get"
     assert capability is Capability.Read
@@ -205,7 +90,7 @@ def test_longview_plan_get_tool_schema() -> None:
 
 
 def test_longview_types_list_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_type_list_tool()
+    tool, capability = gentools_mod.create_linode_longview_type_list_tool()
 
     assert tool.name == "linode_longview_type_list"
     assert capability is Capability.Read
@@ -214,7 +99,7 @@ def test_longview_types_list_tool_schema() -> None:
 
 
 def test_longview_clients_list_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_client_list_tool()
+    tool, capability = gentools_mod.create_linode_longview_client_list_tool()
 
     assert tool.name == "linode_longview_client_list"
     assert capability is Capability.Read
@@ -226,28 +111,26 @@ def test_longview_clients_list_tool_schema() -> None:
 
 @pytest.mark.asyncio
 async def test_longview_clients_list_handler_calls_client_with_pagination(
-    monkeypatch: pytest.MonkeyPatch,
+    sample_config: Any, mock_linode_client: Any
 ) -> None:
-    fake = _FakeClient()
+    mock_linode_client.route_raw.return_value = {
+        "data": [{"id": 123}],
+        "page": 2,
+        "pages": 3,
+    }
 
-    async def fake_execute_tool(
-        cfg: object, arguments: dict[str, Any], action: str, call: Any
-    ) -> list[Any]:
-        assert action == "list Longview clients"
-        payload = await call(fake)
-        return [type("Text", (), {"text": str(payload)})()]
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_client_list(
-        {"page": 2, "page_size": 50}, cast("Any", object())
+    result = await gentools_mod.handle_linode_longview_client_list(
+        {"page": 2, "page_size": 50}, sample_config
     )
 
-    fake.list_longview_clients.assert_awaited_once_with(page=2, page_size=50)
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_longview_client_list", query="page=2&page_size=50"
+    )
     assert "123" in _text(result)
 
 
 def test_longview_subscriptions_list_tool_schema() -> None:
-    tool, capability = linode_longview.create_linode_longview_subscription_list_tool()
+    tool, capability = gentools_mod.create_linode_longview_subscription_list_tool()
 
     assert tool.name == "linode_longview_subscription_list"
     assert capability is Capability.Read
@@ -259,23 +142,21 @@ def test_longview_subscriptions_list_tool_schema() -> None:
 
 @pytest.mark.asyncio
 async def test_longview_subscriptions_list_handler_calls_client_with_pagination(
-    monkeypatch: pytest.MonkeyPatch,
+    sample_config: Any, mock_linode_client: Any
 ) -> None:
-    fake = _FakeClient()
+    mock_linode_client.route_raw.return_value = {
+        "data": [{"id": "longview-3"}],
+        "page": 2,
+        "pages": 3,
+    }
 
-    async def fake_execute_tool(
-        cfg: object, arguments: dict[str, Any], action: str, call: Any
-    ) -> list[Any]:
-        assert action == "list Longview subscriptions"
-        payload = await call(fake)
-        return [type("Text", (), {"text": str(payload)})()]
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_subscription_list(
-        {"page": 2, "page_size": 50}, cast("Any", object())
+    result = await gentools_mod.handle_linode_longview_subscription_list(
+        {"page": 2, "page_size": 50}, sample_config
     )
 
-    fake.list_longview_subscriptions.assert_awaited_once_with(page=2, page_size=50)
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_longview_subscription_list", query="page=2&page_size=50"
+    )
     assert "longview-3" in _text(result)
 
 
@@ -293,11 +174,7 @@ async def test_longview_subscriptions_list_handler_calls_client_with_pagination(
 async def test_longview_subscriptions_list_handler_rejects_invalid_pagination(
     monkeypatch: pytest.MonkeyPatch, arguments: dict[str, Any], message: str
 ) -> None:
-    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
-        raise AssertionError("execute_tool should not be called")
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_subscription_list(
+    result = await gentools_mod.handle_linode_longview_subscription_list(
         arguments, cast("Any", object())
     )
 
@@ -306,34 +183,27 @@ async def test_longview_subscriptions_list_handler_rejects_invalid_pagination(
 
 @pytest.mark.asyncio
 async def test_longview_types_list_handler_calls_client(
-    monkeypatch: pytest.MonkeyPatch,
+    sample_config: Any, mock_linode_client: Any
 ) -> None:
-    fake = _FakeClient()
+    mock_linode_client.route_raw.return_value = {
+        "data": [{"id": "g6-standard-2", "label": "2GB"}]
+    }
 
-    async def fake_execute_tool(
-        cfg: object, arguments: dict[str, Any], action: str, call: Any
-    ) -> list[Any]:
-        assert action == "list Longview types"
-        payload = await call(fake)
-        return [type("Text", (), {"text": str(payload)})()]
+    result = await gentools_mod.handle_linode_longview_type_list({}, sample_config)
 
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_type_list(
-        {}, cast("Any", object())
+    mock_linode_client.route_raw.assert_awaited_once_with(
+        "linode_longview_type_list", query=""
     )
-
-    fake.list_longview_types.assert_awaited_once_with()
     assert "g6-standard-2" in _text(result)
 
 
 @pytest.mark.asyncio
 async def test_longview_plan_get_handler_calls_client(
-    monkeypatch: pytest.MonkeyPatch,
+    sample_config: Any, mock_linode_client: Any
 ) -> None:
-    fake = _FakeClient()
     # The handler routes the raw plan through the LongviewSubscription proto, so a
     # field the proto does not model must drop, proving proto-canonical output.
-    fake.get_longview_plan.return_value = {
+    mock_linode_client.route_raw.return_value = {
         "id": "longview-100",
         "label": "Longview Pro",
         "clients_included": 40,
@@ -341,19 +211,9 @@ async def test_longview_plan_get_handler_calls_client(
         "not_in_proto": "dropped",
     }
 
-    async def fake_execute_tool(
-        cfg: object, arguments: dict[str, Any], action: str, call: Any
-    ) -> list[Any]:
-        assert action == "get Longview plan"
-        payload = await call(fake)
-        return [type("Text", (), {"text": str(payload)})()]
+    result = await gentools_mod.handle_linode_longview_plan_get({}, sample_config)
 
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_plan_get(
-        {}, cast("Any", object())
-    )
-
-    fake.get_longview_plan.assert_awaited_once_with()
+    mock_linode_client.route_raw.assert_awaited_once_with("linode_longview_plan_get")
     text = _text(result)
     assert "Longview Pro" in text
     assert "not_in_proto" not in text
@@ -373,11 +233,7 @@ async def test_longview_plan_get_handler_calls_client(
 async def test_longview_clients_list_handler_rejects_invalid_pagination(
     monkeypatch: pytest.MonkeyPatch, arguments: dict[str, Any], message: str
 ) -> None:
-    async def fake_execute_tool(*args: Any, **kwargs: Any) -> list[Any]:
-        raise AssertionError("execute_tool should not be called")
-
-    monkeypatch.setattr(linode_longview, "execute_tool", fake_execute_tool)
-    result = await linode_longview.handle_linode_longview_client_list(
+    result = await gentools_mod.handle_linode_longview_client_list(
         arguments, cast("Any", object())
     )
 

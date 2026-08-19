@@ -559,6 +559,7 @@ def test_ssh_and_monitor_scopes(
         "linode_vpc_subnet_list",
         "linode_account_oauth_client_thumbnail_get",
         "linode_monitor_service_metric_query",
+        "linode_iam_user_role_permission_get",
     ],
 )
 def test_scopeless_routes_return_empty(tool_name: str) -> None:
@@ -573,6 +574,21 @@ def test_scopeless_routes_return_empty(tool_name: str) -> None:
     tools.
     """
     assert required_scopes(tool_name, Capability.Read) == []
+
+
+def test_scopeless_write_route_returns_empty() -> None:
+    """A mutating tool on a token-only route resolves to no scope.
+
+    The read-only table above cannot reach this shape. The IAM per-user
+    access update is documented with a personal-access-token
+    requirement and no OAuth alternative, so the write tier must
+    resolve empty rather than deriving an account or family scope the
+    API never asks for.
+    """
+    assert (
+        required_scopes("linode_iam_user_role_permission_update", Capability.Admin)
+        == []
+    )
 
 
 @pytest.mark.parametrize(

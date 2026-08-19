@@ -2,7 +2,9 @@
 
 verify_docs_tool_count.py fails when a README line that cites
 docs/contracts/tools-manifest.txt states a tool count that disagrees with the
-manifest's real entry count. These tests pin the parsing and the live README.
+number of tools the proto contract declares. The manifest is generated from that
+contract, so the count comes from the contract itself rather than through the
+file. These tests pin the parsing and the live README.
 """
 
 from __future__ import annotations
@@ -33,14 +35,21 @@ def _load_script(name: str) -> ModuleType:
 guard = _load_script("verify_docs_tool_count")
 
 
-def test_manifest_total_counts_only_entries(tmp_path: Path) -> None:
-    manifest = tmp_path / "tools-manifest.txt"
-    manifest.write_text(
-        "# a header comment\n\nlinode_a\nlinode_b\nlinode_c\n",
-        encoding="utf-8",
+def test_declared_total_matches_the_generated_manifest() -> None:
+    """The count the guard reports is the surface the manifest was written from.
+
+    Reading the descriptors and reading the generated file have to give the same
+    answer, since one is written from the other; a difference would mean the
+    manifest on disk predates the contract.
+    """
+    manifest = REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"
+    listed = sum(
+        1
+        for raw in manifest.read_text(encoding="utf-8").splitlines()
+        if raw.strip() and not raw.strip().startswith("#")
     )
 
-    assert guard.manifest_total(manifest) == 3
+    assert guard.declared_total() == listed
 
 
 def test_readme_claims_reads_only_manifest_lines() -> None:
@@ -59,16 +68,14 @@ def test_readme_claims_matches_hyphenated_phrasing() -> None:
     assert guard.readme_claims(text) == [454]
 
 
-def test_live_readme_matches_live_manifest() -> None:
-    """The real README's count must equal the real manifest's entry count.
+def test_live_readme_matches_the_declared_surface() -> None:
+    """The real README's count must equal the tools the contract declares.
 
     This is the drift guard itself as a test: it fails the moment the README
-    prose and the manifest disagree.
+    prose and the proto disagree.
     """
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    manifest = REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"
     claims = guard.readme_claims(readme)
-    total = guard.manifest_total(manifest)
 
     assert claims, "README states no tool count on a line citing the manifest"
-    assert set(claims) == {total}
+    assert set(claims) == {guard.declared_total()}

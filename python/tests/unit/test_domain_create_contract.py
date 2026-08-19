@@ -9,20 +9,19 @@ the handler accepts or rejects.
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from linodemcp import tools as tools_module
-from linodemcp.linode import APIError, RetryableClient
-from linodemcp.profiles import Capability, Scope, required_scopes
-from linodemcp.server import get_tool_registry
-from linodemcp.tools.linode_domains_write import (
+from linodemcp import gentools
+from linodemcp.gentools import (
     create_linode_domain_create_tool,
     handle_linode_domain_create,
 )
+from linodemcp.linode import APIError
+from linodemcp.profiles import Capability, Scope, required_scopes
+from linodemcp.server import get_tool_registry
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -45,8 +44,8 @@ def _client_with_response(response: Any) -> AsyncMock:
 
 def test_domain_create_is_exported_registered_scoped_and_schema_backed() -> None:
     """The tool is exported, registered as a Write, and proto-schema backed."""
-    assert "create_linode_domain_create_tool" in tools_module.__all__
-    assert "handle_linode_domain_create" in tools_module.__all__
+    assert "create_linode_domain_create_tool" in gentools.__all__
+    assert "handle_linode_domain_create" in gentools.__all__
 
     tool, capability = create_linode_domain_create_tool()
     registry = {entry.name: entry for entry in get_tool_registry()}
@@ -315,29 +314,3 @@ async def test_domain_create_surfaces_standard_api_error(
         result = await handle_linode_domain_create(dict(_MASTER_ARGS), sample_config)
 
     assert "soa_email is required (field: soa_email)" in result[0].text
-
-
-async def test_raw_post_uses_selected_single_attempt_protected_path() -> None:
-    """retry=False routes the POST through the no-replay execution path.
-
-    POST /domains is not idempotent, so this is the property that keeps a
-    transient failure from creating a second zone.
-    """
-    client = object.__new__(RetryableClient)
-    client.client = cast("Any", SimpleNamespace(post_raw=AsyncMock()))
-    without_retry = AsyncMock(return_value={"id": 7})
-    with_retry = AsyncMock()
-
-    with (
-        patch.object(client, "_execute_without_retry", without_retry),
-        patch.object(client, "_execute_with_retry", with_retry),
-    ):
-        result = await client.post_raw(
-            "/domains", {"domain": "example.com"}, retry=False
-        )
-
-    assert result == {"id": 7}
-    without_retry.assert_awaited_once_with(
-        client.client.post_raw, "/domains", {"domain": "example.com"}
-    )
-    with_retry.assert_not_awaited()

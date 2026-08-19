@@ -3,126 +3,21 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 
-from linodemcp.linode import Client, NetworkError, RetryableClient
-from linodemcp.profiles import Capability
-from linodemcp.server import Server, get_tool_registry
-from linodemcp.tools.linode_instances import (
+from linodemcp.gentools import (
     create_linode_instance_stats_month_get_tool,
     handle_linode_instance_stats_month_get,
 )
+from linodemcp.profiles import Capability
+from linodemcp.server import Server, get_tool_registry
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-
-
-async def test_get_instance_stats_by_year_month_sends_exact_route() -> None:
-    """Client sends the documented monthly stats route."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    response = MagicMock()
-    response.json.return_value = {"cpu": [[1719792000, 1.25]], "io": {}}
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = response
-
-        result = await client.get_instance_stats_by_year_month(123, 2024, 7)
-
-    assert result["cpu"] == [[1719792000, 1.25]]
-    mock_request.assert_awaited_once_with("GET", "/linode/instances/123/stats/2024/7")
-
-    await client.close()
-
-
-@pytest.mark.parametrize(
-    ("linode_id", "year", "month", "message"),
-    [
-        (0, 2024, 7, "linode_id"),
-        (True, 2024, 7, "linode_id"),
-        ("12/3", 2024, 7, "linode_id"),
-        (123, 1969, 7, "year"),
-        (123, "2024?x=1", 7, "year"),
-        (123, 2024, 0, "month"),
-        (123, 2024, "..", "month"),
-    ],
-)
-async def test_get_instance_stats_by_year_month_rejects_invalid_path_params(
-    linode_id: object, year: object, month: object, message: str
-) -> None:
-    """Client rejects invalid monthly stats path parameters before requests."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with (
-        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
-        pytest.raises(ValueError, match=message),
-    ):
-        await client.get_instance_stats_by_year_month(
-            cast("Any", linode_id), cast("Any", year), cast("Any", month)
-        )
-
-    mock_request.assert_not_called()
-
-    await client.close()
-
-
-@pytest.mark.parametrize("body", [[], "stats", 5, True, None])
-async def test_get_instance_stats_by_year_month_rejects_non_object_json(
-    body: object,
-) -> None:
-    """Client rejects a non-object stats body instead of emptying it.
-
-    An empty mapping would serialize into a zero-valued InstanceStats and reach
-    the caller as a successful read with no graphs, hiding the malformed body.
-    Go decodes this endpoint with protojson, which rejects every one of these.
-    """
-    client = Client("https://api.linode.com/v4", "test-token")
-    response = MagicMock()
-    response.json.return_value = body
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = response
-
-        with pytest.raises(TypeError, match="instance stats response"):
-            await client.get_instance_stats_by_year_month(123, 2024, 7)
-
-    mock_request.assert_awaited_once_with("GET", "/linode/instances/123/stats/2024/7")
-
-    await client.close()
-
-
-async def test_get_instance_stats_by_year_month_wraps_http_errors() -> None:
-    """Client wraps monthly stats HTTP errors."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.side_effect = httpx.HTTPError("boom")
-
-        with pytest.raises(NetworkError) as exc_info:
-            await client.get_instance_stats_by_year_month(123, 2024, 7)
-
-    assert "GetInstanceStatsByYearMonth" in str(exc_info.value)
-
-    await client.close()
-
-
-async def test_retryable_get_instance_stats_by_year_month_delegates() -> None:
-    """Retryable client delegates monthly stats retrieval."""
-    client = RetryableClient("https://api.linode.com/v4", "test-token")
-    mock_get = AsyncMock(return_value={"cpu": []})
-    object.__setattr__(client.client, "get_instance_stats_by_year_month", mock_get)
-
-    try:
-        result = await client.get_instance_stats_by_year_month(123, 2024, 7)
-    finally:
-        await client.close()
-
-    assert result == {"cpu": []}
-    mock_get.assert_awaited_once_with(123, 2024, 7)
 
 
 def test_linode_instance_stats_month_get_tool_schema() -> None:
@@ -147,7 +42,7 @@ async def test_handle_linode_instance_stats_month_get_success(
         mock_client = AsyncMock()
         # The real API nests the graphs under a top-level "data" object; the
         # proto now models that wrapper.
-        mock_client.get_instance_stats_by_year_month.return_value = {
+        mock_client.route_raw.return_value = {
             "title": "linode123 stats",
             "data": {"cpu": [[1719792000, 1.25]], "io": {}},
         }
@@ -162,7 +57,9 @@ async def test_handle_linode_instance_stats_month_get_success(
     payload: dict[str, Any] = json.loads(result[0].text)
     assert payload["title"] == "linode123 stats"
     assert payload["data"]["cpu"][0][1] == 1.25
-    mock_client.get_instance_stats_by_year_month.assert_awaited_once_with(123, 2024, 7)
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_instance_stats_month_get", 123, 2024, 7
+    )
 
 
 @pytest.mark.parametrize(

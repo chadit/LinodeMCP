@@ -1,19 +1,28 @@
-"""Offline tests for the hand-list half of the sync gate (verify_sync_enums.py).
+"""Offline tests for the non-enum half of the sync gate (verify_sync_enums.py).
 
-The gate diffs the hand-maintained validation lists (bucket ACL, placement group
-type, config device slots) against the live API spec. These tests drive the real
-CLI with a crafted `--spec` and `--go-lists` so no network or `go` toolchain is
-needed, and assert the drift logic: the read-only `custom` ACL value is excluded,
-dropped values are flagged, and a missing/renamed Go symbol trips the gate.
+The gate diffs the validation value-sets (bucket ACL, placement group type,
+config device slots) against the live API spec. All three live on the contract
+now: the ACL set as a CEL alternation, the placement group type as its field's
+reader_values, and the device slots as the key vocabulary of the walk over the
+devices argument. These tests drive the real CLI with a crafted `--spec` so no
+network is needed, and assert the drift logic: the read-only `custom` ACL value
+is excluded, and a renamed declaration trips the gate rather than diffing an
+empty set.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "verify_sync_enums.py"
@@ -123,22 +132,23 @@ _CANNED_ACLS = ["private", "public-read", "authenticated-read", "public-read-wri
 _ALL_SLOTS = ["sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh"]
 
 
-def _run(tmp_path: Path, go_lists: dict[str, list[str]]) -> str:
-    """Run the gate offline against the crafted spec and go-lists; return output."""
+def _gate() -> ModuleType:
+    """Import the gate script by path, since scripts/ is not an installed package."""
+    spec = importlib.util.spec_from_file_location("verify_sync_enums", SCRIPT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _run(tmp_path: Path) -> str:
+    """Run the gate offline against the crafted spec; return its output."""
     spec_file = tmp_path / "spec.json"
     spec_file.write_text(json.dumps(MIN_SPEC), encoding="utf-8")
-    go_file = tmp_path / "go.json"
-    go_file.write_text(json.dumps(go_lists), encoding="utf-8")
 
     proc = subprocess.run(  # noqa: S603 - fixed argv, our own script, no shell
-        [
-            sys.executable,
-            str(SCRIPT),
-            "--spec",
-            str(spec_file),
-            "--go-lists",
-            str(go_file),
-        ],
+        [sys.executable, str(SCRIPT), "--spec", str(spec_file)],
         capture_output=True,
         text=True,
         check=False,
@@ -146,56 +156,62 @@ def _run(tmp_path: Path, go_lists: dict[str, list[str]]) -> str:
     return proc.stdout + proc.stderr
 
 
-def test_custom_acl_excluded_no_drift(tmp_path: Path) -> None:
-    """A 4-value ACL hand-list matches the spec: `custom` must not read as drift."""
-    output = _run(
-        tmp_path,
-        {
-            "bucket_acl": _CANNED_ACLS,
-            "placement_group_type": ["anti_affinity:local"],
-            "config_device_slot": _ALL_SLOTS,
-        },
-    )
+def test_contract_sets_match_the_spec(tmp_path: Path) -> None:
+    """The three declared vocabularies match the spec, `custom` excluded."""
+    output = _run(tmp_path)
+
     assert "bucket_acl:" not in output
     assert "custom" not in output
     assert "placement_group_type:" not in output
+    assert "config_device_slot:" not in output
 
 
-def test_dropped_acl_value_flagged(tmp_path: Path) -> None:
-    """Dropping a canned ACL from the Go hand-list is reported against the spec."""
-    output = _run(
-        tmp_path,
-        {
-            "bucket_acl": ["private", "public-read", "authenticated-read"],
-            "placement_group_type": ["anti_affinity:local"],
-            "config_device_slot": _ALL_SLOTS,
-        },
-    )
-    assert "bucket_acl: go hand-list missing API value(s)" in output
-    assert "public-read-write" in output
+def test_placement_type_reads_its_reader_values() -> None:
+    """The contract field the placement vocabulary moved onto declares it."""
+    assert _gate().proto_reader_values("placement_group_type") == {
+        "anti_affinity:local"
+    }
 
 
-def test_missing_device_slot_flagged(tmp_path: Path) -> None:
-    """A dropped slot drifts: slots come from the `devices` object property names."""
-    output = _run(
-        tmp_path,
-        {
-            "bucket_acl": _CANNED_ACLS,
-            "placement_group_type": ["anti_affinity:local"],
-            "config_device_slot": ["sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg"],
-        },
-    )
-    assert "config_device_slot: go hand-list missing API value(s)" in output
-    assert "sdh" in output
+def test_renamed_reader_values_field_is_tripwire() -> None:
+    """A renamed field yields no set, which must raise rather than diff nothing."""
+    with pytest.raises(ValueError, match="no contract field declares reader_values"):
+        _gate().proto_reader_values("placement_group_kind")
 
 
-def test_missing_go_key_is_tripwire(tmp_path: Path) -> None:
-    """A renamed/removed Go symbol yields no key, which must fail loudly."""
-    output = _run(
-        tmp_path,
-        {
-            "bucket_acl": _CANNED_ACLS,
-            "placement_group_type": ["anti_affinity:local"],
-        },
-    )
-    assert "config_device_slot: go hand-list empty or missing" in output
+def test_acl_rule_declares_the_canned_set() -> None:
+    """The contract rule the ACL set moved onto declares exactly the 4 values."""
+    assert _gate().proto_cel_values(
+        "object_storage_bucket_access_allow.acl.known"
+    ) == set(_CANNED_ACLS)
+
+
+def test_renamed_acl_rule_is_tripwire() -> None:
+    """A renamed rule yields no set, which must raise rather than diff nothing."""
+    with pytest.raises(ValueError, match="no rule declares this id"):
+        _gate().proto_cel_values("object_storage_bucket_access_allow.acl.renamed")
+
+
+def test_device_slots_read_their_walk_vocabulary() -> None:
+    """The walk the slot set moved onto declares exactly the eight slots."""
+    assert _gate().proto_walk_keys("devices") == set(_ALL_SLOTS)
+
+
+def test_renamed_walked_argument_is_tripwire() -> None:
+    """A renamed argument yields no set, which must raise rather than diff nothing."""
+    with pytest.raises(ValueError, match="no object_walk declares a key vocabulary"):
+        _gate().proto_walk_keys("device_slots")
+
+
+def test_a_dropped_slot_is_drift(tmp_path: Path) -> None:
+    """A slot the contract stops declaring is reported against the spec.
+
+    Driven through the diff rather than the CLI, since the contract is the
+    shipped proto and this is about what the comparison does with a short set.
+    """
+    diffs = _gate()._object_walk_diffs("config_device_slot", "devices", set(_ALL_SLOTS))
+    assert diffs == []
+
+    short = _gate()._object_walk_diffs("config_device_slot", "helpers", set(_ALL_SLOTS))
+    assert short
+    assert "sdh" in short[0]

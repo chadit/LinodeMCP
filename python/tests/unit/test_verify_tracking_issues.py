@@ -8,10 +8,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
-
-    import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -38,6 +38,15 @@ def _baseline(tmp_path: Path, name: str, lines: list[str]) -> Path:
     path = tmp_path / name
     path.write_text("# header\n" + "\n".join(lines) + "\n", encoding="utf-8")
     return path
+
+
+def _with_extras(contracts: Path) -> Path:
+    """Seed the hand-named exemption files the gate requires to exist."""
+    for name in gate._ANNOTATED_EXTRAS:
+        path = contracts / name
+        if not path.exists():
+            path.write_text("# header\n", encoding="utf-8")
+    return contracts
 
 
 def test_collects_every_entry_citing_one_issue(tmp_path: Path) -> None:
@@ -72,8 +81,11 @@ def test_collects_every_entry_citing_one_issue(tmp_path: Path) -> None:
 def test_reports_a_closed_issue_with_its_entries() -> None:
     """The report leads with the dead issue, then what it was holding."""
     citations = {
-        CLOSED_ISSUE: ["scope-sync-baseline.txt: one", "behavior-baseline.txt: two"],
-        OPEN_ISSUE: ["list-envelope-baseline.txt: three"],
+        CLOSED_ISSUE: [
+            "scope-sync-baseline.txt: one",
+            "behavior-dryrun-baseline.txt: two",
+        ],
+        OPEN_ISSUE: ["tool-parity-baseline.txt: three"],
     }
 
     reported = gate.closed_citations(
@@ -82,7 +94,7 @@ def test_reports_a_closed_issue_with_its_entries() -> None:
 
     assert reported == [
         f"{CLOSED_ISSUE} is closed",
-        "    behavior-baseline.txt: two",
+        "    behavior-dryrun-baseline.txt: two",
         "    scope-sync-baseline.txt: one",
     ]
 
@@ -111,7 +123,7 @@ def test_snapshots_are_not_walked(tmp_path: Path) -> None:
         tmp_path, "real-baseline.txt", [f"tool  # accepted 2026-07-16 {OPEN_ISSUE}"]
     )
 
-    names = {path.name for path in gate.guarded_files(tmp_path)}
+    names = {path.name for path in gate.guarded_files(_with_extras(tmp_path))}
 
     assert "real-baseline.txt" in names
     assert "api-pagination-baseline.txt" not in names
@@ -123,9 +135,20 @@ def test_exemption_files_are_walked(tmp_path: Path) -> None:
         f"entry\treason  # accepted 2026-07-25 {OPEN_ISSUE}\n", encoding="utf-8"
     )
 
-    names = {path.name for path in gate.guarded_files(tmp_path)}
+    names = {path.name for path in gate.guarded_files(_with_extras(tmp_path))}
 
     assert "scope-sync-exempt.txt" in names
+
+
+def test_a_named_file_that_does_not_exist_fails(tmp_path: Path) -> None:
+    """A hand-named file that went away must fail, not quietly drop out.
+
+    The ratchets are globbed, so one that goes away with its gate is fine. The
+    exemption files are named in the script, and a name with no file behind it
+    would leave the gate reporting on fewer promises than it claims.
+    """
+    with pytest.raises(SystemExit, match=r"scope-sync-exempt\.txt"):
+        gate.guarded_files(tmp_path)
 
 
 def test_a_closed_issue_fails_the_gate(
@@ -140,7 +163,7 @@ def test_a_closed_issue_fails_the_gate(
     _baseline(
         contracts, "thing-baseline.txt", [f"tool  # accepted 2026-07-16 {CLOSED_ISSUE}"]
     )
-    monkeypatch.setattr(gate, "_CONTRACTS", contracts)
+    monkeypatch.setattr(gate, "_CONTRACTS", _with_extras(contracts))
 
     states = tmp_path / "states.json"
     states.write_text(json.dumps({CLOSED_ISSUE: "closed"}), encoding="utf-8")

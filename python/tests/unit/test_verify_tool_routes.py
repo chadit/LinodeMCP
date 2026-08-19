@@ -267,3 +267,101 @@ def test_the_checked_in_surface_is_fully_annotated() -> None:
         gate.read_manifest(),
         gate._surface.tool_input_messages(),
     ) == ([], [], [])
+
+
+def _declaration(message: str, route_tool: str, surface: str) -> object:
+    return reader.ToolDeclaration(
+        message=f"linode.mcp.v1.{message}",
+        route_tool=route_tool,
+        meta_tool="",
+        capability="TOOL_CAPABILITY_READ",
+        api_surface=surface,
+    )
+
+
+def test_a_routed_tool_on_a_non_default_surface_is_accepted() -> None:
+    """v4beta is the case the option exists for."""
+    declared = [_declaration("LockListInput", "linode_lock_list", "API_SURFACE_V4BETA")]
+
+    assert gate.surface_violations(declared) == []
+
+
+def test_an_unannotated_tool_reports_nothing() -> None:
+    """Absence is how the whole v4 surface stays unannotated."""
+    declared = [_declaration("TagListInput", "linode_tag_list", "")]
+
+    assert gate.surface_violations(declared) == []
+
+
+def test_a_surface_without_a_route_is_refused() -> None:
+    """A meta tool reaches no Linode API, so it has no surface to answer on."""
+    declared = [_declaration("HelloInput", "", "API_SURFACE_V4BETA")]
+
+    assert gate.surface_violations(declared) == [
+        "linode.mcp.v1.HelloInput: declares API_SURFACE_V4BETA but no tool_route"
+    ]
+
+
+@pytest.mark.parametrize("surface", ["API_SURFACE_V4", "API_SURFACE_UNSPECIFIED"])
+def test_writing_the_default_out_is_refused(surface: str) -> None:
+    """One spelling of v4 is what keeps an unannotated tool byte-identical."""
+    declared = [_declaration("TagListInput", "linode_tag_list", surface)]
+
+    violations = gate.surface_violations(declared)
+
+    assert len(violations) == 1
+    assert surface in violations[0]
+    assert "which is the default" in violations[0]
+
+
+def test_the_checked_in_surface_declares_no_bad_surface() -> None:
+    """The real descriptors satisfy the surface half of the gate too."""
+    assert gate.surface_violations(reader.declarations()) == []
+
+
+def _input(message: str, tool: str, arguments: tuple[str, ...]) -> object:
+    return reader.ToolDeclaration(
+        message=f"linode.mcp.v1.{message}",
+        route_tool=tool,
+        meta_tool="",
+        capability="TOOL_CAPABILITY_READ",
+        arguments=arguments,
+    )
+
+
+@pytest.mark.parametrize("argument", ["api_version", "api_surface", "surface", "beta"])
+def test_a_surface_argument_is_refused(argument: str) -> None:
+    """A caller must never be able to move a call to another API surface.
+
+    The name would show up in the tool's advertised JSON schema, so anything
+    reading that schema could ask for a surface the contract never declared.
+    """
+    declared = [_input("TagListInput", "linode_tag_list", ("label", argument))]
+
+    violations = gate.argument_violations(declared)
+
+    assert len(violations) == 1
+    assert argument in violations[0]
+
+
+def test_ordinary_arguments_are_left_alone() -> None:
+    """Only the exact reserved names are refused, not anything resembling them.
+
+    linode.mcp.v1.VersionResponse declares api_version legitimately, and the
+    five Beta Programs tools take arguments of their own; a looser match would
+    fail shipped surface that has nothing to do with API versioning.
+    """
+    declared = [
+        _input(
+            "TagListInput",
+            "linode_tag_list",
+            ("label", "region", "api_version_note", "betas"),
+        )
+    ]
+
+    assert gate.argument_violations(declared) == []
+
+
+def test_the_checked_in_inputs_name_no_surface_argument() -> None:
+    """The real descriptors carry no reserved argument on any tool input."""
+    assert gate.argument_violations(reader.declarations()) == []

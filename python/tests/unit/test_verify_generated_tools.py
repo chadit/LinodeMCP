@@ -1,9 +1,14 @@
 """Offline tests for the generated-tools ratchet gate.
 
-verify_generated_tools.py holds the tool generator to owning its whole cohort in
-every registered language, refuses a hand-written factory left behind for a
-generated tool, and counts what each language still serves by hand against
-docs/contracts/generated-tools-counts.txt. Those counts only ever fall.
+verify_generated_tools.py holds the tool generator to owning every tool
+docs/contracts/handwritten-tools.txt does not claim, in every registered
+language, refuses a hand-written factory left behind for a generated tool, and
+counts what each language still serves by hand against
+docs/contracts/generated-tools-counts.txt. Those counts only ever fall, which is
+what makes a change to the hand-written list's length visible.
+
+The list is the cohort inverted, so the cohort is derived here the way the gate
+derives it: the manifest less the list.
 
 Every failure path has a test below, including the four ways the gate could run
 while measuring nothing. The last test measures the real trees, so the committed
@@ -52,7 +57,7 @@ MANIFEST = (
     "linode_thing_get\n"
     "linode_thing_list\n"
 )
-COHORT = "# cohort\nlinode_thing_get\nlinode_thing_list\n"
+HANDWRITTEN = "# still by hand\nlinode_other_get\nlinode_thing_delete\n"
 
 # One factory spells its name plainly, one joins two literals with +, the way the
 # real client spells one of its own. A scan reading source verbatim would miss the
@@ -192,7 +197,7 @@ def _fixture_repo(
     _write(tmp_path / PY_GEN_DIR / "thing.py", PY_GENERATED)
     _write(tmp_path / "languages.txt", REGISTRY)
     _write(tmp_path / "tools-manifest.txt", MANIFEST)
-    _write(tmp_path / "generated-tools.txt", COHORT)
+    _write(tmp_path / "handwritten-tools.txt", HANDWRITTEN)
 
     counts_path = tmp_path / "generated-tools-counts.txt"
     _write(counts_path, counts)
@@ -200,7 +205,7 @@ def _fixture_repo(
     monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
     monkeypatch.setattr(gate, "_LANGUAGES", tmp_path / "languages.txt")
     monkeypatch.setattr(gate, "_MANIFEST", tmp_path / "tools-manifest.txt")
-    monkeypatch.setattr(gate, "_COHORT", tmp_path / "generated-tools.txt")
+    monkeypatch.setattr(gate, "_HANDWRITTEN", tmp_path / "handwritten-tools.txt")
     monkeypatch.setattr(gate, "_COUNTS", counts_path)
 
     return counts_path
@@ -268,6 +273,26 @@ def test_a_generated_tool_outside_the_cohort_fails_by_name(
     assert "go generates linode_other_get, which the cohort does not" in _error(capsys)
 
 
+def test_a_new_hand_written_tool_fails_rather_than_joining_the_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The inversion in one test: new surface is born generated.
+
+    A tool the manifest lists and the hand-written list leaves out is in the
+    cohort, so writing it by hand instead fails naming the tool the generator
+    did not write. There is no line to add that would make this pass.
+    """
+    _fixture_repo(tmp_path, monkeypatch)
+    _write(tmp_path / "tools-manifest.txt", MANIFEST + "linode_thing_new\n")
+    _write(
+        tmp_path / GO_HAND_DIR / "linode_thing.go",
+        GO_HAND + GO_HAND.replace("linode_other_get", "linode_thing_new"),
+    )
+
+    assert gate.main([]) == 1
+    assert "go generates no factory for linode_thing_new" in _error(capsys)
+
+
 def test_a_leftover_hand_written_factory_fails_by_name(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -278,18 +303,38 @@ def test_a_leftover_hand_written_factory_fails_by_name(
     assert gate.main([]) == 1
 
     error = _error(capsys)
-    assert f"go still names linode_thing_get in {GO_HAND_DIR}" in error
+    assert "go still names linode_thing_get in go/internal/tools" in error
 
 
 def test_an_empty_cohort_fails_instead_of_passing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Every cohort check is scoped to the cohort, so an empty one proves nothing."""
+    """Every cohort check is scoped to the cohort, so an empty one proves nothing.
+
+    Under the inversion the way to empty it is a list claiming the whole
+    surface, which reads as "nothing has migrated yet" and would otherwise pass.
+    """
     _fixture_repo(tmp_path, monkeypatch)
-    _write(tmp_path / "generated-tools.txt", "# nothing listed yet\n")
+    _write(tmp_path / "handwritten-tools.txt", MANIFEST)
 
     assert gate.main([]) == 1
     assert "cohort is empty" in _error(capsys)
+
+
+def test_a_listed_tool_no_tree_names_fails_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An entry naming nothing exempts that name from the generator forever.
+
+    It is also indistinguishable from remaining work, so it would sit on the
+    list being counted as debt nobody can pay down.
+    """
+    _fixture_repo(tmp_path, monkeypatch)
+    _write(tmp_path / "handwritten-tools.txt", HANDWRITTEN + "linode_thing_gone\n")
+    _write(tmp_path / "tools-manifest.txt", MANIFEST + "linode_thing_gone\n")
+
+    assert gate.main([]) == 1
+    assert "go names linode_thing_gone in neither" in _error(capsys)
 
 
 def test_an_empty_generated_tree_fails_instead_of_passing(
@@ -421,9 +466,12 @@ def test_recorded_counts_match_the_real_trees() -> None:
         name: gate.scan(name, gate._TREES[name], manifest) for name in languages
     }
 
-    assert gate.cohort_problems(gate.read_names(gate._COHORT), measured) == []
-    assert gate.leftovers(gate.read_names(gate._COHORT), measured) == []
-    assert gate.unlocatable(gate.read_names(gate._COHORT), manifest, measured) == []
+    handwritten = gate.read_names(gate._HANDWRITTEN)
+    cohort = [tool for tool in manifest if tool not in set(handwritten)]
+
+    assert gate.cohort_problems(cohort, measured) == []
+    assert gate.leftovers(cohort, measured) == []
+    assert gate.unlocatable(handwritten, measured) == []
     assert {name: len(found.hand) for name, found in measured.items()} == (
         gate.read_counts(gate._COUNTS)
     )

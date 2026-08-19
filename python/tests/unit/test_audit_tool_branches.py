@@ -21,18 +21,18 @@ from linodemcp.audit import (
 from linodemcp.config import (
     REPORT_OUTPUT_LIST,
     REPORT_OUTPUT_SUMMARY,
+    Config,
     ReportConfig,
     ReportFilter,
 )
-from linodemcp.tools.linode_audit_export import handle_linode_audit_export
-from linodemcp.tools.linode_audit_report import (
+from linodemcp.gentools import (
+    handle_linode_audit_export,
+    handle_linode_audit_health,
     handle_linode_audit_report,
-    set_audit_reports,
-)
-from linodemcp.tools.linode_audit_summary import (
     handle_linode_audit_summary,
-    set_audit_sqlite_path,
 )
+from linodemcp.tools.linode_audit_report import set_audit_reports
+from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -80,9 +80,12 @@ def _write_log(tmp_path: Path, events: list[Event]) -> None:
 
 async def test_export_rejects_malformed_since() -> None:
     """A non-RFC-3339 since surfaces as an error, not a written file."""
-    result = await handle_linode_audit_export({"format": "json", "since": "garbage"})
+    result = await handle_linode_audit_export(
+        {"format": "json", "since": "garbage"}, Config()
+    )
 
     assert len(result) == 1
+    assert result[0].text.startswith("Error: ")
     assert "invalid timestamp" in result[0].text
     assert "garbage" in result[0].text
 
@@ -104,7 +107,9 @@ async def test_export_caps_record_count_to_max_records(
         ],
     )
 
-    result = await handle_linode_audit_export({"format": "json", "max_records": 5})
+    result = await handle_linode_audit_export(
+        {"format": "json", "max_records": 5}, Config()
+    )
 
     payload = json.loads(result[0].text)
     assert payload["record_count"] == 5
@@ -112,7 +117,7 @@ async def test_export_caps_record_count_to_max_records(
 
 async def test_report_empty_name_errors() -> None:
     """An empty name is rejected before catalog lookup."""
-    result = await handle_linode_audit_report({"name": ""})
+    result = await handle_linode_audit_report({"name": ""}, Config())
 
     assert "report name is required" in result[0].text
 
@@ -136,7 +141,7 @@ async def test_report_bad_group_by_errors(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "broken"})
+    result = await handle_linode_audit_report({"name": "broken"}, Config())
     assert "bogus" in result[0].text
 
 
@@ -165,7 +170,7 @@ async def test_report_status_in_post_filter(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "errors"})
+    result = await handle_linode_audit_report({"name": "errors"}, Config())
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 2, "two error events, the success dropped"
 
@@ -194,7 +199,7 @@ async def test_report_environment_glob_post_filter(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "prod-only"})
+    result = await handle_linode_audit_report({"name": "prod-only"}, Config())
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 1
     assert payload["events"][0]["environment"] == "prod-us"
@@ -225,7 +230,7 @@ async def test_report_absolute_until_bounds_window(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "until-2"})
+    result = await handle_linode_audit_report({"name": "until-2"}, Config())
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 2, "seconds 1 and 2 kept, second 3 dropped"
 
@@ -255,7 +260,7 @@ async def test_report_absolute_since_bounds_window(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "since-2"})
+    result = await handle_linode_audit_report({"name": "since-2"}, Config())
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 2, "seconds 2 and 3 kept, second 1 dropped"
 
@@ -288,14 +293,77 @@ async def test_report_since_offset_excludes_old_events(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "recent-1h"})
+    result = await handle_linode_audit_report({"name": "recent-1h"}, Config())
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 0, "events older than an hour ago are excluded"
 
 
 async def test_summary_rejects_malformed_since() -> None:
     """A non-RFC-3339 since surfaces as an error before any load."""
-    result = await handle_linode_audit_summary({"since": "garbage"})
+    result = await handle_linode_audit_summary({"since": "garbage"}, Config())
 
     assert len(result) == 1
     assert "invalid 'since' timestamp" in result[0].text
+
+
+async def test_export_rejects_a_format_the_encoder_does_not_know() -> None:
+    """The format's legal set is the contract's rule, answered before the hook.
+
+    The generated shell runs it, so a name no encoder knows never reaches the
+    write. The sentence is the one the hand-written check answered with.
+    """
+    result = await handle_linode_audit_export({"format": "xml"}, Config())
+
+    assert result[0].text == "Error: format must be one of: json, csv, ndjson"
+
+
+async def test_export_requires_a_format() -> None:
+    """An absent format is the same refusal: the field has no presence."""
+    result = await handle_linode_audit_export({}, Config())
+
+    assert result[0].text == "Error: format must be one of: json, csv, ndjson"
+
+
+async def test_health_answers_rather_than_raising(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A store the collector cannot read answers as a tool-result error.
+
+    The hand-written handler let the failure raise out of the handler where
+    Go's answered an error result, which is the divergence this pins closed.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    set_audit_sqlite_path("")
+
+    def _boom(*_args: object, **_kwargs: object) -> object:
+        msg = "audit dir is gone"
+        raise OSError(msg)
+
+    monkeypatch.setattr("linodemcp.tools.linode_audit_health.collect_health", _boom)
+
+    result = await handle_linode_audit_health({}, Config())
+
+    assert result[0].text.startswith("Error: failed to collect audit health:")
+
+
+async def test_export_reports_a_file_it_cannot_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A temp file the writer cannot create answers as a tool-result error.
+
+    Go's answer reports the same failure the same way, which is the point of
+    pinning a branch the filesystem normally never reaches.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    set_audit_sqlite_path("")
+    (tmp_path / "linodemcp").mkdir()
+
+    def _boom(*_args: object, **_kwargs: object) -> object:
+        msg = "no space left"
+        raise OSError(msg)
+
+    monkeypatch.setattr("tempfile.NamedTemporaryFile", _boom)
+
+    result = await handle_linode_audit_export({"format": "json"}, Config())
+
+    assert result[0].text.startswith("Error: failed to write export file:")

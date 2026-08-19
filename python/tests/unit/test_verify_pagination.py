@@ -3,7 +3,8 @@
 verify_pagination.py fails when a tool's GET route paginates in the spec
 snapshot but the tool's proto input has no page/page_size. These tests pin the
 template matcher, the spec extractor's envelope rule (including allOf
-composition), and the live repo's no-drift state against the ratchet baseline.
+composition), and the live repo's clean state: the gate keeps no accepted-gap
+list, so a gap is a failure and a scan that judged nothing is one too.
 """
 
 from __future__ import annotations
@@ -114,17 +115,45 @@ def test_snapshot_routes_parses_entry_lines(tmp_path: Path) -> None:
     assert gate.snapshot_routes(snapshot) == {"/widgets"}
 
 
-def test_live_gate_has_no_drift_vs_baseline() -> None:
-    """The repo's current gaps must equal the accepted ratchet entries.
+def test_live_gate_has_no_pagination_gap() -> None:
+    """The repo must have no gap at all: the gate keeps no accepted list.
 
-    This is the gate itself as a test: a new unpaginated list tool, or a fixed
-    tool whose baseline line was not removed, fails here and in make check.
+    This is the gate itself as a test. A new list tool whose spec route
+    paginates but whose input does not fails here and in make check, with
+    nowhere to record it instead.
     """
-    violations, _unmapped = gate.current_violations()
-    baselines = _load_script("_baselines")
-    ratchet = REPO_ROOT / "docs" / "contracts" / "pagination-baseline.txt"
+    coverage = gate.current_violations()
 
-    assert set(violations) == baselines.read_entries(ratchet)
+    assert coverage.violations == []
+    assert not (REPO_ROOT / "docs" / "contracts" / "pagination-baseline.txt").exists()
+
+
+def test_the_gate_judges_something() -> None:
+    """A gate with no accepted list has to say what it reached.
+
+    Zero judged routes would report exactly like a fully paginated surface, so
+    the count is asserted here as well as trapped in main.
+    """
+    assert gate.current_violations().judged > 0
+
+
+def test_main_fails_on_an_unpaginated_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A gap must be a non-zero exit, since nothing can accept it."""
+    monkeypatch.setattr(
+        gate,
+        "current_violations",
+        lambda: gate.Coverage(["linode_widget_list: GET /widgets unpaginated"], 1, 0),
+    )
+
+    assert gate.main([]) == 1
+
+
+def test_main_fails_when_nothing_was_judged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fixture tree that stopped matching reads like a clean surface."""
+    monkeypatch.setattr(gate, "current_violations", lambda: gate.Coverage([], 0, 0))
+
+    with pytest.raises(SystemExit, match="covered nothing"):
+        gate.main([])
 
 
 def test_tag_object_list_stays_paginated() -> None:

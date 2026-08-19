@@ -12,6 +12,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import pytest
+
 from linodemcp.audit import (
     DEFAULT_RECENT_LIMIT,
     Capability,
@@ -173,3 +175,37 @@ def test_read_recent_skips_corrupt_lines(tmp_path: Path) -> None:
     got = read_recent(str(tmp_path), RecentQuery())
     assert len(got) == 1
     assert got[0].tool == "tool_ok"
+
+
+def test_read_recent_skips_corrupt_gzip_header(tmp_path: Path) -> None:
+    """A rotated .gz that is not gzip at all is skipped like an open
+    failure, matching the Go reader, while other files still contribute
+    events."""
+    good = _event("tool_ok", Capability.READ, Status.SUCCESS, 8)
+    (tmp_path / "audit.log").write_text(
+        json.dumps(good.to_dict()) + "\n", encoding="utf-8"
+    )
+    (tmp_path / "audit-2026-05-18.log.gz").write_bytes(b"not gzip data")
+
+    got = read_recent(str(tmp_path), RecentQuery())
+    assert [event.tool for event in got] == ["tool_ok"]
+
+
+def test_read_recent_surfaces_truncated_rotated_file(tmp_path: Path) -> None:
+    """A valid-header .gz cut mid-stream raises instead of dropping its
+    events silently.
+
+    Mirrors the Go reader: open and header failures skip the file, but a
+    failure while reading an opened file surfaces.
+    """
+    lines = "".join(
+        json.dumps(_event(f"tool_{i}", Capability.READ, Status.SUCCESS, 8).to_dict())
+        + "\n"
+        for i in range(500)
+    )
+    payload = gzip.compress(lines.encode("utf-8"))
+    truncated = payload[: len(payload) >> 1]  # keep half, cutting the stream
+    (tmp_path / "audit-2026-05-18.log.gz").write_bytes(truncated)
+
+    with pytest.raises(EOFError):
+        read_recent(str(tmp_path), RecentQuery())

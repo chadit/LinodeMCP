@@ -14,9 +14,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from linodemcp.config import TwoStageConfig
-from linodemcp.linode import parse_instance
+from linodemcp.gentools import handle_linode_instance_delete
 from linodemcp.profiles import Capability
-from linodemcp.tools.linode_instance_write import handle_linode_instance_delete
 from linodemcp.twostage import (
     DEFAULT_PLAN_TTL,
     Settings,
@@ -33,11 +32,33 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def stub_instance_walk(mock_linode_client: AsyncMock) -> None:
-    """Stub the volume and IP sub-fetches the instance plan-time walk makes so
-    the walk runs cleanly; the config tests only care about plan TTL.
+    """Stub the sub-fetches the instance plan-time walk makes so the walk runs
+    cleanly; the config tests only care about plan TTL and opt-in behavior.
     """
-    mock_linode_client.list_volumes.return_value = []
+    mock_linode_client.list_instance_volumes.return_value = {"data": []}
     mock_linode_client.list_instance_ips.return_value = {"ipv4": {"public": []}}
+    mock_linode_client.list_instance_firewalls.return_value = {"data": []}
+
+
+async def test_config_opt_out_falls_through(
+    sample_config: Config, mock_linode_client: AsyncMock
+) -> None:
+    mock_linode_client.route_raw.return_value = {"id": 123, "status": "running"}
+    sample_config.two_stage = TwoStageConfig(opt_in={"linode_instance_delete": False})
+
+    store = PlanStore()
+    token = set_plan_store(store)
+    try:
+        result = await handle_linode_instance_delete(
+            {"instance_id": 123, "mode": "plan"}, sample_config
+        )
+        # Opted out: two-stage returns None, the handler falls through to the
+        # normal flow, which refuses without confirm. No plan is stored.
+        assert await store.length() == 0
+        mock_linode_client.route_call.assert_not_awaited()
+        assert "confirm" in result[0].text.lower()
+    finally:
+        reset_plan_store(token)
 
 
 def test_settings_opted_in_honors_override() -> None:
@@ -74,9 +95,7 @@ def test_settings_defaults_match_builtin() -> None:
 async def test_config_ttl_override_drives_plan_lifetime(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {"id": 123, "status": "running"}
-    )
+    mock_linode_client.route_raw.return_value = {"id": 123, "status": "running"}
     sample_config.two_stage = TwoStageConfig(default_plan_ttl_seconds=60)
 
     store = PlanStore()
@@ -96,9 +115,7 @@ async def test_config_ttl_override_drives_plan_lifetime(
 async def test_config_per_tool_ttl_override(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {"id": 123, "status": "running"}
-    )
+    mock_linode_client.route_raw.return_value = {"id": 123, "status": "running"}
     sample_config.two_stage = TwoStageConfig(
         tool_ttl_seconds={"linode_instance_delete": 120}
     )
@@ -113,28 +130,5 @@ async def test_config_per_tool_ttl_override(
         created = datetime.fromisoformat(body["created_at"])
         expires = datetime.fromisoformat(body["expires_at"])
         assert expires - created == timedelta(seconds=120)
-    finally:
-        reset_plan_store(token)
-
-
-async def test_config_opt_out_falls_through(
-    sample_config: Config, mock_linode_client: AsyncMock
-) -> None:
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {"id": 123, "status": "running"}
-    )
-    sample_config.two_stage = TwoStageConfig(opt_in={"linode_instance_delete": False})
-
-    store = PlanStore()
-    token = set_plan_store(store)
-    try:
-        result = await handle_linode_instance_delete(
-            {"instance_id": 123, "mode": "plan"}, sample_config
-        )
-        # Opted out: two-stage returns None, the handler falls through to the
-        # normal flow, which refuses without confirm. No plan is stored.
-        assert await store.length() == 0
-        mock_linode_client.delete_instance.assert_not_awaited()
-        assert "confirm" in result[0].text.lower()
     finally:
         reset_plan_store(token)
