@@ -85,16 +85,6 @@ func newUnreachableRoutedClient(t *testing.T) *linode.Client {
 // short-circuits ahead of the transport, so the case would assert a validation
 // error instead of the wrap.
 const (
-	testIPv4       = "198.51.100.7"
-	testIPv6Range  = "2001:db8::/64"
-	testIPv6Target = "2001:db8::1"
+	testIPv4      = "198.51.100.7"
+	testIPv6Range = "2001:db8::/64"
 )
-
-// testLabel returns an addressable label for a request field typed *string.
-// Guards reject a request with every editable field unset, and a package-level
-// var would hand every case a pointer into the same storage.
-func testLabel() *string {
-	label := "routed-transport-label"
-
-	return &label
-}

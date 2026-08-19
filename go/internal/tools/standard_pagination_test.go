@@ -7,7 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // TestStandardPaginationRejections covers the shared page/page_size reader
@@ -54,7 +54,7 @@ func TestStandardPaginationRejections(t *testing.T) {
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeRegionListTool(cfg)
+			_, _, handler := gentools.NewLinodeRegionListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -87,7 +87,7 @@ func TestInstanceListRejectsBadPagination(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPageSize: "x"})
 
@@ -130,7 +130,7 @@ func TestFirewallSettingsGetRejectsBadPagination(t *testing.T) {
 	}
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeFirewallSettingsListTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallSettingsGetTool(cfg)
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -176,7 +176,7 @@ func TestFirewallTemplateGetRejectsBadPagination(t *testing.T) {
 	}
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallTemplateGetTool(cfg)
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeKernelGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeKernelGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeKernelGetTool(cfg)
 
 	if tool.Name != "linode_kernel_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_kernel_get")
@@ -83,7 +83,7 @@ func TestLinodeKernelGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := kernelTestConfig(srv.URL)
-	_, _, handler := tools.NewLinodeKernelGetTool(cfg)
+	_, _, handler := gentools.NewLinodeKernelGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
 
@@ -137,7 +137,7 @@ func TestLinodeKernelGetToolClientFailureReturnsToolError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := kernelTestConfig(srv.URL)
-	_, _, handler := tools.NewLinodeKernelGetTool(cfg)
+	_, _, handler := gentools.NewLinodeKernelGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyKernelID: kernelLatestFixture})
 
@@ -197,7 +197,7 @@ func TestLinodeKernelGetToolRejectsInvalidKernelIdBeforeClientCall(t *testing.T)
 			defer srv.Close()
 
 			cfg := kernelTestConfig(srv.URL)
-			_, _, handler := tools.NewLinodeKernelGetTool(cfg)
+			_, _, handler := gentools.NewLinodeKernelGetTool(cfg)
 
 			args := map[string]any{}
 			if name != caseMissing {

@@ -162,14 +162,23 @@ type ReorderConfigInterfacesRequest struct {
 
 // InstanceInterfaceSettings represents interface settings for a Linode instance.
 type InstanceInterfaceSettings struct {
-	DefaultRoute  *InterfaceDefaultRoute `json:"default_route,omitempty"`
-	NetworkHelper *bool                  `json:"network_helper,omitempty"`
+	DefaultRoute  *InterfaceSettingsDefaultRoute `json:"default_route,omitempty"`
+	NetworkHelper *bool                          `json:"network_helper,omitempty"`
+}
+
+// InterfaceSettingsDefaultRoute names the interface each address family routes
+// through. The settings route addresses them by interface id, where an
+// interface's own default_route carries booleans, so the two cannot share a
+// type: sending the boolean form here is a body the API refuses.
+type InterfaceSettingsDefaultRoute struct {
+	IPv4InterfaceID *int `json:"ipv4_interface_id,omitempty"`
+	IPv6InterfaceID *int `json:"ipv6_interface_id,omitempty"`
 }
 
 // UpdateInstanceInterfaceSettingsRequest represents fields that can update Linode interface settings.
 type UpdateInstanceInterfaceSettingsRequest struct {
-	DefaultRoute  *InterfaceDefaultRoute `json:"default_route,omitempty"`
-	NetworkHelper *bool                  `json:"network_helper,omitempty"`
+	DefaultRoute  *InterfaceSettingsDefaultRoute `json:"default_route,omitempty"`
+	NetworkHelper *bool                          `json:"network_helper,omitempty"`
 }
 
 // InstanceDisk represents a disk attached to a Linode instance.

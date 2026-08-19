@@ -15,15 +15,6 @@ func TestClientRoutesIPv6Ranges(t *testing.T) {
 
 	runClientRouteCases(t, []clientRouteCase{
 		{
-			name:     "DeleteIPv6Range",
-			wantVerb: http.MethodDelete,
-			wantPath: clientRoutePathNetworkingIpv6Ranges20010db864,
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.DeleteIPv6Range(ctx, "2001:0db8::/64"))
-			},
-		},
-		{
 			name:     "GetIPv6Range",
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathNetworkingIpv6Ranges20010db864,
@@ -33,18 +24,6 @@ func TestClientRoutesIPv6Ranges(t *testing.T) {
 				got, err := client.GetIPv6Range(ctx, "2001:0db8::/64")
 
 				return clientRouteProbe(err, func() any { return got.Range })
-			},
-		},
-		{
-			name:     "GetIPv6RangeProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathNetworkingIpv6Ranges20010db864,
-			response: clientRouteProtoObjRange,
-			want:     clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetIPv6RangeProto(ctx, "2001:0db8::/64")
-
-				return clientRouteProbe(err, func() any { return got.GetRange() })
 			},
 		},
 	})

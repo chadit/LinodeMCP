@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeInstanceInterfaceGetToolDefinition(t *testing.T) {
@@ -21,7 +21,7 @@ func TestLinodeInstanceInterfaceGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeInstanceInterfaceGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceInterfaceGetTool(cfg)
 
 	t.Parallel()
 
@@ -57,7 +57,7 @@ func TestLinodeInstanceInterfaceGetToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceInterfaceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceInterfaceGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -130,7 +130,7 @@ func TestLinodeInstanceInterfaceGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfaceGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceInterfaceGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456)})
 
@@ -180,7 +180,7 @@ func TestLinodeInstanceInterfaceGetToolClientError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfaceGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceInterfaceGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456)})
 
@@ -208,7 +208,7 @@ func TestLinodeInstanceInterfacesListToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeInstanceInterfacesListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceInterfaceListTool(cfg)
 
 	t.Parallel()
 
@@ -241,7 +241,7 @@ func TestLinodeInstanceInterfacesListToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceInterfacesListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceInterfaceListTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -299,7 +299,7 @@ func TestLinodeInstanceInterfacesListToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{"interfaces": interfaces}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keyInterfaces: interfaces}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -310,7 +310,7 @@ func TestLinodeInstanceInterfacesListToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfacesListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceInterfaceListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 
@@ -360,7 +360,7 @@ func TestLinodeInstanceInterfacesListToolClientError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfacesListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceInterfaceListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 
@@ -388,230 +388,5 @@ func TestLinodeInstanceInterfacesListToolClientError(t *testing.T) {
 
 	if !strings.Contains(text.Text, errForbidden) {
 		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeInstanceInterfaceDeleteToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, capability, handler := tools.NewLinodeInstanceInterfaceDeleteTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_instance_interface_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_interface_delete")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapDestroy {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	if !strings.Contains(tool.Description, "WARNING") {
-		t.Errorf("tool.Description does not contain %v", "WARNING")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyLinodeID, keyInterfaceID, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeInstanceInterfaceDeleteToolConfirm(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeInstanceInterfaceDeleteTool(cfg)
-
-	confirmTests := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseStringConfirmRejected, value: boolStringTrue, set: true},
-		{name: caseNumericConfirmRejected, value: 1, set: true},
-	}
-	for _, tt := range confirmTests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456)}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-		})
-	}
-}
-
-func TestLinodeInstanceInterfaceDeleteToolValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeInstanceInterfaceDeleteTool(cfg)
-
-	validationTests := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissingLinodeID, args: map[string]any{keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errLinodeIDInteger},
-		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, want: tools.ErrInterfaceIDRequired.Error()},
-		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDInteger},
-		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: interfaceIDQueryValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDInteger},
-		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDInteger},
-		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(-1), keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDMinOne},
-		{name: caseZeroInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errInterfaceIDMinOne},
-	}
-	for _, tt := range validationTests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, tt.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, tt.want)
-			}
-		})
-	}
-}
-
-func TestLinodeInstanceInterfaceDeleteToolSuccessfulDeletion(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcLinodeInstances123Interfaces456 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces456)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfaceDeleteTool(srvCfg)
-
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "deleted") {
-		t.Errorf("error text %q does not contain %q", text.Text, "deleted")
-	}
-}
-
-func TestLinodeInstanceInterfaceDeleteToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfaceDeleteTool(srvCfg)
-
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete interface 456 from instance 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete interface 456 from instance 123")
 	}
 }

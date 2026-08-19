@@ -5,6 +5,9 @@ package audit_test
 // literals across the package.
 const (
 	tcProfile = "profile"
+	// toolOK is the surviving-event tool name the reader's skip tests
+	// reuse. Extracted to satisfy goconst.
+	toolOK = "tool_ok"
 	// argLinodeID is the conventional Linode-ID arg key. Reused in
 	// event-construction fixtures across multiple test files.
 	argLinodeID = "linode_id"

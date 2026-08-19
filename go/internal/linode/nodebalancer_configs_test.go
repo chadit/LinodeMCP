@@ -3,7 +3,6 @@ package linode_test
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -619,303 +618,29 @@ func TestClientGetNodeBalancerConfigNodeRetriesTransientError(t *testing.T) {
 	}
 }
 
-func TestClientDeleteNodeBalancerConfigSuccess(t *testing.T) {
+// TestClientGetNodeBalancerConfigReportsAnAPIFailure covers the branch a dry-run
+// preview depends on: an unreadable config has to reach the caller as an error
+// rather than as a zeroed config it would then report as current state.
+func TestClientGetNodeBalancerConfigReportsAnAPIFailure(t *testing.T) {
 	t.Parallel()
 
-	var sawBody atomic.Bool
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
+		if r.URL.Path != "/nodebalancers/123/configs/456" {
+			t.Errorf("r.URL.Path = %v, want the one config", r.URL.Path)
 		}
 
-		if r.URL.Path != tcNodebalancers123Configs456 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != authHeaderTestToken {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
-		}
-
-		if r.Body != nil {
-			body, readErr := io.ReadAll(r.Body)
-			if readErr != nil {
-				t.Errorf("unexpected error: %v", readErr)
-			}
-
-			sawBody.Store(len(body) > 0)
-		}
-
-		w.WriteHeader(http.StatusOK)
+		http.Error(w, "not found", http.StatusNotFound)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	err := client.DeleteNodeBalancerConfig(t.Context(), 123, 456)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if sawBody.Load() != false {
-		t.Errorf("sawBody.Load() = %v, want %v", sawBody.Load(), false)
-	}
-}
-
-func TestClientDeleteNodeBalancerConfigAPIError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcNodebalancers123Configs456 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456)
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-
-	err := client.DeleteNodeBalancerConfig(t.Context(), 123, 456)
+	got, err := client.GetNodeBalancerConfig(t.Context(), 123, 456)
 	if err == nil {
-		t.Fatal("expected an error, got nil")
+		t.Fatal("err is nil, want the API failure")
 	}
 
-	apiErr, ok := errors.AsType[*linode.APIError](err)
-	if !ok {
-		t.Fatalf("error %v is not *linode.APIError", err)
-	}
-
-	if apiErr.StatusCode != http.StatusForbidden {
-		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
-	}
-
-	if apiErr.Message != errForbidden {
-		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
-	}
-}
-
-func TestClientDeleteNodeBalancerConfigDoesNotRetryTransientError(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcNodebalancers123Configs456 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456)
-		}
-
-		calls.Add(1)
-		http.Error(w, "temporary", http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-
-	err := client.DeleteNodeBalancerConfig(t.Context(), 123, 456)
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	if calls.Load() != int32(1) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
-	}
-}
-
-func TestClientDeleteNodeBalancerConfigValidatesIDs(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
-
-	err := client.DeleteNodeBalancerConfig(t.Context(), 0, 456)
-	if !errors.Is(err, linode.ErrNodeBalancerIDPositive) {
-		t.Fatalf("error = %v, want %v", err, linode.ErrNodeBalancerIDPositive)
-	}
-
-	err = client.DeleteNodeBalancerConfig(t.Context(), 123, 0)
-	if !errors.Is(err, linode.ErrConfigIDPositive) {
-		t.Fatalf("error = %v, want %v", err, linode.ErrConfigIDPositive)
-	}
-
-	if calls.Load() != int32(0) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-	}
-}
-
-func TestClientDeleteNodeBalancerConfigNodeSuccess(t *testing.T) {
-	t.Parallel()
-
-	var sawBody atomic.Bool
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcNodebalancers123Configs456Nodes789 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes789)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != authHeaderTestToken {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), authHeaderTestToken)
-		}
-
-		if r.Body != nil {
-			body, readErr := io.ReadAll(r.Body)
-			if readErr != nil {
-				t.Errorf("unexpected error: %v", readErr)
-			}
-
-			sawBody.Store(len(body) > 0)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-
-	err := client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 789)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if sawBody.Load() != false {
-		t.Errorf("sawBody.Load() = %v, want %v", sawBody.Load(), false)
-	}
-}
-
-func TestClientDeleteNodeBalancerConfigNodeAPIError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcNodebalancers123Configs456Nodes789 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes789)
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-
-	err := client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 789)
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	apiErr, ok := errors.AsType[*linode.APIError](err)
-	if !ok {
-		t.Fatalf("error %v is not *linode.APIError", err)
-	}
-
-	if apiErr.StatusCode != http.StatusForbidden {
-		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
-	}
-
-	if apiErr.Message != errForbidden {
-		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
-	}
-}
-
-func TestClientDeleteNodeBalancerConfigNodeDoesNotRetryTransientError(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcNodebalancers123Configs456Nodes789 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs456Nodes789)
-		}
-
-		calls.Add(1)
-		http.Error(w, "temporary", http.StatusServiceUnavailable)
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-
-	err := client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 789)
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	if calls.Load() != int32(1) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
-	}
-}
-
-func TestClientDeleteNodeBalancerConfigNodeValidatesIDs(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-
-	err := client.DeleteNodeBalancerConfigNode(t.Context(), 0, 456, 789)
-	if !errors.Is(err, linode.ErrNodeBalancerIDPositive) {
-		t.Fatalf("error = %v, want %v", err, linode.ErrNodeBalancerIDPositive)
-	}
-
-	err = client.DeleteNodeBalancerConfigNode(t.Context(), 123, 0, 789)
-	if !errors.Is(err, linode.ErrConfigIDPositive) {
-		t.Fatalf("error = %v, want %v", err, linode.ErrConfigIDPositive)
-	}
-
-	err = client.DeleteNodeBalancerConfigNode(t.Context(), 123, 456, 0)
-	if !errors.Is(err, linode.ErrNodeIDPositive) {
-		t.Fatalf("error = %v, want %v", err, linode.ErrNodeIDPositive)
-	}
-
-	if calls.Load() != int32(0) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
 	}
 }

@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // databaseAllInstancesPath is the cross-engine list endpoint, distinct from
@@ -23,7 +23,7 @@ func TestLinodeDatabaseAllInstancesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseAllInstancesListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseInstanceListTool(cfg)
 
 	if tool.Name != "linode_database_instance_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_instance_list")
@@ -91,7 +91,7 @@ func TestLinodeDatabaseAllInstancesListToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseAllInstancesListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -141,7 +141,7 @@ func TestLinodeDatabaseAllInstancesListToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseAllInstancesListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseInstanceListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -176,7 +176,7 @@ func TestLinodeDatabaseAllInstancesListToolRejectsInvalidPagination(t *testing.T
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseAllInstancesListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseInstanceListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPageSize: 7}))
 	if err != nil {

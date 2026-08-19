@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -27,7 +27,7 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
 	if tool.Name != monitorServiceAlertDefinitionGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServiceAlertDefinitionGetToolName)
 	}
@@ -86,7 +86,7 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 20000})
 
@@ -143,7 +143,7 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase, monitorAlertIDParam: 20000})
 
@@ -165,8 +165,8 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorServiceAlertDefinitionGetToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorServiceAlertDefinitionGetToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve alert definition") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve alert definition")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -196,7 +196,7 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolInvalidArgumentsRejectBeforeC
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorServiceAlertDefinitionGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 

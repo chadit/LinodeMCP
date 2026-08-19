@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // expect* helpers are fatal package-local checks from linode_assertions_test.go; check* helpers are nonfatal.
@@ -22,7 +22,7 @@ func TestLinodeNodeBalancerVPCListToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeNodeBalancerVPCListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeNodebalancerVPCConfigListTool(cfg)
 
 	t.Parallel()
 
@@ -58,7 +58,7 @@ func TestLinodeNodeBalancerVPCListToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeNodeBalancerVPCListTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerVPCConfigListTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -133,7 +133,7 @@ func TestLinodeNodeBalancerVPCListToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeNodeBalancerVPCListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeNodebalancerVPCConfigListTool(srvCfg)
 
 	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPage: float64(2), keyPageSize: float64(50)}))
 	if err != nil {
@@ -184,7 +184,7 @@ func TestLinodeNodeBalancerVPCListToolClientError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeNodeBalancerVPCListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeNodebalancerVPCConfigListTool(srvCfg)
 
 	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)}))
 	if err != nil {

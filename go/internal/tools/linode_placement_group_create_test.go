@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -21,16 +21,16 @@ const (
 	placementGroupCreateLabel    = "pg-test"
 	placementGroupCreateRegion   = "us-east"
 	placementGroupType           = "anti_affinity:local"
-	errPlacementGroupRegionBlank = "region must be a non-empty string"
 	caseNumericLabel             = "numeric label"
 	placementGroupCreatePolicy   = "strict"
+	errPolicyRequired            = "placement_group_policy is required"
 )
 
 func TestLinodePlacementGroupCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodePlacementGroupCreateTool(cfg)
+	tool, capability, handler := gentools.NewLinodePlacementGroupCreateTool(cfg)
 
 	if tool.Name != placementGroupCreateToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, placementGroupCreateToolName)
@@ -90,7 +90,7 @@ func TestLinodePlacementGroupCreateToolConfirmRequiredBeforeClientCall(t *testin
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodePlacementGroupCreateTool(cfg)
+			_, _, handler := gentools.NewLinodePlacementGroupCreateTool(cfg)
 
 			args := placementGroupCreateArgs()
 			delete(args, keyConfirm)
@@ -131,18 +131,22 @@ func TestLinodePlacementGroupCreateToolInvalidRequestRejectedBeforeClientCall(t 
 		update      func(map[string]any)
 		wantMessage string
 	}{
+		// The absent and unusable sentences below are the contract's: the label
+		// and region rules live on PlacementGroupCreateInput, the type and
+		// policy checks on their fields' membership readers, and the normalize
+		// hook still trims each text argument before any of them read it.
 		{name: caseMissingLabel, update: func(args map[string]any) { delete(args, managedServiceLabelParam) }, wantMessage: errLabelRequired},
-		{name: caseBlankLabelImageShareGroupToken, update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = blankString }, wantMessage: errLabelNonEmpty},
-		{name: caseNumericLabel, update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = 123 }, wantMessage: errLabelNonEmpty},
+		{name: caseBlankLabelImageShareGroupToken, update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = blankString }, wantMessage: errLabelRequired},
+		{name: caseNumericLabel, update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = 123 }, wantMessage: "label must be a string"},
 		{name: "invalid label pattern", update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = "-bad" }, wantMessage: "label must start and end with an alphanumeric character and contain only alphanumeric characters, hyphens, underscores, or periods"},
 		{name: caseMissingRegion, update: func(args map[string]any) { delete(args, keySupportTicketRegion) }, wantMessage: "region is required"},
-		{name: "blank region", update: func(args map[string]any) { args[keySupportTicketRegion] = blankString }, wantMessage: errPlacementGroupRegionBlank},
+		{name: "blank region", update: func(args map[string]any) { args[keySupportTicketRegion] = blankString }, wantMessage: "region is required"},
 		{name: caseMissingType, update: func(args map[string]any) { delete(args, keyPlacementGroupTypeJSON) }, wantMessage: "placement_group_type is required"},
-		{name: "numeric type", update: func(args map[string]any) { args[keyPlacementGroupTypeJSON] = 123 }, wantMessage: "placement_group_type must be a non-empty string"},
+		{name: "numeric type", update: func(args map[string]any) { args[keyPlacementGroupTypeJSON] = 123 }, wantMessage: "placement_group_type is required"},
 		{name: caseInvalidType, update: func(args map[string]any) { args[keyPlacementGroupTypeJSON] = "affinity:local" }, wantMessage: "placement_group_type must be anti_affinity:local"},
-		{name: "missing policy", update: func(args map[string]any) { delete(args, keyPlacementGroupPolicyJSON) }, wantMessage: "placement_group_policy is required"},
-		{name: "blank policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = blankString }, wantMessage: "placement_group_policy must be a non-empty string"},
-		{name: "numeric policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = 123 }, wantMessage: "placement_group_policy must be a non-empty string"},
+		{name: "missing policy", update: func(args map[string]any) { delete(args, keyPlacementGroupPolicyJSON) }, wantMessage: errPolicyRequired},
+		{name: "blank policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = blankString }, wantMessage: errPolicyRequired},
+		{name: "numeric policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = 123 }, wantMessage: errPolicyRequired},
 		{name: "invalid policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = "eventual" }, wantMessage: "placement_group_policy must be one of: flexible, strict"},
 	}
 
@@ -159,7 +163,7 @@ func TestLinodePlacementGroupCreateToolInvalidRequestRejectedBeforeClientCall(t 
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodePlacementGroupCreateTool(cfg)
+			_, _, handler := gentools.NewLinodePlacementGroupCreateTool(cfg)
 
 			args := placementGroupCreateArgs()
 			testCase.update(args)
@@ -200,7 +204,7 @@ func TestLinodePlacementGroupCreateToolDryRunReturnsPreviewWithoutClientCall(t *
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupCreateTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupCreateTool(cfg)
 
 	args := placementGroupCreateArgs()
 	delete(args, keyConfirm)
@@ -268,7 +272,7 @@ func TestLinodePlacementGroupCreateToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupCreateTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupCreateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, placementGroupCreateArgs()))
 	if err != nil {
@@ -342,7 +346,7 @@ func TestLinodePlacementGroupCreateToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupCreateTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupCreateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, placementGroupCreateArgs()))
 	if err != nil {

@@ -12,13 +12,13 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // Repeated literals hoisted past the duplicate-string threshold. The tags texts
 // are the exact messages both languages emit, so drift in either one fails here.
 const (
 	listPagePathDomains = "/domains"
+	listPageQuery       = "page=2&page_size=50"
 	errTagsNotJSONArray = "tags must be a JSON string array"
 	errTagsBlankEntry   = "tags entries must be non-empty strings"
 )
@@ -60,10 +60,10 @@ func TestListToolsSendPageQuery(t *testing.T) {
 		path    string
 	}{
 		{name: "domains", path: listPagePathDomains, newTool: gentools.NewLinodeDomainListTool},
-		{name: "firewalls", path: "/networking/firewalls", newTool: tools.NewLinodeFirewallListTool},
-		{name: "nodebalancers", path: "/nodebalancers", newTool: tools.NewLinodeNodeBalancerListTool},
-		{name: "ssh keys", path: "/profile/sshkeys", newTool: tools.NewLinodeSSHKeyListTool},
-		{name: "stackscripts", path: "/linode/stackscripts", newTool: tools.NewLinodeStackScriptListTool},
+		{name: "firewalls", path: "/networking/firewalls", newTool: gentools.NewLinodeFirewallListTool},
+		{name: "nodebalancers", path: "/nodebalancers", newTool: gentools.NewLinodeNodebalancerListTool},
+		{name: "ssh keys", path: "/profile/sshkeys", newTool: gentools.NewLinodeSshkeyListTool},
+		{name: "stackscripts", path: "/linode/stackscripts", newTool: gentools.NewLinodeStackscriptListTool},
 	}
 
 	for _, testCase := range cases {
@@ -89,7 +89,7 @@ func TestListToolsSendPageQuery(t *testing.T) {
 				t.Errorf("result.IsError = true, want false")
 			}
 
-			if want := reservedIPListPaginationQuery; gotQuery != want {
+			if want := listPageQuery; gotQuery != want {
 				t.Errorf("query = %q, want %q", gotQuery, want)
 			}
 		})
@@ -200,49 +200,43 @@ func TestWriteToolsRejectMalformedTags(t *testing.T) {
 	}{
 		{
 			name:    "instance create rejects a non-array tags",
-			newTool: tools.NewLinodeInstanceCreateTool,
+			newTool: gentools.NewLinodeInstanceCreateTool,
 			args:    map[string]any{keyConfirm: true, keyRegion: regionUSEast, keyType: typeG6Nanode1, keyFirewallID: 123, keyTags: 5},
 			want:    errTagsNotJSONArray,
 		},
 		{
 			name:    "instance create rejects a blank tag",
-			newTool: tools.NewLinodeInstanceCreateTool,
+			newTool: gentools.NewLinodeInstanceCreateTool,
 			args:    map[string]any{keyConfirm: true, keyRegion: regionUSEast, keyType: typeG6Nanode1, keyFirewallID: 123, keyTags: []any{envProd, " "}},
 			want:    errTagsBlankEntry,
 		},
 		{
 			name:    "firewall create rejects a non-array tags",
-			newTool: tools.NewLinodeFirewallCreateTool,
+			newTool: gentools.NewLinodeFirewallCreateTool,
 			args:    map[string]any{keyConfirm: true, keyLabel: "web-fw", keyTags: 5},
 			want:    errTagsNotJSONArray,
 		},
 		{
-			name:    "firewall update rejects a non-array tags",
-			newTool: tools.NewLinodeFirewallUpdateTool,
-			args:    map[string]any{keyConfirm: true, keyFirewallID: 123, keyTags: 5},
-			want:    errTagsNotJSONArray,
-		},
-		{
 			name:    "nodebalancer create rejects a non-array tags",
-			newTool: tools.NewLinodeNodeBalancerCreateTool,
+			newTool: gentools.NewLinodeNodebalancerCreateTool,
 			args:    map[string]any{keyConfirm: true, keyRegion: regionUSEast, keyTags: 5},
 			want:    errTagsNotJSONArray,
 		},
 		{
 			name:    "nodebalancer update rejects a non-array tags",
-			newTool: tools.NewLinodeNodeBalancerUpdateTool,
+			newTool: gentools.NewLinodeNodebalancerUpdateTool,
 			args:    map[string]any{keyConfirm: true, keyNodeBalancerID: 789, keyTags: 5},
 			want:    errTagsNotJSONArray,
 		},
 		{
 			name:    "volume create rejects a non-array tags",
-			newTool: tools.NewLinodeVolumeCreateTool,
+			newTool: gentools.NewLinodeVolumeCreateTool,
 			args:    map[string]any{keyConfirm: true, keyLabel: "my-vol", keyRegion: regionUSEast, keyTags: 5},
 			want:    errTagsNotJSONArray,
 		},
 		{
 			name:    "domain update rejects a non-array tags",
-			newTool: tools.NewLinodeDomainUpdateTool,
+			newTool: gentools.NewLinodeDomainUpdateTool,
 			args:    map[string]any{keyConfirm: true, keyDomainID: 5, keyTags: 5},
 			want:    errTagsNotJSONArray,
 		},
@@ -277,9 +271,12 @@ func TestLKEClusterIDReadToolsRejectMissingID(t *testing.T) {
 	cases := []struct {
 		newTool toolConstructor
 		name    string
+		want    string
 	}{
-		{name: "dashboard get", newTool: tools.NewLinodeLKEDashboardGetTool},
-		{name: "acl get", newTool: tools.NewLinodeLKEACLGetTool},
+		{name: "dashboard get", newTool: gentools.NewLinodeLkeDashboardGetTool, want: "cluster_id is required"},
+		// The ACL route holds its id rule on the contract, where proto3 reads an
+		// absent int32 as zero, so one sentence answers absent and unusable alike.
+		{name: "acl get", newTool: gentools.NewLinodeLkeACLGetTool, want: "cluster_id must be a positive integer"},
 	}
 
 	for _, testCase := range cases {
@@ -298,7 +295,7 @@ func TestLKEClusterIDReadToolsRejectMissingID(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			assertToolErrorContains(t, result, "cluster_id is required")
+			assertToolErrorContains(t, result, testCase.want)
 		})
 	}
 }

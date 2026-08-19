@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
@@ -19,13 +20,19 @@ import (
 const (
 	accountUserGetToolName      = "linode_account_user_get"
 	errUsernamePathParamInvalid = "username must not contain '/', '?', '#', or '..'"
+	caseMissingUsername         = "missing username"
+	caseEmptyUsername           = "empty username"
+	caseBlankUsername           = "blank username"
+	caseNumericUsername         = "numeric username"
+	errUsernameRequired         = "username is required"
+	errUsernameNonEmpty         = "username must be a non-empty string"
 )
 
 func TestLinodeAccountUserGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountUserGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountUserGetTool(cfg)
 
 	if tool.Name != accountUserGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, accountUserGetToolName)
@@ -83,7 +90,7 @@ func TestLinodeAccountUserGetToolInvalidUsernameRejectedBeforeClientCall(t *test
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountUserGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountUserGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -140,7 +147,7 @@ func TestLinodeAccountUserGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountUserGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountUserGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyUsername: accountLoginUsername})
 
@@ -195,7 +202,7 @@ func TestLinodeAccountUserGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountUserGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountUserGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyUsername: accountLoginUsername})
 
@@ -212,11 +219,52 @@ func TestLinodeAccountUserGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_user_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_user_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve account user") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve account user")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
 		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+// TestAccountUsernamePathArgumentRefusals pins the two sentences the shared
+// username reader answers. The grants update is the one caller left that reads
+// a username through it rather than through its contract, so its refusals are
+// covered here rather than through a generated tool.
+func TestAccountUsernamePathArgumentRefusals(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		args map[string]any
+		name string
+		want string
+	}{
+		{name: caseMissingUsername, args: map[string]any{}, want: errUsernameRequired},
+		{name: caseEmptyUsername, args: map[string]any{keyUsername: ""}, want: errUsernameNonEmpty},
+		{name: caseNumericUsername, args: map[string]any{keyUsername: 7}, want: errUsernameNonEmpty},
+		{
+			name: "separator in username",
+			args: map[string]any{keyUsername: "alice/dev"},
+			want: errUsernamePathParamInvalid,
+		},
+		{
+			name: "fragment in username",
+			args: map[string]any{keyUsername: "alice#dev"},
+			want: errUsernamePathParamInvalid,
+		},
+		{name: "usable username", args: map[string]any{keyUsername: "alice"}, want: ""},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: testCase.args}}
+
+			if _, got := tools.AccountUsernamePathArgument(&request); got != testCase.want {
+				t.Errorf("AccountUsernamePathArgument = %q, want %q", got, testCase.want)
+			}
+		})
 	}
 }

@@ -11,8 +11,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -26,7 +26,7 @@ func TestLinodeLongviewPlanToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeLongviewPlanTool(cfg)
+	tool, capability, handler := gentools.NewLinodeLongviewPlanGetTool(cfg)
 	if tool.Name != "linode_longview_plan_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_plan_get")
 	}
@@ -83,7 +83,7 @@ func TestLinodeLongviewPlanToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewPlanTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewPlanGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -140,7 +140,7 @@ func TestLinodeLongviewPlanToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewPlanTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewPlanGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -162,8 +162,8 @@ func TestLinodeLongviewPlanToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_longview_plan_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_longview_plan_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve the Longview plan") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve the Longview plan")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -176,7 +176,7 @@ func TestLinodeLongviewPlanUpdateToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeLongviewPlanUpdateTool(cfg)
+	tool, capability, handler := gentools.NewLinodeLongviewPlanUpdateTool(cfg)
 	if tool.Name != "linode_longview_plan_update" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_plan_update")
 	}
@@ -240,7 +240,7 @@ func TestLinodeLongviewPlanUpdateToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewPlanUpdateTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewPlanUpdateTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLongviewSubscription: longviewSubscription, keyConfirm: true})
 
@@ -293,7 +293,7 @@ func TestLinodeLongviewPlanUpdateToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewPlanUpdateTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewPlanUpdateTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLongviewSubscription: longviewSubscription, keyConfirm: true})
 
@@ -315,8 +315,8 @@ func TestLinodeLongviewPlanUpdateToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to update linode_longview_plan_update") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to update linode_longview_plan_update")
+	if !strings.Contains(textContent.Text, "Failed to update the Longview plan") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to update the Longview plan")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -343,7 +343,7 @@ func TestLinodeLongviewPlanUpdateToolConfirmRejectsBeforeClient(t *testing.T) {
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeLongviewPlanUpdateTool(cfg)
+			_, _, handler := gentools.NewLinodeLongviewPlanUpdateTool(cfg)
 
 			args := map[string]any{keyLongviewSubscription: longviewSubscription}
 			if testCase.set {
@@ -395,7 +395,7 @@ func TestLinodeLongviewPlanUpdateToolValidationRejectsBeforeClient(t *testing.T)
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeLongviewPlanUpdateTool(cfg)
+			_, _, handler := gentools.NewLinodeLongviewPlanUpdateTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {

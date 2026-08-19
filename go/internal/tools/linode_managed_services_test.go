@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -26,7 +26,7 @@ func TestLinodeManagedServicesToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeManagedServicesTool(cfg)
+	tool, capability, handler := gentools.NewLinodeManagedServiceListTool(cfg)
 
 	if tool.Name != managedServicesToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, managedServicesToolName)
@@ -99,7 +99,7 @@ func TestLinodeManagedServicesToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeManagedServicesTool(cfg)
+	_, _, handler := gentools.NewLinodeManagedServiceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -149,7 +149,7 @@ func TestLinodeManagedServicesToolInvalidPaginationRejectsBeforeClient(t *testin
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeManagedServicesTool(cfg)
+			_, _, handler := gentools.NewLinodeManagedServiceListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -199,7 +199,7 @@ func TestLinodeManagedServicesToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeManagedServicesTool(cfg)
+	_, _, handler := gentools.NewLinodeManagedServiceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 

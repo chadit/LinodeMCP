@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -29,7 +29,7 @@ func TestLinodeManagedContactGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeManagedContactGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeManagedContactGetTool(cfg)
 
 	if tool.Name != managedContactGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, managedContactGetToolName)
@@ -88,7 +88,7 @@ func TestLinodeManagedContactGetToolInvalidContactIdRejectedBeforeClientCall(t *
 			t.Cleanup(srv.Close)
 
 			cfg := managedContactConfig(srv.URL)
-			_, _, handler := tools.NewLinodeManagedContactGetTool(cfg)
+			_, _, handler := gentools.NewLinodeManagedContactGetTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
@@ -149,7 +149,7 @@ func TestLinodeManagedContactGetToolSuccess(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, _, handler := tools.NewLinodeManagedContactGetTool(managedContactConfig(srv.URL))
+	_, _, handler := gentools.NewLinodeManagedContactGetTool(managedContactConfig(srv.URL))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyContactID: managedContactIDValue}))
 	if err != nil {
@@ -197,7 +197,7 @@ func TestLinodeManagedContactGetToolApiError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, _, handler := tools.NewLinodeManagedContactGetTool(managedContactConfig(srv.URL))
+	_, _, handler := gentools.NewLinodeManagedContactGetTool(managedContactConfig(srv.URL))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyContactID: managedContactIDValue}))
 	if err != nil {
@@ -212,8 +212,8 @@ func TestLinodeManagedContactGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_contact_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_contact_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve managed contact") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve managed contact")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

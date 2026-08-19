@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -19,17 +19,22 @@ const (
 	monitorServiceGetToolPath               = "/monitor/services/dbaas"
 	monitorServiceMetricDefinitionsToolPath = "/monitor/services/dbaas/metric-definitions"
 	monitorServiceAlertDefinitionsToolPath  = "/monitor/services/dbaas/alert-definitions"
-	monitorServiceMetricsToolPath           = "/monitor/services/dbaas/metrics"
 	monitorServicesToolName                 = "linode_monitor_service_list"
 	monitorServiceGetToolName               = "linode_monitor_service_get"
 	monitorServiceMetricDefinitionsToolName = "linode_monitor_service_metric_definition_list"
 	monitorServiceAlertDefinitionsToolName  = "linode_monitor_service_alert_definition_list"
-	monitorServiceMetricsToolName           = "linode_monitor_service_metric_query"
 	monitorServiceToolLabel                 = "Databases"
 	monitorMetricDefinitionToolLabel        = "CPU Usage"
 	monitorMetricDefinitionToolMetric       = "cpu_usage"
 	monitorServiceToolTypeDatabase          = "dbaas"
 	monitorServiceTypeParam                 = "service_type"
+	monitorAlertDefinitionLabelParam        = "label"
+	monitorAlertDefinitionSeverityParam     = "severity"
+	monitorAlertDefinitionRuleCriteriaParam = "rule_criteria"
+	monitorAlertDefinitionTriggerParam      = "trigger_conditions"
+	monitorAlertDefinitionChannelIDsParam   = "channel_ids"
+	monitorAlertDefinitionGroupByParam      = "group_by"
+	monitorAlertDefinitionRegionsParam      = "regions"
 	monitorServiceTypeInvalidError          = "service_type must be a single non-empty service type slug"
 	monitorServiceTypeNonStringError        = "service_type must be a string"
 	monitorServiceTypeRequiredError         = "service_type is required"
@@ -40,7 +45,7 @@ func TestLinodeMonitorServiceGetToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorServiceGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorServiceGetTool(cfg)
 	if tool.Name != monitorServiceGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServiceGetToolName)
 	}
@@ -94,7 +99,7 @@ func TestLinodeMonitorServiceGetToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -147,7 +152,7 @@ func TestLinodeMonitorServiceGetToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -169,8 +174,8 @@ func TestLinodeMonitorServiceGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorServiceGetToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorServiceGetToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve monitor service") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve monitor service")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -204,7 +209,7 @@ func TestLinodeMonitorServiceGetToolInvalidServiceTypeRejectsBeforeClient(t *tes
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorServiceGetTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorServiceGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -238,7 +243,7 @@ func TestLinodeMonitorServiceMetricDefinitionsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorServiceMetricDefinitionsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorServiceMetricDefinitionListTool(cfg)
 	if tool.Name != monitorServiceMetricDefinitionsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServiceMetricDefinitionsToolName)
 	}
@@ -295,7 +300,7 @@ func TestLinodeMonitorServiceMetricDefinitionsToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceMetricDefinitionsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceMetricDefinitionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -348,7 +353,7 @@ func TestLinodeMonitorServiceMetricDefinitionsToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceMetricDefinitionsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceMetricDefinitionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -405,7 +410,7 @@ func TestLinodeMonitorServiceMetricDefinitionsToolInvalidServiceTypeRejectsBefor
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorServiceMetricDefinitionsTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorServiceMetricDefinitionListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -439,7 +444,7 @@ func TestLinodeMonitorServiceAlertDefinitionsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorServiceAlertDefinitionListTool(cfg)
 	if tool.Name != monitorServiceAlertDefinitionsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServiceAlertDefinitionsToolName)
 	}
@@ -496,7 +501,7 @@ func TestLinodeMonitorServiceAlertDefinitionsToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceAlertDefinitionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -549,7 +554,7 @@ func TestLinodeMonitorServiceAlertDefinitionsToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceAlertDefinitionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -600,7 +605,7 @@ func TestLinodeMonitorServiceAlertDefinitionsToolInvalidServiceTypeRejectsBefore
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionsTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorServiceAlertDefinitionListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -634,7 +639,7 @@ func TestLinodeMonitorServicesToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorServicesTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorServiceListTool(cfg)
 	if tool.Name != monitorServicesToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServicesToolName)
 	}
@@ -693,7 +698,7 @@ func TestLinodeMonitorServicesToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServicesTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -746,7 +751,7 @@ func TestLinodeMonitorServicesToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServicesTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -774,197 +779,5 @@ func TestLinodeMonitorServicesToolApiError(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, errForbidden) {
 		t.Errorf("textContent.Text does not contain %v", errForbidden)
-	}
-}
-
-func TestLinodeMonitorServiceMetricsToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-
-	tool, capability, handler := tools.NewLinodeMonitorServiceMetricsTool(cfg)
-	if tool.Name != monitorServiceMetricsToolName {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServiceMetricsToolName)
-	}
-
-	if capability != profiles.CapRead {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if !strings.Contains(string(tool.RawInputSchema), monitorServiceTypeParam) {
-		t.Errorf("tool.RawInputSchema missing key %v", monitorServiceTypeParam)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-}
-
-func TestLinodeMonitorServiceMetricsToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != monitorServiceMetricsToolPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceMetricsToolPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{"cpu": []float64{1.5}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceMetricsTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	for _, want := range []string{
-		"Monitor service metrics read for 'dbaas'",
-		"\"service_type\"",
-		"\"metrics\"",
-		managedStatsToolCPUKey,
-	} {
-		if !strings.Contains(textContent.Text, want) {
-			t.Errorf("textContent.Text does not contain %v", want)
-		}
-	}
-}
-
-func TestLinodeMonitorServiceMetricsToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != monitorServiceMetricsToolPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, monitorServiceMetricsToolPath)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceMetricsTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorServiceMetricsToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorServiceMetricsToolName)
-	}
-
-	if !strings.Contains(textContent.Text, errForbidden) {
-		t.Errorf("textContent.Text does not contain %v", errForbidden)
-	}
-}
-
-func TestLinodeMonitorServiceMetricsToolInvalidServiceTypeRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissingServiceType, args: map[string]any{}, wantMessage: monitorServiceTypeRequiredError},
-		{name: caseNumericServiceType, args: map[string]any{monitorServiceTypeParam: 123}, wantMessage: monitorServiceTypeNonStringError},
-		{name: caseSeparatorServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeSlash}, wantMessage: monitorServiceTypeInvalidError},
-		{name: caseQueryServiceType, args: map[string]any{monitorServiceTypeParam: invalidServiceTypeQuery}, wantMessage: monitorServiceTypeInvalidError},
-		{name: caseTraversalServiceType, args: map[string]any{monitorServiceTypeParam: pathTraversalValue}, wantMessage: monitorServiceTypeInvalidError},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorServiceMetricsTool(cfg)
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, testCase.wantMessage) {
-				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
-			}
-		})
 	}
 }

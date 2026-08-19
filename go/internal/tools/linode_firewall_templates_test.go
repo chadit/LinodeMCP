@@ -11,15 +11,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeFirewallTemplatesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeFirewallTemplatesListTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeFirewallTemplateListTool(&config.Config{})
 
 	if tool.Name != "linode_firewall_template_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_template_list")
@@ -89,7 +89,7 @@ func TestLinodeFirewallTemplatesListToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallTemplatesListTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallTemplateListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: float64(2), keyPageSize: float64(50)})
 
@@ -145,7 +145,7 @@ func TestLinodeFirewallTemplatesListToolClientError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallTemplatesListTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallTemplateListTool(cfg)
 
 	result, err := handler(t.Context(), mcp.CallToolRequest{})
 	if err != nil {
@@ -168,7 +168,7 @@ func TestLinodeFirewallTemplatesListToolClientError(t *testing.T) {
 func TestLinodeFirewallTemplateGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeFirewallTemplateGetTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeFirewallTemplateGetTool(&config.Config{})
 
 	if tool.Name != "linode_firewall_template_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_template_get")
@@ -230,7 +230,7 @@ func TestLinodeFirewallTemplateGetToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallTemplateGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keySlug: purposePublic, keyPage: float64(1), keyPageSize: float64(25)})
 
@@ -281,7 +281,7 @@ func TestLinodeFirewallTemplateGetToolRejectsInvalidSlugBeforeClientCall(t *test
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			}}
-			_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+			_, _, handler := gentools.NewLinodeFirewallTemplateGetTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySlug: slug}))
 			if err != nil {
@@ -332,7 +332,7 @@ func TestLinodeFirewallTemplateGetToolClientError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallTemplateGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallTemplateGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySlug: purposeVPC}))
 	if err != nil {
@@ -347,7 +347,7 @@ func TestLinodeFirewallTemplateGetToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_template_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_template_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve firewall template") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve firewall template")
 	}
 }

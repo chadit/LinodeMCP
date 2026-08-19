@@ -10,15 +10,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeRegionGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeRegionGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeRegionGetTool(cfg)
 
 	if tool.Name != "linode_region_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_region_get")
@@ -71,7 +71,7 @@ func TestLinodeRegionGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeRegionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
 	if err != nil {
@@ -113,7 +113,7 @@ func TestLinodeRegionGetToolApiFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeRegionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
 	if err != nil {
@@ -133,8 +133,8 @@ func TestLinodeRegionGetToolApiFailure(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_region_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_region_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve region") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve region")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -146,14 +146,14 @@ func TestLinodeRegionGetToolInvalidRegionId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeRegionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionGetTool(cfg)
 
 	cases := []struct {
 		name string
 		args map[string]any
 		want string
 	}{
-		{name: caseMissingRegion, args: map[string]any{}, want: keyRegionID + " must be a non-empty string"},
+		{name: caseMissingRegion, args: map[string]any{}, want: keyRegionID + " is required"},
 		{name: caseEmpty, args: map[string]any{keyRegionID: ""}, want: keyRegionID + " must be a non-empty string"},
 		{name: caseNumber, args: map[string]any{keyRegionID: 123}, want: keyRegionID + " must be a non-empty string"},
 		{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue}, want: errRegionIDSlug},

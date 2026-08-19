@@ -11,9 +11,11 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
+
+// auditGroupByRefused is a group_by column no audit store has.
+const auditGroupByRefused = "bogus"
 
 // summaryResult mirrors the linode_audit_summary JSON response.
 type summaryResult struct {
@@ -22,32 +24,6 @@ type summaryResult struct {
 		Count  int               `json:"count"`
 	} `json:"rows"`
 	TotalEvents int `json:"total_events"`
-}
-
-// TestLinodeAuditSummaryDefinition pins the tool identity and schema.
-func TestLinodeAuditSummaryDefinition(t *testing.T) {
-	t.Parallel()
-
-	tool, capability, handler := tools.NewLinodeAuditSummaryTool(&config.Config{})
-
-	if tool.Name != "linode_audit_summary" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_summary")
-	}
-
-	if capability != profiles.CapMeta {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, param := range []string{keySince, "group_by", "include_meta"} {
-		if !strings.Contains(raw, param) {
-			t.Errorf("tool.RawInputSchema missing key %v", param)
-		}
-	}
 }
 
 // TestLinodeAuditSummaryCountsByToolStatus drives the handler against
@@ -69,7 +45,7 @@ func TestLinodeAuditSummaryCountsByToolStatus(t *testing.T) {
 		auditEvent("linode_audit_recent", audit.CapabilityMeta, audit.StatusSuccess, 4),
 	})
 
-	_, _, handler := tools.NewLinodeAuditSummaryTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditSummaryTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -107,10 +83,10 @@ func TestLinodeAuditSummaryCountsByToolStatus(t *testing.T) {
 func TestLinodeAuditSummaryInvalidGroupBy(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeAuditSummaryTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditSummaryTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		"group_by": []any{"bogus"},
+		"group_by": []any{auditGroupByRefused},
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

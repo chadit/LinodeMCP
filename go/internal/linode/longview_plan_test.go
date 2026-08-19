@@ -13,12 +13,7 @@ import (
 )
 
 const (
-	longviewPlanPath               = "/longview/plan"
-	longviewSubscriptionPlan       = "longview-40"
-	keyLongviewClientsIncluded     = "clients_included"
-	keyLongviewSubscriptionPrice   = "price"
-	keyLongviewSubscriptionHourly  = "hourly"
-	keyLongviewSubscriptionMonthly = "monthly"
+	longviewPlanPath = "/longview/plan"
 )
 
 func TestClientGetLongviewPlanSuccess(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -26,7 +26,7 @@ func TestLinodeInstanceTransferMonthGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeInstanceTransferMonthGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceTransferMonthGetTool(cfg)
 
 	t.Parallel()
 
@@ -53,6 +53,10 @@ func TestLinodeInstanceTransferMonthGetToolDefinition(t *testing.T) {
 	}
 }
 
+// errTransferYearRange is the window the contract states for both monthly
+// reads, which is what an absent year and one outside it now read alike.
+const errTransferYearRange = "year must be an integer between 1970 and 9999"
+
 func TestLinodeInstanceTransferMonthGetToolValidation(t *testing.T) {
 	t.Parallel()
 
@@ -61,7 +65,7 @@ func TestLinodeInstanceTransferMonthGetToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceTransferMonthGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceTransferMonthGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -71,7 +75,7 @@ func TestLinodeInstanceTransferMonthGetToolValidation(t *testing.T) {
 		{name: caseMissingLinodeID, args: map[string]any{transferKeyYear: 2024, transferKeyMonth: 1}, wantContains: errLinodeIDRequired},
 		{name: caseSeparatorLinodeID, args: map[string]any{keyLinodeID: pathSeparatorLinodeID, transferKeyYear: 2024, transferKeyMonth: 1}, wantContains: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, transferKeyYear: 2024, transferKeyMonth: 1}, wantContains: errLinodeIDInteger},
-		{name: "missing year", args: map[string]any{keyLinodeID: 123, transferKeyMonth: 1}, wantContains: "year is required"},
+		{name: "missing year", args: map[string]any{keyLinodeID: 123, transferKeyMonth: 1}, wantContains: errTransferYearRange},
 		{name: "traversal year", args: map[string]any{keyLinodeID: 123, transferKeyYear: pathTraversalValue, transferKeyMonth: 1}, wantContains: "year must be an integer"},
 		{name: "query month", args: map[string]any{keyLinodeID: 123, transferKeyYear: 2024, transferKeyMonth: "1?query"}, wantContains: "month must be an integer"},
 		{name: "month too large", args: map[string]any{keyLinodeID: 123, transferKeyYear: 2024, transferKeyMonth: 13}, wantContains: "month must be"},
@@ -130,7 +134,7 @@ func TestLinodeInstanceTransferMonthGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceTransferMonthGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceTransferMonthGetTool(srvCfg)
 
 	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: 123, transferKeyYear: 2024, transferKeyMonth: 1}))
 	if err != nil {

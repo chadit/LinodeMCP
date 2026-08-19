@@ -6,10 +6,13 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"sort"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
@@ -47,18 +50,7 @@ func fixtureCatalog() []profiles.ToolDescriptor {
 func callListTools(t *testing.T, args map[string]any) []map[string]any {
 	t.Helper()
 
-	_, _, handler := tools.NewLinodeProfileListToolsTool(fixtureCatalog)
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = args
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
+	result := callAnswer(t, catalogState(fixtureCatalog()), tools.ProfileListToolsAnswer, nil, args)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	if !ok {
@@ -89,7 +81,7 @@ func callListTools(t *testing.T, args map[string]any) []map[string]any {
 func TestListToolsRegistration(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeProfileListToolsTool(fixtureCatalog)
+	tool, capability, handler := gentools.NewLinodeProfileListToolsTool(&config.Config{})
 
 	if tool.Name != "linode_profile_list_tools" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_list_tools")
@@ -292,13 +284,7 @@ func TestListToolsCombinedFilters(t *testing.T) {
 func TestListToolsEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
 
-	emptyProvider := func() []profiles.ToolDescriptor { return nil }
-	_, _, handler := tools.NewLinodeProfileListToolsTool(emptyProvider)
-
-	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	result := callAnswer(t, catalogState(nil), tools.ProfileListToolsAnswer, nil, nil)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	if !ok {
@@ -330,7 +316,7 @@ func TestListToolsEmptyCatalogReturnsEmptyArray(t *testing.T) {
 func TestListToolsRespectsContextCancellation(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeProfileListToolsTool(fixtureCatalog)
+	_, _, handler := gentools.NewLinodeProfileListToolsTool(&config.Config{})
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -349,7 +335,7 @@ func TestListToolsRespectsContextCancellation(t *testing.T) {
 func TestListCategoriesRegistration(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeProfileListCategoriesTool(fixtureCatalog)
+	tool, capability, handler := gentools.NewLinodeProfileListCategoriesTool(&config.Config{})
 
 	if tool.Name != "linode_profile_list_categories" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_list_categories")
@@ -376,12 +362,7 @@ func TestListCategoriesRegistration(t *testing.T) {
 func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeProfileListCategoriesTool(fixtureCatalog)
-
-	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	result := callAnswer(t, catalogState(fixtureCatalog()), tools.ProfileListCategoriesAnswer, nil, nil)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	if !ok {
@@ -406,18 +387,40 @@ func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 		counts[name] = int(raw)
 	}
 
-	// linode_instance_boot carries both compute and compute_actions.
-	// linode_domain_get carries dns. hello carries core. Each tool
-	// contributes 1 to each of its categories.
+	// linode_instance_boot carries compute, linode_domain_get dns, and hello
+	// core. Each tool contributes 1 to each of its categories.
 	for key, want := range map[string]any{
-		"compute":         1,
-		"compute_actions": 1,
-		dnsCategory:       1,
-		"core":            1,
+		"compute":   1,
+		dnsCategory: 1,
+		"core":      1,
 	} {
 		if !reflect.DeepEqual(counts[key], want) {
 			t.Errorf("counts[%v] = %v, want %v", key, counts[key], want)
 		}
+	}
+}
+
+// TestListToolsSortedByName pins the answer's order. The catalog fixture is
+// deliberately NOT in name order, so a dropped sort fails here rather than
+// showing up as two languages listing one menu two ways: Go registers its
+// hand-written tools first and Python registers in name order, which is the
+// divergence this sort closes.
+func TestListToolsSortedByName(t *testing.T) {
+	t.Parallel()
+
+	entries := callListTools(t, map[string]any{})
+
+	names := make([]string, len(entries))
+	for i := range entries {
+		names[i], _ = entries[i]["name"].(string)
+	}
+
+	if len(names) != len(fixtureCatalog()) {
+		t.Fatalf("len(names) = %d, want %d", len(names), len(fixtureCatalog()))
+	}
+
+	if !sort.StringsAreSorted(names) {
+		t.Errorf("names = %v, want name-sorted", names)
 	}
 }
 
@@ -428,12 +431,7 @@ func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 func TestListCategoriesSortedByName(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeProfileListCategoriesTool(fixtureCatalog)
-
-	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	result := callAnswer(t, catalogState(fixtureCatalog()), tools.ProfileListCategoriesAnswer, nil, nil)
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
 
@@ -468,13 +466,7 @@ func TestListCategoriesSortedByName(t *testing.T) {
 func TestListCategoriesEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
 
-	emptyProvider := func() []profiles.ToolDescriptor { return nil }
-	_, _, handler := tools.NewLinodeProfileListCategoriesTool(emptyProvider)
-
-	result, err := handler(t.Context(), mcp.CallToolRequest{})
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	result := callAnswer(t, catalogState(nil), tools.ProfileListCategoriesAnswer, nil, nil)
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
 

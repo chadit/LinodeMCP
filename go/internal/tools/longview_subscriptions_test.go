@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -25,7 +25,7 @@ func TestLinodeLongviewSubscriptionsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeLongviewSubscriptionsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeLongviewSubscriptionListTool(cfg)
 	if tool.Name != "linode_longview_subscription_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_subscription_list")
 	}
@@ -82,7 +82,7 @@ func TestLinodeLongviewSubscriptionsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewSubscriptionsTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewSubscriptionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -131,7 +131,7 @@ func TestLinodeLongviewSubscriptionsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewSubscriptionsTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewSubscriptionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -183,7 +183,7 @@ func TestLinodeLongviewSubscriptionsToolInvalidPaginationRejectsBeforeClient(t *
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeLongviewSubscriptionsTool(cfg)
+			_, _, handler := gentools.NewLinodeLongviewSubscriptionListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 

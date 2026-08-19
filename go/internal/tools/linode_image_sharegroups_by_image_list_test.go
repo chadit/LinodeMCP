@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeImageShareGroupsByImageListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupsByImageListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupByImageListTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_by_image_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_by_image_list")
@@ -103,7 +103,7 @@ func TestLinodeImageShareGroupsByImageListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupsByImageListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupByImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyImageID: privateImage12345Fixture, keyPage: 2, keyPageSize: 25})
 
@@ -169,7 +169,7 @@ func TestLinodeImageShareGroupsByImageListToolRejectsInvalidImageIdBeforeClientC
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeImageShareGroupsByImageListTool(cfg)
+			_, _, handler := gentools.NewLinodeImageSharegroupByImageListTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{keyImageID: value})
 
@@ -197,7 +197,7 @@ func TestLinodeImageShareGroupsByImageListToolMissingImageId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeImageShareGroupsByImageListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupByImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -237,7 +237,7 @@ func TestLinodeImageShareGroupsByImageListToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupsByImageListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupByImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyImageID: privateImage12345Fixture})
 

@@ -2,7 +2,6 @@ package tools_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"slices"
@@ -10,6 +9,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
@@ -35,46 +36,23 @@ func mutateFixtureCatalog() []profiles.ToolDescriptor {
 	}
 }
 
-// staticCatalog wraps a slice as a CatalogSnapshot. Tests that don't
-// care about hot-reloads-mid-call (most of them) use this single-shot
-// adapter.
-func staticCatalog(catalog []profiles.ToolDescriptor) tools.CatalogSnapshot {
-	return func() []profiles.ToolDescriptor { return catalog }
+// mutateState carries the registry plus the catalog _draft_add_tools expands
+// patterns against.
+func mutateState(reg *builder.Registry) *tools.BuilderState {
+	return builderState(reg, mutateFixtureCatalog(), noProfile)
 }
 
-// callMutateHandler invokes the handler and returns the parsed
-// response. Mirrors the helper in linode_profile_draft_test.go.
-func callMutateHandler(
+// callMutateAnswer invokes the answer with the state attached and returns the
+// parsed response. None of the three mutators reads the configuration.
+func callMutateAnswer(
 	t *testing.T,
-	handler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error),
+	state *tools.BuilderState,
+	answer builderAnswer,
 	args map[string]any,
 ) map[string]any {
 	t.Helper()
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = args
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Error("ok = false, want true")
-	}
-
-	var out map[string]any
-
-	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	return out
+	return builderBody(t, callAnswer(t, state, answer, nil, args))
 }
 
 // TestDraftAddToolsRegistration locks in the CapMeta tag and tool
@@ -84,11 +62,7 @@ func callMutateHandler(
 func TestDraftAddToolsRegistration(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	tool, capability, handler := tools.NewLinodeProfileDraftAddToolsTool(
-		reg,
-		staticCatalog(mutateFixtureCatalog()),
-	)
+	tool, capability, handler := gentools.NewLinodeProfileDraftAddToolsTool(&config.Config{})
 
 	if tool.Name != "linode_profile_draft_add_tools" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_draft_add_tools")
@@ -119,12 +93,7 @@ func TestDraftAddToolsAddsLiterals(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
-		reg,
-		staticCatalog(mutateFixtureCatalog()),
-	)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolInstanceBoot, toolHello},
 	})
@@ -181,12 +150,7 @@ func TestDraftAddToolsExpandsWildcards(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
-		reg,
-		staticCatalog(mutateFixtureCatalog()),
-	)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{"linode_instance_*"},
 	})
@@ -221,19 +185,14 @@ func TestDraftAddToolsDedupesAgainstExisting(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
-		reg,
-		staticCatalog(mutateFixtureCatalog()),
-	)
-
 	// First add: toolHello lands.
-	_ = callMutateHandler(t, handler, map[string]any{
+	_ = callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolHello},
 	})
 
 	// Second add: toolHello is already there.
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolHello},
 	})
@@ -260,21 +219,10 @@ func TestDraftAddToolsRefusesUnknownDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
-		reg,
-		staticCatalog(mutateFixtureCatalog()),
-	)
-
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, nil, map[string]any{
 		keyName:  envNonexistent,
 		keyTools: []any{toolHello},
-	}
-
-	_, err := handler(t.Context(), req)
-	if !errors.Is(err, builder.ErrDraftNotFound) {
-		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
-	}
+	}, "draft not found: nonexistent")
 }
 
 // TestDraftAddToolsRefusesMissingName covers the validation guard.
@@ -282,15 +230,16 @@ func TestDraftAddToolsRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftAddToolsTool(
-		reg,
-		staticCatalog(mutateFixtureCatalog()),
-	)
+	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, nil, nil, wantDraftNameMissing)
+}
 
-	_, err := handler(t.Context(), mcp.CallToolRequest{})
-	if !errors.Is(err, tools.ErrDraftNameMissing) {
-		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
-	}
+// TestDraftRemoveToolsRefusesMissingName mirrors the add-tools guard.
+func TestDraftRemoveToolsRefusesMissingName(t *testing.T) {
+	t.Parallel()
+
+	reg := builder.NewRegistry()
+	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, nil, map[string]any{keyTools: []any{toolHello}},
+		wantDraftNameMissing)
 }
 
 // TestDraftRemoveToolsRemovesLiterals is the happy path: literal
@@ -307,9 +256,7 @@ func TestDraftRemoveToolsRemovesLiterals(t *testing.T) {
 
 	draft.AllowedTools = []string{toolInstanceBoot, toolInstanceReboot, toolHello}
 
-	_, _, handler := tools.NewLinodeProfileDraftRemoveToolsTool(reg)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolHello},
 	})
@@ -351,9 +298,7 @@ func TestDraftRemoveToolsExpandsWildcardsAgainstDraft(t *testing.T) {
 
 	draft.AllowedTools = []string{toolInstanceBoot, toolInstanceReboot, toolHello}
 
-	_, _, handler := tools.NewLinodeProfileDraftRemoveToolsTool(reg)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{"linode_instance_*"},
 	})
@@ -398,9 +343,7 @@ func TestDraftRemoveToolsNoMatchIsBenign(t *testing.T) {
 
 	draft.AllowedTools = []string{toolHello}
 
-	_, _, handler := tools.NewLinodeProfileDraftRemoveToolsTool(reg)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{"nonexistent-tool"},
 	})
@@ -425,26 +368,17 @@ func TestDraftRemoveToolsRefusesUnknownDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftRemoveToolsTool(reg)
-
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, nil, map[string]any{
 		keyName:  envNonexistent,
 		keyTools: []any{toolHello},
-	}
-
-	_, err := handler(t.Context(), req)
-	if !errors.Is(err, builder.ErrDraftNotFound) {
-		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
-	}
+	}, "draft not found: nonexistent")
 }
 
 // TestDraftSetRegistersAndIsCapMeta covers the static contract.
 func TestDraftSetRegistersAndIsCapMeta(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	tool, capability, handler := tools.NewLinodeProfileDraftSetTool(reg)
+	tool, capability, handler := gentools.NewLinodeProfileDraftSetTool(&config.Config{})
 
 	if tool.Name != "linode_profile_draft_set" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_draft_set")
@@ -480,9 +414,7 @@ func TestDraftSetEnvironmentsOnly(t *testing.T) {
 	draft.RequiredTokenScopes = []string{tcScopeRead}
 	draft.AllowYolo = true
 
-	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{
 		keyName:               "my-draft",
 		tcAllowedEnvironments: []any{envProd},
 	})
@@ -531,9 +463,7 @@ func TestDraftSetAllowYoloFlipsCleanly(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{
 		keyName:      mutateDraftName,
 		keyAllowYolo: true,
 	})
@@ -565,12 +495,10 @@ func TestDraftSetMultipleFieldsAtOnce(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
-
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{
 		keyName:               mutateDraftName,
 		tcAllowedEnvironments: []any{envProd, "dev"},
-		tcRequiredTokenScopes: []any{"linodes:read_write"},
+		tcRequiredTokenScopes: []any{scopeLinodesReadWrite},
 		keyAllowYolo:          true,
 	})
 
@@ -592,9 +520,7 @@ func TestDraftSetEmptyCallNoOps(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
-
-	out := callMutateHandler(t, handler, map[string]any{keyName: mutateDraftName})
+	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{keyName: mutateDraftName})
 
 	changes, _ := out["changes"].(map[string]any)
 	if len(changes) != 0 {
@@ -608,17 +534,41 @@ func TestDraftSetRefusesUnknownDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftSetTool(reg)
-
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftSetAnswer, nil, map[string]any{
 		keyName:      envNonexistent,
 		keyAllowYolo: true,
+	}, "draft not found: nonexistent")
+}
+
+// TestDraftSetRefusesMissingName mirrors the add- and remove-tools guards.
+func TestDraftSetRefusesMissingName(t *testing.T) {
+	t.Parallel()
+
+	reg := builder.NewRegistry()
+	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftSetAnswer, nil, map[string]any{keyAllowYolo: true},
+		wantDraftNameMissing)
+}
+
+// TestDraftSetRefusesUnknownDraftPerField covers each settable field's own
+// refusal: the handler sets them one at a time, so a field whose miss was
+// never exercised could report something else entirely.
+func TestDraftSetRefusesUnknownDraftPerField(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]map[string]any{
+		tcAllowedEnvironments: {keyName: envNonexistent, tcAllowedEnvironments: []any{envProd}},
+		tcRequiredTokenScopes: {keyName: envNonexistent, tcRequiredTokenScopes: []any{scopeLinodesReadWrite}},
 	}
 
-	_, err := handler(t.Context(), req)
-	if !errors.Is(err, builder.ErrDraftNotFound) {
-		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
+	for field, args := range cases {
+		t.Run(field, func(t *testing.T) {
+			t.Parallel()
+
+			reg := builder.NewRegistry()
+
+			wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftSetAnswer, nil, args,
+				"draft not found: nonexistent")
+		})
 	}
 }
 
@@ -627,13 +577,9 @@ func TestDraftSetRefusesUnknownDraft(t *testing.T) {
 func TestDraftMutatorsRespectContextCancellation(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	_, _, addHandler := tools.NewLinodeProfileDraftAddToolsTool(
-		reg,
-		staticCatalog(mutateFixtureCatalog()),
-	)
-	_, _, removeHandler := tools.NewLinodeProfileDraftRemoveToolsTool(reg)
-	_, _, setHandler := tools.NewLinodeProfileDraftSetTool(reg)
+	_, _, addHandler := gentools.NewLinodeProfileDraftAddToolsTool(&config.Config{})
+	_, _, removeHandler := gentools.NewLinodeProfileDraftRemoveToolsTool(&config.Config{})
+	_, _, setHandler := gentools.NewLinodeProfileDraftSetTool(&config.Config{})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

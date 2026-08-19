@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -30,7 +30,7 @@ func TestLinodeMonitorAlertChannelsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorAlertChannelListTool(cfg)
 	if tool.Name != monitorAlertChannelsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorAlertChannelsToolName)
 	}
@@ -92,7 +92,7 @@ func TestLinodeMonitorAlertChannelsToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorAlertChannelListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -145,7 +145,7 @@ func TestLinodeMonitorAlertChannelsToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorAlertChannelListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -167,8 +167,8 @@ func TestLinodeMonitorAlertChannelsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
+	if !strings.Contains(textContent.Text, "Failed to list monitor alert channels") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to list monitor alert channels")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -196,7 +196,7 @@ func TestLinodeMonitorAlertChannelsToolInvalidPaginationRejectsBeforeClient(t *t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorAlertChannelsTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorAlertChannelListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 

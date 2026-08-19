@@ -6,16 +6,10 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
-
-// ActiveProfileProvider returns the profile the server is currently running
-// under. Injected (rather than read from a global) so linode_profile_can_run
-// reflects hot-reload profile swaps at call time and tests can supply a
-// reproducible fixture without standing up a Server.
-type ActiveProfileProvider func() profiles.Profile
 
 const (
 	// canRunParamCalls is the input property: an array of {tool, args?}
@@ -78,83 +72,68 @@ func profilePermitsAllEnvironments(envs []string) bool {
 	return len(envs) == 0 || (len(envs) == 1 && envs[0] == envWildcard)
 }
 
-// NewLinodeProfileCanRunTool returns the linode_profile_can_run pre-check
-// tool. It answers "would the active profile permit this sequence of tool
-// calls?" so the model can bail before partial execution strands the user.
+// ProfileCanRunAnswer answers linode_profile_can_run. It reports "would the
+// active profile permit this sequence of tool calls?" so the model can bail
+// before partial execution strands the user.
 // It inspects only the tool name and the optional `environment` arg of each
 // call against the active profile; it does not check resource IDs, API token
 // scope, resource existence, or rate limits. Pre-check is advice, not a plan.
 //
-// Both providers run at handler call time so hot-reload changes to the
-// catalog or active profile are reflected without re-registering the tool.
-func NewLinodeProfileCanRunTool(
-	catalog CatalogProvider,
-	activeProfile ActiveProfileProvider,
-) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewToolWithRawSchema(
-		"linode_profile_can_run",
-		"Pre-check whether the active profile would permit a sequence of tool "+
-			"calls before executing any of them. Returns a per-call allowed/blocked "+
-			"verdict with a reason and remedy, plus a summary. Inspects only the tool "+
-			"name and optional environment arg, not resource IDs. Advice only; it does "+
-			"not execute anything.",
-		toolschemas.Schema("linode.mcp.v1.ProfileCanRunInput"),
-	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		profile := activeProfile()
-		registered := registeredCapabilities(catalog())
-		allowedTools := sliceToSet(profile.AllowedTools)
-		allEnvs := profilePermitsAllEnvironments(profile.AllowedEnvironments)
-
-		rawCalls, _ := request.GetArguments()[canRunParamCalls].([]any)
-
-		resp := canRunResponse{
-			ActiveProfile: profile.Name,
-			Results:       make([]canRunCallResult, 0, len(rawCalls)),
-			Summary: canRunSummary{
-				BlockedByReason: map[string]int{
-					canRunBucketUnregistered: 0,
-					canRunBucketProfileBlock: 0,
-					canRunBucketEnvBlock:     0,
-					canRunBucketCapability:   0,
-				},
-			},
-		}
-
-		for _, raw := range rawCalls {
-			entry, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-
-			toolName, _ := entry[canRunEntryTool].(string)
-			env, hasEnv := canRunEntryEnvironment(entry)
-
-			result, bucket := evaluateCanRun(toolName, env, hasEnv, registered, allowedTools, profile.AllowedEnvironments, allEnvs)
-			resp.Results = append(resp.Results, result)
-			resp.Summary.Total++
-
-			if result.Allowed {
-				resp.Summary.Allowed++
-
-				continue
-			}
-
-			resp.Summary.Blocked++
-			resp.Summary.BlockedByReason[bucket]++
-		}
-
-		return MarshalProtoToolResponse(canRunProto(&resp))
+// Both the catalog and the active profile are read from the attached builder
+// state at call time, so a hot reload of either reaches this already-registered
+// tool.
+func ProfileCanRunAnswer(
+	ctx context.Context, request *mcp.CallToolRequest, _ *config.Config,
+) (*mcp.CallToolResult, error) {
+	state, refusal := builderStateOrRefusal(ctx)
+	if refusal != nil {
+		return refusal, nil
 	}
 
-	return tool, profiles.CapMeta, handler
+	profile := state.ActiveProfile()
+	registered := registeredCapabilities(state.Catalog())
+	allowedTools := sliceToSet(profile.AllowedTools)
+	allEnvs := profilePermitsAllEnvironments(profile.AllowedEnvironments)
+
+	rawCalls, _ := request.GetArguments()[canRunParamCalls].([]any)
+
+	resp := canRunResponse{
+		ActiveProfile: profile.Name,
+		Results:       make([]canRunCallResult, 0, len(rawCalls)),
+		Summary: canRunSummary{
+			BlockedByReason: map[string]int{
+				canRunBucketUnregistered: 0,
+				canRunBucketProfileBlock: 0,
+				canRunBucketEnvBlock:     0,
+				canRunBucketCapability:   0,
+			},
+		},
+	}
+
+	for _, raw := range rawCalls {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		toolName, _ := entry[canRunEntryTool].(string)
+		env, hasEnv := canRunEntryEnvironment(entry)
+
+		result, bucket := evaluateCanRun(toolName, env, hasEnv, registered, allowedTools, profile.AllowedEnvironments, allEnvs)
+		resp.Results = append(resp.Results, result)
+		resp.Summary.Total++
+
+		if result.Allowed {
+			resp.Summary.Allowed++
+
+			continue
+		}
+
+		resp.Summary.Blocked++
+		resp.Summary.BlockedByReason[bucket]++
+	}
+
+	return MarshalProtoToolResponse(canRunProto(&resp))
 }
 
 // canRunProto converts the internal verdict shape into the response message.
@@ -182,16 +161,16 @@ func canRunProto(resp *canRunResponse) *linodev1.ProfileCanRunResponse {
 
 	blockedByReason := make(map[string]int32, len(resp.Summary.BlockedByReason))
 	for bucket, count := range resp.Summary.BlockedByReason {
-		blockedByReason[bucket] = linodeIDToInt32(count)
+		blockedByReason[bucket] = IDToInt32(count)
 	}
 
 	return &linodev1.ProfileCanRunResponse{
 		ActiveProfile: resp.ActiveProfile,
 		Results:       results,
 		Summary: &linodev1.ProfileCanRunSummary{
-			Total:           linodeIDToInt32(resp.Summary.Total),
-			Allowed:         linodeIDToInt32(resp.Summary.Allowed),
-			Blocked:         linodeIDToInt32(resp.Summary.Blocked),
+			Total:           IDToInt32(resp.Summary.Total),
+			Allowed:         IDToInt32(resp.Summary.Allowed),
+			Blocked:         IDToInt32(resp.Summary.Blocked),
 			BlockedByReason: blockedByReason,
 		},
 	}

@@ -6,57 +6,15 @@ import "errors"
 var (
 	ErrEnvironmentNotFound    = errors.New("environment not found in configuration")
 	ErrLinodeConfigIncomplete = errors.New("linode configuration is incomplete: check your API URL and token")
-	ErrLinodeIDRequired       = errors.New("linode_id is required")
-	ErrLinodeIDInvalid        = errors.New("linode_id must be a valid integer")
-	errUnexpectedTrailingJSON = errors.New("unexpected trailing JSON")
 	// errUnexpectedKeyToken reports a non-string object key, which valid
 	// JSON never produces; it guards the widenObject type assertion.
-	errUnexpectedKeyToken  = errors.New("unexpected object key token")
-	ErrBackupIDRequired    = errors.New("backup_id is required")
-	ErrBackupIDInvalid     = errors.New("backup_id must be a valid integer")
-	ErrConfigIDRequired    = errors.New("config_id is required")
-	ErrInterfaceIDRequired = errors.New("interface_id is required")
-	ErrDiskIDRequired      = errors.New("disk_id is required")
-	ErrDiskIDInvalid       = errors.New("disk_id must be a valid integer")
-	errReservedIPListShape = errors.New("reserved IP list response shape mismatch")
+	errUnexpectedKeyToken = errors.New("unexpected object key token")
 )
 
 // Sentinel errors for image share group validation.
 var (
-	ErrImageShareGroupImageIDRequired = errors.New("image id is required")
-	ErrImagesMustBeArray              = errors.New("images must be an array of objects")
-	ErrTagsMustBeJSONStringArray      = errors.New("tags must be a JSON string array")
-	ErrTagsEntriesNonEmpty            = errors.New("tags entries must be non-empty strings")
-)
-
-// Sentinel errors for SSH key validation.
-var (
-	ErrSSHKeyRequired      = errors.New("ssh_key is required")
-	ErrSSHKeyInvalidFormat = errors.New("invalid SSH key format: must start with ssh-rsa, ssh-ed25519, or ecdsa-sha2-*")
-	ErrSSHKeyInvalidLength = errors.New("invalid SSH key length: key appears malformed")
-)
-
-// Sentinel errors for password validation.
-var (
-	ErrPasswordTooShort    = errors.New("root_pass must be at least 12 characters")
-	ErrPasswordTooLong     = errors.New("root_pass must not exceed 128 characters")
-	ErrPasswordMissingChar = errors.New("root_pass must contain uppercase, lowercase, and digits")
-)
-
-// Sentinel errors for DNS validation.
-var (
-	ErrDNSNameTooLong       = errors.New("DNS record name exceeds maximum length of 253 characters")
-	ErrDNSNameInvalid       = errors.New("invalid DNS record name: must contain only alphanumeric characters, hyphens, and dots")
-	ErrDNSTargetRequired    = errors.New("target is required")
-	ErrDNSTargetInvalidA    = errors.New("a record target must be a valid IPv4 address")
-	ErrDNSTargetPrivateIP   = errors.New("a record target cannot be a private IP address")
-	ErrDNSTargetInvalidAAAA = errors.New("aaaa record target must be a valid IPv6 address")
-)
-
-// Sentinel errors for volume validation.
-var (
-	ErrVolumeSizeTooSmall = errors.New("volume size must be at least 10 GB")
-	ErrVolumeSizeTooLarge = errors.New("volume size cannot exceed 10240 GB (10 TB)")
+	ErrTagsMustBeJSONStringArray = errors.New("tags must be a JSON string array")
+	ErrTagsEntriesNonEmpty       = errors.New("tags entries must be non-empty strings")
 )
 
 // ErrVLANNotFound is returned when a VLAN dry-run cannot find a matching
@@ -66,35 +24,7 @@ var ErrVLANNotFound = errors.New("VLAN not found")
 // Sentinel errors for bucket validation.
 var (
 	ErrBucketLabelRequired  = errors.New("label is required")
-	ErrBucketLabelTooShort  = errors.New("bucket label must be at least 3 characters")
-	ErrBucketLabelTooLong   = errors.New("bucket label must not exceed 63 characters")
-	ErrBucketLabelStartEnd  = errors.New("bucket label must start and end with a lowercase letter or number")
-	ErrBucketLabelInvalid   = errors.New("bucket label must contain only lowercase letters, numbers, and hyphens")
-	ErrBucketLabelIPAddress = errors.New("bucket label must not be formatted as an IP address")
-	ErrBucketLabelXNPrefix  = errors.New("bucket label must not use the 'xn--' prefix (reserved for internationalized domain names)")
-	ErrBucketACLInvalid     = errors.New("acl must be one of: private, public-read, authenticated-read, public-read-write")
 	ErrBucketRegionRequired = errors.New("region is required")
-	ErrRegionInvalid        = errors.New("region must contain only lowercase letters, numbers, and hyphens")
-)
-
-// Sentinel errors for access key validation.
-var (
-	ErrKeyLabelRequired        = errors.New("label is required")
-	ErrKeyLabelTooLong         = errors.New("access key label must not exceed 50 characters")
-	ErrKeyIDRequired           = errors.New("key_id is required and must be a positive integer")
-	ErrKeyBucketNameRequired   = errors.New("bucket_access entries must include bucket_name")
-	ErrKeyBucketRegionRequired = errors.New("bucket_access entries must include region")
-)
-
-// Sentinel errors for presigned URL validation.
-var (
-	ErrPresignedExpiresInvalid = errors.New("expires_in must be between 1 and 604800 seconds (7 days)")
-	ErrObjectNameRequired      = errors.New("name (object key) is required")
-)
-
-// Sentinel errors for LKE validation.
-var (
-	ErrLKETierRequired = errors.New("tier is required")
 )
 
 // Sentinel errors for placement group validation.
@@ -106,29 +36,29 @@ var (
 	ErrPlacementGroupLinodesDuplicate = errors.New("linodes entries must be unique")
 )
 
-// Sentinel errors for Phase 8.3 profile-builder draft tools. Callers
-// match with errors.Is.
+// The profile-builder tools word their refusals as tool results rather than
+// errors, so their sentences live beside the handlers that answer them
+// (builderstate.go and linode_profile_draft_save.go) rather than here.
 var (
-	// ErrDraftNameMissing reports that the name argument was empty.
-	ErrDraftNameMissing = errors.New("name argument is required")
-	// ErrCloneSourceMissing reports that clone_from named a profile
-	// that doesn't exist in built-ins or user config.
-	ErrCloneSourceMissing = errors.New("clone_from profile not found")
-)
-
-// Sentinel errors for Phase 8.5 draft save. Save is the only builder
-// tool that mutates the config file, so it carries its own validation
-// surface.
-var (
-	// ErrConfirmRequired reports that the save was called without
-	// confirm=true. Mirrors every other confirmation-gated write tool.
-	ErrConfirmRequired = errors.New("confirm=true is required for draft save")
-	// ErrSaveBuiltinName reports that the save target name matches a
-	// built-in profile. Built-ins live in code and cannot be shadowed
-	// by user-defined entries.
-	ErrSaveBuiltinName = errors.New("cannot save over built-in profile name")
-	// ErrConfigPathUnknown reports that the server is running without
-	// a known config path on disk. Phase 8.5 save needs a target
-	// path to write to.
-	ErrConfigPathUnknown = errors.New("config path not configured")
+	// ErrNullMember means the response and the declared member were read
+	// apart, so there is no object to restore an explicit null into.
+	ErrNullMember = errors.New("response carries no object to restore explicit nulls into")
+	// ErrResponseDecode wraps the JSON failure when a response object that
+	// should hold members does not parse as one.
+	ErrResponseDecode = errors.New("failed to decode response object")
+	// ErrResponseIndent wraps the JSON failure when a restored response could
+	// not be re-indented, which means the restoration built invalid bytes.
+	ErrResponseIndent = errors.New("failed to indent proto response")
+	// ErrCollectionElement means a removal read the collection its resource
+	// belongs to and found no element carrying the id it was addressed by, so
+	// there is nothing to preview or hash.
+	ErrCollectionElement = errors.New("collection holds no matching element")
+	// ErrPageElementCount means a page and the raw bodies it decoded from are
+	// different lengths, so element i of one is not element i of the other and
+	// restoring by index would write one resource's nulls onto another.
+	ErrPageElementCount = errors.New("page element count does not match the raw one")
+	// ErrStateNotDeclared means a dependency walk written for a declared fetch
+	// was handed some other state, which used to read as a resource carrying
+	// nothing and report an empty walk. Python raises the same sentence.
+	ErrStateNotDeclared = errors.New("dependency walk received state that is not a declared fetch")
 )

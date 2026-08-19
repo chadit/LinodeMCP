@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
@@ -54,25 +56,88 @@ type behaviorCase struct {
 	APIResponseRaw *string                    `json:"api_response_raw"`
 	APIStatus      *int                       `json:"api_status"`
 	APIResponses   map[string]json.RawMessage `json:"api_responses"`
-	ExpectAPIError string                     `json:"expect_api_error"`
-	ExpectError    string                     `json:"expect_error"`
-	ExpectRequest  *behaviorRequest           `json:"expect_request"`
-	ExpectResult   json.RawMessage            `json:"expect_result"`
+	// APIResponseHeaders answers headers per routed key, for a leg whose result
+	// is a header rather than a body: a presigned PUT reports the stored
+	// object's entity tag in ETag and sends no JSON at all.
+	APIResponseHeaders map[string]map[string]string `json:"api_response_headers"`
+	// Files are materialized into a temp directory before the case runs, so a
+	// tool taking a local path has something real to read. {{file:name}}
+	// substitutes the absolute path into any string argument.
+	Files          map[string]behaviorFile `json:"files"`
+	Config         *behaviorConfig         `json:"config"`
+	ExpectAPIError string                  `json:"expect_api_error"`
+	ExpectError    string                  `json:"expect_error"`
+	ExpectRequest  *behaviorRequest        `json:"expect_request"`
+	ExpectResult   json.RawMessage         `json:"expect_result"`
+}
+
+// behaviorFile is one file a case needs on disk. Content writes literal text;
+// Size and Fill generate a file too large to spell out in the fixture, which is
+// how the over-ceiling case stays a 2 KB file rather than a 5 GiB one.
+type behaviorFile struct {
+	Content string `json:"content"`
+	Fill    string `json:"fill"`
+	Size    int    `json:"size"`
+}
+
+// behaviorConfig is the narrow config overlay a case may apply. Only the
+// Object Storage data-plane block is reachable, by name: a general overlay
+// would let a fixture change the profile or the auth it is being tested under,
+// and a fixture that can change what it is being tested under is not a fixture.
+//
+// The keys are snake_case like the rest of the fixture schema, not the
+// camelCase the operator's YAML uses: this is a fixture contract, and it is
+// read by both runners rather than by the config loader.
+type behaviorConfig struct {
+	ObjectStorage *behaviorObjectStorage `json:"object_storage"`
+}
+
+// behaviorObjectStorage overlays the data-plane budgets a case runs under.
+type behaviorObjectStorage struct {
+	MaxSinglePartBytes int64 `json:"max_single_part_bytes"`
 }
 
 // behaviorRequest is the expected outgoing HTTP call: method, path (with any
 // query string), and the JSON body compared structurally.
 type behaviorRequest struct {
-	Method string          `json:"method"`
-	Path   string          `json:"path"`
-	Body   json.RawMessage `json:"body"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	// APISurface is the base the call must go to, "" meaning v4. Absent is what
+	// nearly every fixture says, so a tool that moved to another surface without
+	// its fixture moving with it fails here rather than passing quietly.
+	APISurface string          `json:"api_surface"`
+	Body       json.RawMessage `json:"body"`
+}
+
+// surface is the declared surface, with the default filled in.
+func (r *behaviorRequest) surface() string {
+	if r.APISurface == "" {
+		return linoderoute.DefaultSurfaceSegment
+	}
+
+	return r.APISurface
+}
+
+// splitSurface takes the leading version segment off a request path, answering
+// it beside the rest. The fake base ends in one, so every request carries it;
+// a path arriving without one means the client dropped the base's version.
+func splitSurface(path string) (string, string) {
+	trimmed := strings.TrimPrefix(path, "/")
+
+	segment, rest, found := strings.Cut(trimmed, "/")
+	if !found {
+		return segment, "/"
+	}
+
+	return segment, "/" + rest
 }
 
 // capturedRequest is one HTTP request the fake transport observed.
 type capturedRequest struct {
-	method string
-	path   string
-	body   []byte
+	method  string
+	path    string
+	surface string
+	body    []byte
 }
 
 // behaviorOutcomeCount returns the number of usable outcome assertions set on
@@ -131,6 +196,32 @@ func decodeBehaviorResult(t *testing.T, rawResponse []byte) (bool, string) {
 	text, _ := first["text"].(string)
 
 	return isError, text
+}
+
+// callServerTool dispatches one tools/call through the real server and returns
+// the answer text with its error flag. One copy of the JSON-RPC envelope keeps
+// the tests that drive the server through its own wire from drifting apart.
+func callServerTool(
+	t *testing.T, srv *server.Server, name string, args map[string]any,
+) (bool, string) {
+	t.Helper()
+
+	message, err := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params":  map[string]any{callNameKey: name, "arguments": args},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rawResponse, err := json.Marshal(srv.HandleMessage(t.Context(), message))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	return decodeBehaviorResult(t, rawResponse)
 }
 
 // TestBehaviorConformance replays every shared behavior fixture through the
@@ -259,6 +350,110 @@ func resolveBehaviorResponse(testCase *behaviorCase, method, path string) ([]byt
 	return response, http.StatusOK, true
 }
 
+// materializeBehaviorFiles writes the case's declared files into a temp
+// directory and answers the arguments with {{file:name}} resolved to their
+// absolute paths. A tool whose whole job is reading a local file cannot be
+// pinned by a fixture that never puts one on disk.
+//
+// {{file_dir}} names the directory itself, which is what a tool that WRITES a
+// file needs: a destination inside a directory the case owns and that no file
+// occupies yet.
+func materializeBehaviorFiles(
+	t *testing.T, testCase *behaviorCase,
+) map[string]any {
+	t.Helper()
+
+	dir := t.TempDir()
+	defer func() {
+		testCase.ExpectError = substituteFilePaths(testCase.ExpectError, dir, testCase.Files)
+	}()
+
+	paths := make(map[string]string, len(testCase.Files))
+
+	for name, declared := range testCase.Files {
+		content := []byte(declared.Content)
+		if declared.Size > 0 {
+			content = bytes.Repeat([]byte(declared.Fill), declared.Size)
+		}
+
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, content, 0o600); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		paths[name] = path
+	}
+
+	resolved := make(map[string]any, len(testCase.Args))
+
+	for key, value := range testCase.Args {
+		text, isText := value.(string)
+		if !isText {
+			resolved[key] = value
+
+			continue
+		}
+
+		for name, path := range paths {
+			text = strings.ReplaceAll(text, "{{file:"+name+"}}", path)
+		}
+
+		resolved[key] = strings.ReplaceAll(text, "{{file_dir}}", dir)
+	}
+
+	return resolved
+}
+
+// substituteFilePaths resolves the file tokens in one string. The expected
+// error text needs them as much as the arguments do: a refusal that names the
+// local path it refused cannot be pinned any other way, because the path is a
+// per-run temp directory.
+func substituteFilePaths(text, dir string, files map[string]behaviorFile) string {
+	for name := range files {
+		text = strings.ReplaceAll(text, "{{file:"+name+"}}", filepath.Join(dir, name))
+	}
+
+	return strings.ReplaceAll(text, "{{file_dir}}", dir)
+}
+
+// substituteAPIBase resolves {{api_base}} in the routed responses. The fake
+// server's port is picked at run time, so a fixture that has to name it (a
+// presigned URL pointing back at the fake) cannot spell it out.
+func substituteAPIBase(
+	responses map[string]json.RawMessage, base string,
+) map[string]json.RawMessage {
+	resolved := make(map[string]json.RawMessage, len(responses))
+
+	for key, value := range responses {
+		resolved[key] = json.RawMessage(
+			strings.ReplaceAll(string(value), "{{api_base}}", base))
+	}
+
+	return resolved
+}
+
+// behaviorConfigFor builds the config one case runs under, pointed at the fake
+// API and carrying the case's narrow overlay when it declared one.
+func behaviorConfigFor(testCase *behaviorCase, apiURL string) *config.Config {
+	cfg := fullAccessConfig()
+
+	if testCase.Config != nil && testCase.Config.ObjectStorage != nil {
+		cfg.ObjectStorage.MaxSinglePartBytes = testCase.Config.ObjectStorage.MaxSinglePartBytes
+	}
+
+	cfg.Environments[envKeyDefault] = config.EnvironmentConfig{
+		Label: envLabelDefault,
+		// The version segment is what makes the fake base the shape a real
+		// apiUrl has, so a surface swap can fire against it.
+		Linode: config.LinodeConfig{
+			APIURL: apiURL + "/" + linoderoute.DefaultSurfaceSegment,
+			Token:  tokenShort,
+		},
+	}
+
+	return cfg
+}
+
 // runBehaviorCase dispatches one case and checks its expected outcome.
 func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 	t.Helper()
@@ -284,8 +479,23 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 
 	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		record := capturedRequest{method: r.Method, path: r.URL.RequestURI(), body: body}
-		response, status, matched := resolveBehaviorResponse(testCase, r.Method, r.URL.Path)
+		// Match on the escaped path, not r.URL.Path: net/http decodes %2F back to
+		// a slash, so a path arg carrying one would match a key the client never
+		// sent, and the Python runner reads the raw URL. Keys stay comparable.
+		// The fake base carries a version segment the way a real apiUrl does, so
+		// the surface swap fires here exactly as it does in the Python runner.
+		// Stripping it before matching keeps every fixture's api_responses key
+		// and expected path written without one.
+		surface, matchPath := splitSurface(r.URL.EscapedPath())
+		_, requestURI := splitSurface(r.URL.RequestURI())
+		record := capturedRequest{
+			method: r.Method, path: requestURI, surface: surface, body: body,
+		}
+		response, status, matched := resolveBehaviorResponse(testCase, r.Method, matchPath)
+
+		for header, value := range testCase.APIResponseHeaders[r.Method+" "+matchPath] {
+			w.Header().Set(header, value)
+		}
 
 		func() {
 			captureMu.Lock()
@@ -294,7 +504,7 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 			captured = append(captured, record)
 
 			if !matched {
-				unmatched = append(unmatched, r.Method+" "+r.URL.Path)
+				unmatched = append(unmatched, r.Method+" "+matchPath)
 			}
 		}()
 
@@ -304,13 +514,16 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 	}))
 	defer apiSrv.Close()
 
-	cfg := fullAccessConfig()
-	cfg.Environments[envKeyDefault] = config.EnvironmentConfig{
-		Label:  envLabelDefault,
-		Linode: config.LinodeConfig{APIURL: apiSrv.URL, Token: tokenShort},
+	args := materializeBehaviorFiles(t, testCase)
+
+	// Resolved after the server is up because the port is only known now, and
+	// the routed responses are what carry a URL pointing back at it.
+	if testCase.APIResponses != nil {
+		testCase.APIResponses = substituteAPIBase(testCase.APIResponses,
+			apiSrv.URL+"/"+linoderoute.DefaultSurfaceSegment)
 	}
 
-	srv, err := server.New(cfg)
+	srv, err := server.New(behaviorConfigFor(testCase, apiSrv.URL))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -319,7 +532,7 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "tools/call",
-		"params":  map[string]any{"name": toolName, "arguments": testCase.Args},
+		"params":  map[string]any{"name": toolName, "arguments": args},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -505,6 +718,10 @@ func checkBehaviorRequest(t *testing.T, isError bool, text string, captured []ca
 
 	if got.path != want.Path {
 		t.Errorf("path = %q, want %q", got.path, want.Path)
+	}
+
+	if got.surface != want.surface() {
+		t.Errorf("api surface = %q, want %q", got.surface, want.surface())
 	}
 
 	if want.Body == nil {

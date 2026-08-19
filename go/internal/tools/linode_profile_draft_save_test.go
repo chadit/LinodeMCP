@@ -2,18 +2,19 @@ package tools_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
@@ -58,23 +59,18 @@ func writableSaveConfig(t *testing.T) string {
 	return path
 }
 
-// staticConfigPath wraps a string as a ConfigPathProvider. Tests use
-// this rather than the production config.Path so the home
-// dir + env-var lookup stays out of the picture.
-func staticConfigPath(path string) tools.ConfigPathProvider {
-	return func() string { return path }
-}
+// configPathEnv is what config.Path reads before falling back to the home
+// directory. The save handler reads the live path on every call, so setting it
+// is how a case aims the save somewhere writable. Setting an environment
+// variable forbids t.Parallel, which is why these cases do not run in parallel.
+const configPathEnv = "LINODEMCP_CONFIG_PATH"
 
 // TestSaveRegistration locks in the static contract: tool name,
 // description, CapMeta tag.
 func TestSaveRegistration(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	tool, capability, handler := tools.NewLinodeProfileDraftSaveTool(
-		reg,
-		staticConfigPath("/dev/null"),
-	)
+	tool, capability, handler := gentools.NewLinodeProfileDraftSaveTool(&config.Config{})
 
 	if tool.Name != "linode_profile_draft_save" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_draft_save")
@@ -97,8 +93,6 @@ func TestSaveRegistration(t *testing.T) {
 // user-defined profile. The diff carries IsNew=true and the full
 // AllowedTools as AddedTools.
 func TestSaveCreatesNewProfile(t *testing.T) {
-	t.Parallel()
-
 	path := writableSaveConfig(t)
 
 	reg := builder.NewRegistry()
@@ -111,9 +105,9 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 	draft.Description = "saved via test"
 	draft.AllowedTools = []string{toolHello, toolInstanceBoot}
 
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+	t.Setenv(configPathEnv, path)
 
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callSaveAnswer(t, draftState(reg), map[string]any{
 		keyName:    saveDraftName,
 		keyConfirm: true,
 	})
@@ -177,8 +171,6 @@ func TestSaveCreatesNewProfile(t *testing.T) {
 // existing profile gets a new tool added and one removed; the diff
 // reports both deltas and the prior state in ChangedFields.
 func TestSaveUpdatesExistingProfile(t *testing.T) {
-	t.Parallel()
-
 	path := writableSaveConfig(t)
 
 	// Stage an existing user-defined profile.
@@ -204,12 +196,17 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
+	// All three value shapes the diff can carry: a string, a string list and
+	// a bool. Each renders through its own arm of the conversion, so changing
+	// only the description would leave two of them unexercised.
 	draft.Description = "updated"
 	draft.AllowedTools = []string{toolInstanceBoot}
+	draft.AllowedEnvironments = []string{envProd}
+	draft.AllowYolo = true
 
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+	t.Setenv(configPathEnv, path)
 
-	out := callMutateHandler(t, handler, map[string]any{
+	out := callSaveAnswer(t, draftState(reg), map[string]any{
 		keyName:    saveDraftName,
 		keyConfirm: true,
 	})
@@ -241,14 +238,32 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 	if !reflect.DeepEqual(descChange["new"], "updated") {
 		t.Errorf("got %v, want %v", descChange["new"], "updated")
 	}
+
+	// The list arm: an empty prior list and the one the draft carries.
+	envChange, _ := changes[tcAllowedEnvironments].(map[string]any)
+	if !reflect.DeepEqual(envChange["old"], []any{}) {
+		t.Errorf("envChange[old] = %v, want []", envChange["old"])
+	}
+
+	if !reflect.DeepEqual(envChange["new"], []any{envProd}) {
+		t.Errorf("envChange[new] = %v, want %v", envChange["new"], []any{envProd})
+	}
+
+	// The bool arm.
+	yoloChange, _ := changes[keyAllowYolo].(map[string]any)
+	if !reflect.DeepEqual(yoloChange["old"], false) {
+		t.Errorf("yoloChange[old] = %v, want false", yoloChange["old"])
+	}
+
+	if !reflect.DeepEqual(yoloChange["new"], true) {
+		t.Errorf("yoloChange[new] = %v, want true", yoloChange["new"])
+	}
 }
 
 // TestSaveRefusesMissingConfirm guards the destructive operation
 // contract. Without confirm=true the handler returns
 // ErrConfirmRequired and writes nothing.
 func TestSaveRefusesMissingConfirm(t *testing.T) {
-	t.Parallel()
-
 	path := writableSaveConfig(t)
 
 	originalBytes, err := os.ReadFile(path)
@@ -263,15 +278,14 @@ func TestSaveRefusesMissingConfirm(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+	t.Setenv(configPathEnv, path)
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{keyName: saveDraftName}
+	// The confirm gate is the generated handler's now, so it is driven
+	// through the emitted factory rather than through the answer.
+	_, _, handler := gentools.NewLinodeProfileDraftSaveTool(&config.Config{})
 
-	_, err = handler(t.Context(), req)
-	if !errors.Is(err, tools.ErrConfirmRequired) {
-		t.Fatalf("expected error %v, got %v", tools.ErrConfirmRequired, err)
-	}
+	wantRefusal(t, draftState(reg), handler, map[string]any{keyName: saveDraftName},
+		"confirm=true is required for draft save")
 
 	// File untouched.
 	finalBytes, err := os.ReadFile(path)
@@ -287,8 +301,6 @@ func TestSaveRefusesMissingConfirm(t *testing.T) {
 // TestSaveRefusesBuiltinName covers the built-in-shadow guard. The
 // user cannot save a draft over a built-in profile name.
 func TestSaveRefusesBuiltinName(t *testing.T) {
-	t.Parallel()
-
 	path := writableSaveConfig(t)
 
 	reg := builder.NewRegistry()
@@ -298,83 +310,34 @@ func TestSaveRefusesBuiltinName(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+	t.Setenv(configPathEnv, path)
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	wantAnswerRefusal(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
 		keyName:    profiles.BuiltinComputeAdmin,
 		keyConfirm: true,
-	}
-
-	_, err = handler(t.Context(), req)
-	if !errors.Is(err, tools.ErrSaveBuiltinName) {
-		t.Fatalf("expected error %v, got %v", tools.ErrSaveBuiltinName, err)
-	}
+	}, "cannot save over built-in profile name: compute-admin")
 }
 
 // TestSaveRefusesUnknownDraft surfaces builder.ErrDraftNotFound when
 // the draft isn't in the registry.
 func TestSaveRefusesUnknownDraft(t *testing.T) {
-	t.Parallel()
-
 	path := writableSaveConfig(t)
 	reg := builder.NewRegistry()
 
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+	t.Setenv(configPathEnv, path)
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	wantAnswerRefusal(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
 		keyName:    draftNonexistent,
 		keyConfirm: true,
-	}
-
-	_, err := handler(t.Context(), req)
-	if !errors.Is(err, builder.ErrDraftNotFound) {
-		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
-	}
+	}, "draft not found: nonexistent-draft")
 }
 
 // TestSaveRefusesMissingName covers the validation guard.
 func TestSaveRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath("/dev/null"))
-
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{keyConfirm: true}
-
-	_, err := handler(t.Context(), req)
-	if !errors.Is(err, tools.ErrDraftNameMissing) {
-		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
-	}
-}
-
-// TestSaveRefusesEmptyConfigPath surfaces ErrConfigPathUnknown when
-// the provider returns "". This is the safety net for servers
-// started without a known config path on disk.
-func TestSaveRefusesEmptyConfigPath(t *testing.T) {
-	t.Parallel()
-
-	reg := builder.NewRegistry()
-
-	_, err := reg.Create(saveDraftName, nil)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(""))
-
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
-		keyName:    saveDraftName,
-		keyConfirm: true,
-	}
-
-	_, err = handler(t.Context(), req)
-	if !errors.Is(err, tools.ErrConfigPathUnknown) {
-		t.Fatalf("expected error %v, got %v", tools.ErrConfigPathUnknown, err)
-	}
+	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftSaveAnswer, nil,
+		map[string]any{keyConfirm: true}, wantDraftNameMissing)
 }
 
 // TestSaveRespectsContextCancellation locks the cancellation
@@ -382,8 +345,7 @@ func TestSaveRefusesEmptyConfigPath(t *testing.T) {
 func TestSaveRespectsContextCancellation(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath("/dev/null"))
+	_, _, handler := gentools.NewLinodeProfileDraftSaveTool(&config.Config{})
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -399,8 +361,6 @@ func TestSaveRespectsContextCancellation(t *testing.T) {
 // Python and Go can compare against this fixture in cross-language
 // parity tests later.
 func TestSaveResultIsValidJSON(t *testing.T) {
-	t.Parallel()
-
 	path := writableSaveConfig(t)
 
 	reg := builder.NewRegistry()
@@ -412,28 +372,12 @@ func TestSaveResultIsValidJSON(t *testing.T) {
 
 	draft.AllowedTools = []string{toolHello}
 
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+	t.Setenv(configPathEnv, path)
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	payload := callSaveAnswer(t, draftState(reg), map[string]any{
 		keyName:    saveDraftName,
 		keyConfirm: true,
-	}
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Error("ok = false, want true")
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &payload); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
+	})
 
 	if _, ok := payload["name"]; !ok {
 		t.Errorf("payload missing key %v", "name")
@@ -453,6 +397,33 @@ func TestSaveResultIsValidJSON(t *testing.T) {
 
 	if _, ok := payload["changed_fields"]; !ok {
 		t.Errorf("payload missing key %v", "changed_fields")
+	}
+}
+
+// TestSaveReportsLoadFailure covers the branch where the config path names no
+// readable file. The draft is real and confirmed by then, so a swallowed load
+// error would report a save that never had a config to merge into.
+func TestSaveReportsLoadFailure(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "absent.yml")
+	t.Setenv(configPathEnv, missing)
+
+	reg := builder.NewRegistry()
+
+	if _, err := reg.Create(saveDraftName, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	refusal := refusalText(t, callAnswer(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
+		keyName:    saveDraftName,
+		keyConfirm: true,
+	}))
+
+	if !strings.HasPrefix(refusal, "failed to load config from ") {
+		t.Errorf("refusal = %q, want the load failure reported", refusal)
+	}
+
+	if !strings.Contains(refusal, missing) {
+		t.Errorf("refusal = %q, want the unreadable path named in it", refusal)
 	}
 }
 
@@ -499,8 +470,6 @@ func readOnlyConfigDir(t *testing.T) string {
 // config by then, so a swallowed write error would report a saved profile that
 // only exists in this process and vanishes on restart.
 func TestSaveReportsWriteFailure(t *testing.T) {
-	t.Parallel()
-
 	path := readOnlyConfigDir(t)
 
 	reg := builder.NewRegistry()
@@ -512,21 +481,19 @@ func TestSaveReportsWriteFailure(t *testing.T) {
 
 	draft.AllowedTools = []string{toolHello}
 
-	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+	t.Setenv(configPathEnv, path)
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
+	refusal := refusalText(t, callAnswer(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
 		keyName:    saveDraftName,
 		keyConfirm: true,
+	}))
+
+	if !strings.HasPrefix(refusal, "failed to write config to ") {
+		t.Errorf("refusal = %q, want the write failure reported", refusal)
 	}
 
-	result, saveErr := handler(t.Context(), req)
-	if !errors.Is(saveErr, fs.ErrPermission) {
-		t.Errorf("saveErr = %v, want the refused write to stay in the chain", saveErr)
-	}
-
-	if result != nil {
-		t.Errorf("result = %+v, want nil", result)
+	if !strings.Contains(refusal, fs.ErrPermission.Error()) {
+		t.Errorf("refusal = %q, want the refused write named in it", refusal)
 	}
 
 	reloaded, loadErr := config.Load(path)

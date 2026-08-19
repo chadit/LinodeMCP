@@ -9,176 +9,10 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
-// TestClientRoutesInstanceDeepPart1 and its Part2 through Part5 siblings pin each
-// instance sub-resource client method to the route it issues and the value it
-// decodes back.
-func TestClientRoutesInstanceDeepPart1(t *testing.T) {
-	t.Parallel()
-
-	runClientRouteCases(t, []clientRouteCase{
-		{
-			name:     labelAddInstanceConfigInterfaceProto,
-			wantVerb: http.MethodPost,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615Interfaces,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.AddInstanceConfigInterfaceProto(ctx, 4242, 8615, &linode.ConfigInterface{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "AddInstanceInterfaceProto",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/interfaces",
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.AddInstanceInterfaceProto(ctx, 4242, &linode.AddInstanceInterfaceRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "ApplyInstanceFirewalls",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/firewalls/apply",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.ApplyInstanceFirewalls(ctx, 4242))
-			},
-		},
-		{
-			name:     "CancelInstanceBackups",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/backups/cancel",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.CancelInstanceBackups(ctx, 4242))
-			},
-		},
-		{
-			name:     labelCloneInstanceDiskProto,
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/disks/8615/clone",
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CloneInstanceDiskProto(ctx, 4242, 8615)
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     labelCloneInstanceProto,
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/clone",
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CloneInstanceProto(ctx, 4242, &linode.CloneInstanceRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     labelCreateInstanceBackupProto,
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/backups",
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CreateInstanceBackupProto(ctx, 4242, "alpha")
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     labelCreateInstanceConfigProto,
-			wantVerb: http.MethodPost,
-			wantPath: clientRoutePathLinodeInstances4242Configs,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CreateInstanceConfigProto(ctx, 4242, &linode.CreateConfigRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     labelCreateInstanceDiskProto,
-			wantVerb: http.MethodPost,
-			wantPath: clientRoutePathLinodeInstances4242Disks,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CreateInstanceDiskProto(ctx, 4242, &linode.CreateDiskRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "DeleteInstanceConfig",
-			wantVerb: http.MethodDelete,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615,
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.DeleteInstanceConfig(ctx, 4242, 8615))
-			},
-		},
-		{
-			name:     "DeleteInstanceConfigInterface",
-			wantVerb: http.MethodDelete,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615Interfaces1379,
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.DeleteInstanceConfigInterface(ctx, 4242, 8615, 1379))
-			},
-		},
-		{
-			name:     "DeleteInstanceDisk",
-			wantVerb: http.MethodDelete,
-			wantPath: clientRoutePathLinodeInstances4242Disks8615,
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.DeleteInstanceDisk(ctx, 4242, 8615))
-			},
-		},
-	})
-}
-
 func TestClientRoutesInstanceDeepPart2(t *testing.T) {
 	t.Parallel()
 
 	runClientRouteCases(t, []clientRouteCase{
-		{
-			name:     "DeleteInstanceIP",
-			wantVerb: http.MethodDelete,
-			wantPath: clientRoutePathLinodeInstances4242IpsAlpha,
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.DeleteInstanceIP(ctx, 4242, "alpha"))
-			},
-		},
-		{
-			name:     "DeleteInstanceInterface",
-			wantVerb: http.MethodDelete,
-			wantPath: clientRoutePathLinodeInstances4242Interfaces8615,
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.DeleteInstanceInterface(ctx, 4242, 8615))
-			},
-		},
-		{
-			name:     "EnableInstanceBackups",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/backups/enable",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.EnableInstanceBackups(ctx, 4242))
-			},
-		},
 		{
 			name:     labelGetInstanceBackup,
 			wantVerb: http.MethodGet,
@@ -189,18 +23,6 @@ func TestClientRoutesInstanceDeepPart2(t *testing.T) {
 				got, err := client.GetInstanceBackup(ctx, 4242, 8615)
 
 				return clientRouteProbe(err, func() any { return got.Label })
-			},
-		},
-		{
-			name:     "GetInstanceBackupProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Backups8615,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceBackupProto(ctx, 4242, 8615)
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
 			},
 		},
 		{
@@ -228,30 +50,6 @@ func TestClientRoutesInstanceDeepPart2(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetInstanceConfigInterfaceProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615Interfaces1379,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceConfigInterfaceProto(ctx, 4242, 8615, 1379)
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "GetInstanceConfigProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceConfigProto(ctx, 4242, 8615)
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
 			name:     labelGetInstanceDisk,
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathLinodeInstances4242Disks8615,
@@ -261,18 +59,6 @@ func TestClientRoutesInstanceDeepPart2(t *testing.T) {
 				got, err := client.GetInstanceDisk(ctx, 4242, 8615)
 
 				return clientRouteProbe(err, func() any { return got.Label })
-			},
-		},
-		{
-			name:     "GetInstanceDiskProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Disks8615,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceDiskProto(ctx, 4242, 8615)
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
 			},
 		},
 		{
@@ -295,18 +81,6 @@ func TestClientRoutesInstanceDeepPart3(t *testing.T) {
 
 	runClientRouteCases(t, []clientRouteCase{
 		{
-			name:     "GetInstanceIPProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242IpsAlpha,
-			response: clientRouteProtoObjAddress,
-			want:     clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceIPProto(ctx, 4242, "alpha")
-
-				return clientRouteProbe(err, func() any { return got.GetAddress() })
-			},
-		},
-		{
 			name:     labelGetInstanceInterface,
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathLinodeInstances4242Interfaces8615,
@@ -316,42 +90,6 @@ func TestClientRoutesInstanceDeepPart3(t *testing.T) {
 				got, err := client.GetInstanceInterface(ctx, 4242, 8615)
 
 				return clientRouteProbe(err, func() any { return got.MACAddress })
-			},
-		},
-		{
-			name:     "GetInstanceInterfaceProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Interfaces8615,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceInterfaceProto(ctx, 4242, 8615)
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "GetInstanceStatsProto",
-			wantVerb: http.MethodGet,
-			wantPath: "/linode/instances/4242/stats",
-			response: clientRouteProtoObjTitle,
-			want:     clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceStatsProto(ctx, 4242)
-
-				return clientRouteProbe(err, func() any { return got.GetTitle() })
-			},
-		},
-		{
-			name:     "ListInstanceConfigInterfacesProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615Interfaces,
-			response: clientRouteProtoArrayPurpose,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceConfigInterfacesProto(ctx, 4242, 8615)
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.ConfigInterfaceResponse).GetPurpose) })
 			},
 		},
 		{
@@ -369,18 +107,6 @@ func TestClientRoutesInstanceDeepPart3(t *testing.T) {
 			},
 		},
 		{
-			name:     "ListInstanceConfigsProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Configs,
-			response: clientRouteProtoPageLabel,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceConfigsProto(ctx, 4242, 1, 25)
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.InstanceConfig).GetLabel) })
-			},
-		},
-		{
 			name:     "ListInstanceDisks",
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathLinodeInstances4242Disks,
@@ -390,18 +116,6 @@ func TestClientRoutesInstanceDeepPart3(t *testing.T) {
 				got, err := client.ListInstanceDisks(ctx, 4242)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, func(item linode.InstanceDisk) string { return item.Label }) })
-			},
-		},
-		{
-			name:     "ListInstanceDisksProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Disks,
-			response: clientRouteProtoPageLabel,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceDisksProto(ctx, 4242, 1, 25)
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.InstanceDisk).GetLabel) })
 			},
 		},
 		{
@@ -428,18 +142,6 @@ func TestClientRoutesInstanceDeepPart3(t *testing.T) {
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Firewall).GetLabel) })
 			},
 		},
-		{
-			name:     "ListInstanceInterfaceFirewallsProto",
-			wantVerb: http.MethodGet,
-			wantPath: "/linode/instances/4242/interfaces/8615/firewalls",
-			response: clientRouteProtoPageLabel,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceInterfaceFirewallsProto(ctx, 4242, 8615)
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Firewall).GetLabel) })
-			},
-		},
 	})
 }
 
@@ -449,30 +151,6 @@ func TestClientRoutesInstanceDeepPart4(t *testing.T) {
 	t.Parallel()
 
 	runClientRouteCases(t, []clientRouteCase{
-		{
-			name:     "ListInstanceInterfaceHistoryProto",
-			wantVerb: http.MethodGet,
-			wantPath: "/linode/instances/4242/interfaces/history",
-			response: clientRouteProtoPageCreated,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceInterfaceHistoryProto(ctx, 4242, 1, 25)
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.InstanceInterfaceHistory).GetCreated) })
-			},
-		},
-		{
-			name:     "ListInstanceNodeBalancersProto",
-			wantVerb: http.MethodGet,
-			wantPath: "/linode/instances/4242/nodebalancers",
-			response: clientRouteProtoPageLabel,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceNodeBalancersProto(ctx, 4242)
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.NodeBalancer).GetLabel) })
-			},
-		},
 		{
 			name:     "ListInstanceVolumes",
 			wantVerb: http.MethodGet,
@@ -485,183 +163,6 @@ func TestClientRoutesInstanceDeepPart4(t *testing.T) {
 				return clientRouteProbe(err, func() any { return clientRouteList(got, func(item linode.Volume) string { return item.Label }) })
 			},
 		},
-		{
-			name:     "ListInstanceVolumesProto",
-			wantVerb: http.MethodGet,
-			wantPath: clientRoutePathLinodeInstances4242Volumes,
-			response: clientRouteProtoPageLabel,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceVolumesProto(ctx, 4242, 1, 25)
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Volume).GetLabel) })
-			},
-		},
-		{
-			name:     "MigrateInstance",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/migrate",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.MigrateInstance(ctx, 4242, "alpha"))
-			},
-		},
-		{
-			name:     "MutateInstance",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/mutate",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.MutateInstance(ctx, 4242, &linode.MutateInstanceRequest{}))
-			},
-		},
-		{
-			name:     "RebuildInstanceProto",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/rebuild",
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.RebuildInstanceProto(ctx, 4242, &linode.RebuildInstanceRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "ReorderInstanceConfigInterfaces",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/configs/8615/interfaces/order",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.ReorderInstanceConfigInterfaces(ctx, 4242, 8615, &linode.ReorderConfigInterfacesRequest{}))
-			},
-		},
-		{
-			name:     "RescueInstance",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/rescue",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.RescueInstance(ctx, 4242, linode.RescueInstanceRequest{}))
-			},
-		},
-		{
-			name:     "ResetInstanceDiskPassword",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/disks/8615/password",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.ResetInstanceDiskPassword(ctx, 4242, 8615, "alpha"))
-			},
-		},
-		{
-			name:     "ResetInstancePassword",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/password",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.ResetInstancePassword(ctx, 4242, "alpha"))
-			},
-		},
-		{
-			name:     "ResizeInstanceDisk",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/disks/8615/resize",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.ResizeInstanceDisk(ctx, 4242, 8615, linode.ResizeDiskRequest{}))
-			},
-		},
-	})
-}
-
-// TestClientRoutesInstanceDeepPart5 pins the instance sub-resource client methods listed below to the
-// request each one issues and the value it decodes back.
-func TestClientRoutesInstanceDeepPart5(t *testing.T) {
-	t.Parallel()
-
-	runClientRouteCases(t, []clientRouteCase{
-		{
-			name:     "RestoreInstanceBackup",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/backups/8615/restore",
-			response: clientRouteEmptyObject,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.RestoreInstanceBackup(ctx, 4242, 8615, linode.RestoreBackupRequest{}))
-			},
-		},
-		{
-			name:     "UpdateInstanceConfigInterfaceProto",
-			wantVerb: http.MethodPut,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615Interfaces1379,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateInstanceConfigInterfaceProto(ctx, 4242, 8615, 1379, &linode.UpdateConfigInterfaceRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "UpdateInstanceConfigProto",
-			wantVerb: http.MethodPut,
-			wantPath: clientRoutePathLinodeInstances4242Configs8615,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateInstanceConfigProto(ctx, 4242, 8615, &linode.UpdateConfigRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "UpdateInstanceDiskProto",
-			wantVerb: http.MethodPut,
-			wantPath: clientRoutePathLinodeInstances4242Disks8615,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateInstanceDiskProto(ctx, 4242, 8615, linode.UpdateDiskRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "UpdateInstanceFirewallsProto",
-			wantVerb: http.MethodPut,
-			wantPath: clientRoutePathLinodeInstances4242Firewalls,
-			response: clientRouteProtoPageLabel,
-			want:     clientRouteTwoElementProbe,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateInstanceFirewallsProto(ctx, 4242, 1, 25, &linode.UpdateInstanceFirewallsRequest{})
-
-				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Firewall).GetLabel) })
-			},
-		},
-		{
-			name:     "UpdateInstanceInterfaceProto",
-			wantVerb: http.MethodPut,
-			wantPath: clientRoutePathLinodeInstances4242Interfaces8615,
-			response: clientRouteProtoObjIDInt32,
-			want:     int32(4242),
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateInstanceInterfaceProto(ctx, 4242, 8615, &linode.UpdateInstanceInterfaceRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetId() })
-			},
-		},
-		{
-			name:     "UpgradeLinodeInterfacesProto",
-			wantVerb: http.MethodPost,
-			wantPath: "/linode/instances/4242/upgrade-interfaces",
-			response: clientRouteProtoObjMessage,
-			want:     clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpgradeLinodeInterfacesProto(ctx, 4242, &linode.UpgradeLinodeInterfacesRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetMessage() })
-			},
-		},
 	})
 }
 
@@ -669,10 +170,8 @@ func TestClientRoutesInstanceDeepPart5(t *testing.T) {
 // cases below. They stay in this file rather than the shared route fixtures
 // because no other resource's cases read these shapes.
 const (
-	instanceRouteBackupsAutomatic = "{\"automatic\":[{\"status\":\"probe-value\"}]}"
 	instanceRouteIPv4Public       = "{\"ipv4\":{\"public\":[{\"address\":\"probe-value\"}]}}"
 	instanceRouteNetworkHelper    = "{\"network_helper\":true}"
-	instanceRoutePathBackups      = "/linode/instances/4242/backups"
 	instanceRoutePathIps          = "/linode/instances/4242/ips"
 	instanceRoutePathIfaceSetting = "/linode/instances/4242/interfaces/settings"
 )
@@ -683,18 +182,6 @@ func TestClientRoutesInstanceDeepPart6(t *testing.T) {
 	t.Parallel()
 
 	runClientRouteCases(t, []clientRouteCase{
-		{
-			name:     "AllocateInstanceIPProto",
-			wantVerb: http.MethodPost,
-			wantPath: instanceRoutePathIps,
-			response: clientRouteProtoObjAddress,
-			want:     clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.AllocateInstanceIPProto(ctx, 4242, linode.AllocateIPRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetAddress() })
-			},
-		},
 		{
 			name:     labelGetInstanceInterfaceSettings,
 			wantVerb: http.MethodGet,
@@ -710,32 +197,6 @@ func TestClientRoutesInstanceDeepPart6(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetInstanceInterfaceSettingsProto",
-			wantVerb: http.MethodGet,
-			wantPath: instanceRoutePathIfaceSetting,
-			response: instanceRouteNetworkHelper,
-			want:     true,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.GetInstanceInterfaceSettingsProto(ctx, 4242)
-
-				return clientRouteProbe(err, func() any { return got.GetNetworkHelper() })
-			},
-		},
-		{
-			name:     "ListInstanceBackupsProto",
-			wantVerb: http.MethodGet,
-			wantPath: instanceRoutePathBackups,
-			response: instanceRouteBackupsAutomatic,
-			want:     "1:" + clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceBackupsProto(ctx, 4242)
-
-				return clientRouteProbe(err, func() any {
-					return clientRouteList(got.GetAutomatic(), (*linodev1.InstanceBackup).GetStatus)
-				})
-			},
-		},
-		{
 			name:     labelListInstanceIPs,
 			wantVerb: http.MethodGet,
 			wantPath: instanceRoutePathIps,
@@ -747,44 +208,6 @@ func TestClientRoutesInstanceDeepPart6(t *testing.T) {
 				return clientRouteProbe(err, func() any {
 					return clientRouteList(got.IPv4.Public, func(ip linode.IPAddress) string { return ip.Address })
 				})
-			},
-		},
-		{
-			name:     "ListInstanceIPsProto",
-			wantVerb: http.MethodGet,
-			wantPath: instanceRoutePathIps,
-			response: instanceRouteIPv4Public,
-			want:     "1:" + clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListInstanceIPsProto(ctx, 4242)
-
-				return clientRouteProbe(err, func() any {
-					return clientRouteList(got.GetIpv4().GetPublic(), (*linodev1.IPAddress).GetAddress)
-				})
-			},
-		},
-		{
-			name:     "UpdateInstanceIPProto",
-			wantVerb: http.MethodPut,
-			wantPath: clientRoutePathLinodeInstances4242IpsAlpha,
-			response: clientRouteProtoObjAddress,
-			want:     clientRouteProbeValue,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateInstanceIPProto(ctx, 4242, "alpha", linode.UpdateIPRDNSRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetAddress() })
-			},
-		},
-		{
-			name:     "UpdateInstanceInterfaceSettingsProto",
-			wantVerb: http.MethodPut,
-			wantPath: instanceRoutePathIfaceSetting,
-			response: instanceRouteNetworkHelper,
-			want:     true,
-			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateInstanceInterfaceSettingsProto(ctx, 4242, &linode.UpdateInstanceInterfaceSettingsRequest{})
-
-				return clientRouteProbe(err, func() any { return got.GetNetworkHelper() })
 			},
 		},
 	})

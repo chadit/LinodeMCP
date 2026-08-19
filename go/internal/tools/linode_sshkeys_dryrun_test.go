@@ -11,14 +11,14 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeSSHKeyCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeSSHKeyCreateTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeSshkeyCreateTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -36,7 +36,7 @@ func TestLinodeSSHKeyCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeSSHKeyCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeSshkeyCreateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLabel:  keyNameTest,
@@ -103,7 +103,7 @@ func TestLinodeSSHKeyCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 func TestLinodeSSHKeyCreateToolDryRunStillValidatesLabel(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeSSHKeyCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeSshkeyCreateTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keySSHKey: validTestSSHKey,
@@ -128,7 +128,7 @@ func TestLinodeSSHKeyUpdateToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeSSHKeyUpdateTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeSshkeyUpdateTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -138,7 +138,7 @@ func TestLinodeSSHKeyUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/profile/sshkeys/123", linode.SSHKey{ID: 123, Label: keyNameTest})
-		_, _, handler := tools.NewLinodeSSHKeyUpdateTool(cfg)
+		_, _, handler := gentools.NewLinodeSshkeyUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keySSHKeyID: float64(123),
@@ -193,7 +193,7 @@ func TestLinodeSSHKeyUpdateToolDryRun(t *testing.T) {
 	t.Run("still validates ssh_key_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeSSHKeyUpdateTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeSshkeyUpdateTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  testRenamedLabel,
@@ -219,7 +219,7 @@ func TestLinodeSSHKeyDeleteToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeSSHKeyDeleteTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeSshkeyDeleteTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -229,7 +229,7 @@ func TestLinodeSSHKeyDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/profile/sshkeys/123", linode.SSHKey{ID: 123, Label: keyNameTest})
-		_, _, handler := tools.NewLinodeSSHKeyDeleteTool(cfg)
+		_, _, handler := gentools.NewLinodeSshkeyDeleteTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keySSHKeyID: float64(123),
@@ -269,7 +269,7 @@ func TestLinodeSSHKeyDeleteToolDryRun(t *testing.T) {
 	t.Run("still validates ssh_key_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeSSHKeyDeleteTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeSshkeyDeleteTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
 		if err != nil {

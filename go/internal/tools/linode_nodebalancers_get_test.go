@@ -7,7 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 func TestLinodeNodeBalancerGetToolValidation(t *testing.T) {
@@ -18,7 +18,7 @@ func TestLinodeNodeBalancerGetToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeNodeBalancerGetTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerGetTool(cfg)
 
 	validationTests := []struct {
 		name         string

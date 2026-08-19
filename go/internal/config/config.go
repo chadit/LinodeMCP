@@ -39,6 +39,22 @@ const (
 	DefaultBindHost = "127.0.0.1"
 )
 
+// Default Object Storage data-plane values.
+const (
+	// DefaultMaxSinglePartBytes is the largest file a single presigned PUT
+	// carries. S3 caps one PUT at 5 GiB and the tools do no multipart yet, so a
+	// larger file is refused by name rather than truncated.
+	DefaultMaxSinglePartBytes int64 = 5 << 30 // 5 GiB
+
+	// DefaultTransferTimeout bounds one data-plane transfer. The API client's
+	// own per-request budget cannot hold a multi-gigabyte body.
+	DefaultTransferTimeout = 30 * time.Minute
+
+	// DefaultPresignTTLSeconds is how long a minted URL stays valid. It has to
+	// outlast the transfer it authorizes, so it tracks the transfer budget.
+	DefaultPresignTTLSeconds = 3600
+)
+
 // Default resilience configuration values.
 const (
 	DefaultMaxRetries              = 3
@@ -79,8 +95,7 @@ const (
 	defaultEnvironmentLabel = "Default"
 
 	// Boolean string constants for environment variable parsing.
-	boolTrue  = "true"
-	boolFalse = "false"
+	boolTrue = "true"
 )
 
 // ServerConfig holds core server settings.
@@ -105,6 +120,35 @@ type ResilienceConfig struct {
 	CircuitBreakerTimeout   time.Duration `json:"circuit_breaker_timeout"   yaml:"circuitBreakerTimeout"`
 }
 
+// ObjectStorageConfig tunes the Object Storage data-plane transfers, which do
+// not go through the API client's request path: they follow a presigned URL, so
+// neither the per-request timeout nor the retry policy that governs v4 calls
+// applies to them.
+//
+// Every field is optional; a zero falls back to the default beside it, except
+// FilesystemRoot, which has no default. The defaults are identical in both
+// languages on purpose, because a divergent one would send the two
+// implementations down different paths for the same file and leave the behavior
+// fixtures pinning neither.
+type ObjectStorageConfig struct {
+	// FilesystemRoot confines the local files a transfer may read. An empty
+	// value confines nothing, which is the default: the deployment this feature
+	// exists for is a stdio server reading the operator's own paths, and a
+	// default root would refuse them. When a root is set, the path is resolved
+	// through symlinks before the comparison, so a link inside the root pointing
+	// out of it is refused rather than followed.
+	FilesystemRoot string `json:"filesystem_root" yaml:"filesystemRoot"`
+	// MaxSinglePartBytes is the ceiling one presigned PUT carries.
+	MaxSinglePartBytes int64 `json:"max_single_part_bytes" yaml:"maxSinglePartBytes"`
+	// TransferTimeout bounds one whole transfer, not one attempt: the data
+	// plane is not retried, because a replay would re-read a stream the first
+	// attempt already drained.
+	TransferTimeout time.Duration `json:"transfer_timeout" yaml:"transferTimeout"`
+	// PresignTTLSeconds is the lifetime requested for a minted URL when the
+	// caller names none.
+	PresignTTLSeconds int `json:"presign_ttl_seconds" yaml:"presignTtlSeconds"`
+}
+
 // LinodeConfig holds Linode API settings for an environment.
 type LinodeConfig struct {
 	APIURL string `json:"api_url" yaml:"apiUrl"`
@@ -127,6 +171,7 @@ type Config struct {
 	Server                   ServerConfig                 `json:"server"                     yaml:"server"`
 	Audit                    AuditConfig                  `json:"audit"                      yaml:"audit"`
 	Observability            ObservabilityConfig          `json:"observability"              yaml:"observability"`
+	ObjectStorage            ObjectStorageConfig          `json:"object_storage"             yaml:"objectStorage"`
 	Resilience               ResilienceConfig             `json:"resilience"                 yaml:"resilience"`
 }
 
@@ -362,6 +407,7 @@ func parseConfigData(data []byte, cfg *Config) error {
 func setDefaults(cfg *Config) {
 	setServerDefaults(cfg)
 	setResilienceDefaults(cfg)
+	setObjectStorageDefaults(cfg)
 	setObservabilityDefaults(cfg)
 	setAuditDefaults(cfg)
 }
@@ -438,6 +484,23 @@ func setResilienceDefaults(cfg *Config) {
 
 	if cfg.Resilience.CircuitBreakerTimeout == 0 {
 		cfg.Resilience.CircuitBreakerTimeout = DefaultCircuitBreakerTimeout
+	}
+}
+
+// setObjectStorageDefaults fills the data-plane budgets. FilesystemRoot is
+// deliberately absent: an unset root confines nothing, and there is no safe
+// path to guess for a server reading the operator's own files.
+func setObjectStorageDefaults(cfg *Config) {
+	if cfg.ObjectStorage.MaxSinglePartBytes == 0 {
+		cfg.ObjectStorage.MaxSinglePartBytes = DefaultMaxSinglePartBytes
+	}
+
+	if cfg.ObjectStorage.TransferTimeout == 0 {
+		cfg.ObjectStorage.TransferTimeout = DefaultTransferTimeout
+	}
+
+	if cfg.ObjectStorage.PresignTTLSeconds == 0 {
+		cfg.ObjectStorage.PresignTTLSeconds = DefaultPresignTTLSeconds
 	}
 }
 

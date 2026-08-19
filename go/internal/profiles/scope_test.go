@@ -714,12 +714,35 @@ func TestRequiredScopesScopelessRoutes(t *testing.T) {
 		"linode_vpc_subnet_list",
 		"linode_account_oauth_client_thumbnail_get",
 		"linode_monitor_service_metric_query",
+		"linode_iam_user_role_permission_get",
+		"linode_iam_idp_config_get",
+		"linode_entity_list",
 	}
 
 	for _, tool := range cases {
 		if got := profiles.RequiredScopes(tool, profiles.CapRead); got != nil {
 			t.Errorf("RequiredScopes(%s) = %v, want nil", tool, got)
 		}
+	}
+}
+
+// TestRequiredScopesScopelessWriteRoute pins the one shape the read-only
+// table above cannot reach: a mutating tool whose route the spec gates
+// on the token alone. The IAM per-user access update is documented with
+// a personal-access-token requirement and no OAuth alternative, so the
+// write tier must resolve empty too rather than deriving an account or
+// family scope the API never asks for.
+func TestRequiredScopesScopelessWriteRoute(t *testing.T) {
+	t.Parallel()
+
+	if got := profiles.RequiredScopes("linode_iam_user_role_permission_update", profiles.CapAdmin); got != nil {
+		t.Errorf("RequiredScopes(linode_iam_user_role_permission_update) = %v, want nil", got)
+	}
+
+	// The IDP configuration writes are the same shape: the spec documents
+	// them with a personal-access-token requirement and no OAuth scope.
+	if got := profiles.RequiredScopes("linode_iam_idp_config_update", profiles.CapAdmin); got != nil {
+		t.Errorf("RequiredScopes(linode_iam_idp_config_update) = %v, want nil", got)
 	}
 }
 
@@ -776,7 +799,7 @@ func TestRequiredScopesForTagDelete(t *testing.T) {
 		t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_tag_delete", profiles.CapDestroy), []profiles.Scope{profiles.ScopeAccountReadWrite})
 	}
 
-	if !slices.Contains(profiles.Categories("linode_tag_delete"), "core") {
-		t.Errorf("collection does not contain %v", "core")
+	if !slices.Contains(profiles.Categories("linode_tag_delete"), "account") {
+		t.Errorf("collection does not contain %v", "account")
 	}
 }

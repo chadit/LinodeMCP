@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeImageShareGroupTokenImagesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupTokenImagesListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupTokenImageListTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_token_image_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_token_image_list")
@@ -93,7 +93,7 @@ func TestLinodeImageShareGroupTokenImagesListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupTokenImagesListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyPage: 2, keyPageSize: 25})
 
@@ -156,7 +156,7 @@ func TestLinodeImageShareGroupTokenImagesListToolRejectsInvalidTokenUuidBeforeCl
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeImageShareGroupTokenImagesListTool(cfg)
+			_, _, handler := gentools.NewLinodeImageSharegroupTokenImageListTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{keyTokenUUID: value})
 
@@ -184,7 +184,7 @@ func TestLinodeImageShareGroupTokenImagesListToolMissingTokenUuid(t *testing.T) 
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeImageShareGroupTokenImagesListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -224,7 +224,7 @@ func TestLinodeImageShareGroupTokenImagesListToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupTokenImagesListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID})
 

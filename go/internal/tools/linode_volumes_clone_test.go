@@ -12,15 +12,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeVolumeCloneToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, _, handler := tools.NewLinodeVolumeCloneTool(cfg)
+	tool, _, handler := gentools.NewLinodeVolumeCloneTool(cfg)
 
 	t.Parallel()
 
@@ -54,7 +54,7 @@ func TestLinodeVolumeCloneToolValidation(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeVolumeCloneTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeCloneTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -100,7 +100,7 @@ func TestLinodeVolumeCloneToolValidation(t *testing.T) {
 func TestLinodeVolumeCloneToolSuccessfulClone(t *testing.T) {
 	t.Parallel()
 
-	volume := linode.Volume{ID: 444, Label: labelDataVol, Region: regionUSEast, Status: imageUploadStatusFixture}
+	volume := linode.Volume{ID: 444, Label: labelDataVol, Region: regionUSEast, Status: statusCreating}
 
 	var requestCount atomic.Int32
 
@@ -135,7 +135,7 @@ func TestLinodeVolumeCloneToolSuccessfulClone(t *testing.T) {
 	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, successHandler := tools.NewLinodeVolumeCloneTool(successCfg)
+	_, _, successHandler := gentools.NewLinodeVolumeCloneTool(successCfg)
 
 	result, err := successHandler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyVolumeID: float64(333),
@@ -198,7 +198,7 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeVolumeCloneTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeCloneTool(cfg)
 
 	t.Run("dry_run validates empty label before preview", func(t *testing.T) {
 		t.Parallel()
@@ -214,7 +214,7 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 		noCallCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: noCallSrv.URL, Token: tokenTest}},
 		}}
-		_, _, noCallHandler := tools.NewLinodeVolumeCloneTool(noCallCfg)
+		_, _, noCallHandler := gentools.NewLinodeVolumeCloneTool(noCallCfg)
 
 		result, err := noCallHandler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),

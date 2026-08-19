@@ -623,163 +623,96 @@ func TestJSONRoundtrip(t *testing.T) {
 	}
 }
 
-func TestCategoriesIncludesAccountInvoicesInCore(t *testing.T) {
+// Everything the API gates on account:* belongs to the account category, the
+// one an account-scoped admin profile would elevate. Calling these core left
+// them in a bucket no profile can lift, while Python filed the same tools under
+// account.
+func TestCategoriesFileAccountGatedToolsUnderAccount(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_invoice_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
+	for _, toolName := range []string{
+		"linode_account_beta_get",
+		"linode_account_beta_list",
+		"linode_account_event_get",
+		"linode_account_invoice_item_list",
+		"linode_account_invoice_list",
+		"linode_account_notification_list",
+		"linode_account_oauth_client_list",
+		"linode_account_payment_create",
+		"linode_account_payment_list",
+		"linode_account_payment_method_create",
+		"linode_account_payment_method_delete",
+		"linode_account_payment_method_get",
+		"linode_account_payment_method_list",
+		"linode_account_payment_method_make_default",
+		"linode_account_promo_credit_add",
+		"linode_account_user_create",
+		"linode_account_user_delete",
+		"linode_account_user_get",
+		"linode_account_user_grants_get",
+		"linode_account_user_grants_update",
+		"linode_account_user_list",
+		"linode_account_user_update",
+		"linode_beta_list",
+		"linode_lock_create",
+		"linode_lock_list",
+		"linode_maintenance_policy_list",
+		"linode_managed_contact_create",
+		"linode_managed_credential_revoke",
+		"linode_managed_service_create",
+		"linode_profile_app_delete",
+		"linode_profile_app_get",
+		"linode_profile_device_get",
+		"linode_profile_device_revoke",
+		"linode_profile_grants_get",
+		"linode_profile_login_get",
+		"linode_profile_phone_number_delete",
+		"linode_profile_phone_number_send",
+		"linode_profile_phone_number_verify",
+		"linode_profile_preferences_get",
+		toolSecurityQuestionList,
+		"linode_profile_tfa_enable",
+		"linode_profile_token_create",
+		"linode_profile_token_get",
+		"linode_profile_update",
+		"linode_support_ticket_attachment_create",
+		"linode_support_ticket_close",
+		"linode_support_ticket_create",
+		"linode_support_ticket_get",
+		"linode_support_ticket_reply_create",
+		"linode_tag_create",
+		"linode_tag_delete",
+		"linode_tag_list",
+		"linode_tag_object_list",
+	} {
+		t.Run(toolName, func(t *testing.T) {
+			t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_payment_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
+			cats := profiles.Categories(toolName)
+			if !slices.Contains(cats, "account") {
+				t.Errorf("Categories(%q) = %v, want it to contain account", toolName, cats)
+			}
 
-	if !slices.Contains(profiles.Categories("linode_account_payment_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_promo_credit_add"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_invoice_item_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
+			if slices.Contains(cats, "core") {
+				t.Errorf("Categories(%q) = %v, want no core entry", toolName, cats)
+			}
+		})
 	}
 }
 
-func TestCategoriesIncludesAccountPaymentMethodsInCore(t *testing.T) {
+// Core holds the tools a session starts from and nothing else, so it stays
+// these four names however far the account surface grows.
+func TestCategoriesHoldCoreToTheSessionTools(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_payment_method_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
+	for _, toolName := range []string{toolHello, toolVersion, toolProfile, toolAccount} {
+		t.Run(toolName, func(t *testing.T) {
+			t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_account_payment_method_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_payment_method_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_payment_method_delete"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_payment_method_make_default"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesProfilePreferencesInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_profile_preferences_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_security_question_answer"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesProfileTokenCreateInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_profile_token_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesAccountOAuthClientsInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_account_oauth_client_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesProfileDeviceGetInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_profile_device_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesProfileAppsInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_profile_login_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_tfa_enable"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_phone_number_send"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_phone_number_delete"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_phone_number_verify"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_tfa_disable"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_tfa_enable_confirm"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_app_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_app_delete"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_device_revoke"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_app_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_security_question_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_device_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_preferences_update"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesMaintenancePoliciesInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_maintenance_policy_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesTagCreateInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_tag_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
+			if cats := profiles.Categories(toolName); !reflect.DeepEqual(cats, []string{"core"}) {
+				t.Errorf("Categories(%q) = %v, want [core]", toolName, cats)
+			}
+		})
 	}
 }
 
@@ -796,82 +729,6 @@ func TestTagCreateExcludedFromNarrowBuiltinProfiles(t *testing.T) {
 		if slices.Contains(profile.AllowedTools, "linode_tag_create") {
 			t.Errorf("profile.AllowedTools should not contain %v", "linode_tag_create")
 		}
-	}
-}
-
-func TestCategoriesIncludesAccountUsersInCore(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_account_user_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_user_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_profile_token_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_user_grants_get"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_user_grants_update"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_user_update"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_user_delete"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_account_user_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_support_ticket_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_support_ticket_attachment_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_support_ticket_reply_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_support_ticket_close"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_managed_contact_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-
-	if !slices.Contains(profiles.Categories("linode_managed_service_create"), "core") {
-		t.Errorf("collection does not contain %v", "core")
-	}
-}
-
-func TestCategoriesIncludesLongviewClientsInMonitor(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_longview_client_list"), "monitor") {
-		t.Errorf("collection does not contain %v", "monitor")
-	}
-}
-
-func TestCategoriesIncludesLongviewSubscriptionsInMonitor(t *testing.T) {
-	t.Parallel()
-
-	if !slices.Contains(profiles.Categories("linode_longview_subscription_list"), "monitor") {
-		t.Errorf("collection does not contain %v", "monitor")
 	}
 }
 
@@ -912,6 +769,51 @@ func TestCategoriesIncludesMonitorAlertChannelsInMonitor(t *testing.T) {
 
 	if !slices.Contains(profiles.Categories("linode_monitor_alert_channel_list"), "monitor") {
 		t.Errorf("collection does not contain %v", "monitor")
+	}
+}
+
+// The iam category exists so a mutating IAM tool resolves the same way in both
+// languages. Go alone would serve a category-less mutator through isElevated's
+// "*" short-circuit while Python's Write/Destroy branch, which needs a named
+// category, would serve it nowhere.
+func TestCategoriesIncludesIamToolsInIam(t *testing.T) {
+	t.Parallel()
+
+	if !slices.Contains(profiles.Categories("linode_iam_idp_config_delete"), "iam") {
+		t.Errorf("collection does not contain %v", "iam")
+	}
+
+	if !slices.Contains(profiles.Categories("linode_iam_delegation_child_account_list"), "iam") {
+		t.Errorf("collection does not contain %v", "iam")
+	}
+
+	if !slices.Contains(profiles.Categories("linode_iam_role_permission_list"), "iam") {
+		t.Errorf("collection does not contain %v", "iam")
+	}
+}
+
+// The removal resolves in the two wildcard profiles and nowhere else, which is
+// the answer Python's resolver has to match.
+//
+// This case does not guard the iam category itself: Go reaches the same answer
+// without it, because isElevated short-circuits on the wildcard whatever the
+// tool's categories are. TestCategoriesIncludesIamToolsInIam is what fails if
+// the category goes, and Python's own case is what catches the divergence,
+// since there a category-less Destroy is served by no profile at all.
+func TestIamRemovalResolvesOnlyInWildcardProfiles(t *testing.T) {
+	t.Parallel()
+
+	catalog := []profiles.ToolDescriptor{
+		{Name: "linode_iam_idp_config_delete", Capability: profiles.CapDestroy},
+	}
+
+	for name, profile := range profiles.BuiltinProfiles(catalog) {
+		allowed := slices.Contains(profile.AllowedTools, "linode_iam_idp_config_delete")
+
+		wildcard := name == profiles.BuiltinFullAccess || name == profiles.BuiltinEmergency
+		if allowed != wildcard {
+			t.Errorf("profile %s serves the removal = %v, want %v", name, allowed, wildcard)
+		}
 	}
 }
 
@@ -978,10 +880,72 @@ func TestCategoriesIncludesPlacementGroupsInCompute(t *testing.T) {
 	}
 }
 
-func TestCategoriesIncludesTagsInCore(t *testing.T) {
+// Reserved IPs are networking surface, so network-admin serves their writes.
+// Go filed them under no category while Python filed them under networking,
+// which made network-admin two different profiles depending on the client.
+func TestNetworkAdminServesReservedIPWrites(t *testing.T) {
 	t.Parallel()
 
-	if !slices.Contains(profiles.Categories("linode_tag_list"), "core") {
-		t.Errorf("collection does not contain %v", "core")
+	catalog := []profiles.ToolDescriptor{
+		{Name: "linode_networking_reserved_ip_create", Capability: profiles.CapWrite},
+		{Name: "linode_networking_reserved_ip_update", Capability: profiles.CapWrite},
+		{Name: "linode_networking_reserved_ip_delete", Capability: profiles.CapDestroy},
+	}
+
+	allowed := profiles.BuiltinProfiles(catalog)[profiles.BuiltinNetworkAdmin].AllowedTools
+	for _, descriptor := range catalog {
+		if !slices.Contains(allowed, descriptor.Name) {
+			t.Errorf("network-admin does not allow %v", descriptor.Name)
+		}
+	}
+}
+
+// Enabling and canceling backups is the surface storage-admin exists for.
+// The singular linode_instance_backup_ prefix missed the plural collection
+// route both switches sit on, so only Python's table reached them.
+func TestStorageAdminServesInstanceBackupSwitches(t *testing.T) {
+	t.Parallel()
+
+	catalog := []profiles.ToolDescriptor{
+		{Name: "linode_instance_backups_enable", Capability: profiles.CapWrite},
+		{Name: "linode_instance_backups_cancel", Capability: profiles.CapDestroy},
+	}
+
+	allowed := profiles.BuiltinProfiles(catalog)[profiles.BuiltinStorageAdmin].AllowedTools
+	for _, descriptor := range catalog {
+		if !slices.Contains(allowed, descriptor.Name) {
+			t.Errorf("storage-admin does not allow %v", descriptor.Name)
+		}
+	}
+}
+
+// A mutator in no category reaches only the profiles that elevate every
+// category, which is why `make profile-resolution` fails on one: no
+// category-scoped admin profile can be given it, however plainly it belongs
+// to that admin's surface.
+func TestCategoryLessMutatorResolvesOnlyInWildcardProfiles(t *testing.T) {
+	t.Parallel()
+
+	homeless := "linode_unmapped_thing_create"
+	catalog := []profiles.ToolDescriptor{{Name: homeless, Capability: profiles.CapWrite}}
+	built := profiles.BuiltinProfiles(catalog)
+
+	for _, name := range []string{profiles.BuiltinFullAccess, profiles.BuiltinEmergency} {
+		if !slices.Contains(built[name].AllowedTools, homeless) {
+			t.Errorf("%v does not allow %v", name, homeless)
+		}
+	}
+
+	for _, name := range []string{
+		profiles.BuiltinDefault,
+		profiles.BuiltinReadonlyFull,
+		profiles.BuiltinComputeAdmin,
+		profiles.BuiltinNetworkAdmin,
+		profiles.BuiltinKubernetesAdmin,
+		profiles.BuiltinStorageAdmin,
+	} {
+		if slices.Contains(built[name].AllowedTools, homeless) {
+			t.Errorf("%v allows %v", name, homeless)
+		}
 	}
 }

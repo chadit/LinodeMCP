@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeLongviewTypesToolDefinition(t *testing.T) {
@@ -19,7 +19,7 @@ func TestLinodeLongviewTypesToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeLongviewTypesTool(cfg)
+	tool, capability, handler := gentools.NewLinodeLongviewTypeListTool(cfg)
 	if tool.Name != "linode_longview_type_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_type_list")
 	}
@@ -80,7 +80,7 @@ func TestLinodeLongviewTypesToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewTypesTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -133,7 +133,7 @@ func TestLinodeLongviewTypesToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewTypesTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 

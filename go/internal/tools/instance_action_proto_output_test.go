@@ -10,7 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // The instance action write tools echo the request as proto-canonical JSON.
@@ -93,7 +93,11 @@ func wantOutputString(t *testing.T, m map[string]any, key, want string) {
 	}
 }
 
-func wantOutputNumber(t *testing.T, m map[string]any, key string, want float64) {
+// wantInstanceIDNumber is the id every case here addresses its instance by, so
+// the check reads it rather than taking it as an argument nothing varies.
+const wantInstanceIDNumber = 123
+
+func wantOutputNumber(t *testing.T, m map[string]any, key string) {
 	t.Helper()
 
 	got, ok := m[key].(float64)
@@ -103,144 +107,31 @@ func wantOutputNumber(t *testing.T, m map[string]any, key string, want float64) 
 		return
 	}
 
-	if got != want {
-		t.Errorf("output[%q] = %v, want %v", key, got, want)
+	if got != wantInstanceIDNumber {
+		t.Errorf("output[%q] = %v, want %v", key, got, wantInstanceIDNumber)
 	}
-}
-
-func wantOutputAbsent(t *testing.T, m map[string]any, key string) {
-	t.Helper()
-
-	if _, present := m[key]; present {
-		t.Errorf("output[%q] present, want absent (value %v)", key, m[key])
-	}
-}
-
-func TestInstanceBootProtoOutput(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/boot")
-	_, _, handler := tools.NewLinodeInstanceBootTool(cfg)
-
-	out := runActionProtoOutput(t, handler, map[string]any{
-		keyInstanceID: float64(123), keyConfirm: true,
-	})
-
-	wantOutputString(t, out, keyOutputMessage, "Instance 123 boot initiated successfully")
-	wantOutputNumber(t, out, keyInstanceID, 123)
-	// The power tools echo instance_id, not linode_id.
-	wantOutputAbsent(t, out, keyLinodeID)
-}
-
-func TestInstanceRebootProtoOutput(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/reboot")
-	_, _, handler := tools.NewLinodeInstanceRebootTool(cfg)
-
-	out := runActionProtoOutput(t, handler, map[string]any{
-		keyInstanceID: float64(123), keyConfirm: true,
-	})
-
-	wantOutputString(t, out, keyOutputMessage, "Instance 123 reboot initiated successfully")
-	wantOutputNumber(t, out, keyInstanceID, 123)
-	wantOutputAbsent(t, out, keyLinodeID)
-}
-
-func TestInstanceShutdownProtoOutput(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/shutdown")
-	_, _, handler := tools.NewLinodeInstanceShutdownTool(cfg)
-
-	out := runActionProtoOutput(t, handler, map[string]any{
-		keyInstanceID: float64(123), keyConfirm: true,
-	})
-
-	wantOutputString(t, out, keyOutputMessage, "Instance 123 shutdown initiated successfully")
-	wantOutputNumber(t, out, keyInstanceID, 123)
-	wantOutputAbsent(t, out, keyLinodeID)
-}
-
-func TestInstanceMigrateProtoOutputWithRegion(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/migrate")
-	_, _, handler := tools.NewLinodeInstanceMigrateTool(cfg)
-
-	out := runActionProtoOutput(t, handler, map[string]any{
-		keyLinodeID: float64(123), keyRegion: regionUSEast, keyConfirm: true,
-	})
-
-	wantOutputString(t, out, keyOutputMessage, "Migration initiated for instance 123 to region us-east")
-	wantOutputNumber(t, out, keyLinodeID, 123)
-	wantOutputString(t, out, keyRegion, regionUSEast)
-}
-
-func TestInstanceMigrateProtoOutputNoRegion(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/migrate")
-	_, _, handler := tools.NewLinodeInstanceMigrateTool(cfg)
-
-	out := runActionProtoOutput(t, handler, map[string]any{
-		keyLinodeID: float64(123), keyConfirm: true,
-	})
-
-	wantOutputString(t, out, keyOutputMessage, "Migration initiated for instance 123")
-	wantOutputNumber(t, out, keyLinodeID, 123)
-	// region is explicit-presence, omitted when the caller lets Linode pick.
-	wantOutputAbsent(t, out, keyRegion)
-}
-
-func TestInstanceRescueProtoOutput(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/rescue")
-	_, _, handler := tools.NewLinodeInstanceRescueTool(cfg)
-
-	out := runActionProtoOutput(t, handler, map[string]any{
-		keyLinodeID: float64(123), keyConfirm: true,
-	})
-
-	wantOutputString(t, out, keyOutputMessage, "Instance 123 is booting into rescue mode")
-	wantOutputNumber(t, out, keyLinodeID, 123)
 }
 
 func TestInstanceResizeProtoOutput(t *testing.T) {
 	t.Parallel()
 
 	cfg := stubAPIConfig(t, "/linode/instances/123/resize")
-	_, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceResizeTool(cfg)
 
 	out := runActionProtoOutput(t, handler, map[string]any{
 		keyInstanceID: float64(123), keyType: typeG6Standard1, keyConfirm: true,
 	})
 
 	wantOutputString(t, out, keyOutputMessage, "Instance 123 resize to g6-standard-1 initiated successfully")
-	wantOutputNumber(t, out, keyInstanceID, 123)
+	wantOutputNumber(t, out, keyInstanceID)
 	wantOutputString(t, out, "new_type", typeG6Standard1)
-}
-
-func TestInstanceBackupsEnableProtoOutput(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/backups/enable")
-	_, _, handler := tools.NewLinodeInstanceBackupsEnableTool(cfg)
-
-	out := runActionProtoOutput(t, handler, map[string]any{
-		keyLinodeID: float64(123), keyConfirm: true,
-	})
-
-	wantOutputString(t, out, keyOutputMessage, "Backup service enabled for instance 123")
-	wantOutputNumber(t, out, keyLinodeID, 123)
 }
 
 func TestInstanceBackupsCancelProtoOutput(t *testing.T) {
 	t.Parallel()
 
 	cfg := stubAPIConfig(t, "/linode/instances/123/backups/cancel")
-	_, _, handler := tools.NewLinodeInstanceBackupsCancelTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceBackupsCancelTool(cfg)
 
 	out := runActionProtoOutput(t, handler, map[string]any{
 		keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true,
@@ -248,36 +139,5 @@ func TestInstanceBackupsCancelProtoOutput(t *testing.T) {
 
 	wantOutputString(t, out, keyOutputMessage,
 		"Backup service canceled for instance 123. All backups have been deleted.")
-	wantOutputNumber(t, out, keyLinodeID, 123)
-}
-
-func TestInstancePasswordResetProtoOutput(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/password")
-	_, _, handler := tools.NewLinodeInstancePasswordResetTool(cfg)
-
-	args := map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}
-	args[keyRootPass] = rootPassStrong
-
-	out := runActionProtoOutput(t, handler, args)
-
-	wantOutputString(t, out, keyOutputMessage, "Root password reset for instance 123")
-	wantOutputNumber(t, out, keyLinodeID, 123)
-}
-
-func TestInstanceDiskPasswordResetProtoOutput(t *testing.T) {
-	t.Parallel()
-
-	cfg := stubAPIConfig(t, "/linode/instances/123/disks/10/password")
-	_, _, handler := tools.NewLinodeInstanceDiskPasswordResetTool(cfg)
-
-	args := map[string]any{keyLinodeID: float64(123), keyDiskID: float64(10), keyConfirm: true}
-	args[keyDiskPassword] = rootPassStrong
-
-	out := runActionProtoOutput(t, handler, args)
-
-	wantOutputString(t, out, keyOutputMessage, "Password reset for disk 10 on instance 123")
-	wantOutputNumber(t, out, keyLinodeID, 123)
-	wantOutputNumber(t, out, keyDiskID, 10)
+	wantOutputNumber(t, out, keyLinodeID)
 }

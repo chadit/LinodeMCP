@@ -9,11 +9,28 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
 
 // listEnvelopeDataKey is the member the standard Linode page envelope wraps its
 // elements under.
 const listEnvelopeDataKey = "data"
+
+// The cursor members a marker-paged body carries beside its elements.
+const (
+	markerTruncatedKey = "is_truncated"
+	markerNextKey      = "next_marker"
+)
+
+// ListMarkerPage is the cursor a marker-paged route answers beside its
+// elements: whether objects remain past this page, and the marker a caller
+// resumes from. The standard page envelope reports neither, which is why the
+// marker shape carries its own.
+type ListMarkerPage struct {
+	NextMarker  string
+	IsTruncated bool
+}
 
 // noPage and noPageSize tell a paginated fetcher there are no page controls
 // left to append. The routed twins below merge the controls into the query
@@ -24,15 +41,18 @@ const (
 	noPageSize = 0
 )
 
-// listProtoElements fetches a list endpoint and decodes each element of its
-// {data:[...]} envelope into a fresh proto message. newElem returns an empty
-// element message (e.g. func() *linodev1.Domain { return &linodev1.Domain{} });
-// operation names the call for error wrapping.
-func listProtoElements[T proto.Message](
+// fetchList performs the GET behind every list fetcher and hands the response
+// to decode.
+//
+// Sharing the request is what keeps one hand-built call site behind the whole
+// list surface: the endpoint each caller passes was resolved from the route
+// contract already, and repeating the request around each decoder only
+// multiplied the places a timeout or a close could go missing.
+func fetchList[T proto.Message](
 	ctx context.Context,
 	client *Client,
 	operation, endpoint string,
-	newElem func() T,
+	decode func(resp *http.Response) ([]T, error),
 ) ([]T, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -44,7 +64,7 @@ func listProtoElements[T proto.Message](
 
 	defer drainClose(resp)
 
-	return decodeProtoElements[T](resp, client, operation, newElem)
+	return decode(resp)
 }
 
 // listProtoElementsPaginated is listProtoElements for endpoints that take
@@ -62,17 +82,11 @@ func listProtoElementsPaginated[T proto.Message](
 	page, pageSize int,
 	newElem func() T,
 ) ([]T, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := client.makeRequest(ctx, http.MethodGet, withPaginationQuery(endpoint, page, pageSize), nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: operation, Err: err}
-	}
-
-	defer drainClose(resp)
-
-	return decodeProtoElements[T](resp, client, operation, newElem)
+	return fetchList(ctx, client, operation,
+		withPaginationQuery(endpoint, page, pageSize),
+		func(resp *http.Response) ([]T, error) {
+			return decodeProtoElements[T](resp, client, operation, newElem)
+		})
 }
 
 // listProtoElementsPaginatedRequiredData is listProtoElementsPaginated for
@@ -88,17 +102,11 @@ func listProtoElementsPaginatedRequiredData[T proto.Message](
 	page, pageSize int,
 	newElem func() T,
 ) ([]T, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := client.makeRequest(ctx, http.MethodGet, withPaginationQuery(endpoint, page, pageSize), nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: operation, Err: err}
-	}
-
-	defer drainClose(resp)
-
-	return decodeProtoElementsRequiredData[T](resp, client, operation, newElem)
+	return fetchList(ctx, client, operation,
+		withPaginationQuery(endpoint, page, pageSize),
+		func(resp *http.Response) ([]T, error) {
+			return decodeProtoElementsRequiredData[T](resp, client, operation, newElem)
+		})
 }
 
 // listProtoElementsKeyed is listProtoElements for endpoints that wrap their
@@ -111,17 +119,9 @@ func listProtoElementsKeyed[T proto.Message](
 	operation, endpoint, itemsKey string,
 	newElem func() T,
 ) ([]T, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := client.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: operation, Err: err}
-	}
-
-	defer drainClose(resp)
-
-	return decodeProtoElementsKeyed[T](resp, client, operation, itemsKey, newElem)
+	return fetchList(ctx, client, operation, endpoint, func(resp *http.Response) ([]T, error) {
+		return decodeProtoElementsKeyed[T](resp, client, operation, itemsKey, newElem)
+	})
 }
 
 // listProtoElementsBare fetches endpoints whose response body is a top-level
@@ -132,17 +132,115 @@ func listProtoElementsBare[T proto.Message](
 	operation, endpoint string,
 	newElem func() T,
 ) ([]T, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
+	return fetchList(ctx, client, operation, endpoint, func(resp *http.Response) ([]T, error) {
+		return decodeProtoElementsBare[T](resp, client, operation, newElem)
+	})
+}
 
-	resp, err := client.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: operation, Err: err}
+// listProtoElementsSingleton reads a route whose whole answer is the one
+// element the collection holds, and reports it as a page of one.
+//
+// The body is held to being a JSON object before it is decoded. protojson with
+// DiscardUnknown reads an array or a null as an empty message, so a route that
+// answered something else would come back as one blank element rather than as
+// the failure it is.
+func listProtoElementsSingleton[T proto.Message](
+	ctx context.Context,
+	client *Client,
+	operation, endpoint string,
+	lifts []linoderoute.ElementLift,
+	newElem func() T,
+) ([]T, error) {
+	return fetchList(ctx, client, operation, endpoint, func(resp *http.Response) ([]T, error) {
+		return decodeProtoElementSingleton[T](resp, client, operation, lifts, newElem)
+	})
+}
+
+// liftElementMembers fills the members a route nests a level down, after the
+// element itself is decoded.
+//
+// The value is applied by decoding a one-member patch through the same
+// descriptor and merging it, so a lifted member fills exactly the way the API's
+// own top-level members do, for every element type and every field kind. The
+// patch is built from the declared member name, which is a proto field name, so
+// the only thing that can be malformed in it is the value the route nested.
+//
+// A source the body does not carry leaves the member alone, so the decode's own
+// answer stands.
+func liftElementMembers[T proto.Message](
+	item T, fields map[string]json.RawMessage, operation string, lifts []linoderoute.ElementLift,
+) error {
+	for _, lift := range lifts {
+		value, found := nestedValue(fields, strings.Split(lift.Source, "."))
+		if !found {
+			continue
+		}
+
+		patch := item.ProtoReflect().New().Interface()
+
+		member := []byte(`{"` + lift.Member + `":` + string(value) + `}`)
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(member, patch); err != nil {
+			return fmt.Errorf("failed to unmarshal %s member %s: %w", operation, lift.Member, err)
+		}
+
+		proto.Merge(item, patch)
 	}
 
-	defer drainClose(resp)
+	return nil
+}
 
-	return decodeProtoElementsBare[T](resp, client, operation, newElem)
+// nestedValue walks a dotted path through an element body, answering the raw
+// value and whether the path led anywhere. A member that is not an object holds
+// no path to walk, which reads as not found rather than as a failure: the lift
+// leaves the target alone and the decode's own answer stands.
+func nestedValue(fields map[string]json.RawMessage, path []string) (json.RawMessage, bool) {
+	value, present := fields[path[0]]
+	if !present || len(path) == 1 {
+		return value, present
+	}
+
+	// A member that is not an object leaves nested nil, and a read of a nil map
+	// misses, which is the answer a path that leads nowhere already has.
+	var nested map[string]json.RawMessage
+
+	_ = json.Unmarshal(value, &nested)
+
+	return nestedValue(nested, path[1:])
+}
+
+// decodeProtoElementSingleton reads one object as the page's only element.
+//
+// The body is held to being a JSON object before it is decoded. protojson with
+// DiscardUnknown reads an array or a null as an empty message, so a route that
+// answered something else would come back as one blank element rather than as
+// the failure it is.
+func decodeProtoElementSingleton[T proto.Message](
+	resp *http.Response,
+	client *Client,
+	operation string,
+	lifts []linoderoute.ElementLift,
+	newElem func() T,
+) ([]T, error) {
+	var body json.RawMessage
+	if err := client.handleResponse(resp, &body); err != nil {
+		return nil, err
+	}
+
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(body, &probe); err != nil || probe == nil {
+		return nil, fmt.Errorf("failed to unmarshal %s object: %w", operation, errResponseBodyNotJSONObject)
+	}
+
+	items, err := decodeRawProtoItems[T]([]json.RawMessage{body}, operation, newElem)
+	if err != nil {
+		return nil, err
+	}
+
+	if liftErr := liftElementMembers(items[0], probe, operation, lifts); liftErr != nil {
+		return nil, liftErr
+	}
+
+	return items, nil
 }
 
 // routedList resolves the path a tool declares, attaches the query the call
@@ -154,16 +252,19 @@ func listProtoElementsBare[T proto.Message](
 // unsendable request. The method the route declares is dropped rather than
 // checked, since every fetcher below sends GET as its own constant.
 func routedList[T proto.Message](
+	client *Client,
 	operation, tool, rawQuery string,
 	values []any,
-	fetch func(endpoint string) ([]T, error),
+	fetch func(surfaced *Client, endpoint string) ([]T, error),
 ) ([]T, error) {
-	_, endpoint, err := routedRequest(tool, rawQuery, values)
+	_, endpoint, segment, err := routedRequest(tool, rawQuery, values)
 	if err != nil {
 		return nil, wrapRequestError(operation, err)
 	}
 
-	return fetch(endpoint)
+	// The fetchers below reach the wire through the client they are handed, so
+	// the surface is applied here rather than inside each of them.
+	return fetch(client.onSurface(segment), endpoint)
 }
 
 // pageQuery renders the page controls on their own, through the same encoder
@@ -187,23 +288,6 @@ func mergeQuery(left, right string) string {
 	return strings.Join(parts, "&")
 }
 
-// listProtoElementsRouted is listProtoElements for a call site whose path comes
-// from the proto contract instead of a string it assembled. tool names the
-// route, values fill its path slots in declared order, and rawQuery carries
-// whatever filters the site composed, already encoded. Every Routed twin below
-// takes those same three in place of an endpoint.
-func listProtoElementsRouted[T proto.Message](
-	ctx context.Context,
-	client *Client,
-	operation, tool, rawQuery string,
-	values []any,
-	newElem func() T,
-) ([]T, error) {
-	return routedList(operation, tool, rawQuery, values, func(endpoint string) ([]T, error) {
-		return listProtoElements(ctx, client, operation, endpoint, newElem)
-	})
-}
-
 // listProtoElementsPaginatedRouted is listProtoElementsPaginated for a call
 // site that names its tool.
 func listProtoElementsPaginatedRouted[T proto.Message](
@@ -216,8 +300,8 @@ func listProtoElementsPaginatedRouted[T proto.Message](
 ) ([]T, error) {
 	query := mergeQuery(rawQuery, pageQuery(page, pageSize))
 
-	return routedList(operation, tool, query, values, func(endpoint string) ([]T, error) {
-		return listProtoElementsPaginated(ctx, client, operation, endpoint, noPage, noPageSize, newElem)
+	return routedList(client, operation, tool, query, values, func(surfaced *Client, endpoint string) ([]T, error) {
+		return listProtoElementsPaginated(ctx, surfaced, operation, endpoint, noPage, noPageSize, newElem)
 	})
 }
 
@@ -233,9 +317,9 @@ func listProtoElementsPaginatedRequiredDataRouted[T proto.Message](
 ) ([]T, error) {
 	query := mergeQuery(rawQuery, pageQuery(page, pageSize))
 
-	return routedList(operation, tool, query, values, func(endpoint string) ([]T, error) {
+	return routedList(client, operation, tool, query, values, func(surfaced *Client, endpoint string) ([]T, error) {
 		return listProtoElementsPaginatedRequiredData(
-			ctx, client, operation, endpoint, noPage, noPageSize, newElem,
+			ctx, surfaced, operation, endpoint, noPage, noPageSize, newElem,
 		)
 	})
 }
@@ -249,9 +333,43 @@ func listProtoElementsKeyedRouted[T proto.Message](
 	values []any,
 	newElem func() T,
 ) ([]T, error) {
-	return routedList(operation, tool, rawQuery, values, func(endpoint string) ([]T, error) {
-		return listProtoElementsKeyed(ctx, client, operation, endpoint, itemsKey, newElem)
+	return routedList(client, operation, tool, rawQuery, values, func(surfaced *Client, endpoint string) ([]T, error) {
+		return listProtoElementsKeyed(ctx, surfaced, operation, endpoint, itemsKey, newElem)
 	})
+}
+
+// listProtoElementsMemberRaw fetches one page and answers its elements beside
+// the bodies they decoded from, so a caller can write back what the decode
+// dropped. required tells an absent member from an empty page, the split
+// decodeProtoElementsRequiredData makes for the same two readings.
+func listProtoElementsMemberRaw[T proto.Message](
+	ctx context.Context,
+	client *Client,
+	tool, rawQuery, itemsKey string,
+	values []any,
+	required bool,
+	newElem func() T,
+) ([]T, []json.RawMessage, error) {
+	var raws []json.RawMessage
+
+	items, err := routedList(client, tool, tool, rawQuery, values, func(surfaced *Client, endpoint string) ([]T, error) {
+		return fetchList(ctx, surfaced, tool, endpoint, func(resp *http.Response) ([]T, error) {
+			rawItems, readErr := readListEnvelopeItems(resp, surfaced, tool, itemsKey)
+			if readErr != nil {
+				return nil, readErr
+			}
+
+			if rawItems == nil && required {
+				return nil, missingListMember(tool, itemsKey)
+			}
+
+			raws = rawItems
+
+			return decodeRawProtoItems[T](rawItems, tool, newElem)
+		})
+	})
+
+	return items, raws, err
 }
 
 // listProtoElementsBareRouted is listProtoElementsBare for a call site that
@@ -263,8 +381,23 @@ func listProtoElementsBareRouted[T proto.Message](
 	values []any,
 	newElem func() T,
 ) ([]T, error) {
-	return routedList(operation, tool, rawQuery, values, func(endpoint string) ([]T, error) {
-		return listProtoElementsBare(ctx, client, operation, endpoint, newElem)
+	return routedList(client, operation, tool, rawQuery, values, func(surfaced *Client, endpoint string) ([]T, error) {
+		return listProtoElementsBare(ctx, surfaced, operation, endpoint, newElem)
+	})
+}
+
+// listProtoElementsSingletonRouted is listProtoElementsSingleton for a call site
+// that names its tool.
+func listProtoElementsSingletonRouted[T proto.Message](
+	ctx context.Context,
+	client *Client,
+	operation, tool, rawQuery string,
+	values []any,
+	lifts []linoderoute.ElementLift,
+	newElem func() T,
+) ([]T, error) {
+	return routedList(client, operation, tool, rawQuery, values, func(surfaced *Client, endpoint string) ([]T, error) {
+		return listProtoElementsSingleton(ctx, surfaced, operation, endpoint, lifts, newElem)
 	})
 }
 
@@ -294,19 +427,25 @@ func decodeProtoElementsRequiredData[T proto.Message](
 		return nil, err
 	}
 
-	// Closest existing sentinel: the data member carried no JSON array because
-	// it was absent or null. A sentinel naming that precisely belongs in
-	// errors.go.
 	if rawItems == nil {
-		return nil, fmt.Errorf(
-			"failed to unmarshal %s list envelope: %s member is missing or null: %w",
-			operation,
-			listEnvelopeDataKey,
-			errResponseBodyNotJSONArray,
-		)
+		return nil, missingListMember(operation, listEnvelopeDataKey)
 	}
 
 	return decodeRawProtoItems[T](rawItems, operation, newElem)
+}
+
+// missingListMember reports the envelope member a page that must carry one did
+// not send.
+//
+// Closest existing sentinel: the member carried no JSON array because it was
+// absent or null. A sentinel naming that precisely belongs in errors.go.
+func missingListMember(operation, member string) error {
+	return fmt.Errorf(
+		"failed to unmarshal %s list envelope: %s member is missing or null: %w",
+		operation,
+		member,
+		errResponseBodyNotJSONArray,
+	)
 }
 
 // decodeProtoElementsBare reads a top-level JSON array from resp, then
@@ -357,6 +496,22 @@ func readListEnvelopeItems(
 	client *Client,
 	operation, itemsKey string,
 ) ([]json.RawMessage, error) {
+	envelope, err := readListEnvelopeMembers(resp, client, operation)
+	if err != nil {
+		return nil, err
+	}
+
+	return listEnvelopeItems(envelope, operation, itemsKey)
+}
+
+// readListEnvelopeMembers reads resp as a list envelope and returns its members
+// still undecoded. The marker shape needs the cursor beside the elements, and
+// the body can only be read once.
+func readListEnvelopeMembers(
+	resp *http.Response,
+	client *Client,
+	operation string,
+) (map[string]json.RawMessage, error) {
 	var envelope map[string]json.RawMessage
 
 	if err := client.handleResponse(resp, &envelope); err != nil {
@@ -371,7 +526,18 @@ func readListEnvelopeItems(
 		)
 	}
 
+	return envelope, nil
+}
+
+// listEnvelopeItems pulls the still undecoded elements out of an already read
+// envelope. A nil result means no such member, which readListEnvelopeItems
+// documents the two readings of.
+func listEnvelopeItems(
+	envelope map[string]json.RawMessage,
+	operation, itemsKey string,
+) ([]json.RawMessage, error) {
 	var rawItems []json.RawMessage
+
 	if raw, ok := envelope[itemsKey]; ok && len(raw) > 0 {
 		if err := json.Unmarshal(raw, &rawItems); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal %s list envelope: %w", operation, err)
@@ -379,6 +545,86 @@ func readListEnvelopeItems(
 	}
 
 	return rawItems, nil
+}
+
+// listProtoElementsMarkerRouted reads a marker-paged collection: the elements
+// under data, plus the cursor the caller resumes from. The cursor travels back
+// out of the decode rather than being read from a second request, because the
+// body carries both and can only be read once.
+func listProtoElementsMarkerRouted[T proto.Message](
+	ctx context.Context,
+	client *Client,
+	operation, tool, rawQuery string,
+	values []any,
+	newElem func() T,
+) ([]T, ListMarkerPage, error) {
+	var cursor ListMarkerPage
+
+	items, err := routedList(client, operation, tool, rawQuery, values, func(surfaced *Client, endpoint string) ([]T, error) {
+		return fetchList(ctx, surfaced, operation, endpoint, func(resp *http.Response) ([]T, error) {
+			decoded, page, decodeErr := decodeProtoElementsMarker(resp, surfaced, operation, newElem)
+			cursor = page
+
+			return decoded, decodeErr
+		})
+	})
+
+	return items, cursor, err
+}
+
+// decodeProtoElementsMarker reads {data, is_truncated, next_marker} and decodes
+// the elements the same way every other shape does.
+func decodeProtoElementsMarker[T proto.Message](
+	resp *http.Response,
+	client *Client,
+	operation string,
+	newElem func() T,
+) ([]T, ListMarkerPage, error) {
+	envelope, err := readListEnvelopeMembers(resp, client, operation)
+	if err != nil {
+		return nil, ListMarkerPage{}, err
+	}
+
+	rawItems, err := listEnvelopeItems(envelope, operation, listEnvelopeDataKey)
+	if err != nil {
+		return nil, ListMarkerPage{}, err
+	}
+
+	cursor, err := readMarkerCursor(envelope, operation)
+	if err != nil {
+		return nil, ListMarkerPage{}, err
+	}
+
+	items, err := decodeRawProtoItems[T](rawItems, operation, newElem)
+	if err != nil {
+		return nil, ListMarkerPage{}, err
+	}
+
+	return items, cursor, nil
+}
+
+// readMarkerCursor decodes the two cursor members. An absent member is the page
+// that is not truncated, which is what the route sends on a complete listing.
+func readMarkerCursor(
+	envelope map[string]json.RawMessage, operation string,
+) (ListMarkerPage, error) {
+	var cursor ListMarkerPage
+
+	if raw, ok := envelope[markerTruncatedKey]; ok && len(raw) > 0 {
+		if err := json.Unmarshal(raw, &cursor.IsTruncated); err != nil {
+			return ListMarkerPage{}, fmt.Errorf(
+				"failed to unmarshal %s list envelope: %w", operation, err)
+		}
+	}
+
+	if raw, ok := envelope[markerNextKey]; ok && len(raw) > 0 {
+		if err := json.Unmarshal(raw, &cursor.NextMarker); err != nil {
+			return ListMarkerPage{}, fmt.Errorf(
+				"failed to unmarshal %s list envelope: %w", operation, err)
+		}
+	}
+
+	return cursor, nil
 }
 
 // decodeRawProtoItems protojson-decodes each raw list element into a fresh proto

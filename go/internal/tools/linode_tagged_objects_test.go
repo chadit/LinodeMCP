@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -26,7 +26,7 @@ func TestLinodeTaggedObjectsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeTaggedObjectsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeTagObjectListTool(cfg)
 
 	if tool.Name != "linode_tag_object_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_tag_object_list")
@@ -96,7 +96,7 @@ func TestLinodeTaggedObjectsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeTaggedObjectsTool(cfg)
+	_, _, handler := gentools.NewLinodeTagObjectListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd + "/web", keyPage: 2, keyPageSize: 25})
 
@@ -149,7 +149,7 @@ func TestLinodeTaggedObjectsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeTaggedObjectsTool(cfg)
+	_, _, handler := gentools.NewLinodeTagObjectListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{tagLabelParamTest: envProd})
 
@@ -200,7 +200,7 @@ func TestLinodeTaggedObjectsToolInvalidTagLabelRejectsBeforeClient(t *testing.T)
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeTaggedObjectsTool(cfg)
+			_, _, handler := gentools.NewLinodeTagObjectListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)

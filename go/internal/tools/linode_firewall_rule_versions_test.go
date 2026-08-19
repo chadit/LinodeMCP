@@ -11,14 +11,14 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeFirewallRuleVersionsListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeFirewallRuleVersionsListTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeFirewallRuleVersionListTool(&config.Config{})
 
 	if tool.Name != "linode_firewall_rule_version_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_rule_version_list")
@@ -69,7 +69,7 @@ func TestLinodeFirewallRuleVersionsListToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallRuleVersionsListTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallRuleVersionListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
 	if err != nil {
@@ -134,7 +134,7 @@ func TestLinodeFirewallRuleVersionsListToolRejectsInvalidFirewallIdBeforeClientC
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			}}
-			_, _, handler := tools.NewLinodeFirewallRuleVersionsListTool(cfg)
+			_, _, handler := gentools.NewLinodeFirewallRuleVersionListTool(cfg)
 
 			args := map[string]any{}
 			if rawID != nil {
@@ -154,13 +154,12 @@ func TestLinodeFirewallRuleVersionsListToolRejectsInvalidFirewallIdBeforeClientC
 				t.Error("result.IsError = false, want true")
 			}
 
-			wantFirewallID := errFirewallIDPositive
-			if name == caseMissingFirewallPathID {
-				wantFirewallID = errFirewallIDRequired
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantFirewallID) {
-				t.Errorf("error text %q does not contain %q", text.Text, wantFirewallID)
+			// The declared rule speaks for all five ids in both languages: a
+			// string spelling anything but one whole number is left absent for
+			// the rule to answer, so the reader that once took the 123 out of
+			// "123/456" no longer lets it past.
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
+				t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
 			}
 
 			if called.Load() {
@@ -195,7 +194,7 @@ func TestLinodeFirewallRuleVersionsListToolClientError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallRuleVersionsListTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallRuleVersionListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123)}))
 	if err != nil {
@@ -218,7 +217,7 @@ func TestLinodeFirewallRuleVersionsListToolClientError(t *testing.T) {
 func TestLinodeFirewallRuleVersionGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeFirewallRuleVersionGetTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeFirewallRuleVersionGetTool(&config.Config{})
 
 	if tool.Name != "linode_firewall_rule_version_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_rule_version_get")
@@ -280,7 +279,7 @@ func TestLinodeFirewallRuleVersionGetToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallRuleVersionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallRuleVersionGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyVersion: float64(2)}))
 	if err != nil {
@@ -348,7 +347,7 @@ func TestLinodeFirewallRuleVersionGetToolRejectsInvalidPathParamsBeforeClientCal
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			}}
-			_, _, handler := tools.NewLinodeFirewallRuleVersionGetTool(cfg)
+			_, _, handler := gentools.NewLinodeFirewallRuleVersionGetTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 			if err != nil {
@@ -395,7 +394,7 @@ func TestLinodeFirewallRuleVersionGetToolClientError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeFirewallRuleVersionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallRuleVersionGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: float64(123), keyVersion: float64(2)}))
 	if err != nil {
@@ -410,7 +409,7 @@ func TestLinodeFirewallRuleVersionGetToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_rule_version_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_rule_version_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve rule version") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve rule version")
 	}
 }

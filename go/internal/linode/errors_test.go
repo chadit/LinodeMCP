@@ -2,7 +2,6 @@ package linode_test
 
 import (
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -110,7 +109,7 @@ func TestNetworkErrorErrorAndUnwrap(t *testing.T) {
 		t.Errorf("err.Error() = %q, want %q", got, "network error during GetProfile: connection refused")
 	}
 
-	if !reflect.DeepEqual(err.Unwrap(), inner) {
+	if !errors.Is(err, inner) {
 		t.Errorf("err.Unwrap() = %v, want %v", err.Unwrap(), inner)
 	}
 }

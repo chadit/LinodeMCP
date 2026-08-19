@@ -2,11 +2,13 @@ package tools_test
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
@@ -117,9 +119,9 @@ func TestBuildDryRunResponseShape(t *testing.T) {
 	}
 
 	for key, want := range map[string]any{
-		keyDryRun:    true,
-		"tool":       "linode_instance_delete",
-		canRunKeyEnv: canRunEnvProd,
+		keyDryRun:     true,
+		canRunKeyTool: "linode_instance_delete",
+		canRunKeyEnv:  canRunEnvProd,
 	} {
 		if !reflect.DeepEqual(got[key], want) {
 			t.Errorf("got[%v] = %v, want %v", key, got[key], want)
@@ -252,3 +254,75 @@ func dryRunResultText(t *testing.T, result *mcp.CallToolResult) string {
 
 	return text.Text
 }
+
+// TestProtoStateListSerializesThroughTheDescriptor pins the preview convention
+// the two firewall replacements read their state under: every member the
+// descriptor declares, including the ones sitting at their zero, so the state
+// reads the way the elements in the tool's own answer do.
+func TestProtoStateListSerializesThroughTheDescriptor(t *testing.T) {
+	t.Parallel()
+
+	state, err := tools.ProtoStateList([]*linodev1.Firewall{
+		{Id: 9, Label: "edge", Status: statusEnabled},
+	}, nil)
+	if err != nil {
+		t.Fatalf("ProtoStateList: %v", err)
+	}
+
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal state: %v", err)
+	}
+
+	var got, want any
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatalf("decode state: %v", err)
+	}
+
+	if err := json.Unmarshal([]byte(
+		`[{"id":9,"label":"edge","status":"enabled","tags":[],"created":"","updated":""}]`,
+	), &want); err != nil {
+		t.Fatalf("decode want: %v", err)
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("state = %s, want the descriptor's own shape", encoded)
+	}
+}
+
+// TestProtoStateListCarriesTheFetchFailure covers the read that never
+// answered: the preview has no state to report and must say so rather than
+// report an empty collection as the current one.
+func TestProtoStateListCarriesTheFetchFailure(t *testing.T) {
+	t.Parallel()
+
+	state, err := tools.ProtoStateList([]*linodev1.Firewall{}, errStateFetch)
+	if !errors.Is(err, errStateFetch) {
+		t.Errorf("err = %v, want the fetch failure", err)
+	}
+
+	if state != nil {
+		t.Errorf("state = %v, want none", state)
+	}
+}
+
+// TestProtoStateListRefusesAnUnserializableElement covers the element the
+// descriptor cannot spell: a proto3 string field holds UTF-8, so a label that
+// is not reaches the marshaller as a failure rather than as bytes no client
+// could read.
+func TestProtoStateListRefusesAnUnserializableElement(t *testing.T) {
+	t.Parallel()
+
+	state, err := tools.ProtoStateList([]*linodev1.Firewall{{Id: 9, Label: "\xff"}}, nil)
+	if err == nil {
+		t.Fatal("err = nil, want the invalid element refused")
+	}
+
+	if state != nil {
+		t.Errorf("state = %v, want none", state)
+	}
+}
+
+// errStateFetch stands in for a read that failed before the preview could
+// serialize anything.
+var errStateFetch = errors.New("fetch failed")

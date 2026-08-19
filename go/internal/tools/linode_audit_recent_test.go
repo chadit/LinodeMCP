@@ -12,8 +12,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // auditRecentResult mirrors the tool's JSON response so the test can
@@ -22,37 +21,6 @@ import (
 type auditRecentResult struct {
 	Events []audit.Event `json:"events"`
 	Count  int           `json:"count"`
-}
-
-// TestLinodeAuditRecentDefinition pins the tool's identity: name,
-// CapMeta tag, and the documented filter parameters.
-func TestLinodeAuditRecentDefinition(t *testing.T) {
-	t.Parallel()
-
-	tool, capability, handler := tools.NewLinodeAuditRecentTool(&config.Config{})
-
-	if tool.Name != "linode_audit_recent" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_recent")
-	}
-
-	if capability != profiles.CapMeta {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, param := range []string{"limit", keySince, "until", "tool", "capability", "status", "include_meta"} {
-		if !strings.Contains(raw, param) {
-			t.Errorf("tool.RawInputSchema missing key %v", param)
-		}
-	}
-
-	if strings.Contains(raw, "confirm") {
-		t.Errorf("tool.RawInputSchema has unexpected key %v", "confirm")
-	}
 }
 
 // TestLinodeAuditRecentReturnsEvents drives the handler end-to-end
@@ -74,7 +42,7 @@ func TestLinodeAuditRecentReturnsEvents(t *testing.T) {
 		auditEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusError, 3),
 	})
 
-	_, _, handler := tools.NewLinodeAuditRecentTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditRecentTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -114,7 +82,7 @@ func TestLinodeAuditRecentReturnsEvents(t *testing.T) {
 func TestLinodeAuditRecentInvalidSince(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeAuditRecentTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditRecentTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySince: "not-a-timestamp"}))
 	if err != nil {

@@ -233,57 +233,6 @@ func TestCreateSupportTicketAttachmentReportsAnUnreadableFile(t *testing.T) {
 	}
 }
 
-// The route declares the path and nothing else, so a caller-chosen filter has
-// to survive the move into the routed list twin. The query on the wire is the
-// only proof.
-func TestListNetworkingIPsProtoSendsTheSkipRDNSFilter(t *testing.T) {
-	t.Parallel()
-
-	for _, tt := range []struct {
-		name      string
-		wantQuery string
-		skip      bool
-	}{
-		{name: "filtered", skip: true, wantQuery: "skip_ipv6_rdns=true"},
-		{name: "unfiltered", skip: false, wantQuery: ""},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var (
-				gotPath  string
-				gotQuery string
-			)
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotPath = r.URL.EscapedPath()
-				gotQuery = r.URL.RawQuery
-
-				w.WriteHeader(http.StatusOK)
-
-				if _, err := w.Write([]byte(`{"data":[]}`)); err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}))
-			defer srv.Close()
-
-			client := linode.NewClient(srv.URL, routedTransportToken, nil, linode.WithMaxRetries(0))
-
-			if _, err := client.ListNetworkingIPsProto(t.Context(), tt.skip); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if gotPath != "/networking/ips" {
-				t.Errorf("path = %v, want /networking/ips", gotPath)
-			}
-
-			if gotQuery != tt.wantQuery {
-				t.Errorf("query = %q, want %q", gotQuery, tt.wantQuery)
-			}
-		})
-	}
-}
-
 // The shared transport sweep builds each case from an empty request, and an
 // empty File path fails the read above the route call, so its attachment row
 // passes off the wrong branch and never exercises this wrap. A real file on

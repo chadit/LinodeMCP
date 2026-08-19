@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,9 +13,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -25,7 +24,6 @@ const (
 	objectStorageEndpointUSEast = "us-east-1.linodeobjects.com"
 	objectStorageQuotaTestID    = "obj-buckets-us-sea-1.linodeobjects.com"
 	regionSlashUSEast1          = "us/east-1"
-	msgRegionInvalidClusterID   = "region must be a valid region or cluster ID"
 )
 
 // End-to-end verification of object storage bucket listing.
@@ -35,7 +33,7 @@ func TestLinodeObjectStorageBucketsListToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketListTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageBucketListTool(cfg)
 
 	t.Parallel()
 
@@ -83,7 +81,7 @@ func TestLinodeObjectStorageBucketsListToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageBucketListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -124,7 +122,7 @@ func TestLinodeObjectStorageBucketsListToolMissingEnvironment(t *testing.T) {
 	emptyCfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{},
 	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageBucketListTool(emptyCfg)
+	_, _, emptyHandler := gentools.NewLinodeObjectStorageBucketListTool(emptyCfg)
 
 	req := createRequestWithArgs(t, map[string]any{canRunKeyEnv: "nonexistent"})
 
@@ -149,7 +147,7 @@ func TestLinodeObjectStorageBucketsListByRegionToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketListByRegionTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageBucketByRegionListTool(cfg)
 
 	t.Parallel()
 
@@ -206,7 +204,7 @@ func TestLinodeObjectStorageBucketsListByRegionToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketListByRegionTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageBucketByRegionListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1})
 
@@ -271,7 +269,7 @@ func TestLinodeObjectStorageBucketsListByRegionToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketListByRegionTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageBucketByRegionListTool(cfg)
 
 	t.Parallel()
 
@@ -319,7 +317,7 @@ func TestLinodeObjectStorageBucketGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageBucketGetTool(cfg)
 
 	t.Parallel()
 
@@ -365,7 +363,7 @@ func TestLinodeObjectStorageBucketGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageBucketGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 
@@ -402,7 +400,7 @@ func TestLinodeObjectStorageBucketGetToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketGetTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageBucketGetTool(cfg)
 
 	t.Parallel()
 
@@ -436,333 +434,9 @@ func TestLinodeObjectStorageBucketGetToolValidation(t *testing.T) {
 	}
 }
 
-// End-to-end verification of object listing within a bucket.
-func TestLinodeObjectStorageBucketContentsToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketContentsTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_bucket_object_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_object_list")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-}
-
-// objectStorageContentsBody builds the bespoke {data, is_truncated, next_marker}
-// body the S3-style object-list endpoint returns. size is a JSON number on the
-// wire and the canonical serializer keeps the proto int64 field a JSON number.
-func objectStorageContentsBody(objects string, isTruncated bool, nextMarker string) string {
-	return `{"data":[` + objects + `],"is_truncated":` + strconv.FormatBool(isTruncated) +
-		`,"next_marker":"` + nextMarker + `"}`
-}
-
-func decodeObjectListOutput(t *testing.T, text string) struct {
-	Filter     string `json:"filter"`
-	NextMarker string `json:"next_marker"`
-	Objects    []struct {
-		Name string `json:"name"`
-		Size int64  `json:"size"`
-	} `json:"objects"`
-	Count       int  `json:"count"`
-	IsTruncated bool `json:"is_truncated"`
-} {
-	t.Helper()
-
-	var out struct {
-		Filter     string `json:"filter"`
-		NextMarker string `json:"next_marker"`
-		Objects    []struct {
-			Name string `json:"name"`
-			Size int64  `json:"size"`
-		} `json:"objects"`
-		Count       int  `json:"count"`
-		IsTruncated bool `json:"is_truncated"`
-	}
-	if err := json.Unmarshal([]byte(text), &out); err != nil {
-		t.Fatalf("unmarshal output: %v", err)
-	}
-
-	return out
-}
-
-func TestLinodeObjectStorageBucketContentsToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	body := objectStorageContentsBody(
-		`{"name":"file1.txt","size":1024,"last_modified":"2024-01-15T10:00:00Z"},`+
-			`{"name":"file2.jpg","size":2048,"last_modified":"2024-01-16T10:00:00Z"}`,
-		false, "",
-	)
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/object-storage/buckets/us-east-1/my-bucket/object-list" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/buckets/us-east-1/my-bucket/object-list")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if _, writeErr := w.Write([]byte(body)); writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	out := decodeObjectListOutput(t, textContent.Text)
-
-	if out.Count != 2 || len(out.Objects) != 2 {
-		t.Fatalf("count/objects = %d/%d, want 2/2", out.Count, len(out.Objects))
-	}
-
-	if out.Objects[0].Name != "file1.txt" || out.Objects[1].Name != "file2.jpg" {
-		t.Errorf("objects = %v, want file1.txt + file2.jpg", out.Objects)
-	}
-
-	if out.Objects[0].Size != 1024 {
-		t.Errorf("objects[0].size = %v, want %v (int64 stays a JSON number)", out.Objects[0].Size, 1024)
-	}
-
-	if out.IsTruncated {
-		t.Error("is_truncated = true, want false")
-	}
-}
-
-func TestLinodeObjectStorageBucketContentsToolWithPrefix(t *testing.T) {
-	t.Parallel()
-
-	body := objectStorageContentsBody(`{"name":"images/photo1.jpg","size":2048}`, false, "")
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("prefix") != "images/" {
-			t.Errorf("got %v, want %v", r.URL.Query().Get("prefix"), "images/")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if _, writeErr := w.Write([]byte(body)); writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		"prefix":  "images/",
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	out := decodeObjectListOutput(t, textContent.Text)
-
-	if len(out.Objects) != 1 || out.Objects[0].Name != "images/photo1.jpg" {
-		t.Errorf("objects = %v, want one object images/photo1.jpg", out.Objects)
-	}
-
-	if out.Filter != "prefix=images/" {
-		t.Errorf("filter = %q, want prefix=images/", out.Filter)
-	}
-}
-
-func TestLinodeObjectStorageBucketContentsToolTruncated(t *testing.T) {
-	t.Parallel()
-
-	body := objectStorageContentsBody(`{"name":"file1.txt","size":1024}`, true, "file2.txt")
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		if _, writeErr := w.Write([]byte(body)); writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketContentsTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	out := decodeObjectListOutput(t, textContent.Text)
-
-	if !out.IsTruncated {
-		t.Error("is_truncated = false, want true")
-	}
-
-	if out.NextMarker != "file2.txt" {
-		t.Errorf("next_marker = %q, want file2.txt", out.NextMarker)
-	}
-}
-
-func TestLinodeObjectStorageBucketContentsToolCaseMissingRegion(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketContentsTool(cfg)
-
-	t.Parallel()
-
-	req := createRequestWithArgs(t, map[string]any{keyLabel: bucketTest})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-// TestLinodeObjectStorageBucketReadFormatValidation pins the region/label format
-// checks ported from Python (strictest-wins): bucket_get and bucket_object_list
-// now reject malformed region/label locally with Python's exact texts.
-func TestLinodeObjectStorageBucketReadFormatValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, getHandler := tools.NewLinodeObjectStorageBucketGetTool(cfg)
-	_, _, listHandler := tools.NewLinodeObjectStorageBucketContentsTool(cfg)
-
-	tests := []struct {
-		args     map[string]any
-		name     string
-		contains string
-		list     bool
-	}{
-		{name: "get rejects uppercase region", args: map[string]any{keyRegion: "US-EAST-1", keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
-		{name: "get rejects region with slash", args: map[string]any{keyRegion: regionSlashUSEast1, keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
-		{name: "get rejects double-hyphen region", args: map[string]any{keyRegion: "us--east-1", keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
-		{name: "get rejects uppercase label", args: map[string]any{keyRegion: regionUSEast1, keyLabel: "My_Bucket"}, contains: "label must be a valid bucket label"},
-		{name: "list rejects uppercase region", list: true, args: map[string]any{keyRegion: "US-EAST-1", keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
-		{name: "list rejects malformed label", list: true, args: map[string]any{keyRegion: regionUSEast1, keyLabel: "bad/label"}, contains: "label must be a valid bucket label"},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			handler := getHandler
-			if testCase.list {
-				handler = listHandler
-			}
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil || !result.IsError {
-				t.Fatal("expected an error result")
-			}
-
-			text, ok := result.Content[0].(mcp.TextContent)
-			if !ok || !strings.Contains(text.Text, testCase.contains) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.contains)
-			}
-		})
-	}
-}
-
-// End-to-end verification of object storage endpoint listing.
 func TestLinodeObjectStorageEndpointsListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageEndpointListTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageEndpointListTool(cfg)
 
 	t.Parallel()
 
@@ -818,7 +492,7 @@ func TestLinodeObjectStorageEndpointsListToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageEndpointListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageEndpointListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -874,7 +548,7 @@ func TestLinodeObjectStorageEndpointsListToolApiError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageEndpointListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageEndpointListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -909,7 +583,7 @@ func TestLinodeObjectStorageEndpointsListToolIncompleteConfig(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 		},
 	}
-	_, _, incompleteHandler := tools.NewLinodeObjectStorageEndpointListTool(incompleteCfg)
+	_, _, incompleteHandler := gentools.NewLinodeObjectStorageEndpointListTool(incompleteCfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -931,7 +605,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageTypeListTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageTypeListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -979,7 +653,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeObjectStorageTypeListTool(srvCfg)
+		_, _, srvHandler := gentools.NewLinodeObjectStorageTypeListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -1018,7 +692,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 			},
 		}
-		_, _, incompleteHandler := tools.NewLinodeObjectStorageTypeListTool(incompleteCfg)
+		_, _, incompleteHandler := gentools.NewLinodeObjectStorageTypeListTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -1078,7 +752,7 @@ func TestLinodeObjectStorageTypeListDecodesRegionPrices(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageTypeListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -1106,7 +780,7 @@ func TestLinodeObjectStorageTypeListDecodesRegionPrices(t *testing.T) {
 // End-to-end verification of object storage quota listing.
 func TestLinodeObjectStorageQuotasListToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageQuotasListTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageQuotaListTool(cfg)
 
 	t.Parallel()
 
@@ -1175,7 +849,7 @@ func TestLinodeObjectStorageQuotasListToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageQuotasListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageQuotaListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1232,7 +906,7 @@ func TestLinodeObjectStorageQuotasListToolApiError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageQuotasListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageQuotaListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1267,7 +941,7 @@ func TestLinodeObjectStorageQuotasListToolIncompleteConfig(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 		},
 	}
-	_, _, incompleteHandler := tools.NewLinodeObjectStorageQuotasListTool(incompleteCfg)
+	_, _, incompleteHandler := gentools.NewLinodeObjectStorageQuotaListTool(incompleteCfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1290,7 +964,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageKeyListTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageKeyListTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1343,7 +1017,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeObjectStorageKeyListTool(srvCfg)
+		_, _, srvHandler := gentools.NewLinodeObjectStorageKeyListTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -1382,7 +1056,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 			},
 		}
-		_, _, incompleteHandler := tools.NewLinodeObjectStorageKeyListTool(incompleteCfg)
+		_, _, incompleteHandler := gentools.NewLinodeObjectStorageKeyListTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -1408,7 +1082,7 @@ func TestLinodeObjectStorageKeyGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageKeyGetTool(cfg)
 
 	t.Parallel()
 
@@ -1456,7 +1130,7 @@ func TestLinodeObjectStorageKeyGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageKeyGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageKeyGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyKeyID: float64(42)})
 
@@ -1493,7 +1167,7 @@ func TestLinodeObjectStorageKeyGetToolMissingKeyId(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageKeyGetTool(cfg)
 
 	t.Parallel()
 
@@ -1519,7 +1193,7 @@ func TestLinodeObjectStorageKeyGetToolInvalidKeyId(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageKeyGetTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageKeyGetTool(cfg)
 
 	t.Parallel()
 
@@ -1551,7 +1225,7 @@ func TestLinodeObjectStorageKeyGetToolInvalidKeyId(t *testing.T) {
 // End-to-end verification of object storage quota usage retrieval.
 func TestLinodeObjectStorageQuotaUsageToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageQuotaUsageTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageQuotaUsageGetTool(cfg)
 
 	t.Parallel()
 
@@ -1599,7 +1273,7 @@ func TestLinodeObjectStorageQuotaUsageToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageQuotaUsageTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageQuotaUsageGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{"obj_quota_id": "obj-bucket-us-ord-1"})
 
@@ -1636,7 +1310,7 @@ func TestLinodeObjectStorageQuotaUsageToolSuccess(t *testing.T) {
 
 func TestLinodeObjectStorageQuotaUsageToolMissingQuotaId(t *testing.T) {
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeObjectStorageQuotaUsageTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageQuotaUsageGetTool(cfg)
 
 	t.Parallel()
 
@@ -1658,7 +1332,7 @@ func TestLinodeObjectStorageQuotaUsageToolMissingQuotaId(t *testing.T) {
 
 func TestLinodeObjectStorageQuotaUsageToolInvalidQuotaId(t *testing.T) {
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeObjectStorageQuotaUsageTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageQuotaUsageGetTool(cfg)
 
 	t.Parallel()
 
@@ -1698,7 +1372,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageTransferTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageTransferGetTool(cfg)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -1739,7 +1413,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			},
 		}
-		_, _, srvHandler := tools.NewLinodeObjectStorageTransferTool(srvCfg)
+		_, _, srvHandler := gentools.NewLinodeObjectStorageTransferGetTool(srvCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -1778,7 +1452,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 			},
 		}
-		_, _, incompleteHandler := tools.NewLinodeObjectStorageTransferTool(incompleteCfg)
+		_, _, incompleteHandler := gentools.NewLinodeObjectStorageTransferGetTool(incompleteCfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -1804,7 +1478,7 @@ func TestLinodeObjectStorageQuotaGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageQuotaGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageQuotaGetTool(cfg)
 
 	t.Parallel()
 
@@ -1861,7 +1535,7 @@ func TestLinodeObjectStorageQuotaGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageQuotaGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageQuotaGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyObjectStorageQuotaID: objectStorageQuotaTestID})
 
@@ -1906,7 +1580,7 @@ func TestLinodeObjectStorageQuotaGetToolMissingQuotaId(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageQuotaGetTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageQuotaGetTool(cfg)
 
 	t.Parallel()
 
@@ -1932,7 +1606,7 @@ func TestLinodeObjectStorageQuotaGetToolInvalidPathParameterValues(t *testing.T)
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageQuotaGetTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageQuotaGetTool(cfg)
 
 	t.Parallel()
 
@@ -1975,7 +1649,7 @@ func TestLinodeObjectStorageQuotaGetToolIncompleteConfig(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "", Token: ""}},
 		},
 	}
-	_, _, incompleteHandler := tools.NewLinodeObjectStorageQuotaGetTool(incompleteCfg)
+	_, _, incompleteHandler := gentools.NewLinodeObjectStorageQuotaGetTool(incompleteCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyObjectStorageQuotaID: objectStorageQuotaTestID})
 
@@ -2000,7 +1674,7 @@ func TestLinodeObjectStorageBucketAccessGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
 
 	t.Parallel()
 
@@ -2043,7 +1717,7 @@ func TestLinodeObjectStorageBucketAccessGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageBucketAccessGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 
@@ -2080,7 +1754,7 @@ func TestLinodeObjectStorageBucketAccessGetToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageBucketAccessGetTool(cfg)
 
 	t.Parallel()
 
@@ -2120,7 +1794,7 @@ func TestLinodeObjectStorageBucketAccessGetToolMissingEnvironment(t *testing.T) 
 	emptyCfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{},
 	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageBucketAccessGetTool(emptyCfg)
+	_, _, emptyHandler := gentools.NewLinodeObjectStorageBucketAccessGetTool(emptyCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest})
 
@@ -2145,7 +1819,7 @@ func TestLinodeObjectStorageBucketCreateToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageBucketCreateTool(cfg)
 
 	t.Parallel()
 
@@ -2179,7 +1853,7 @@ func TestLinodeObjectStorageBucketCreateToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageBucketCreateTool(cfg)
 
 	t.Parallel()
 
@@ -2247,7 +1921,7 @@ func TestLinodeObjectStorageBucketCreateToolLabelStartWithHyphen(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageBucketCreateTool(cfg)
 
 	t.Parallel()
 
@@ -2283,7 +1957,7 @@ func TestValidateBucketACLMessageReconciled(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageBucketCreateTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyLabel:   bucketTest,
@@ -2344,7 +2018,7 @@ func TestLinodeObjectStorageBucketCreateToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketCreateTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageBucketCreateTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyLabel:   bucketTest,
@@ -2380,162 +2054,13 @@ func TestLinodeObjectStorageBucketCreateToolSuccess(t *testing.T) {
 	}
 }
 
-// End-to-end verification of object storage bucket deletion.
-func TestLinodeObjectStorageBucketDeleteToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, capability, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_bucket_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_delete")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	if capability != profiles.CapDestroy {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
-	}
-
-	if !strings.Contains(tool.Description, "WARNING") {
-		t.Errorf("tool.Description does not contain %v", "WARNING")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyRegion, keyLabel, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeObjectStorageBucketDeleteToolValidation(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
-
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		args     map[string]any
-		contains string
-	}{
-		{
-			name:     caseRequiresConfirm,
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest},
-			contains: errConfirmEqualsTrue,
-		},
-		{
-			name:     caseMissingRegion,
-			args:     map[string]any{keyLabel: bucketTest, keyConfirm: true, keyConfirmedDryRun: true},
-			contains: errRegionRequired,
-		},
-		{
-			name:     caseMissingLabel,
-			args:     map[string]any{keyRegion: regionUSEast1, keyConfirm: true, keyConfirmedDryRun: true},
-			contains: errLabelRequired,
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.contains) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.contains)
-			}
-		})
-	}
-}
-
-func TestLinodeObjectStorageBucketDeleteToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcObjectStorageBucketsUsEast1MyBucket {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageBucketsUsEast1MyBucket)
-		}
-
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketDeleteTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:  regionUSEast1,
-		keyLabel:   bucketTest,
-		keyConfirm: true, keyConfirmedDryRun: true,
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "removed successfully") {
-		t.Errorf("textContent.Text does not contain %v", "removed successfully")
-	}
-}
-
 func TestLinodeObjectStorageCancelToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeObjectStorageCancelTool(cfg)
+	tool, capability, handler := gentools.NewLinodeObjectStorageCancelTool(cfg)
 
 	t.Parallel()
 
@@ -2573,7 +2098,7 @@ func TestLinodeObjectStorageCancelToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageCancelTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageCancelTool(cfg)
 
 	t.Parallel()
 
@@ -2629,7 +2154,7 @@ func TestLinodeObjectStorageCancelToolDryRunSkipsDestructiveCall(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageCancelTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageCancelTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
 
@@ -2685,7 +2210,7 @@ func TestLinodeObjectStorageCancelToolClientError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageCancelTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageCancelTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
@@ -2732,7 +2257,7 @@ func TestLinodeObjectStorageCancelToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageCancelTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageCancelTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
@@ -2759,753 +2284,6 @@ func TestLinodeObjectStorageCancelToolSuccess(t *testing.T) {
 	}
 }
 
-func TestLinodeObjectStorageBucketAccessAllowToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketAccessAllowTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_bucket_access_allow" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_access_allow")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyRegion, keyLabel, keyACL, keyCORSEnabled, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeObjectStorageBucketAccessAllowToolValidation(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketAccessAllowTool(cfg)
-
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		args     map[string]any
-		contains string
-	}{
-		{
-			name:     caseRequiresConfirm,
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead},
-			contains: errConfirmEqualsTrue,
-		},
-		{
-			name:     caseConfirmFalse,
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: false},
-			contains: errConfirmEqualsTrue,
-		},
-		{
-			name:     "confirm string rejected",
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: boolStringTrue},
-			contains: errConfirmEqualsTrue,
-		},
-		{
-			name:     "confirm number rejected",
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: 1},
-			contains: errConfirmEqualsTrue,
-		},
-		{
-			name:     errInvalidACL,
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: "bad-acl", keyConfirm: true},
-			contains: errACLMustBeOneOf,
-		},
-		{
-			name:     "region separator rejected",
-			args:     map[string]any{keyRegion: regionSlashUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
-			contains: errRegionInvalid,
-		},
-		{
-			name:     "region query separator rejected",
-			args:     map[string]any{keyRegion: "us-east-1?x=1", keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
-			contains: errRegionInvalid,
-		},
-		{
-			name:     "region traversal rejected",
-			args:     map[string]any{keyRegion: pathTraversalValue, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
-			contains: errRegionInvalid,
-		},
-		{
-			name:     "label separator rejected",
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: "bad/bucket", keyACL: aclPublicRead, keyConfirm: true},
-			contains: "bucket label must contain only lowercase letters, numbers, and hyphens",
-		},
-		{
-			name:     "label traversal rejected",
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: pathTraversalValue, keyACL: aclPublicRead, keyConfirm: true},
-			contains: "bucket label must be at least 3 characters",
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.contains) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.contains)
-			}
-		})
-	}
-}
-
-func TestLinodeObjectStorageBucketAccessAllowToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != objStorageAccessPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, objStorageAccessPath)
-		}
-
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(body[keyACL], aclPublicRead) {
-			t.Errorf("body[keyACL] = %v, want %v", body[keyACL], aclPublicRead)
-		}
-
-		if !reflect.DeepEqual(body["cors_enabled"], true) {
-			t.Errorf("got %v, want %v", body["cors_enabled"], true)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketAccessAllowTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:      regionUSEast1,
-		keyLabel:       bucketTest,
-		keyACL:         aclPublicRead,
-		"cors_enabled": true,
-		keyConfirm:     true,
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "applied successfully") {
-		t.Errorf("textContent.Text does not contain %v", "applied successfully")
-	}
-}
-
-func TestLinodeObjectStorageBucketAccessAllowToolMissingEnvironment(t *testing.T) {
-	t.Parallel()
-
-	emptyCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{},
-	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageBucketAccessAllowTool(emptyCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:  regionUSEast1,
-		keyLabel:   bucketTest,
-		keyACL:     aclPrivate,
-		keyConfirm: true,
-	})
-
-	result, err := emptyHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-// End-to-end verification of bucket access settings update.
-func TestLinodeObjectStorageBucketAccessUpdateToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, _, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_bucket_access_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_bucket_access_update")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyRegion, keyLabel, keyACL, keyCORSEnabled, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeObjectStorageBucketAccessUpdateToolValidation(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(cfg)
-
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		args     map[string]any
-		contains string
-	}{
-		{
-			name:     caseRequiresConfirm,
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead},
-			contains: errConfirmEqualsTrue,
-		},
-		{
-			name:     errInvalidACL,
-			args:     map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest, keyACL: "bad-acl", keyConfirm: true},
-			contains: errACLMustBeOneOf,
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.contains) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.contains)
-			}
-		})
-	}
-}
-
-func TestLinodeObjectStorageBucketAccessUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != objStorageAccessPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, objStorageAccessPath)
-		}
-
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:  regionUSEast1,
-		keyLabel:   bucketTest,
-		keyACL:     aclPublicRead,
-		keyConfirm: true,
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "modified successfully") {
-		t.Errorf("textContent.Text does not contain %v", "modified successfully")
-	}
-}
-
-func TestLinodeObjectStorageBucketAccessUpdateToolMissingEnvironment(t *testing.T) {
-	t.Parallel()
-
-	emptyCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{},
-	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageBucketAccessUpdateTool(emptyCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:  regionUSEast1,
-		keyLabel:   bucketTest,
-		keyACL:     aclPrivate,
-		keyConfirm: true,
-	})
-
-	result, err := emptyHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-// End-to-end verification of object storage access key creation.
-func TestLinodeObjectStorageKeyCreateToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_key_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_key_create")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	if !strings.Contains(tool.Description, "WARNING") {
-		t.Errorf("tool.Description does not contain %v", "WARNING")
-	}
-
-	if !strings.Contains(tool.Description, "secret_key") {
-		t.Errorf("tool.Description does not contain %v", "secret_key")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyLabel, keyBucketAccess, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeObjectStorageKeyCreateToolValidation(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStorageKeyCreateTool(cfg)
-
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		args     map[string]any
-		contains []string
-	}{
-		{
-			name:     caseRequiresConfirm,
-			args:     map[string]any{keyLabel: keyNameTest},
-			contains: []string{errConfirmEqualsTrue, "secret_key"},
-		},
-		{
-			name:     "empty label",
-			args:     map[string]any{keyLabel: "", keyConfirm: true},
-			contains: []string{errLabelRequired},
-		},
-		{
-			name:     "label too long",
-			args:     map[string]any{keyLabel: strings.Repeat("a", 51), keyConfirm: true},
-			contains: []string{"50 characters"},
-		},
-		{
-			name:     "invalid bucket access JSON",
-			args:     map[string]any{keyLabel: keyNameTest, keyBucketAccess: "not-valid-json", keyConfirm: true},
-			contains: []string{"Invalid bucket_access JSON"},
-		},
-		{
-			name:     "invalid permissions",
-			args:     map[string]any{keyLabel: keyNameTest, keyBucketAccess: `[{"bucket_name": "mybucket", "region": "us-east-1", "permissions": "admin"}]`, keyConfirm: true},
-			contains: []string{"read_only"},
-		},
-		{
-			name:     "missing bucket name",
-			args:     map[string]any{keyLabel: keyNameTest, keyBucketAccess: `[{"bucket_name": "", "region": "us-east-1", "permissions": "read_only"}]`, keyConfirm: true},
-			contains: []string{"bucket_name"},
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			for _, expected := range testCase.contains {
-				if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, expected) {
-					t.Errorf("error text %q does not contain %q", text.Text, expected)
-				}
-			}
-		})
-	}
-}
-
-func TestLinodeObjectStorageKeyCreateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	key := linode.ObjectStorageKey{
-		ID:        42,
-		Label:     keyNameTest,
-		AccessKey: objectStorageKey,
-		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-		Limited:   true,
-		BucketAccess: []linode.ObjectStorageKeyBucketAccess{
-			{BucketName: "mybucket", Region: regionUSEast1, Permissions: "read_write"},
-		},
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/object-storage/keys" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/keys")
-		}
-
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(key); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageKeyCreateTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyLabel:        keyNameTest,
-		keyBucketAccess: `[{"bucket_name": "mybucket", "region": "us-east-1", "permissions": "read_write"}]`,
-		keyConfirm:      true,
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, keyNameTest) {
-		t.Errorf("textContent.Text does not contain %v", keyNameTest)
-	}
-
-	if !strings.Contains(textContent.Text, "created successfully") {
-		t.Errorf("textContent.Text does not contain %v", "created successfully")
-	}
-
-	if !strings.Contains(textContent.Text, "IMPORTANT") {
-		t.Errorf("textContent.Text does not contain %v", "IMPORTANT")
-	}
-
-	if !strings.Contains(textContent.Text, "secret_key") {
-		t.Errorf("textContent.Text does not contain %v", "secret_key")
-	}
-
-	if !strings.Contains(textContent.Text, "wJalrXUtnFEMI") {
-		t.Errorf("textContent.Text does not contain %v", "wJalrXUtnFEMI")
-	}
-}
-
-func TestLinodeObjectStorageKeyCreateToolMissingEnvironment(t *testing.T) {
-	t.Parallel()
-
-	emptyCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{},
-	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageKeyCreateTool(emptyCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyLabel:   keyNameTest,
-		keyConfirm: true,
-	})
-
-	result, err := emptyHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-// End-to-end verification of object storage access key update.
-func TestLinodeObjectStorageKeyUpdateToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, _, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_key_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_key_update")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyKeyID, keyLabel, keyBucketAccess, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeObjectStorageKeyUpdateToolValidation(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStorageKeyUpdateTool(cfg)
-
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		args     map[string]any
-		contains string
-	}{
-		{
-			name:     caseRequiresConfirm,
-			args:     map[string]any{keyKeyID: float64(42), keyLabel: labelNew},
-			contains: errConfirmEqualsTrue,
-		},
-		{
-			name:     "invalid key id",
-			args:     map[string]any{keyKeyID: float64(0), keyLabel: labelNew, keyConfirm: true},
-			contains: "key_id is required",
-		},
-	}
-
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.contains) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.contains)
-			}
-		})
-	}
-}
-
-func TestLinodeObjectStorageKeyUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcObjectStorageKeys42 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageKeys42)
-		}
-
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageKeyUpdateTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyKeyID:   float64(42),
-		keyLabel:   "updated-key",
-		keyConfirm: true,
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "modified successfully") {
-		t.Errorf("textContent.Text does not contain %v", "modified successfully")
-	}
-}
-
 // End-to-end verification of object storage access key revocation.
 func TestLinodeObjectStorageKeyDeleteToolDefinition(t *testing.T) {
 	cfg := &config.Config{
@@ -3513,7 +2291,7 @@ func TestLinodeObjectStorageKeyDeleteToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageKeyDeleteTool(cfg)
 
 	t.Parallel()
 
@@ -3543,7 +2321,7 @@ func TestLinodeObjectStorageKeyDeleteToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageKeyDeleteTool(cfg)
 
 	t.Parallel()
 
@@ -3560,7 +2338,7 @@ func TestLinodeObjectStorageKeyDeleteToolValidation(t *testing.T) {
 		{
 			name:     "invalid key id",
 			args:     map[string]any{keyKeyID: float64(-1), keyConfirm: true, keyConfirmedDryRun: true},
-			contains: "key_id is required",
+			contains: "key_id must be a positive integer",
 		},
 	}
 
@@ -3611,7 +2389,7 @@ func TestLinodeObjectStorageKeyDeleteToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageKeyDeleteTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageKeyDeleteTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyKeyID:   float64(42),
@@ -3647,7 +2425,7 @@ func TestLinodeObjectStorageKeyDeleteToolMissingEnvironment(t *testing.T) {
 	emptyCfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{},
 	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageKeyDeleteTool(emptyCfg)
+	_, _, emptyHandler := gentools.NewLinodeObjectStorageKeyDeleteTool(emptyCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyKeyID:   float64(42),
@@ -3674,7 +2452,7 @@ func TestLinodeObjectStorageKeyDeleteToolDryRunSchemaProperty(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, _ := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+	tool, _, _ := gentools.NewLinodeObjectStorageKeyDeleteTool(cfg)
 
 	t.Parallel()
 
@@ -3711,7 +2489,7 @@ func TestLinodeObjectStorageKeyDeleteToolDryRunReturnsPreviewWithoutMutating(t *
 	dryRunCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, dryRunHandler := tools.NewLinodeObjectStorageKeyDeleteTool(dryRunCfg)
+	_, _, dryRunHandler := gentools.NewLinodeObjectStorageKeyDeleteTool(dryRunCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyKeyID:  float64(77),
@@ -3773,7 +2551,7 @@ func TestLinodeObjectStorageKeyDeleteToolDryRunStillRejectsNegativeKeyId(t *test
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageKeyDeleteTool(cfg)
 
 	t.Parallel()
 
@@ -3799,269 +2577,18 @@ func TestLinodeObjectStorageKeyDeleteToolDryRunStillRejectsNegativeKeyId(t *test
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "key_id is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "key_id is required")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "key_id must be a positive integer") {
+		t.Errorf("error text %q does not contain %q", text.Text, "key_id must be a positive integer")
 	}
 }
 
-// End-to-end verification of presigned URL generation.
-func TestLinodeObjectStoragePresignedURLToolDefinition(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	tool, _, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_presigned_url_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_presigned_url_create")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyRegion, keyLabel, keyName, keyMethod, keyExpiresIn} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeObjectStoragePresignedURLToolMissingName(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
-
-	t.Parallel()
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyMethod: httpMethodGET,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "name") {
-		t.Errorf("textContent.Text does not contain %v", "name")
-	}
-}
-
-func TestLinodeObjectStoragePresignedURLToolInvalidMethod(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
-
-	t.Parallel()
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyName:   objectPhotoJPG,
-		keyMethod: "DELETE",
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, httpMethodGET) {
-		t.Errorf("textContent.Text does not contain %v", httpMethodGET)
-	}
-
-	if !strings.Contains(textContent.Text, "PUT") {
-		t.Errorf("textContent.Text does not contain %v", "PUT")
-	}
-}
-
-func TestLinodeObjectStoragePresignedURLToolInvalidExpiresIn(t *testing.T) {
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-		},
-	}
-	_, _, handler := tools.NewLinodeObjectStoragePresignedURLTool(cfg)
-
-	t.Parallel()
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:    regionUSEast1,
-		keyLabel:     bucketTest,
-		keyName:      objectPhotoJPG,
-		keyMethod:    httpMethodGET,
-		"expires_in": float64(700000),
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "604800") {
-		t.Errorf("textContent.Text does not contain %v", "604800")
-	}
-}
-
-func TestLinodeObjectStoragePresignedURLToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	resp := map[string]any{
-		"url":         "https://my-bucket.us-east-1.linodeobjects.com/photo.jpg?signed=abc123",
-		keyNotInProto: valNotInProto,
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/object-storage/buckets/us-east-1/my-bucket/object-url" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/buckets/us-east-1/my-bucket/object-url")
-		}
-
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStoragePresignedURLTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyName:   objectPhotoJPG,
-		keyMethod: httpMethodGET,
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "signed=abc123") {
-		t.Errorf("textContent.Text does not contain %v", "signed=abc123")
-	}
-
-	if strings.Contains(textContent.Text, valNotInProto) {
-		t.Error("unknown field not_in_proto leaked into proto-canonical output")
-	}
-}
-
-func TestLinodeObjectStoragePresignedURLToolMissingEnvironment(t *testing.T) {
-	t.Parallel()
-
-	emptyCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{},
-	}
-	_, _, emptyHandler := tools.NewLinodeObjectStoragePresignedURLTool(emptyCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyName:   objectPhotoJPG,
-		keyMethod: httpMethodGET,
-	})
-
-	result, err := emptyHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-// End-to-end verification of object ACL retrieval.
 func TestLinodeObjectStorageObjectACLGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageObjectACLGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageObjectACLGetTool(cfg)
 
 	t.Parallel()
 
@@ -4091,7 +2618,7 @@ func TestLinodeObjectStorageObjectACLGetToolMissingName(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeObjectStorageObjectACLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageObjectACLGetTool(cfg)
 
 	t.Parallel()
 
@@ -4153,7 +2680,7 @@ func TestLinodeObjectStorageObjectACLGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageObjectACLGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageObjectACLGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast1,
@@ -4191,7 +2718,7 @@ func TestLinodeObjectStorageObjectACLUpdateToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, _, handler := tools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
 
 	t.Parallel()
 
@@ -4253,7 +2780,7 @@ func TestLinodeObjectStorageObjectACLUpdateToolValidation(t *testing.T) {
 				testCfg = &config.Config{}
 			}
 
-			_, _, testHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(testCfg)
+			_, _, testHandler := gentools.NewLinodeObjectStorageObjectACLUpdateTool(testCfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -4312,7 +2839,7 @@ func TestLinodeObjectStorageObjectACLUpdateToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageObjectACLUpdateTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageObjectACLUpdateTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion:  regionUSEast1,
@@ -4348,7 +2875,7 @@ func TestLinodeObjectStorageObjectACLUpdateToolSuccess(t *testing.T) {
 // End-to-end verification of bucket SSL certificate status retrieval.
 func TestLinodeObjectStorageSSLGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageSSLGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageSSLGetTool(cfg)
 
 	t.Parallel()
 
@@ -4401,7 +2928,7 @@ func TestLinodeObjectStorageSSLGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageSSLGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageSSLGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast1,
@@ -4437,7 +2964,7 @@ func TestLinodeObjectStorageSSLGetToolMissingEnvironment(t *testing.T) {
 	emptyCfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{},
 	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageSSLGetTool(emptyCfg)
+	_, _, emptyHandler := gentools.NewLinodeObjectStorageSSLGetTool(emptyCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast1,
@@ -4455,540 +2982,13 @@ func TestLinodeObjectStorageSSLGetToolMissingEnvironment(t *testing.T) {
 
 	if !result.IsError {
 		t.Error("result.IsError = false, want true")
-	}
-}
-
-// End-to-end verification of bucket SSL certificate deletion.
-func TestLinodeObjectStorageSSLDeleteToolDefinition(t *testing.T) {
-	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
-
-	t.Parallel()
-
-	if tool.Name != "linode_object_storage_ssl_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_object_storage_ssl_delete")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyRegion, keyLabel, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeObjectStorageSSLDeleteToolConfirmRequired(t *testing.T) {
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
-
-	t.Parallel()
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:  regionUSEast1,
-		keyLabel:   bucketTest,
-		keyConfirm: false,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, errConfirmEqualsTrue) {
-		t.Errorf("textContent.Text does not contain %v", errConfirmEqualsTrue)
-	}
-}
-
-func TestLinodeObjectStorageSSLDeleteToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcObjectStorageBucketsUsEast1MyBucketSsl {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageBucketsUsEast1MyBucketSsl)
-		}
-
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	srvCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageSSLDeleteTool(srvCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:  regionUSEast1,
-		keyLabel:   bucketTest,
-		keyConfirm: true, keyConfirmedDryRun: true,
-	})
-
-	result, err := srvHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "SSL certificate deleted") {
-		t.Errorf("textContent.Text does not contain %v", "SSL certificate deleted")
-	}
-}
-
-func TestLinodeObjectStorageSSLDeleteToolMissingEnvironment(t *testing.T) {
-	t.Parallel()
-
-	emptyCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{},
-	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageSSLDeleteTool(emptyCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion:  regionUSEast1,
-		keyLabel:   bucketTest,
-		keyConfirm: true, keyConfirmedDryRun: true,
-	})
-
-	result, err := emptyHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-// Dry-run coverage for bucket delete. Kept in a sibling function so
-// the main test's subtest count stays under maintidx's threshold.
-func TestLinodeObjectStorageBucketDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
-	t.Parallel()
-
-	tool, _, _ := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
-	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
-		t.Errorf("RawInputSchema missing key %v", keyDryRun)
-	}
-}
-
-func TestLinodeObjectStorageBucketDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
-	t.Parallel()
-
-	var methodsSeen []string
-
-	bucketBody := `{"label":"my-bucket","region":"us-east-1","size":1024,"objects":3}`
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		methodsSeen = append(methodsSeen, r.Method)
-		if r.URL.Path != tcObjectStorageBucketsUsEast1MyBucket {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageBucketsUsEast1MyBucket)
-		}
-
-		if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(bucketBody))
-
-			return
-		}
-
-		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-	}}
-	_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Fatal("result.IsError = true, want false")
-	}
-
-	textContent, isText := result.Content[0].(mcp.TextContent)
-	if !isText {
-		t.Fatal("isText = false, want true")
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !reflect.DeepEqual(body[keyDryRun], true) {
-		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
-	}
-
-	if !reflect.DeepEqual(body["tool"], "linode_object_storage_bucket_delete") {
-		t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_bucket_delete")
-	}
-
-	would, isWouldObject := body["would_execute"].(map[string]any)
-	if !isWouldObject {
-		t.Fatal("isWouldObject = false, want true")
-	}
-
-	if !reflect.DeepEqual(would["method"], "DELETE") {
-		t.Errorf("got %v, want %v", would["method"], "DELETE")
-	}
-
-	if !reflect.DeepEqual(would["path"], tcObjectStorageBucketsUsEast1MyBucket) {
-		t.Errorf("got %v, want %v", would["path"], tcObjectStorageBucketsUsEast1MyBucket)
-	}
-
-	state, stateIsObject := body["current_state"].(map[string]any)
-	if !stateIsObject {
-		t.Fatal("stateIsObject = false, want true")
-	}
-
-	if !reflect.DeepEqual(state[keyLabel], "my-bucket") {
-		t.Errorf("state[keyLabel] = %v, want %v", state[keyLabel], "my-bucket")
-	}
-
-	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
-		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
-	}
-}
-
-func TestLinodeObjectStorageBucketDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"label":"my-bucket","region":"us-east-1"}`))
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-	}}
-	_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-}
-
-func TestLinodeObjectStorageBucketDeleteToolDryRunDryRunStillValidatesRegion(t *testing.T) {
-	t.Parallel()
-
-	_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
-	req := createRequestWithArgs(t, map[string]any{
-		keyLabel:  bucketTest,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "region is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "region is required")
-	}
-}
-
-func TestLinodeObjectStorageBucketDeleteToolDryRunDryRunStillValidatesLabel(t *testing.T) {
-	t.Parallel()
-
-	_, _, handler := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "label is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "label is required")
-	}
-}
-
-// Dry-run coverage for SSL certificate delete. Kept in a sibling function
-// so the main test's subtest count stays under maintidx's threshold.
-func TestLinodeObjectStorageSSLDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
-	t.Parallel()
-
-	tool, _, _ := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
-	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
-		t.Errorf("RawInputSchema missing key %v", keyDryRun)
-	}
-}
-
-func TestLinodeObjectStorageSSLDeleteToolDryRunPreviewWithoutMutating(t *testing.T) {
-	t.Parallel()
-
-	var methodsSeen []string
-
-	sslBody := `{"ssl":true}`
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		methodsSeen = append(methodsSeen, r.Method)
-		if r.URL.Path != tcObjectStorageBucketsUsEast1MyBucketSsl {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcObjectStorageBucketsUsEast1MyBucketSsl)
-		}
-
-		if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(sslBody))
-
-			return
-		}
-
-		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-	}}
-	_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Fatal("result.IsError = true, want false")
-	}
-
-	textContent, isText := result.Content[0].(mcp.TextContent)
-	if !isText {
-		t.Fatal("isText = false, want true")
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !reflect.DeepEqual(body[keyDryRun], true) {
-		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
-	}
-
-	if !reflect.DeepEqual(body["tool"], "linode_object_storage_ssl_delete") {
-		t.Errorf("got %v, want %v", body["tool"], "linode_object_storage_ssl_delete")
-	}
-
-	would, isWouldObject := body["would_execute"].(map[string]any)
-	if !isWouldObject {
-		t.Fatal("isWouldObject = false, want true")
-	}
-
-	if !reflect.DeepEqual(would["method"], "DELETE") {
-		t.Errorf("got %v, want %v", would["method"], "DELETE")
-	}
-
-	if !reflect.DeepEqual(would["path"], tcObjectStorageBucketsUsEast1MyBucketSsl) {
-		t.Errorf("got %v, want %v", would["path"], tcObjectStorageBucketsUsEast1MyBucketSsl)
-	}
-
-	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
-		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
-	}
-}
-
-func TestLinodeObjectStorageSSLDeleteToolDryRunDoesNotRequireConfirm(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"ssl":true}`))
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-	}}
-	_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyLabel:  bucketTest,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-}
-
-func TestLinodeObjectStorageSSLDeleteToolDryRunDryRunStillValidatesRegion(t *testing.T) {
-	t.Parallel()
-
-	_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
-	req := createRequestWithArgs(t, map[string]any{
-		keyLabel:  bucketTest,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "region is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "region is required")
-	}
-}
-
-func TestLinodeObjectStorageSSLDeleteToolDryRunDryRunStillValidatesLabel(t *testing.T) {
-	t.Parallel()
-
-	_, _, handler := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
-	req := createRequestWithArgs(t, map[string]any{
-		keyRegion: regionUSEast1,
-		keyDryRun: true,
-	})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "label is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "label is required")
 	}
 }
 
 // End-to-end verification of bucket SSL certificate upload.
 func TestLinodeObjectStorageSSLUploadToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeObjectStorageSSLUploadTool(cfg)
+	tool, _, handler := gentools.NewLinodeObjectStorageSSLUploadTool(cfg)
 
 	t.Parallel()
 
@@ -5014,7 +3014,7 @@ func TestLinodeObjectStorageSSLUploadToolDefinition(t *testing.T) {
 
 func TestLinodeObjectStorageSSLUploadToolConfirmRequired(t *testing.T) {
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeObjectStorageSSLUploadTool(cfg)
+	_, _, handler := gentools.NewLinodeObjectStorageSSLUploadTool(cfg)
 
 	t.Parallel()
 
@@ -5074,7 +3074,7 @@ func TestLinodeObjectStorageSSLUploadToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion:      regionUSEast1,
@@ -5127,7 +3127,7 @@ func TestLinodeObjectStorageSSLUploadToolMissingEnvironment(t *testing.T) {
 	emptyCfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{},
 	}
-	_, _, emptyHandler := tools.NewLinodeObjectStorageSSLUploadTool(emptyCfg)
+	_, _, emptyHandler := gentools.NewLinodeObjectStorageSSLUploadTool(emptyCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion:      regionUSEast1,
@@ -5169,7 +3169,7 @@ func TestLinodeObjectStorageSSLUploadToolApiErrorPropagated(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion:      regionUSEast1,
@@ -5230,7 +3230,7 @@ func TestLinodeObjectStorageSSLUploadToolTraversalCase(t *testing.T) {
 					envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 				},
 			}
-			_, _, srvHandler := tools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
+			_, _, srvHandler := gentools.NewLinodeObjectStorageSSLUploadTool(srvCfg)
 
 			req := createRequestWithArgs(t, map[string]any{
 				keyRegion:      regionUSEast1,

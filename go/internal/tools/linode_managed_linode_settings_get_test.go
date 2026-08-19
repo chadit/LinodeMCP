@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -29,7 +29,7 @@ func TestLinodeManagedLinodeSettingsGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeManagedLinodeSettingsGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeManagedLinodeSettingsGetTool(cfg)
 
 	if tool.Name != managedLinodeSettingsGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, managedLinodeSettingsGetToolName)
@@ -88,7 +88,7 @@ func TestLinodeManagedLinodeSettingsGetToolInvalidLinodeIdRejectedBeforeClientCa
 			t.Cleanup(srv.Close)
 
 			cfg := managedLinodeSettingsConfig(srv.URL)
-			_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(cfg)
+			_, _, handler := gentools.NewLinodeManagedLinodeSettingsGetTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
@@ -155,7 +155,7 @@ func TestLinodeManagedLinodeSettingsGetToolSuccess(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
+	_, _, handler := gentools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsToolIDValue}))
 	if err != nil {
@@ -207,7 +207,7 @@ func TestLinodeManagedLinodeSettingsGetToolApiError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, _, handler := tools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
+	_, _, handler := gentools.NewLinodeManagedLinodeSettingsGetTool(managedLinodeSettingsConfig(srv.URL))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedLinodeSettingsLinodeID: managedLinodeSettingsToolIDValue}))
 	if err != nil {
@@ -222,8 +222,8 @@ func TestLinodeManagedLinodeSettingsGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_linode_settings_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_linode_settings_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve managed settings for instance") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve managed settings for instance")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

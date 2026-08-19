@@ -11,8 +11,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -29,7 +29,7 @@ func TestLinodePlacementGroupAssignToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodePlacementGroupAssignTool(cfg)
+	tool, capability, handler := gentools.NewLinodePlacementGroupAssignTool(cfg)
 
 	if tool.Name != "linode_placement_group_assign" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_group_assign")
@@ -67,7 +67,7 @@ func TestLinodePlacementGroupAssignToolValidation(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: false}, wantContains: errConfirmTrue},
 		{name: "string confirm", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: boolStringTrue}, wantContains: errConfirmTrue},
 		{name: "numeric confirm", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: 1}, wantContains: errConfirmTrue},
-		{name: caseMissingGroupID, args: map[string]any{keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: true}, wantContains: placementGroupIDRequired},
+		{name: caseMissingGroupID, args: map[string]any{keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: true}, wantContains: placementGroupIDIntegerMessage},
 		{name: caseSlashGroupID, args: map[string]any{keyPlacementGroupID: placementGroupSlashValue, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: true}, wantContains: placementGroupIDError},
 		{name: caseQueryGroupID, args: map[string]any{keyPlacementGroupID: placementGroupQueryValue, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: true}, wantContains: placementGroupIDError},
 		{name: caseTraversalGroupID, args: map[string]any{keyPlacementGroupID: pathTraversalValue, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: true}, wantContains: placementGroupIDError},
@@ -75,17 +75,17 @@ func TestLinodePlacementGroupAssignToolValidation(t *testing.T) {
 		{name: "dry run still validates linodes", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyDryRun: true}, wantContains: errLinodesRequired},
 		{name: "string linodes", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: "[123]", keyConfirm: true}, wantContains: "linodes must be a JSON array"},
 		{name: "invalid linode element", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{"123"}, keyConfirm: true}, wantContains: errPositiveInteger},
-		{name: "empty linodes", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{}, keyConfirm: true}, wantContains: "at least one"},
+		{name: "empty linodes", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{}, keyConfirm: true}, wantContains: "distinct positive integer Linode IDs"},
 		{name: "zero linode", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{float64(0)}, keyConfirm: true}, wantContains: errPositiveInteger},
 		{name: "fractional linode", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{float64(123.5)}, keyConfirm: true}, wantContains: errPositiveInteger},
-		{name: "duplicate linode", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{float64(123), float64(123)}, keyConfirm: true}, wantContains: "unique"},
+		{name: "duplicate linode", args: map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{float64(123), float64(123)}, keyConfirm: true}, wantContains: "distinct positive integer Linode IDs"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodePlacementGroupAssignTool(cfg)
+			_, _, handler := gentools.NewLinodePlacementGroupAssignTool(cfg)
 			req := createRequestWithArgs(t, tt.args)
 
 			result, err := handler(t.Context(), req)
@@ -157,7 +157,7 @@ func TestLinodePlacementGroupAssignToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodePlacementGroupAssignTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupAssignTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{float64(123), float64(456)}, keyConfirm: true})
 
@@ -214,7 +214,7 @@ func TestLinodePlacementGroupAssignToolApiErrorIncludesGroupIdAndReason(t *testi
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodePlacementGroupAssignTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupAssignTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyConfirm: true})
 
@@ -266,7 +266,7 @@ func TestLinodePlacementGroupAssignToolDryRunStateFetchErrorIsReported(t *testin
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodePlacementGroupAssignTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupAssignTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyDryRun: true})
 
@@ -313,7 +313,7 @@ func TestLinodePlacementGroupAssignToolDryRunSkipsConfirmAndDoesNotPost(t *testi
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodePlacementGroupAssignTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupAssignTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPlacementGroupID: placementGroupIDFixture, keyPlacementGroupLinodes: []any{placementGroupLinodeSingle}, keyDryRun: true})
 

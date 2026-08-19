@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
 
@@ -36,6 +37,30 @@ const (
 const (
 	methodDelete = "DELETE"
 	methodGet    = "GET"
+)
+
+// The base path segments the two declarable surfaces resolve to.
+const (
+	segmentV4     = "v4"
+	segmentV4Beta = "v4beta"
+)
+
+// Bases the surface swap leaves alone: an origin with no version segment, and
+// a host that merely ends in one.
+const (
+	bareOriginBase = "http://127.0.0.1:8080"
+	v4HostBase     = "https://v4.example.com"
+)
+
+// fakeTemplate is a route no contract declares, for the checks a generated
+// contract cannot reach.
+const fakeTemplate = "/fake"
+
+// The configured apiUrl a default deployment carries, and the base the beta
+// surface derives from it.
+const (
+	canonicalBase     = "https://api.linode.com/v4"
+	canonicalBetaBase = "https://api.linode.com/v4beta"
 )
 
 // TestAllCoversEveryNonMetaTool reads the capability manifest rather than a
@@ -79,7 +104,7 @@ func TestAllRoutesBuildAPath(t *testing.T) {
 			t.Errorf("For(%q).Template = %v, want a rooted path", route.Tool, route.Template)
 		}
 
-		assertFills(t, route)
+		assertFills(t, &route)
 	}
 }
 
@@ -305,7 +330,7 @@ func TestIsContractErrorNamesEveryFailureHere(t *testing.T) {
 		"empty value": {tool: tagDelete, values: []any{""}},
 		"value type":  {tool: instanceDelete, values: []any{42.5}},
 	} {
-		_, _, err := linoderoute.Resolve(probe.tool, probe.values...)
+		_, _, _, err := linoderoute.Resolve(probe.tool, probe.values...)
 		assertContractError(t, name, err)
 	}
 
@@ -369,7 +394,7 @@ func TestValidateContractRejectsBrokenRoutes(t *testing.T) {
 func TestResolveReturnsMethodAndFilledPath(t *testing.T) {
 	t.Parallel()
 
-	method, endpoint, err := linoderoute.Resolve(instanceDelete, 4242)
+	method, endpoint, _, err := linoderoute.Resolve(instanceDelete, 4242)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -399,7 +424,7 @@ func TestResolveReportsEitherFailure(t *testing.T) {
 		"empty value":    {tool: tagDelete, values: []any{""}, want: linoderoute.ErrEmptyValue},
 		"bad value type": {tool: instanceDelete, values: []any{42.5}, want: linoderoute.ErrValueType},
 	} {
-		method, endpoint, err := linoderoute.Resolve(probe.tool, probe.values...)
+		method, endpoint, _, err := linoderoute.Resolve(probe.tool, probe.values...)
 		if !errors.Is(err, probe.want) {
 			t.Errorf("Resolve() error for %s = %v, want %v", name, err, probe.want)
 		}
@@ -439,8 +464,88 @@ func TestValidateAcceptsTheShippedContract(t *testing.T) {
 	}
 }
 
+// TestSurfaceSegmentNamesEverySurface pins the segment each declared surface
+// resolves to. An undeclared surface reads as the zero value, which is why it
+// has to answer v4 rather than fail.
+func TestSurfaceSegmentNamesEverySurface(t *testing.T) {
+	t.Parallel()
+
+	for _, probe := range []struct {
+		want    string
+		surface linodev1.ApiSurface
+	}{
+		{segmentV4, linodev1.ApiSurface_API_SURFACE_UNSPECIFIED},
+		{segmentV4, linodev1.ApiSurface_API_SURFACE_V4},
+		{segmentV4Beta, linodev1.ApiSurface_API_SURFACE_V4BETA},
+	} {
+		got, err := linoderoute.SurfaceSegment(probe.surface)
+		if err != nil {
+			t.Errorf("SurfaceSegment(%v) = %v, want nil", probe.surface, err)
+		}
+
+		if got != probe.want {
+			t.Errorf("SurfaceSegment(%v) = %v, want %v", probe.surface, got, probe.want)
+		}
+	}
+}
+
+// TestSurfaceSegmentRefusesAnUnknownSurface is the fail-closed half. A surface
+// this build cannot address must not fall back to v4: the route would answer
+// 404, or worse, address a different resource surface and look like it worked.
+// The value is handed in directly because generation refuses to emit one.
+func TestSurfaceSegmentRefusesAnUnknownSurface(t *testing.T) {
+	t.Parallel()
+
+	got, err := linoderoute.SurfaceSegment(linodev1.ApiSurface(99))
+	if !errors.Is(err, linoderoute.ErrAPISurface) {
+		t.Errorf("SurfaceSegment(99) error = %v, want ErrAPISurface", err)
+	}
+
+	if got != "" {
+		t.Errorf("SurfaceSegment(99) = %v, want an empty segment", got)
+	}
+}
+
+// TestBaseForRePointsOnlyADefaultSuffixedBase is the whole override rule in one
+// table. The configured apiUrl wins in every row but the first: a surface picks
+// among versions of one deployment, it never picks the deployment.
+func TestBaseForRePointsOnlyADefaultSuffixedBase(t *testing.T) {
+	t.Parallel()
+
+	for name, probe := range map[string]struct {
+		base, segment, want string
+	}{
+		"canonical base": {
+			canonicalBase, segmentV4Beta, canonicalBetaBase,
+		},
+		"proxy keeps its path prefix": {
+			"https://proxy.example/linode/v4", segmentV4Beta, "https://proxy.example/linode/v4beta",
+		},
+		"a base already on the beta surface is left alone": {
+			canonicalBetaBase, segmentV4Beta, canonicalBetaBase,
+		},
+		"a bare origin has no version segment to swap": {
+			bareOriginBase, segmentV4Beta, bareOriginBase,
+		},
+		"a trailing slash is not a version segment": {
+			canonicalBase + "/", segmentV4Beta, canonicalBase + "/",
+		},
+		"a base whose host merely ends in v4": {
+			v4HostBase, segmentV4Beta, v4HostBase,
+		},
+		"the default surface is a no-op": {
+			canonicalBase, segmentV4, canonicalBase,
+		},
+	} {
+		if got := linoderoute.BaseFor(probe.base, probe.segment); got != probe.want {
+			t.Errorf("%s: BaseFor(%q, %q) = %v, want %v",
+				name, probe.base, probe.segment, got, probe.want)
+		}
+	}
+}
+
 // assertFills builds one route's path and checks nothing is left unsubstituted.
-func assertFills(t *testing.T, route linoderoute.Route) {
+func assertFills(t *testing.T, route *linoderoute.Route) {
 	t.Helper()
 
 	values := make([]any, len(route.Slots))
@@ -546,4 +651,111 @@ func difference(left, right []string) []string {
 	slices.Sort(missing)
 
 	return missing
+}
+
+// TestTargetRefusesASurfaceItCannotAddress reaches the refusal a generated
+// contract cannot: the gates keep an unrenderable surface out of the shipped
+// descriptors, so the route is built here instead. Nothing may be returned
+// beside the error, since a caller that ignored it would send the request to
+// whichever base the empty segment produced.
+func TestTargetRefusesASurfaceItCannotAddress(t *testing.T) {
+	t.Parallel()
+
+	route := linoderoute.Route{
+		Tool:     "linode_fake_get",
+		Method:   methodGet,
+		Template: "/fake/{fake_id}",
+		Slots:    []string{"fake_id"},
+		Surface:  linodev1.ApiSurface(99),
+	}
+
+	method, endpoint, segment, err := route.Target(probeValue)
+	if !errors.Is(err, linoderoute.ErrAPISurface) {
+		t.Fatalf("Target() error = %v, want ErrAPISurface", err)
+	}
+
+	if method != "" || endpoint != "" || segment != "" {
+		t.Errorf("Target() = (%q, %q, %q), want all empty", method, endpoint, segment)
+	}
+}
+
+// TestTargetAnswersTheSegmentTheSurfaceNames is the same path succeeding, so a
+// route on the beta surface is proven to carry its segment out to the client
+// before any tool declares one.
+func TestTargetAnswersTheSegmentTheSurfaceNames(t *testing.T) {
+	t.Parallel()
+
+	route := linoderoute.Route{
+		Tool:     "linode_fake_list",
+		Method:   methodGet,
+		Template: fakeTemplate,
+		Surface:  linodev1.ApiSurface_API_SURFACE_V4BETA,
+	}
+
+	method, endpoint, segment, err := route.Target()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if method != methodGet || endpoint != fakeTemplate || segment != segmentV4Beta {
+		t.Errorf("Target() = (%q, %q, %q), want (%q, %q, %q)",
+			method, endpoint, segment, methodGet, fakeTemplate, segmentV4Beta)
+	}
+}
+
+// TestValidateContractRejectsARouteOnAnUnaddressableSurface is the startup half
+// of the same refusal: a contract carrying one has to stop the server rather
+// than wait to surface as one tool's failed request.
+func TestValidateContractRejectsARouteOnAnUnaddressableSurface(t *testing.T) {
+	t.Parallel()
+
+	route := linoderoute.Route{
+		Tool:     "linode_fake_list",
+		Method:   methodGet,
+		Template: fakeTemplate,
+		Surface:  linodev1.ApiSurface(99),
+	}
+
+	err := linoderoute.ValidateContract(nil, []linoderoute.Route{route})
+	if !errors.Is(err, linoderoute.ErrAPISurface) {
+		t.Errorf("ValidateContract() error = %v, want ErrAPISurface", err)
+	}
+}
+
+// SurfacedTools is the contract's own answer to what is on another surface, so
+// it has to name what the proto annotates rather than a list kept beside it.
+func TestSurfacedToolsNamesTheAnnotatedTools(t *testing.T) {
+	t.Parallel()
+
+	surfaced := linoderoute.SurfacedTools()
+	if len(surfaced) == 0 {
+		t.Fatal("SurfacedTools() is empty, want the annotated tools")
+	}
+
+	if !slices.Contains(surfaced, "linode_lock_list") {
+		t.Errorf("SurfacedTools() = %v, want it to name linode_lock_list", surfaced)
+	}
+
+	if slices.Contains(surfaced, tagDelete) {
+		t.Errorf("SurfacedTools() = %v, want no unannotated tool in it", surfaced)
+	}
+}
+
+// Repointable is what a startup check asks before deciding a configured base
+// leaves the annotated tools unreachable.
+func TestRepointableAcceptsOnlyADefaultSuffixedBase(t *testing.T) {
+	t.Parallel()
+
+	for base, want := range map[string]bool{
+		canonicalBase:                     true,
+		"https://proxy.example/linode/v4": true,
+		canonicalBetaBase:                 false,
+		bareOriginBase:                    false,
+		canonicalBase + "/":               false,
+		v4HostBase:                        false,
+	} {
+		if got := linoderoute.Repointable(base); got != want {
+			t.Errorf("Repointable(%q) = %v, want %v", base, got, want)
+		}
+	}
 }

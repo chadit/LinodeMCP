@@ -12,9 +12,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const placementGroupUnassignToolName = "linode_placement_group_unassign"
@@ -23,7 +23,7 @@ func TestLinodePlacementGroupUnassignToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
+	tool, capability, handler := gentools.NewLinodePlacementGroupUnassignTool(cfg)
 
 	if tool.Name != placementGroupUnassignToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, placementGroupUnassignToolName)
@@ -76,7 +76,7 @@ func TestLinodePlacementGroupUnassignToolConfirmRequiredBeforeClientCall(t *test
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
+			_, _, handler := gentools.NewLinodePlacementGroupUnassignTool(cfg)
 
 			args := placementGroupUnassignArgs()
 			delete(args, keyConfirm)
@@ -109,6 +109,13 @@ func TestLinodePlacementGroupUnassignToolConfirmRequiredBeforeClientCall(t *test
 	}
 }
 
+// The two arms the membership list tells apart, named once so the package's
+// constant scan reads one occurrence of each.
+const (
+	unassignLinodesShape = "linodes must be a non-empty array of distinct positive integer Linode IDs"
+	unassignLinodesArray = "linodes must be a JSON array of positive integer Linode IDs"
+)
+
 func TestLinodePlacementGroupUnassignToolInvalidRequestRejectedBeforeClientCall(t *testing.T) {
 	t.Parallel()
 
@@ -117,17 +124,17 @@ func TestLinodePlacementGroupUnassignToolInvalidRequestRejectedBeforeClientCall(
 		update      func(map[string]any)
 		wantMessage string
 	}{
-		{name: "missing group_id", update: func(args map[string]any) { delete(args, keyPlacementGroupID) }, wantMessage: "group_id is required"},
+		{name: "missing group_id", update: func(args map[string]any) { delete(args, keyPlacementGroupID) }, wantMessage: placementGroupIDIntegerMessage},
 		{name: "slash group_id", update: func(args map[string]any) { args[keyPlacementGroupID] = pathSeparatorValue }, wantMessage: placementGroupIDError},
 		{name: "query group_id", update: func(args map[string]any) { args[keyPlacementGroupID] = "12?x=1" }, wantMessage: placementGroupIDError},
 		{name: "traversal group_id", update: func(args map[string]any) { args[keyPlacementGroupID] = pathTraversalValue }, wantMessage: placementGroupIDError},
-		{name: "missing linodes", update: func(args map[string]any) { delete(args, "linodes") }, wantMessage: tools.ErrPlacementGroupLinodesRequired.Error()},
-		{name: "empty linodes", update: func(args map[string]any) { args["linodes"] = []any{} }, wantMessage: tools.ErrPlacementGroupLinodesEmpty.Error()},
-		{name: "string linodes", update: func(args map[string]any) { args["linodes"] = []any{"123"} }, wantMessage: tools.ErrPlacementGroupLinodesPositive.Error()},
-		{name: "non-array linodes", update: func(args map[string]any) { args["linodes"] = "123" }, wantMessage: tools.ErrPlacementGroupLinodesJSON.Error()},
-		{name: "fractional linode", update: func(args map[string]any) { args["linodes"] = []any{123.5} }, wantMessage: tools.ErrPlacementGroupLinodesPositive.Error()},
-		{name: "duplicate linode", update: func(args map[string]any) { args["linodes"] = []any{float64(123), float64(123)} }, wantMessage: tools.ErrPlacementGroupLinodesDuplicate.Error()},
-		{name: "zero linode", update: func(args map[string]any) { args["linodes"] = []any{float64(0)} }, wantMessage: tools.ErrPlacementGroupLinodesPositive.Error()},
+		{name: "missing linodes", update: func(args map[string]any) { delete(args, "linodes") }, wantMessage: "linodes is required"},
+		{name: "empty linodes", update: func(args map[string]any) { args["linodes"] = []any{} }, wantMessage: unassignLinodesShape},
+		{name: "string linodes", update: func(args map[string]any) { args["linodes"] = []any{"123"} }, wantMessage: unassignLinodesShape},
+		{name: "non-array linodes", update: func(args map[string]any) { args["linodes"] = "123" }, wantMessage: unassignLinodesArray},
+		{name: "fractional linode", update: func(args map[string]any) { args["linodes"] = []any{123.5} }, wantMessage: unassignLinodesShape},
+		{name: "duplicate linode", update: func(args map[string]any) { args["linodes"] = []any{float64(123), float64(123)} }, wantMessage: unassignLinodesShape},
+		{name: "zero linode", update: func(args map[string]any) { args["linodes"] = []any{float64(0)} }, wantMessage: unassignLinodesShape},
 	}
 
 	for _, testCase := range cases {
@@ -143,7 +150,7 @@ func TestLinodePlacementGroupUnassignToolInvalidRequestRejectedBeforeClientCall(
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
+			_, _, handler := gentools.NewLinodePlacementGroupUnassignTool(cfg)
 
 			args := placementGroupUnassignArgs()
 			testCase.update(args)
@@ -196,7 +203,7 @@ func TestLinodePlacementGroupUnassignToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupUnassignTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, placementGroupUnassignArgs()))
 	if err != nil {
@@ -258,7 +265,7 @@ func TestLinodePlacementGroupUnassignToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupUnassignTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, placementGroupUnassignArgs()))
 	if err != nil {
@@ -320,7 +327,7 @@ func TestLinodePlacementGroupUnassignToolDryRun(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupUnassignTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupUnassignTool(cfg)
 
 	args := placementGroupUnassignArgs()
 	delete(args, keyConfirm)

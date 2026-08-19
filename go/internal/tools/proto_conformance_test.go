@@ -582,7 +582,7 @@ func TestFirewallDeviceProtoCanonicalOutput(t *testing.T) {
 			t.Fatal("entity must be present when set (proto message presence)")
 		}
 
-		if entity["label"] != imageUploadTagWeb {
+		if entity["label"] != tagWeb {
 			t.Errorf("entity.label = %v, want web", entity["label"])
 		}
 
@@ -768,7 +768,7 @@ func TestFirewallProtoCanonicalOutput(t *testing.T) {
 			`"addresses":{"ipv4":["0.0.0.0/0"]},"label":"ssh"}]},`+
 			`"tags":["prod"]}`)
 
-		if out["label"] != imageUploadTagWeb {
+		if out["label"] != tagWeb {
 			t.Errorf("label = %v, want web", out["label"])
 		}
 
@@ -984,8 +984,8 @@ func marshalInterfaceSettingsFixture(t *testing.T, fixture string) map[string]an
 }
 
 // TestInstanceInterfaceSettingsProtoCanonicalOutput pins the serialization: a
-// nullable default_route message (omitted when nil) carrying optional bools, and
-// an optional network_helper bool (omitted when unset). The Python
+// nullable default_route message (omitted when nil) carrying optional interface
+// ids, and an optional network_helper bool (omitted when unset). The Python
 // instance_interface_settings_to_response_dict mirror follows the same rules.
 func TestInstanceInterfaceSettingsProtoCanonicalOutput(t *testing.T) {
 	t.Parallel()
@@ -994,15 +994,15 @@ func TestInstanceInterfaceSettingsProtoCanonicalOutput(t *testing.T) {
 		t.Parallel()
 
 		out := marshalInterfaceSettingsFixture(t,
-			`{"default_route":{"ipv4":true},"network_helper":false}`)
+			`{"default_route":{"ipv4_interface_id":7},"network_helper":false}`)
 
 		route, isObject := out["default_route"].(map[string]any)
-		if !isObject || route["ipv4"] != true {
-			t.Errorf("default_route.ipv4 = %v, want true", out["default_route"])
+		if !isObject || route["ipv4_interface_id"] != float64(7) {
+			t.Errorf("default_route.ipv4_interface_id = %v, want 7", out["default_route"])
 		}
 
-		if _, present := route["ipv6"]; present {
-			t.Error("default_route.ipv6 must be omitted when unset (proto optional)")
+		if _, present := route["ipv6_interface_id"]; present {
+			t.Error("default_route.ipv6_interface_id must be omitted when unset (proto optional)")
 		}
 
 		if out["network_helper"] != false {

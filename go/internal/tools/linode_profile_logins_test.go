@@ -10,16 +10,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeProfileLoginsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileLoginsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileLoginListTool(cfg)
 
 	if tool.Name != "linode_profile_login_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_login_list")
@@ -82,7 +82,7 @@ func TestLinodeProfileLoginsToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeProfileLoginsTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileLoginListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2.0, keyPageSize: 25.0})
 
@@ -117,7 +117,7 @@ func TestLinodeProfileLoginsToolInvalidPagination(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeProfileLoginsTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileLoginListTool(cfg)
 
 	cases := []struct {
 		name        string
@@ -183,7 +183,7 @@ func TestLinodeProfileLoginsToolUpstreamError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeProfileLoginsTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileLoginListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {

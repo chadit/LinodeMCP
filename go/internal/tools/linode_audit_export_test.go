@@ -11,8 +11,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // exportResult mirrors the linode_audit_export JSON response.
@@ -20,30 +19,6 @@ type exportResult struct {
 	Path        string `json:"path"`
 	Format      string `json:"format"`
 	RecordCount int    `json:"record_count"`
-}
-
-// TestLinodeAuditExportDefinition pins the tool identity and that
-// format is a required parameter.
-func TestLinodeAuditExportDefinition(t *testing.T) {
-	t.Parallel()
-
-	tool, capability, handler := tools.NewLinodeAuditExportTool(&config.Config{})
-
-	if tool.Name != "linode_audit_export" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_export")
-	}
-
-	if capability != profiles.CapMeta {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	if !strings.Contains(string(tool.RawInputSchema), "format") {
-		t.Errorf("tool.RawInputSchema missing key %v", "format")
-	}
 }
 
 // TestLinodeAuditExportWritesNDJSON drives the handler against a temp
@@ -63,9 +38,9 @@ func TestLinodeAuditExportWritesNDJSON(t *testing.T) {
 		auditEvent("linode_volume_list", audit.CapabilityRead, audit.StatusSuccess, 2),
 	})
 
-	_, _, handler := tools.NewLinodeAuditExportTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditExportTool(&config.Config{})
 
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"format": "ndjson"}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFormat: "ndjson"}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,26 +82,5 @@ func TestLinodeAuditExportWritesNDJSON(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(string(body), "\n"), "\n")
 	if len(lines) != 2 {
 		t.Errorf("len(lines) = %d, want %d", len(lines), 2)
-	}
-}
-
-// TestLinodeAuditExportUnknownFormat returns an error result rather
-// than writing a file for an unsupported format.
-func TestLinodeAuditExportUnknownFormat(t *testing.T) {
-	t.Parallel()
-
-	_, _, handler := tools.NewLinodeAuditExportTool(&config.Config{})
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"format": "xml"}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
 	}
 }

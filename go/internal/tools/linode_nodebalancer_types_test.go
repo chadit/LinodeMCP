@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // expect* helpers are fatal package-local checks from linode_assertions_test.go; check* helpers are nonfatal.
@@ -20,7 +20,7 @@ func TestLinodeNodeBalancerTypesToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeNodeBalancerTypesTool(cfg)
+	tool, capability, handler := gentools.NewLinodeNodebalancerTypeListTool(cfg)
 
 	if tool.Name != "linode_nodebalancer_type_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_type_list")
@@ -82,7 +82,7 @@ func TestLinodeNodeBalancerTypesToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeNodeBalancerTypesTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -143,7 +143,7 @@ func TestLinodeNodeBalancerTypesToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeNodeBalancerTypesTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 

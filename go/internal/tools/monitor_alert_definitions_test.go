@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -29,7 +29,7 @@ func TestLinodeMonitorAlertDefinitionsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorAlertDefinitionListTool(cfg)
 	if tool.Name != monitorAlertDefinitionsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorAlertDefinitionsToolName)
 	}
@@ -101,7 +101,7 @@ func TestLinodeMonitorAlertDefinitionsToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorAlertDefinitionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -152,7 +152,7 @@ func TestLinodeMonitorAlertDefinitionsToolInvalidPaginationRejectsBeforeClient(t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorAlertDefinitionListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -203,7 +203,7 @@ func TestLinodeMonitorAlertDefinitionsToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorAlertDefinitionsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorAlertDefinitionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 

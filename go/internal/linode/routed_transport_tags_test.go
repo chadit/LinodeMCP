@@ -11,9 +11,6 @@ import (
 // named because a method name repeats across this package's tables, and a
 // plain method and its proto variant share one operation.
 const (
-	opCreateTag          = "CreateTag"
-	opCreateTagProto     = "CreateTagProto"
-	opDeleteTagX         = "DeleteTag"
 	opListTaggedObjectsX = "ListTaggedObjects"
 )
 
@@ -23,22 +20,6 @@ func TestRoutedTransportTags(t *testing.T) {
 	t.Parallel()
 
 	runRoutedTransportCases(t, []routedTransportCase{
-		{
-			name:      opCreateTagProto,
-			operation: opCreateTag,
-			call: func(ctx context.Context, client *linode.Client) error {
-				_, err := client.CreateTagProto(ctx, &linode.CreateTagRequest{})
-
-				return clientRouteError(err)
-			},
-		},
-		{
-			name:      opDeleteTagX,
-			operation: opDeleteTagX,
-			call: func(ctx context.Context, client *linode.Client) error {
-				return client.DeleteTag(ctx, "alpha")
-			},
-		},
 		{
 			name:      opListTaggedObjectsX,
 			operation: opListTaggedObjectsX,

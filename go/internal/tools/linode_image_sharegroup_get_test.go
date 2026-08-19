@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeImageShareGroupGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupGetTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_get")
@@ -98,7 +98,7 @@ func TestLinodeImageShareGroupGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
 
@@ -159,7 +159,7 @@ func TestLinodeImageShareGroupGetToolClientFailureReturnsToolError(t *testing.T)
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
 
@@ -222,7 +222,7 @@ func TestLinodeImageShareGroupGetToolRejectsInvalidSharegroupIdBeforeClientCall(
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeImageShareGroupGetTool(cfg)
+			_, _, handler := gentools.NewLinodeImageSharegroupGetTool(cfg)
 
 			args := map[string]any{}
 			if name != caseMissing {

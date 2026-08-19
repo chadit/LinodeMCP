@@ -11,8 +11,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
@@ -21,7 +21,7 @@ func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeStackScriptCreateTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeStackscriptCreateTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -39,7 +39,7 @@ func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
 		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		}}
-		_, _, handler := tools.NewLinodeStackScriptCreateTool(cfg)
+		_, _, handler := gentools.NewLinodeStackscriptCreateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  testStackScriptLabel,
@@ -89,7 +89,7 @@ func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
 	t.Run("still validates label", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeStackScriptCreateTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeStackscriptCreateTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyScript: testStackScript,
@@ -116,7 +116,7 @@ func TestLinodeStackScriptUpdateToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeStackScriptUpdateTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeStackscriptUpdateTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -127,7 +127,7 @@ func TestLinodeStackScriptUpdateToolDryRun(t *testing.T) {
 
 		cfg, methods := dryRunGetStateServer(t, "/linode/stackscripts/456",
 			linode.StackScript{ID: 456, Label: testStackScriptLabel})
-		_, _, handler := tools.NewLinodeStackScriptUpdateTool(cfg)
+		_, _, handler := gentools.NewLinodeStackscriptUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyStackScriptID: testStackScriptID,
@@ -182,7 +182,7 @@ func TestLinodeStackScriptUpdateToolDryRun(t *testing.T) {
 	t.Run("still validates stackscript_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeStackScriptUpdateTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeStackscriptUpdateTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLabel:  "renamed",
@@ -208,7 +208,7 @@ func TestLinodeStackScriptDeleteToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeStackScriptDeleteTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeStackscriptDeleteTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -219,7 +219,7 @@ func TestLinodeStackScriptDeleteToolDryRun(t *testing.T) {
 
 		cfg, methods := dryRunGetStateServer(t, "/linode/stackscripts/456",
 			linode.StackScript{ID: 456, Label: testStackScriptLabel})
-		_, _, handler := tools.NewLinodeStackScriptDeleteTool(cfg)
+		_, _, handler := gentools.NewLinodeStackscriptDeleteTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyStackScriptID: testStackScriptID,
@@ -259,7 +259,7 @@ func TestLinodeStackScriptDeleteToolDryRun(t *testing.T) {
 	t.Run("still validates stackscript_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeStackScriptDeleteTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeStackscriptDeleteTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyStackScriptID: float64(0),
@@ -273,8 +273,8 @@ func TestLinodeStackScriptDeleteToolDryRun(t *testing.T) {
 			t.Error("result.IsError = false, want true")
 		}
 
-		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "stackscript_id must be a positive integer") {
-			t.Errorf("error text %q does not contain %q", text.Text, "stackscript_id must be a positive integer")
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errStackScriptIDRequired) {
+			t.Errorf("error text %q does not contain %q", text.Text, errStackScriptIDRequired)
 		}
 	})
 }

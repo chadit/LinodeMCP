@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const volumeGetFixtureLabel = "data-volume"
@@ -21,7 +21,7 @@ func TestLinodeVolumeGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeVolumeGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeVolumeGetTool(cfg)
 
 	if tool.Name != "linode_volume_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_get")
@@ -82,7 +82,7 @@ func TestLinodeVolumeGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeGetTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyVolumeID: 1234})
 
@@ -140,7 +140,7 @@ func TestLinodeVolumeGetToolRejectsMissingVolumeIDBeforeClientCall(t *testing.T)
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeGetTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -183,7 +183,7 @@ func TestLinodeVolumeGetToolClientFailureReturnsToolError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeGetTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyVolumeID: 99}))
 	if err != nil {

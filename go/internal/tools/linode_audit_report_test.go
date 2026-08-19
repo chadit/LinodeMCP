@@ -4,15 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // reportResult mirrors the subset of the linode_audit_report JSON
@@ -26,35 +24,12 @@ type reportResult struct {
 	TotalEvents int                `json:"total_events"`
 }
 
-// TestLinodeAuditReportDefinition pins the tool identity.
-func TestLinodeAuditReportDefinition(t *testing.T) {
-	t.Parallel()
-
-	tool, capability, handler := tools.NewLinodeAuditReportTool(&config.Config{})
-
-	if tool.Name != "linode_audit_report" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_report")
-	}
-
-	if capability != profiles.CapMeta {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	if !strings.Contains(string(tool.RawInputSchema), "name") {
-		t.Errorf("tool.RawInputSchema missing key %v", "name")
-	}
-}
-
 // TestLinodeAuditReportUnknownName returns an error result rather than
 // running an empty report when the name doesn't match a config entry.
 func TestLinodeAuditReportUnknownName(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeAuditReportTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditReportTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "does-not-exist"}))
 	if err != nil {
@@ -101,7 +76,7 @@ func TestLinodeAuditReportSummary(t *testing.T) {
 		},
 	}
 
-	_, _, handler := tools.NewLinodeAuditReportTool(cfg)
+	_, _, handler := gentools.NewLinodeAuditReportTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "destroys"}))
 	if err != nil {
@@ -177,7 +152,7 @@ func TestLinodeAuditReportListLimit(t *testing.T) {
 		},
 	}
 
-	_, _, handler := tools.NewLinodeAuditReportTool(cfg)
+	_, _, handler := gentools.NewLinodeAuditReportTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyName: "recent-reads"}))
 	if err != nil {

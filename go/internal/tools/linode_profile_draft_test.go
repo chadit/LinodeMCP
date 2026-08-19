@@ -2,13 +2,14 @@ package tools_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
@@ -23,73 +24,62 @@ const (
 	cloneSourceName = "compute-admin"
 )
 
-// fixtureSourceProfile is the canonical Profile the test resolver
-// returns when callers ask for cloneSourceName. Distinct field values
-// per slice so test assertions can spot field-level mistakes.
+// cloneFixtureCatalog is the catalog a cloned draft's tool patterns expand
+// against, which is what the seam hands the resolver.
+func cloneFixtureCatalog() []profiles.ToolDescriptor {
+	return []profiles.ToolDescriptor{
+		{Name: toolInstanceBoot, Capability: profiles.CapWrite},
+		{Name: canRunReadTool, Capability: profiles.CapRead},
+		{Name: tcLinodeDomainGet, Capability: profiles.CapRead},
+	}
+}
+
+// cloneFixtureConfig carries one user-defined profile under cloneSourceName,
+// which is what _draft_new resolves clone_from against. User-defined entries
+// shadow built-ins, so the fixture's fields are the ones a clone lands on.
+func cloneFixtureConfig() *config.Config {
+	return &config.Config{
+		Profiles: map[string]config.UserProfileConfig{
+			cloneSourceName: {
+				Description:         "Compute admin clone source",
+				AllowedTools:        []string{toolInstanceBoot, canRunReadTool},
+				AllowedEnvironments: []string{envProd},
+				RequiredTokenScopes: []string{scopeLinodesReadWrite},
+			},
+		},
+	}
+}
+
+// fixtureSourceProfile is the Profile cloneFixtureConfig resolves to. Its
+// AllowedTools are sorted because pattern expansion sorts what it matched.
 func fixtureSourceProfile() profiles.Profile {
 	return profiles.Profile{
 		Name:                cloneSourceName,
 		Description:         "Compute admin clone source",
-		AllowedTools:        []string{toolInstanceBoot, "linode_instance_list"},
+		AllowedTools:        []string{toolInstanceBoot, canRunReadTool},
 		AllowedEnvironments: []string{envProd},
-		RequiredTokenScopes: []string{"linodes:read_write"},
+		RequiredTokenScopes: []string{scopeLinodesReadWrite},
 		AllowYolo:           false,
 	}
 }
 
-// fixtureResolver returns a Phase 8.3 ProfileResolver that knows about
-// exactly cloneSourceName. Anything else returns (zero, false). This
-// is the minimal contract _draft_new depends on; the production
-// resolver (Server.LookupProfile) consults the live config.
-func fixtureResolver() tools.ProfileResolver {
-	src := fixtureSourceProfile()
-
-	return func(name string) (profiles.Profile, bool) {
-		if name == cloneSourceName {
-			return src, true
-		}
-
-		return profiles.Profile{}, false
-	}
+// cloneState carries the registry plus the catalog the clone resolves against.
+func cloneState(reg *builder.Registry) *tools.BuilderState {
+	return builderState(reg, cloneFixtureCatalog(), noProfile)
 }
 
-// callDraftHandler invokes the given handler with the arg map and
-// returns the parsed JSON object. Cuts the boilerplate the
-// parameterized tests would otherwise repeat per case.
-func callDraftHandler(
+// callDraftAnswer invokes the given answer with the state attached and returns
+// the parsed JSON object. cfg is nil for every answer but draft_new's.
+func callDraftAnswer(
 	t *testing.T,
-	handler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error),
+	state *tools.BuilderState,
+	answer builderAnswer,
+	cfg *config.Config,
 	args map[string]any,
 ) map[string]any {
 	t.Helper()
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = args
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected handler error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("expected non-nil handler result")
-	}
-
-	if len(result.Content) == 0 {
-		t.Fatal("expected handler result content")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("result content must be TextContent")
-	}
-
-	var out map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
-		t.Fatalf("unmarshal response JSON: %v", err)
-	}
-
-	return out
+	return builderBody(t, callAnswer(t, state, answer, cfg, args))
 }
 
 // TestDraftNewRegistration locks in the static contract: the tool's
@@ -98,10 +88,7 @@ func callDraftHandler(
 func TestDraftNewRegistration(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeProfileDraftNewTool(
-		builder.NewRegistry(),
-		fixtureResolver(),
-	)
+	tool, capability, handler := gentools.NewLinodeProfileDraftNewTool(cloneFixtureConfig())
 
 	if tool.Name != "linode_profile_draft_new" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_draft_new")
@@ -127,9 +114,8 @@ func TestDraftNewCreatesEmptyDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftNewTool(reg, fixtureResolver())
-
-	out := callDraftHandler(t, handler, map[string]any{keyName: draftFixtureName})
+	out := callDraftAnswer(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+		map[string]any{keyName: draftFixtureName})
 
 	if !reflect.DeepEqual(out[keyName], draftFixtureName) {
 		t.Errorf("out[keyName] = %v, want %v", out[keyName], draftFixtureName)
@@ -163,12 +149,11 @@ func TestDraftNewClonesFromSource(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftNewTool(reg, fixtureResolver())
-
-	out := callDraftHandler(t, handler, map[string]any{
-		keyName:      draftFixtureName,
-		"clone_from": cloneSourceName,
-	})
+	out := callDraftAnswer(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+		map[string]any{
+			keyName:      draftFixtureName,
+			"clone_from": cloneSourceName,
+		})
 
 	src := fixtureSourceProfile()
 
@@ -193,13 +178,8 @@ func TestDraftNewRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftNewTool(reg, fixtureResolver())
-
-	_, err := handler(t.Context(), mcp.CallToolRequest{})
-
-	if !errors.Is(err, tools.ErrDraftNameMissing) {
-		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
-	}
+	wantAnswerRefusal(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+		nil, wantDraftNameMissing)
 }
 
 // TestDraftNewRefusesUnknownCloneSource covers the unknown-source path.
@@ -209,19 +189,11 @@ func TestDraftNewRefusesUnknownCloneSource(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftNewTool(reg, fixtureResolver())
-
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{
-		keyName:      draftFixtureName,
-		"clone_from": "nonexistent-profile",
-	}
-
-	_, err := handler(t.Context(), req)
-
-	if !errors.Is(err, tools.ErrCloneSourceMissing) {
-		t.Fatalf("expected error %v, got %v", tools.ErrCloneSourceMissing, err)
-	}
+	wantAnswerRefusal(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+		map[string]any{
+			keyName:      draftFixtureName,
+			"clone_from": "nonexistent-profile",
+		}, "clone_from profile not found: nonexistent-profile")
 
 	_, exists := reg.Get(draftFixtureName)
 	if exists {
@@ -236,18 +208,13 @@ func TestDraftNewRefusesDuplicateName(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, handler := tools.NewLinodeProfileDraftNewTool(reg, fixtureResolver())
+	state := cloneState(reg)
 
-	_ = callDraftHandler(t, handler, map[string]any{keyName: draftFixtureName})
+	_ = callDraftAnswer(t, state, tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+		map[string]any{keyName: draftFixtureName})
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{keyName: draftFixtureName}
-
-	_, err := handler(t.Context(), req)
-
-	if !errors.Is(err, builder.ErrDraftExists) {
-		t.Fatalf("expected error %v, got %v", builder.ErrDraftExists, err)
-	}
+	wantAnswerRefusal(t, state, tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+		map[string]any{keyName: draftFixtureName}, "draft already exists: dns-readall")
 }
 
 // TestDraftShowReturnsLiveDraftState reads the draft back. Mirrors
@@ -264,9 +231,8 @@ func TestDraftShowReturnsLiveDraftState(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, showHandler := tools.NewLinodeProfileDraftShowTool(reg)
-
-	out := callDraftHandler(t, showHandler, map[string]any{keyName: draftFixtureName})
+	out := callDraftAnswer(t, draftState(reg), tools.ProfileDraftShowAnswer, nil,
+		map[string]any{keyName: draftFixtureName})
 
 	for key, want := range map[string]any{
 		keyName:        draftFixtureName,
@@ -279,37 +245,22 @@ func TestDraftShowReturnsLiveDraftState(t *testing.T) {
 	}
 }
 
-// TestDraftShowRefusesUnknown covers the typo / expired-session path.
-// The handler returns builder.ErrDraftNotFound so callers can match
-// without parsing the message.
+// TestDraftShowRefusesUnknown covers the typo / expired-session path. The
+// handler answers the miss as a tool result the model can read and correct
+// from, which is the sentence Python answers too.
 func TestDraftShowRefusesUnknown(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	_, _, showHandler := tools.NewLinodeProfileDraftShowTool(reg)
-
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{keyName: draftNonexistent}
-
-	_, err := showHandler(t.Context(), req)
-
-	if !errors.Is(err, builder.ErrDraftNotFound) {
-		t.Fatalf("expected error %v, got %v", builder.ErrDraftNotFound, err)
-	}
+	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftShowAnswer, nil,
+		map[string]any{keyName: draftNonexistent}, "draft not found: nonexistent-draft")
 }
 
 // TestDraftShowRefusesMissingName mirrors the _new validation guard.
 func TestDraftShowRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	_, _, showHandler := tools.NewLinodeProfileDraftShowTool(reg)
-
-	_, err := showHandler(t.Context(), mcp.CallToolRequest{})
-
-	if !errors.Is(err, tools.ErrDraftNameMissing) {
-		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
-	}
+	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftShowAnswer, nil,
+		nil, wantDraftNameMissing)
 }
 
 // TestDraftDiscardRemovesDraft is the happy path. The discarded
@@ -325,9 +276,8 @@ func TestDraftDiscardRemovesDraft(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	_, _, discardHandler := tools.NewLinodeProfileDraftDiscardTool(reg)
-
-	out := callDraftHandler(t, discardHandler, map[string]any{keyName: draftFixtureName})
+	out := callDraftAnswer(t, draftState(reg), tools.ProfileDraftDiscardAnswer, nil,
+		map[string]any{keyName: draftFixtureName})
 
 	if !reflect.DeepEqual(out[keyName], draftFixtureName) {
 		t.Errorf("out[keyName] = %v, want %v", out[keyName], draftFixtureName)
@@ -350,9 +300,8 @@ func TestDraftDiscardIdempotent(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	_, _, discardHandler := tools.NewLinodeProfileDraftDiscardTool(reg)
-
-	out := callDraftHandler(t, discardHandler, map[string]any{keyName: draftNonexistent})
+	out := callDraftAnswer(t, draftState(reg), tools.ProfileDraftDiscardAnswer, nil,
+		map[string]any{keyName: draftNonexistent})
 
 	if !reflect.DeepEqual(out[keyName], draftNonexistent) {
 		t.Errorf("out[keyName] = %v, want %v", out[keyName], draftNonexistent)
@@ -367,14 +316,8 @@ func TestDraftDiscardIdempotent(t *testing.T) {
 func TestDraftDiscardRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	_, _, discardHandler := tools.NewLinodeProfileDraftDiscardTool(reg)
-
-	_, err := discardHandler(t.Context(), mcp.CallToolRequest{})
-
-	if !errors.Is(err, tools.ErrDraftNameMissing) {
-		t.Fatalf("expected error %v, got %v", tools.ErrDraftNameMissing, err)
-	}
+	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftDiscardAnswer, nil,
+		nil, wantDraftNameMissing)
 }
 
 // TestDraftToolsRespectContextCancellation locks the cancellation
@@ -384,12 +327,9 @@ func TestDraftDiscardRefusesMissingName(t *testing.T) {
 func TestDraftToolsRespectContextCancellation(t *testing.T) {
 	t.Parallel()
 
-	reg := builder.NewRegistry()
-	resolver := fixtureResolver()
-
-	_, _, newHandler := tools.NewLinodeProfileDraftNewTool(reg, resolver)
-	_, _, showHandler := tools.NewLinodeProfileDraftShowTool(reg)
-	_, _, discardHandler := tools.NewLinodeProfileDraftDiscardTool(reg)
+	_, _, newHandler := gentools.NewLinodeProfileDraftNewTool(cloneFixtureConfig())
+	_, _, showHandler := gentools.NewLinodeProfileDraftShowTool(cloneFixtureConfig())
+	_, _, discardHandler := gentools.NewLinodeProfileDraftDiscardTool(cloneFixtureConfig())
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

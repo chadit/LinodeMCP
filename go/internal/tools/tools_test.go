@@ -1,12 +1,10 @@
 package tools_test
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,7 +16,6 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -41,7 +38,6 @@ const (
 	keyID                            = "id"
 	keyStatus                        = "status"
 	keySecret                        = "secret"
-	keyExpiry                        = "expiry"
 	keyClientID                      = "client_id"
 	keyAppID                         = "app_id"
 	keyDeviceID                      = "device_id"
@@ -52,16 +48,7 @@ const (
 	profileAppLabel                  = "Example OAuth App"
 	profileDeviceUserAgent           = "Mozilla/5.0"
 	profileDeviceLastAuthenticated   = "2024-01-02T03:04:05"
-	keyISOCode                       = "iso_code"
-	keyPhoneNumber                   = "phone_number"
-	profilePhoneISOCode              = "US"
-	profilePhoneNumber               = "+15551234567"
-	profilePhoneOTPCode              = "123456"
-	keyPreferences                   = "preferences"
-	profilePreferenceKeyTheme        = "theme"
 	profilePreferenceValueDark       = "dark"
-	errISOCodeNonEmpty               = "iso_code must be a non-empty string"
-	errOTPCodeNonEmpty               = "otp_code must be a non-empty string"
 	invalidProfileIDSlash            = "12/345"
 	invalidProfileIDQuery            = "12?345"
 	errProfileAppIDRequired          = "app_id is required"
@@ -90,14 +77,18 @@ const (
 	invalidBetaIDPadded              = " example_open "
 	keyPublic                        = "public"
 	keyThumbnailPNGBase64            = "thumbnail_png_base64"
-	oauthClientThumbnailPNG          = "png-bytes"
+	accountPaymentsTestPath          = "/account/payments"
+	accountPaymentMethodsTestPath    = "/account/payment-methods"
+	accountServiceTransfersTestPath  = "/account/service-transfers"
+	keyPaymentType                   = "type"
+	keyPaymentData                   = "data"
 )
 
 // End-to-end verification of the hello tool.
 func TestHelloTool(t *testing.T) {
 	t.Parallel()
 
-	tool, _, handler := tools.NewHelloTool(nil)
+	tool, _, handler := gentools.NewHelloTool(nil)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -176,11 +167,41 @@ func TestHelloTool(t *testing.T) {
 	})
 }
 
+// hello has no error channel: the generated shell runs the contract's rules
+// first and HelloInput declares none, so nothing reaches the error result the
+// other generated tools return. Pinned because the tier now carries an error
+// path the hand-written tool did not have.
+func TestHelloToolAnswersRatherThanErroring(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := gentools.NewHelloTool(nil)
+
+	req := createRequestWithArgs(t, map[string]any{"unexpected": "argument"})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, "Hello, World!") {
+		t.Errorf("textContent.Text does not contain %v", "Hello, World!")
+	}
+}
+
 // End-to-end verification of the version tool.
 func TestVersionTool(t *testing.T) {
 	t.Parallel()
 
-	tool, _, handler := tools.NewVersionTool(nil)
+	tool, _, handler := gentools.NewVersionTool(nil)
 
 	t.Run("definition", func(t *testing.T) {
 		t.Parallel()
@@ -237,7 +258,7 @@ func TestLinodeInstancesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeInstanceListTool(cfg)
+	tool, _, handler := gentools.NewLinodeInstanceListTool(cfg)
 
 	if tool.Name != canRunReadTool {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, canRunReadTool)
@@ -258,7 +279,7 @@ func TestLinodeInstancesListToolMissingEnvironment(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.EnvironmentConfig{},
 	}
-	_, _, handler := tools.NewLinodeInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{canRunKeyEnv: "nonexistent"})
 
@@ -287,7 +308,7 @@ func TestLinodeInstancesListToolIncompleteConfig(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -335,7 +356,7 @@ func TestLinodeInstancesListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -374,7 +395,7 @@ func TestLinodeProfileTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeProfileTool(cfg)
+		tool, _, handler := gentools.NewLinodeProfileGetTool(cfg)
 
 		if tool.Name != "linode_profile_get" {
 			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_get")
@@ -400,7 +421,7 @@ func TestLinodeProfileTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeProfileTool(cfg)
+		_, _, handler := gentools.NewLinodeProfileGetTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -444,7 +465,7 @@ func TestLinodeProfileTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeProfileTool(cfg)
+		_, _, handler := gentools.NewLinodeProfileGetTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -472,175 +493,12 @@ func TestLinodeProfileTool(t *testing.T) {
 	})
 }
 
-func TestLinodeProfilePreferencesToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfilePreferencesTool(cfg)
-
-	if tool.Name != "linode_profile_preferences_get" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_preferences_get")
-	}
-
-	if capability != profiles.CapRead {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-}
-
-func TestLinodeProfilePreferencesToolIncompleteConfig(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {
-				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{},
-			},
-		},
-	}
-	_, _, handler := tools.NewLinodeProfilePreferencesTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-func TestLinodeProfilePreferencesToolApiFailure(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcProfilePreferences {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePreferences)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		_, err := w.Write([]byte(`{}`))
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {
-				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-			},
-		},
-	}
-	_, _, handler := tools.NewLinodeProfilePreferencesTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-func TestLinodeProfilePreferencesToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	preferences := linode.ProfilePreferences{
-		"desktop_notifications": true,
-		"sort_order":            "ascending",
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != tcProfilePreferences {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePreferences)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(preferences); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {
-				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-			},
-		},
-	}
-	_, _, handler := tools.NewLinodeProfilePreferencesTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "desktop_notifications") {
-		t.Errorf("textContent.Text does not contain %v", "desktop_notifications")
-	}
-
-	if !strings.Contains(textContent.Text, "ascending") {
-		t.Errorf("textContent.Text does not contain %v", "ascending")
-	}
-}
-
 // End-to-end verification of the instance get workflow.
 func TestLinodeInstanceGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeInstanceGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeInstanceGetTool(cfg)
 
 	if tool.Name != "linode_instance_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_get")
@@ -666,7 +524,7 @@ func TestLinodeInstanceGetToolMissingInstanceID(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -695,7 +553,7 @@ func TestLinodeInstanceGetToolInvalidInstanceID(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInstanceID: notANumber})
 
@@ -744,7 +602,7 @@ func TestLinodeInstanceGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInstanceID: 123})
 
@@ -783,7 +641,7 @@ func TestLinodeAccountTool(t *testing.T) {
 		t.Parallel()
 
 		cfg := &config.Config{}
-		tool, _, handler := tools.NewLinodeAccountTool(cfg)
+		tool, _, handler := gentools.NewLinodeAccountGetTool(cfg)
 
 		if tool.Name != "linode_account_get" {
 			t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_get")
@@ -830,7 +688,7 @@ func TestLinodeAccountTool(t *testing.T) {
 				},
 			},
 		}
-		_, _, handler := tools.NewLinodeAccountTool(cfg)
+		_, _, handler := gentools.NewLinodeAccountGetTool(cfg)
 
 		req := createRequestWithArgs(t, map[string]any{})
 
@@ -866,7 +724,7 @@ func TestLinodeAccountTransferToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountTransferTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountTransferGetTool(cfg)
 
 	if tool.Name != "linode_account_transfer_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_transfer_get")
@@ -941,7 +799,7 @@ func TestLinodeAccountTransferToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountTransferTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountTransferGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1007,7 +865,7 @@ func TestLinodeAccountTransferToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountTransferTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountTransferGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1029,8 +887,8 @@ func TestLinodeAccountTransferToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_transfer_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_transfer_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve the account transfer pool") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve the account transfer pool")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -1043,7 +901,7 @@ func TestLinodeAccountSettingsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountSettingsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountSettingsGetTool(cfg)
 
 	if tool.Name != "linode_account_settings_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_settings_get")
@@ -1110,7 +968,7 @@ func TestLinodeAccountSettingsToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountSettingsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountSettingsGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1180,7 +1038,7 @@ func TestLinodeAccountSettingsToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountSettingsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountSettingsGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1216,7 +1074,7 @@ func TestLinodeAccountAgreementsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountAgreementsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountAgreementListTool(cfg)
 
 	if tool.Name != "linode_account_agreement_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_agreement_list")
@@ -1278,7 +1136,7 @@ func TestLinodeAccountAgreementsToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountAgreementsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountAgreementListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1341,7 +1199,7 @@ func TestLinodeAccountAgreementsToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountAgreementsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountAgreementListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1377,7 +1235,7 @@ func TestLinodeAccountMaintenanceToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountMaintenanceTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountMaintenanceListTool(cfg)
 
 	if tool.Name != "linode_account_maintenance_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_maintenance_list")
@@ -1445,7 +1303,7 @@ func TestLinodeAccountMaintenanceToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountMaintenanceTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountMaintenanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -1495,7 +1353,7 @@ func TestLinodeAccountMaintenanceToolInvalidPaginationRejectsBeforeClient(t *tes
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountMaintenanceTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountMaintenanceListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -1552,7 +1410,7 @@ func TestLinodeAccountMaintenanceToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountMaintenanceTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountMaintenanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1588,7 +1446,7 @@ func TestLinodeMaintenancePoliciesToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeMaintenancePoliciesTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMaintenancePolicyListTool(cfg)
 
 	if tool.Name != "linode_maintenance_policy_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_maintenance_policy_list")
@@ -1656,7 +1514,7 @@ func TestLinodeMaintenancePoliciesToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMaintenancePoliciesTool(cfg)
+	_, _, handler := gentools.NewLinodeMaintenancePolicyListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -1706,7 +1564,7 @@ func TestLinodeMaintenancePoliciesToolInvalidPaginationRejectsBeforeClient(t *te
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMaintenancePoliciesTool(cfg)
+			_, _, handler := gentools.NewLinodeMaintenancePolicyListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -1762,7 +1620,7 @@ func TestLinodeMaintenancePoliciesToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMaintenancePoliciesTool(cfg)
+	_, _, handler := gentools.NewLinodeMaintenancePolicyListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1798,7 +1656,7 @@ func TestLinodeAccountAvailabilityGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountAvailabilityGetTool(cfg)
 
 	if tool.Name != "linode_account_availability_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_availability_get")
@@ -1859,7 +1717,7 @@ func TestLinodeAccountAvailabilityGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountAvailabilityGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast})
 
@@ -1921,7 +1779,7 @@ func TestLinodeAccountAvailabilityGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountAvailabilityGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast})
 
@@ -1943,8 +1801,8 @@ func TestLinodeAccountAvailabilityGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_availability_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_availability_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve account availability for region") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve account availability for region")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -1979,7 +1837,7 @@ func TestLinodeAccountAvailabilityGetToolInvalidRegionRejectsBeforeClient(t *tes
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountAvailabilityGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountAvailabilityGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -2013,7 +1871,7 @@ func TestLinodeAccountNotificationsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountNotificationsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountNotificationListTool(cfg)
 
 	if tool.Name != "linode_account_notification_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_notification_list")
@@ -2080,7 +1938,7 @@ func TestLinodeAccountNotificationsToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountNotificationsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountNotificationListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -2142,7 +2000,7 @@ func TestLinodeAccountNotificationsToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountNotificationsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountNotificationListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -2192,7 +2050,7 @@ func TestLinodeAccountNotificationsToolInvalidPaginationRejectsBeforeClient(t *t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountNotificationsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountNotificationListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -2226,7 +2084,7 @@ func TestLinodeBetasToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeBetasTool(cfg)
+	tool, capability, handler := gentools.NewLinodeBetaListTool(cfg)
 
 	if tool.Name != "linode_beta_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_beta_list")
@@ -2302,7 +2160,7 @@ func TestLinodeBetasToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeBetasTool(cfg)
+	_, _, handler := gentools.NewLinodeBetaListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -2368,7 +2226,7 @@ func TestLinodeBetasToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeBetasTool(cfg)
+	_, _, handler := gentools.NewLinodeBetaListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -2421,7 +2279,7 @@ func TestLinodeBetasToolInvalidPaginationRejectsBeforeClient(t *testing.T) {
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeBetasTool(cfg)
+			_, _, handler := gentools.NewLinodeBetaListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -2455,7 +2313,7 @@ func TestLinodeBetaGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeBetaGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeBetaGetTool(cfg)
 
 	if tool.Name != "linode_beta_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_beta_get")
@@ -2531,7 +2389,7 @@ func TestLinodeBetaGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeBetaGetTool(cfg)
+	_, _, handler := gentools.NewLinodeBetaGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
@@ -2597,7 +2455,7 @@ func TestLinodeBetaGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeBetaGetTool(cfg)
+	_, _, handler := gentools.NewLinodeBetaGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
@@ -2614,8 +2472,8 @@ func TestLinodeBetaGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_beta_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_beta_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve beta program") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve beta program")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -2654,7 +2512,7 @@ func TestLinodeBetaGetToolInvalidIdRejectsBeforeClient(t *testing.T) {
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeBetaGetTool(cfg)
+			_, _, handler := gentools.NewLinodeBetaGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -2687,7 +2545,7 @@ func TestLinodeAccountBetasToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountBetasTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountBetaListTool(cfg)
 
 	if tool.Name != "linode_account_beta_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_beta_list")
@@ -2757,7 +2615,7 @@ func TestLinodeAccountBetasToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountBetasTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountBetaListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -2819,7 +2677,7 @@ func TestLinodeAccountBetasToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountBetasTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountBetaListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -2872,7 +2730,7 @@ func TestLinodeAccountBetasToolInvalidPaginationRejectsBeforeClient(t *testing.T
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountBetasTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountBetaListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -2906,7 +2764,7 @@ func TestLinodeAccountInvoiceGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountInvoiceGetTool(cfg)
 
 	if tool.Name != "linode_account_invoice_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_invoice_get")
@@ -2956,7 +2814,7 @@ func TestLinodeAccountInvoiceGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountInvoiceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID})
 
@@ -3013,7 +2871,7 @@ func TestLinodeAccountInvoiceGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountInvoiceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID})
 
@@ -3035,8 +2893,8 @@ func TestLinodeAccountInvoiceGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_invoice_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_invoice_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve invoice") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve invoice")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -3063,7 +2921,7 @@ func TestLinodeAccountInvoiceGetToolInvalidInvoiceIdRejectsBeforeClient(t *testi
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountInvoiceGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountInvoiceGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -3098,7 +2956,7 @@ func TestLinodeProfileSecurityQuestionsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeProfileSecurityQuestionsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileSecurityQuestionListTool(cfg)
 	if tool.Name != "linode_profile_security_question_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_security_question_list")
 	}
@@ -3152,7 +3010,7 @@ func TestLinodeProfileSecurityQuestionsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileSecurityQuestionsTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileSecurityQuestionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -3205,7 +3063,7 @@ func TestLinodeProfileSecurityQuestionsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileSecurityQuestionsTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileSecurityQuestionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -3242,7 +3100,7 @@ func TestLinodeProfileDevicesToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeProfileDevicesTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileDeviceListTool(cfg)
 	if tool.Name != "linode_profile_device_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_device_list")
 	}
@@ -3294,7 +3152,7 @@ func TestLinodeProfileDevicesToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileDevicesTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileDeviceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -3351,7 +3209,7 @@ func TestLinodeProfileDevicesToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileDevicesTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileDeviceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -3403,7 +3261,7 @@ func TestLinodeProfileDevicesToolInvalidPaginationRejectsBeforeClient(t *testing
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeProfileDevicesTool(cfg)
+			_, _, handler := gentools.NewLinodeProfileDeviceListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -3431,599 +3289,11 @@ func TestLinodeProfileDevicesToolInvalidPaginationRejectsBeforeClient(t *testing
 	}
 }
 
-func TestLinodeProfileTFAEnableToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
-
-	if tool.Name != "linode_profile_tfa_enable" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_tfa_enable")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{keyConfirm, keyDryRun} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeProfileTFAEnableToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/profile/tfa-enable" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/tfa-enable")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		body, readErr := io.ReadAll(r.Body)
-		if readErr != nil {
-			t.Errorf("request body should be readable: %v", readErr)
-
-			return
-		}
-
-		if len(body) != 0 {
-			t.Errorf("string(body) = %v, want empty", string(body))
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keySecret: "JBSWY3DPEHPK3PXP", keyExpiry: tfaConfirmExpiry}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "JBSWY3DPEHPK3PXP") {
-		t.Errorf("error text %q does not contain %q", text.Text, "JBSWY3DPEHPK3PXP")
-	}
-
-	// The one-time secret is returned by design and the response carries the
-	// save-the-secret warning byte-identically to the Python implementation.
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Save this two-factor authentication secret now") {
-		t.Errorf("response %q does not carry the save-the-secret warning", text.Text)
-	}
-}
-
-func TestLinodeProfileTFAEnableToolDryRunPreviewsWithoutPost(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "dry_run") {
-		t.Errorf("error text %q does not contain %q", text.Text, "dry_run")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "/profile/tfa-enable") {
-		t.Errorf("error text %q does not contain %q", text.Text, "/profile/tfa-enable")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "side_effects") {
-		t.Errorf("error text %q does not contain %q", text.Text, "side_effects")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "must be confirmed") {
-		t.Errorf("error text %q does not contain %q", text.Text, "must be confirmed")
-	}
-
-	if calls.Load() != int32(0) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-	}
-}
-
-func TestLinodeProfileTFAEnableToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/profile/tfa-enable" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/tfa-enable")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to generate linode_profile_tfa_enable") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to generate linode_profile_tfa_enable")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeProfileTFAEnableToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumericConfirm, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileTFAEnableTool(cfg)
-
-			args := map[string]any{}
-			if testCase.name != caseMissing {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Set confirm=true to proceed") {
-				t.Errorf("error text %q does not contain %q", text.Text, "Set confirm=true to proceed")
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeProfilePhoneNumberSendToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
-
-	if tool.Name != "linode_profile_phone_number_send" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_phone_number_send")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{keyISOCode, keyPhoneNumber, keyConfirm, keyDryRun} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeProfilePhoneNumberSendToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != tcProfilePhoneNumber {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePhoneNumber)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		body, readErr := io.ReadAll(r.Body)
-		if readErr != nil {
-			t.Errorf("request body should be readable: %v", readErr)
-
-			return
-		}
-
-		{
-			var wantJSON, gotJSON any
-			if err := json.Unmarshal([]byte(`{"iso_code":"US","phone_number":"+15551234567"}`), &wantJSON); err != nil {
-				t.Errorf("invalid expected JSON: %v", err)
-			}
-
-			if err := json.Unmarshal([]byte(string(body)), &gotJSON); err != nil {
-				t.Errorf("invalid actual JSON: %v", err)
-			}
-
-			if !reflect.DeepEqual(gotJSON, wantJSON) {
-				t.Errorf("JSON = %s, want %s", string(body), `{"iso_code":"US","phone_number":"+15551234567"}`)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile phone number verification code sent successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Profile phone number verification code sent successfully")
-	}
-}
-
-func TestLinodeProfilePhoneNumberSendToolDryRunPreviewsWithoutPost(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber, keyDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	dryRun, dryRunOK := body["dry_run"].(bool)
-	if !dryRunOK {
-		t.Fatal("dryRunOK = false, want true")
-	}
-
-	if !dryRun {
-		t.Error("dryRun = false, want true")
-	}
-
-	would, wouldOK := body["would_execute"].(map[string]any)
-	if !wouldOK {
-		t.Fatal("wouldOK = false, want true")
-	}
-
-	if !reflect.DeepEqual(would["method"], "POST") {
-		t.Errorf("got %v, want %v", would["method"], "POST")
-	}
-
-	if !reflect.DeepEqual(would["path"], tcProfilePhoneNumber) {
-		t.Errorf("got %v, want %v", would["path"], tcProfilePhoneNumber)
-	}
-
-	previewBody, previewBodyOK := would["body"].(map[string]any)
-	if !previewBodyOK {
-		t.Fatal("previewBodyOK = false, want true")
-	}
-
-	if !reflect.DeepEqual(previewBody[keyISOCode], profilePhoneISOCode) {
-		t.Errorf("previewBody[keyISOCode] = %v, want %v", previewBody[keyISOCode], profilePhoneISOCode)
-	}
-
-	if !reflect.DeepEqual(previewBody[keyPhoneNumber], profilePhoneNumber) {
-		t.Errorf("previewBody[keyPhoneNumber] = %v, want %v", previewBody[keyPhoneNumber], profilePhoneNumber)
-	}
-
-	if calls.Load() != int32(0) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-	}
-
-	sideEffects, _ := body["side_effects"].([]any)
-	if len(sideEffects) != 1 {
-		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
-	}
-}
-
-func TestLinodeProfilePhoneNumberSendToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != tcProfilePhoneNumber {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfilePhoneNumber)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to send linode_profile_phone_number_send") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to send linode_profile_phone_number_send")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeProfilePhoneNumberSendToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumericConfirm, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
-
-			args := map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: profilePhoneNumber}
-			if testCase.name != caseMissing {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Set confirm=true to proceed") {
-				t.Errorf("error text %q does not contain %q", text.Text, "Set confirm=true to proceed")
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeProfilePhoneNumberSendToolRequiredArgumentsRejectBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: "missing iso_code", args: map[string]any{keyPhoneNumber: profilePhoneNumber, keyConfirm: true}, wantMessage: errISOCodeNonEmpty},
-		{name: "blank iso_code", args: map[string]any{keyISOCode: blankString, keyPhoneNumber: profilePhoneNumber, keyConfirm: true}, wantMessage: errISOCodeNonEmpty},
-		{name: "numeric iso_code", args: map[string]any{keyISOCode: 1, keyPhoneNumber: profilePhoneNumber, keyConfirm: true}, wantMessage: errISOCodeNonEmpty},
-		{name: "missing phone_number", args: map[string]any{keyISOCode: profilePhoneISOCode, keyConfirm: true}, wantMessage: "phone_number must be a non-empty string"},
-		{name: "blank phone_number", args: map[string]any{keyISOCode: profilePhoneISOCode, keyPhoneNumber: blankString, keyConfirm: true}, wantMessage: "phone_number must be a non-empty string"},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfilePhoneNumberSendTool(cfg)
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
 func TestLinodeProfilePhoneNumberDeleteToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
 
 	if tool.Name != "linode_profile_phone_number_delete" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_phone_number_delete")
@@ -4078,7 +3348,7 @@ func TestLinodeProfilePhoneNumberDeleteToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyConfirmedDryRun: true})
 
 	result, err := handler(t.Context(), req)
@@ -4111,7 +3381,7 @@ func TestLinodeProfilePhoneNumberDeleteToolDryRunPreviewsWithoutDelete(t *testin
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
 
 	result, err := handler(t.Context(), req)
@@ -4158,7 +3428,7 @@ func TestLinodeProfilePhoneNumberDeleteToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true, keyConfirmedDryRun: true})
 
 	result, err := handler(t.Context(), req)
@@ -4209,7 +3479,7 @@ func TestLinodeProfilePhoneNumberDeleteToolConfirmRequiredBeforeClient(t *testin
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
+			_, _, handler := gentools.NewLinodeProfilePhoneNumberDeleteTool(cfg)
 
 			args := map[string]any{}
 			if testCase.name != caseMissing {
@@ -4240,345 +3510,13 @@ func TestLinodeProfilePhoneNumberDeleteToolConfirmRequiredBeforeClient(t *testin
 	}
 }
 
-func TestLinodeProfilePhoneNumberVerifyToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
-
-	if tool.Name != "linode_profile_phone_number_verify" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_phone_number_verify")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{keyOTPCode, keyConfirm, keyDryRun} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeProfilePhoneNumberVerifyToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/profile/phone-number/verify" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/phone-number/verify")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		body, readErr := io.ReadAll(r.Body)
-		if readErr != nil {
-			t.Errorf("request body should be readable: %v", readErr)
-
-			return
-		}
-
-		{
-			var wantJSON, gotJSON any
-			if err := json.Unmarshal([]byte(`{"otp_code":"123456"}`), &wantJSON); err != nil {
-				t.Errorf("invalid expected JSON: %v", err)
-			}
-
-			if err := json.Unmarshal([]byte(string(body)), &gotJSON); err != nil {
-				t.Errorf("invalid actual JSON: %v", err)
-			}
-
-			if !reflect.DeepEqual(gotJSON, wantJSON) {
-				t.Errorf("JSON = %s, want %s", string(body), `{"otp_code":"123456"}`)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyOTPCode: profilePhoneOTPCode, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile phone number verified successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Profile phone number verified successfully")
-	}
-}
-
-func TestLinodeProfilePhoneNumberVerifyToolDryRunPreviewsWithoutPost(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyOTPCode: profilePhoneOTPCode, keyDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	dryRun, dryRunOK := body["dry_run"].(bool)
-	if !dryRunOK {
-		t.Fatal("dryRunOK = false, want true")
-	}
-
-	if !dryRun {
-		t.Error("dryRun = false, want true")
-	}
-
-	would, wouldOK := body["would_execute"].(map[string]any)
-	if !wouldOK {
-		t.Fatal("wouldOK = false, want true")
-	}
-
-	if !reflect.DeepEqual(would["method"], "POST") {
-		t.Errorf("got %v, want %v", would["method"], "POST")
-	}
-
-	if !reflect.DeepEqual(would["path"], "/profile/phone-number/verify") {
-		t.Errorf("got %v, want %v", would["path"], "/profile/phone-number/verify")
-	}
-
-	previewBody, previewBodyOK := would["body"].(map[string]any)
-	if !previewBodyOK {
-		t.Fatal("previewBodyOK = false, want true")
-	}
-
-	if !reflect.DeepEqual(previewBody[keyOTPCode], profilePhoneOTPCode) {
-		t.Errorf("previewBody[keyOTPCode] = %v, want %v", previewBody[keyOTPCode], profilePhoneOTPCode)
-	}
-
-	if calls.Load() != int32(0) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-	}
-
-	sideEffects, _ := body["side_effects"].([]any)
-	if len(sideEffects) != 1 {
-		t.Fatalf("len(sideEffects) = %d, want %d", len(sideEffects), 1)
-	}
-}
-
-func TestLinodeProfilePhoneNumberVerifyToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/profile/phone-number/verify" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/profile/phone-number/verify")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyOTPCode: profilePhoneOTPCode, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to verify linode_profile_phone_number_verify") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to verify linode_profile_phone_number_verify")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeProfilePhoneNumberVerifyToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumericConfirm, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
-
-			args := map[string]any{keyOTPCode: profilePhoneOTPCode}
-			if testCase.name != caseMissing {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Set confirm=true to proceed") {
-				t.Errorf("error text %q does not contain %q", text.Text, "Set confirm=true to proceed")
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeProfilePhoneNumberVerifyToolRequiredArgumentsRejectBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: "missing otp_code", args: map[string]any{keyConfirm: true}, wantMessage: errOTPCodeNonEmpty},
-		{name: "blank otp_code", args: map[string]any{keyOTPCode: blankString, keyConfirm: true}, wantMessage: errOTPCodeNonEmpty},
-		{name: "numeric otp_code", args: map[string]any{keyOTPCode: 1, keyConfirm: true}, wantMessage: errOTPCodeNonEmpty},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfilePhoneNumberVerifyTool(cfg)
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
 // End-to-end verification of profile OAuth app authorization retrieval.
 func TestLinodeProfileAppsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeProfileAppsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileAppListTool(cfg)
 	if tool.Name != "linode_profile_app_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_app_list")
 	}
@@ -4605,7 +3543,7 @@ func TestLinodeProfileAppsToolSuccess(t *testing.T) {
 			keyLabel:        "example-app",
 			"scopes":        "linodes:read_only",
 			"website":       "example.org",
-			"created":       longviewClientCreatedAt,
+			"created":       longviewClientCreatedFixture,
 			"expiry":        "2018-01-15T00:01:01",
 			"thumbnail_url": "https://example.com/icon.png",
 		}},
@@ -4640,7 +3578,7 @@ func TestLinodeProfileAppsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileAppsTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileAppListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -4701,7 +3639,7 @@ func TestLinodeProfileAppsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileAppsTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileAppListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -4753,7 +3691,7 @@ func TestLinodeProfileAppsToolInvalidPaginationRejectsBeforeClient(t *testing.T)
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeProfileAppsTool(cfg)
+			_, _, handler := gentools.NewLinodeProfileAppListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -4788,7 +3726,7 @@ func TestLinodeAccountOAuthClientsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountOauthClientListTool(cfg)
 	if tool.Name != "linode_account_oauth_client_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_list")
 	}
@@ -4848,7 +3786,7 @@ func TestLinodeAccountOAuthClientsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -4905,7 +3843,7 @@ func TestLinodeAccountOAuthClientsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -4957,7 +3895,7 @@ func TestLinodeAccountOAuthClientsToolInvalidPaginationRejectsBeforeClient(t *te
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountOauthClientListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -4991,7 +3929,7 @@ func TestLinodeAccountChildAccountGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountChildAccountGetTool(cfg)
 
 	if tool.Name != "linode_account_child_account_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_child_account_get")
@@ -5060,7 +3998,7 @@ func TestLinodeAccountChildAccountGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountChildAccountGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID})
 
@@ -5130,7 +4068,7 @@ func TestLinodeAccountChildAccountGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountChildAccountGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID})
 
@@ -5152,8 +4090,8 @@ func TestLinodeAccountChildAccountGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_child_account_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_child_account_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve child account") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve child account")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5182,7 +4120,7 @@ func TestLinodeAccountChildAccountGetToolInvalidEuuidRejectsBeforeClient(t *test
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountChildAccountGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountChildAccountGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -5216,7 +4154,7 @@ func TestLinodeAccountEventsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountEventsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountEventListTool(cfg)
 
 	if tool.Name != "linode_account_event_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_event_list")
@@ -5271,7 +4209,7 @@ func TestLinodeAccountEventsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountEventsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountEventListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -5324,7 +4262,7 @@ func TestLinodeAccountEventsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountEventsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountEventListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -5377,7 +4315,7 @@ func TestLinodeAccountEventsToolInvalidPaginationRejectsBeforeClient(t *testing.
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountEventsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountEventListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -5410,7 +4348,7 @@ func TestLinodeAccountUsersToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountUsersTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountUserListTool(cfg)
 
 	if tool.Name != "linode_account_user_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_user_list")
@@ -5478,7 +4416,7 @@ func TestLinodeAccountUsersToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountUsersTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountUserListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -5531,7 +4469,7 @@ func TestLinodeAccountUsersToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountUsersTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountUserListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -5584,7 +4522,7 @@ func TestLinodeAccountUsersToolInvalidPaginationRejectsBeforeClient(t *testing.T
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountUsersTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountUserListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -5617,7 +4555,7 @@ func TestLinodeAccountLoginsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountLoginsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountLoginListTool(cfg)
 
 	if tool.Name != "linode_account_login_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_login_list")
@@ -5685,7 +4623,7 @@ func TestLinodeAccountLoginsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountLoginsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountLoginListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -5738,7 +4676,7 @@ func TestLinodeAccountLoginsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountLoginsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountLoginListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -5791,7 +4729,7 @@ func TestLinodeAccountLoginsToolInvalidPaginationRejectsBeforeClient(t *testing.
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountLoginsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountLoginListTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -5824,7 +4762,7 @@ func TestLinodeProfileLoginGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileLoginGetTool(cfg)
 
 	if tool.Name != "linode_profile_login_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_login_get")
@@ -5883,7 +4821,7 @@ func TestLinodeProfileLoginGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileLoginGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
 
@@ -5936,7 +4874,7 @@ func TestLinodeProfileLoginGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileLoginGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
 
@@ -5958,8 +4896,8 @@ func TestLinodeProfileLoginGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_login_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_login_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve profile login") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve profile login")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5997,7 +4935,7 @@ func TestLinodeProfileLoginGetToolInvalidLoginIdRejectsBeforeClient(t *testing.T
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileLoginGetTool(cfg)
+			_, _, handler := gentools.NewLinodeProfileLoginGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -6025,7 +4963,7 @@ func TestLinodeAccountLoginGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountLoginGetTool(cfg)
 
 	if tool.Name != "linode_account_login_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_login_get")
@@ -6084,7 +5022,7 @@ func TestLinodeAccountLoginGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountLoginGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
 
@@ -6137,7 +5075,7 @@ func TestLinodeAccountLoginGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountLoginGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLoginID: 123})
 
@@ -6159,8 +5097,8 @@ func TestLinodeAccountLoginGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_login_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_login_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve account login") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve account login")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -6198,7 +5136,7 @@ func TestLinodeAccountLoginGetToolInvalidLoginIdRejectsBeforeClient(t *testing.T
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountLoginGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountLoginGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -6226,7 +5164,7 @@ func TestLinodeAccountChildAccountsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountChildAccountsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountChildAccountListTool(cfg)
 
 	if tool.Name != "linode_account_child_account_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_child_account_list")
@@ -6299,7 +5237,7 @@ func TestLinodeAccountChildAccountsToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountChildAccountsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountChildAccountListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -6365,7 +5303,7 @@ func TestLinodeAccountChildAccountsToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountChildAccountsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountChildAccountListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -6418,7 +5356,7 @@ func TestLinodeAccountChildAccountsToolInvalidPaginationRejectsBeforeClient(t *t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountChildAccountsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountChildAccountListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -6447,303 +5385,11 @@ func TestLinodeAccountChildAccountsToolInvalidPaginationRejectsBeforeClient(t *t
 	}
 }
 
-func TestLinodeProfileAppDeleteToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-
-	if tool.Name != "linode_profile_app_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_app_delete")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{keyAppID, keyConfirm, keyDryRun} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeProfileAppDeleteToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcProfileApps12345 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile app 12345 revoked successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Profile app 12345 revoked successfully")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "\"app_id\"") {
-		t.Errorf("response %q does not echo app_id", text.Text)
-	}
-}
-
-func TestLinodeProfileAppDeleteToolDryRunPreviewsWithoutDelete(t *testing.T) {
-	t.Parallel()
-
-	var deleteCalls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != tcProfileApps12345 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
-		}
-
-		deleteCalls.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyID: profileAppID, keyLabel: profileAppLabel}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "dry_run") {
-		t.Errorf("error text %q does not contain %q", text.Text, "dry_run")
-	}
-
-	if deleteCalls.Load() != int32(1) {
-		t.Errorf("deleteCalls.Load() = %v, want %v", deleteCalls.Load(), int32(1))
-	}
-}
-
-func TestLinodeProfileAppDeleteToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcProfileApps12345 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileApps12345)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete linode_profile_app_delete") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete linode_profile_app_delete")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeProfileAppDeleteToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumericConfirm, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-
-			args := map[string]any{keyAppID: profileAppID}
-			if testCase.name != caseMissing {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Set confirm=true to proceed") {
-				t.Errorf("error text %q does not contain %q", text.Text, "Set confirm=true to proceed")
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeProfileAppDeleteToolInvalidAppIdRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDRequired},
-		{name: caseZero, args: map[string]any{keyAppID: 0, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
-		{name: caseString, args: map[string]any{keyAppID: "12345", keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
-		{name: caseSlash, args: map[string]any{keyAppID: invalidProfileIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
-		{name: caseQuery, args: map[string]any{keyAppID: invalidProfileIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
-		{name: caseDotTraversal, args: map[string]any{keyAppID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errProfileAppIDPositive},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileAppDeleteTool(cfg)
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
 func TestLinodeProfileDeviceGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileDeviceGetTool(cfg)
 
 	if tool.Name != "linode_profile_device_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_device_get")
@@ -6802,7 +5448,7 @@ func TestLinodeProfileDeviceGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileDeviceGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID})
 
 	result, err := handler(t.Context(), req)
@@ -6858,7 +5504,7 @@ func TestLinodeProfileDeviceGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileDeviceGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID})
 
 	result, err := handler(t.Context(), req)
@@ -6874,8 +5520,8 @@ func TestLinodeProfileDeviceGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_profile_device_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_profile_device_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve trusted device") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve trusted device")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -6914,300 +5560,10 @@ func TestLinodeProfileDeviceGetToolInvalidDeviceIdRejectsBeforeClient(t *testing
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileDeviceGetTool(cfg)
+			_, _, handler := gentools.NewLinodeProfileDeviceGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeProfileDeviceRevokeToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
-
-	if tool.Name != "linode_profile_device_revoke" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_device_revoke")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{keyDeviceID, keyConfirm, keyDryRun} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeProfileDeviceRevokeToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcProfileDevices12345 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices12345)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile trusted device 12345 revoked successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Profile trusted device 12345 revoked successfully")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "\"device_id\"") {
-		t.Errorf("response %q does not echo device_id", text.Text)
-	}
-}
-
-func TestLinodeProfileDeviceRevokeToolDryRunPreviewsWithoutDelete(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != tcProfileDevices12345 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices12345)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyID: profileDeviceID, "user_agent": "curl/8.0"}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID, keyDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "dry_run") {
-		t.Errorf("error text %q does not contain %q", text.Text, "dry_run")
-	}
-
-	if calls.Load() != int32(1) {
-		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
-	}
-}
-
-func TestLinodeProfileDeviceRevokeToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcProfileDevices12345 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcProfileDevices12345)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyDeviceID: profileDeviceID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete linode_profile_device_revoke") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete linode_profile_device_revoke")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeProfileDeviceRevokeToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumeric, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
-
-			args := map[string]any{keyDeviceID: profileDeviceID}
-			if testCase.name != caseMissing {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Set confirm=true to proceed") {
-				t.Errorf("error text %q does not contain %q", text.Text, "Set confirm=true to proceed")
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeProfileDeviceRevokeToolInvalidDeviceIdRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errProfileDeviceIDRequired},
-		{name: caseZero, args: map[string]any{keyDeviceID: 0, keyConfirm: true}, want: errProfileDeviceIDPositive},
-		{name: caseNegative, args: map[string]any{keyDeviceID: -1, keyConfirm: true}, want: errProfileDeviceIDPositive},
-		{name: caseString, args: map[string]any{keyDeviceID: "67890", keyConfirm: true}, want: errProfileDeviceIDPositive},
-		{name: caseSlash, args: map[string]any{keyDeviceID: "67/890", keyConfirm: true}, want: errProfileDeviceIDPositive},
-		{name: caseQuery, args: map[string]any{keyDeviceID: "67?890", keyConfirm: true}, want: errProfileDeviceIDPositive},
-		{name: caseDotTraversal, args: map[string]any{keyDeviceID: pathTraversalValue, keyConfirm: true}, want: errProfileDeviceIDPositive},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileDeviceRevokeTool(cfg)
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -7235,7 +5591,7 @@ func TestLinodeProfileAppGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileAppGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileAppGetTool(cfg)
 
 	if tool.Name != "linode_profile_app_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_app_get")
@@ -7293,7 +5649,7 @@ func TestLinodeProfileAppGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileAppGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileAppGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID})
 
 	result, err := handler(t.Context(), req)
@@ -7345,7 +5701,7 @@ func TestLinodeProfileAppGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileAppGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileAppGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyAppID: profileAppID})
 
 	result, err := handler(t.Context(), req)
@@ -7361,8 +5717,8 @@ func TestLinodeProfileAppGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_profile_app_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_profile_app_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve authorized app") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve authorized app")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -7401,7 +5757,7 @@ func TestLinodeProfileAppGetToolInvalidAppIdRejectsBeforeClient(t *testing.T) {
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileAppGetTool(cfg)
+			_, _, handler := gentools.NewLinodeProfileAppGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -7433,7 +5789,7 @@ func TestLinodeAccountOAuthClientGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountOauthClientGetTool(cfg)
 
 	if tool.Name != "linode_account_oauth_client_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_get")
@@ -7487,7 +5843,7 @@ func TestLinodeAccountOAuthClientGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID})
 
 	result, err := handler(t.Context(), req)
@@ -7543,7 +5899,7 @@ func TestLinodeAccountOAuthClientGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID})
 
 	result, err := handler(t.Context(), req)
@@ -7559,8 +5915,8 @@ func TestLinodeAccountOAuthClientGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_oauth_client_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_oauth_client_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve OAuth client") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve OAuth client")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -7589,7 +5945,7 @@ func TestLinodeAccountOAuthClientGetToolInvalidClientIdRejectsBeforeClient(t *te
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountOauthClientGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -7609,971 +5965,6 @@ func TestLinodeAccountOAuthClientGetToolInvalidClientIdRejectsBeforeClient(t *te
 				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
 			}
 		})
-	}
-}
-
-// End-to-end verification of account OAuth client update.
-func TestLinodeAccountOAuthClientUpdateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
-
-	if tool.Name != "linode_account_oauth_client_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_update")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyClientID) {
-		t.Errorf("RawInputSchema missing key %v", keyClientID)
-	}
-
-	if !strings.Contains(rawSchema, keyLabel) {
-		t.Errorf("RawInputSchema missing key %v", keyLabel)
-	}
-
-	if !strings.Contains(rawSchema, keyRedirectURI) {
-		t.Errorf("RawInputSchema missing key %v", keyRedirectURI)
-	}
-
-	if !strings.Contains(rawSchema, keyPublic) {
-		t.Errorf("RawInputSchema missing key %v", keyPublic)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountOAuthClientUpdateToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-		include bool
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false, include: true},
-		{name: caseString, confirm: boolStringTrue, include: true},
-		{name: caseNumeric, confirm: 1, include: true},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
-
-			args := map[string]any{keyClientID: oauthClientID, keyLabel: oauthClientLabel}
-			if testCase.include {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
-				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientUpdateToolInvalidArgsRejectBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true, keyLabel: oauthClientLabel}, want: errClientIDRequired},
-		{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
-		{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyLabel: oauthClientLabel, keyConfirm: true}, want: errClientIDNoSeparators},
-		{name: "no update fields", args: map[string]any{keyClientID: oauthClientID, keyConfirm: true}, want: "at least one of label, redirect_uri, or public is required"},
-		{name: "blank label", args: map[string]any{keyClientID: oauthClientID, keyLabel: blankString, keyConfirm: true}, want: errLabelRequired},
-		{name: "blank redirect_uri", args: map[string]any{keyClientID: oauthClientID, keyRedirectURI: blankString, keyConfirm: true}, want: errRedirectURIRequired},
-		{name: "string public", args: map[string]any{keyClientID: oauthClientID, keyPublic: boolStringTrue, keyConfirm: true}, want: "public must be a boolean"},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	label := oauthClientLabel
-	redirectURI := oauthClientRedirectURI
-	public := true
-	want := linode.UpdateOAuthClientRequest{
-		Label:       &label,
-		RedirectURI: &redirectURI,
-		Public:      &public,
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if r.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), "application/json")
-		}
-
-		var got linode.UpdateOAuthClientRequest
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("request body = %+v, want %+v", got, want)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientID, Label: oauthClientLabel, Public: true, RedirectURI: oauthClientRedirectURI, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyPublic: true, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "OAuth client updated successfully") {
-		t.Errorf("textContent.Text does not contain %v", "OAuth client updated successfully")
-	}
-
-	if !strings.Contains(textContent.Text, oauthClientID) {
-		t.Errorf("textContent.Text does not contain %v", oauthClientID)
-	}
-}
-
-func TestLinodeAccountOAuthClientUpdateToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientUpdateTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyLabel: oauthClientLabel, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_account_oauth_client_update") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_account_oauth_client_update")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-// End-to-end verification of account OAuth client thumbnail update.
-func TestLinodeAccountOAuthClientThumbnailUpdateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
-
-	if tool.Name != "linode_account_oauth_client_thumbnail_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_thumbnail_update")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyClientID) {
-		t.Errorf("RawInputSchema missing key %v", keyClientID)
-	}
-
-	if !strings.Contains(rawSchema, keyThumbnailPNGBase64) {
-		t.Errorf("RawInputSchema missing key %v", keyThumbnailPNGBase64)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailUpdateToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-		include bool
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false, include: true},
-		{name: caseString, confirm: boolStringTrue, include: true},
-		{name: caseNumeric, confirm: 1, include: true},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
-
-			args := map[string]any{keyClientID: oauthClientID, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG))}
-			if testCase.include {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
-				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailUpdateToolInvalidClientIdRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDRequired},
-		{name: caseClientIDEmpty, args: map[string]any{keyClientID: "", keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNonEmpty},
-		{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNonEmpty},
-		{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNoSeparators},
-		{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true}, want: errClientIDNoSeparators},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailUpdateToolInvalidThumbnailRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name  string
-		value any
-		want  string
-	}{
-		{name: caseMissing, want: "thumbnail_png_base64 is required"},
-		{name: caseString, value: blankString, want: "thumbnail_png_base64 must be a non-empty string"},
-		{name: caseNumeric, value: 123, want: "thumbnail_png_base64 must be a non-empty string"},
-		{name: "malformed base64", value: "not base64", want: "thumbnail_png_base64 must be valid standard base64"},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
-			args := map[string]any{keyClientID: oauthClientID, keyConfirm: true}
-
-			if testCase.value != nil {
-				args[keyThumbnailPNGBase64] = testCase.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123Thumbnail {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123Thumbnail)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if r.Header.Get("Content-Type") != "image/png" {
-			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), "image/png")
-		}
-
-		got, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(got, []byte(oauthClientThumbnailPNG)) {
-			t.Errorf("got = %v, want %v", got, []byte(oauthClientThumbnailPNG))
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "OAuth client thumbnail updated successfully") {
-		t.Errorf("textContent.Text does not contain %v", "OAuth client thumbnail updated successfully")
-	}
-
-	if !strings.Contains(textContent.Text, oauthClientID) {
-		t.Errorf("textContent.Text does not contain %v", oauthClientID)
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailUpdateToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123Thumbnail {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123Thumbnail)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyThumbnailPNGBase64: base64.StdEncoding.EncodeToString([]byte(oauthClientThumbnailPNG)), keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_account_oauth_client_thumbnail_update") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_account_oauth_client_thumbnail_update")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-// End-to-end verification of account OAuth client thumbnail retrieval.
-func TestLinodeAccountOAuthClientThumbnailGetToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
-
-	if tool.Name != "linode_account_oauth_client_thumbnail_get" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_thumbnail_get")
-	}
-
-	if capability != profiles.CapRead {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyClientID) {
-		t.Errorf("RawInputSchema missing key %v", keyClientID)
-	}
-
-	if strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailGetToolInvalidClientIdRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{}, want: errClientIDRequired},
-		{name: caseClientIDEmpty, args: map[string]any{keyClientID: ""}, want: errClientIDNonEmpty},
-		{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123}, want: errClientIDNonEmpty},
-		{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash}, want: errClientIDNoSeparators},
-		{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery}, want: errClientIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue}, want: errClientIDNoSeparators},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailGetToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	thumbnailPNG := []byte("png-bytes")
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123Thumbnail {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123Thumbnail)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "image/png")
-
-		_, writeErr := w.Write(thumbnailPNG)
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, oauthClientID) {
-		t.Errorf("textContent.Text does not contain %v", oauthClientID)
-	}
-
-	if !strings.Contains(textContent.Text, base64.StdEncoding.EncodeToString(thumbnailPNG)) {
-		t.Errorf("textContent.Text does not contain %v", base64.StdEncoding.EncodeToString(thumbnailPNG))
-	}
-}
-
-func TestLinodeAccountOAuthClientThumbnailGetToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123Thumbnail {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123Thumbnail)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientThumbnailGetTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to get OAuth client thumbnail") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to get OAuth client thumbnail")
-	}
-}
-
-// End-to-end verification of account OAuth client deletion.
-func TestLinodeAccountOAuthClientDeleteToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
-
-	if tool.Name != "linode_account_oauth_client_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_delete")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyClientID) {
-		t.Errorf("RawInputSchema missing key %v", keyClientID)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountOAuthClientDeleteToolConfirmRequiredBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-		include bool
-	}{
-		{name: caseMissing},
-		{name: caseFalse, confirm: false, include: true},
-		{name: caseString, confirm: boolStringTrue, include: true},
-		{name: caseNumeric, confirm: 1, include: true},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
-
-			args := map[string]any{keyClientID: oauthClientID}
-			if testCase.include {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
-				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientDeleteToolInvalidClientIdRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDRequired},
-		{name: caseClientIDEmpty, args: map[string]any{keyClientID: "", keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNonEmpty},
-		{name: caseClientIDNumeric, args: map[string]any{keyClientID: 123, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNonEmpty},
-		{name: caseClientIDSlash, args: map[string]any{keyClientID: invalidClientIDSlash, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNoSeparators},
-		{name: caseClientIDQuerySeparator, args: map[string]any{keyClientID: invalidClientIDQuery, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyClientID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDNoSeparators},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountOAuthClientDeleteToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		_, writeErr := w.Write([]byte(`{}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "OAuth client deleted successfully") {
-		t.Errorf("textContent.Text does not contain %v", "OAuth client deleted successfully")
-	}
-
-	if !strings.Contains(textContent.Text, oauthClientID) {
-		t.Errorf("textContent.Text does not contain %v", oauthClientID)
-	}
-}
-
-func TestLinodeAccountOAuthClientDeleteToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcAccountOauthClientsClient123 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountOauthClientsClient123)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientDeleteTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete linode_account_oauth_client_delete") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete linode_account_oauth_client_delete")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
 	}
 }
 
@@ -8582,7 +5973,7 @@ func TestLinodeAccountOAuthClientResetSecretToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountOauthClientSecretResetTool(cfg)
 
 	if tool.Name != "linode_account_oauth_client_secret_reset" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_secret_reset")
@@ -8629,7 +6020,7 @@ func TestLinodeAccountOAuthClientResetSecretToolConfirmRequiredBeforeClient(t *t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountOauthClientSecretResetTool(cfg)
 
 			args := map[string]any{keyClientID: oauthClientID}
 			if testCase.include {
@@ -8679,7 +6070,7 @@ func TestLinodeAccountOAuthClientResetSecretToolInvalidClientIdRejectsBeforeClie
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountOauthClientSecretResetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -8722,8 +6113,15 @@ func TestLinodeAccountOAuthClientResetSecretToolSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
 		}
 
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
+		// The reset takes no arguments the API reads, so the generated body
+		// builder sends the empty object every write tool sends.
+		sent, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("read request body: %v", readErr)
+		}
+
+		if strings.TrimSpace(string(sent)) != jsonObjectEmpty {
+			t.Errorf("r.Body = %q, want %q", sent, jsonObjectEmpty)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -8735,7 +6133,7 @@ func TestLinodeAccountOAuthClientResetSecretToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientSecretResetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
@@ -8791,7 +6189,7 @@ func TestLinodeAccountOAuthClientResetSecretToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientResetSecretTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientSecretResetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyClientID: oauthClientID, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
@@ -8807,8 +6205,8 @@ func TestLinodeAccountOAuthClientResetSecretToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to reset linode_account_oauth_client_secret_reset") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to reset linode_account_oauth_client_secret_reset")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to reset the secret for OAuth client") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to reset the secret for OAuth client")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -8821,7 +6219,7 @@ func TestLinodeAccountOAuthClientCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountOauthClientCreateTool(cfg)
 
 	if tool.Name != "linode_account_oauth_client_create" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_oauth_client_create")
@@ -8872,7 +6270,7 @@ func TestLinodeAccountOAuthClientCreateToolConfirmRequiredBeforeClient(t *testin
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountOauthClientCreateTool(cfg)
 
 			args := map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI}
 			if testCase.include {
@@ -8922,7 +6320,7 @@ func TestLinodeAccountOAuthClientCreateToolMissingRequiredArgsRejectBeforeClient
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountOauthClientCreateTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -8993,7 +6391,7 @@ func TestLinodeAccountOAuthClientCreateToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientCreateTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
@@ -9049,7 +6447,7 @@ func TestLinodeAccountOAuthClientCreateToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountOAuthClientCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountOauthClientCreateTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
@@ -9065,8 +6463,8 @@ func TestLinodeAccountOAuthClientCreateToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_account_oauth_client_create") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_account_oauth_client_create")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create OAuth client") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create OAuth client")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -9079,7 +6477,7 @@ func TestLinodeAccountInvoiceItemsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountInvoiceItemListTool(cfg)
 
 	if tool.Name != "linode_account_invoice_item_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_invoice_item_list")
@@ -9151,7 +6549,7 @@ func TestLinodeAccountInvoiceItemsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountInvoiceItemListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID, keyPage: 2, keyPageSize: 25})
 
@@ -9204,7 +6602,7 @@ func TestLinodeAccountInvoiceItemsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountInvoiceItemListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyInvoiceID: accountInvoiceID})
 
@@ -9258,7 +6656,7 @@ func TestLinodeAccountInvoiceItemsToolInvalidInputsRejectBeforeClient(t *testing
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountInvoiceItemsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountInvoiceItemListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -9291,7 +6689,7 @@ func TestLinodeAccountPaymentMethodsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountPaymentMethodsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountPaymentMethodListTool(cfg)
 
 	if tool.Name != "linode_account_payment_method_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_method_list")
@@ -9366,7 +6764,7 @@ func TestLinodeAccountPaymentMethodsToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentMethodListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -9426,7 +6824,7 @@ func TestLinodeAccountPaymentMethodsToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentMethodListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -9479,7 +6877,7 @@ func TestLinodeAccountPaymentMethodsToolInvalidPaginationRejectsBeforeClient(t *
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountPaymentMethodListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -9512,7 +6910,7 @@ func TestLinodeAccountPaymentMethodGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountPaymentMethodGetTool(cfg)
 
 	if tool.Name != "linode_account_payment_method_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_method_get")
@@ -9573,7 +6971,7 @@ func TestLinodeAccountPaymentMethodGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentMethodGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID})
 
 	result, err := handler(t.Context(), req)
@@ -9629,7 +7027,7 @@ func TestLinodeAccountPaymentMethodGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentMethodGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID})
 
 	result, err := handler(t.Context(), req)
@@ -9645,8 +7043,8 @@ func TestLinodeAccountPaymentMethodGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_payment_method_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_payment_method_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve payment method") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve payment method")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -9672,725 +7070,7 @@ func TestLinodeAccountPaymentMethodGetToolInvalidPaymentMethodIdRejectsBeforeCli
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodGetTool(cfg)
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountPaymentMethodCreateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
-
-	if tool.Name != "linode_account_payment_method_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_method_create")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	if !strings.Contains(raw, keyPaymentType) {
-		t.Errorf("tool.RawInputSchema missing key %v", keyPaymentType)
-	}
-
-	if !strings.Contains(raw, keyData) {
-		t.Errorf("tool.RawInputSchema missing key %v", keyData)
-	}
-
-	if !strings.Contains(raw, keyIsDefault) {
-		t.Errorf("tool.RawInputSchema missing key %v", keyIsDefault)
-	}
-
-	if !strings.Contains(raw, keyConfirm) {
-		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountPaymentMethodCreateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != accountPaymentMethodsTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountPaymentMethodsTestPath)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		var body map[string]any
-
-		decodeErr := json.NewDecoder(r.Body).Decode(&body)
-		if decodeErr != nil {
-			t.Errorf("unexpected error: %v", decodeErr)
-		}
-
-		if decodeErr != nil {
-			return
-		}
-
-		for key, want := range map[string]any{
-			keyType:      paymentMethodCreditCard,
-			keyIsDefault: true,
-			keyData:      map[string]any{keyToken: paymentMethodToken},
-		} {
-			if !reflect.DeepEqual(body[key], want) {
-				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.AccountPaymentMethod{ID: 321, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, paymentMethodCreatedMessage) {
-		t.Errorf("textContent.Text does not contain %v", paymentMethodCreatedMessage)
-	}
-
-	if !strings.Contains(textContent.Text, paymentMethodLastFour) {
-		t.Errorf("textContent.Text does not contain %v", paymentMethodLastFour)
-	}
-
-	var envelope map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &envelope); err != nil {
-		t.Fatalf("unmarshal envelope: %v", err)
-	}
-
-	if _, ok := envelope["payment_method"]; !ok {
-		t.Errorf("envelope missing payment_method key, got %v", envelope)
-	}
-
-	if _, ok := envelope["method"]; ok {
-		t.Errorf("envelope should not carry the legacy method key, got %v", envelope)
-	}
-}
-
-func TestLinodeAccountPaymentMethodCreateToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != accountPaymentMethodsTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountPaymentMethodsTestPath)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to create linode_account_payment_method_create") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to create linode_account_payment_method_create")
-	}
-
-	if !strings.Contains(textContent.Text, errForbidden) {
-		t.Errorf("textContent.Text does not contain %v", errForbidden)
-	}
-}
-
-func TestLinodeAccountPaymentMethodCreateToolConfirmRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: casePaymentMethodConfirmFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumeric, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
-
-			args := map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true}
-			if testCase.name != "missing" {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, errConfirmEqualsTrue) {
-				t.Errorf("textContent.Text does not contain %v", errConfirmEqualsTrue)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountPaymentMethodCreateToolRequiredArgumentValidationRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: "missing type", args: map[string]any{keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: true, keyConfirm: true}, want: "type is required"},
-		{name: "missing data", args: map[string]any{keyType: paymentMethodCreditCard, keyIsDefault: true, keyConfirm: true}, want: "data is required"},
-		{name: "missing is_default", args: map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyConfirm: true}, want: "is_default must be a boolean"},
-		{name: "string is_default", args: map[string]any{keyType: paymentMethodCreditCard, keyData: map[string]any{keyToken: paymentMethodToken}, keyIsDefault: boolStringTrue, keyConfirm: true}, want: "is_default must be a boolean"},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodCreateTool(cfg)
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, testCase.want) {
-				t.Errorf("textContent.Text does not contain %v", testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountPaymentMethodDeleteToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
-
-	if tool.Name != "linode_account_payment_method_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_method_delete")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyPaymentMethodID) {
-		t.Errorf("RawInputSchema missing key %v", keyPaymentMethodID)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountPaymentMethodDeleteToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcAccountPaymentMethods123 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods123)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, paymentMethodDeletedMessage) {
-		t.Errorf("textContent.Text does not contain %v", paymentMethodDeletedMessage)
-	}
-}
-
-func TestLinodeAccountPaymentMethodDeleteToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcAccountPaymentMethods123 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountPaymentMethods123)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete linode_account_payment_method_delete") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete linode_account_payment_method_delete")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeAccountPaymentMethodDeleteToolConfirmRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: casePaymentMethodConfirmFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumeric, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
-
-			args := map[string]any{keyPaymentMethodID: paymentMethodID}
-			if testCase.name != caseMissing {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountPaymentMethodDeleteToolInvalidPaymentMethodIdRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDRequired},
-		{name: caseString, args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDInteger},
-		{name: caseZero, args: map[string]any{keyPaymentMethodID: float64(0), keyConfirm: true, keyConfirmedDryRun: true}, want: errPaymentMethodIDInteger},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodDeleteTool(cfg)
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountPaymentMethodMakeDefaultToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountPaymentMethodMakeDefaultTool(cfg)
-
-	if tool.Name != "linode_account_payment_method_make_default" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_method_make_default")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyPaymentMethodID) {
-		t.Errorf("RawInputSchema missing key %v", keyPaymentMethodID)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountPaymentMethodMakeDefaultToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/payment-methods/123/make-default" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/payment-methods/123/make-default")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodMakeDefaultTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Payment method set as default successfully") {
-		t.Errorf("textContent.Text does not contain %v", "Payment method set as default successfully")
-	}
-}
-
-func TestLinodeAccountPaymentMethodMakeDefaultToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/payment-methods/123/make-default" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/payment-methods/123/make-default")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountPaymentMethodMakeDefaultTool(cfg)
-	req := createRequestWithArgs(t, map[string]any{keyPaymentMethodID: paymentMethodID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to set linode_account_payment_method_make_default") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to set linode_account_payment_method_make_default")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeAccountPaymentMethodMakeDefaultToolConfirmRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		confirm any
-		name    string
-	}{
-		{name: caseMissing},
-		{name: casePaymentMethodConfirmFalse, confirm: false},
-		{name: caseString, confirm: boolStringTrue},
-		{name: caseNumeric, confirm: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodMakeDefaultTool(cfg)
-
-			args := map[string]any{keyPaymentMethodID: paymentMethodID}
-			if testCase.name != caseMissing {
-				args[keyConfirm] = testCase.confirm
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-		})
-	}
-}
-
-func TestLinodeAccountPaymentMethodMakeDefaultToolInvalidPaymentMethodIdRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errPaymentMethodIDRequired},
-		{name: caseString, args: map[string]any{keyPaymentMethodID: idAbc123, keyConfirm: true}, want: errPaymentMethodIDInteger},
-		{name: caseZero, args: map[string]any{keyPaymentMethodID: float64(0), keyConfirm: true}, want: errPaymentMethodIDInteger},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentMethodMakeDefaultTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountPaymentMethodGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)
@@ -10417,7 +7097,7 @@ func TestLinodeAccountPaymentsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountPaymentsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountPaymentListTool(cfg)
 
 	if tool.Name != "linode_account_payment_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_list")
@@ -10492,7 +7172,7 @@ func TestLinodeAccountPaymentsToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountPaymentsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -10552,7 +7232,7 @@ func TestLinodeAccountPaymentsToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountPaymentsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -10605,7 +7285,7 @@ func TestLinodeAccountPaymentsToolInvalidPaginationRejectsBeforeClient(t *testin
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountPaymentListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -10638,7 +7318,7 @@ func TestLinodeAccountPaymentGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountPaymentGetTool(cfg)
 
 	if tool.Name != "linode_account_payment_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_payment_get")
@@ -10704,7 +7384,7 @@ func TestLinodeAccountPaymentGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPaymentID: 654})
 
@@ -10764,7 +7444,7 @@ func TestLinodeAccountPaymentGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountPaymentGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPaymentID: 654})
 
@@ -10781,8 +7461,8 @@ func TestLinodeAccountPaymentGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_payment_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_payment_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve payment") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve payment")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -10812,7 +7492,7 @@ func TestLinodeAccountPaymentGetToolInvalidPaymentIdRejectsBeforeClient(t *testi
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountPaymentGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountPaymentGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -10840,7 +7520,7 @@ func TestLinodeAccountInvoicesToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountInvoicesTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountInvoiceListTool(cfg)
 
 	if tool.Name != "linode_account_invoice_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_invoice_list")
@@ -10915,7 +7595,7 @@ func TestLinodeAccountInvoicesToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountInvoicesTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountInvoiceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -10975,7 +7655,7 @@ func TestLinodeAccountInvoicesToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountInvoicesTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountInvoiceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -11028,7 +7708,7 @@ func TestLinodeAccountInvoicesToolInvalidPaginationRejectsBeforeClient(t *testin
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountInvoicesTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountInvoiceListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -11061,7 +7741,7 @@ func TestLinodeAccountServiceTransfersToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountServiceTransfersTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountServiceTransferListTool(cfg)
 
 	if tool.Name != "linode_account_service_transfer_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfer_list")
@@ -11141,7 +7821,7 @@ func TestLinodeAccountServiceTransfersToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountServiceTransfersTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountServiceTransferListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -11207,7 +7887,7 @@ func TestLinodeAccountServiceTransfersToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountServiceTransfersTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountServiceTransferListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -11260,7 +7940,7 @@ func TestLinodeAccountServiceTransfersToolInvalidPaginationRejectsBeforeClient(t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountServiceTransfersTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountServiceTransferListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -11293,7 +7973,7 @@ func TestLinodeAccountEventGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountEventGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountEventGetTool(cfg)
 
 	if tool.Name != "linode_account_event_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_event_get")
@@ -11353,7 +8033,7 @@ func TestLinodeAccountEventGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountEventGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountEventGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID)})
 
@@ -11400,7 +8080,7 @@ func TestLinodeAccountEventGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountEventGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountEventGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID)})
 
@@ -11422,8 +8102,8 @@ func TestLinodeAccountEventGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_event_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_event_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve account event") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve account event")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -11455,7 +8135,7 @@ func TestLinodeAccountEventGetToolValidation(t *testing.T) {
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountEventGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountEventGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -11484,256 +8164,11 @@ func TestLinodeAccountEventGetToolValidation(t *testing.T) {
 	}
 }
 
-// End-to-end verification of marking an account event as seen.
-func TestLinodeAccountEventSeenToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountEventSeenTool(cfg)
-
-	if tool.Name != "linode_account_event_seen" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_event_seen")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyEventID) {
-		t.Errorf("RawInputSchema missing key %v", keyEventID)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountEventSeenToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls atomic.Int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				calls.Add(1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
-
-			args := map[string]any{keyEventID: float64(accountEventID)}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if calls.Load() != int32(0) {
-				t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(0))
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "confirm=true") {
-				t.Errorf("error text %q does not contain %q", text.Text, "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeAccountEventSeenToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/events/123/seen" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/events/123/seen")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID), keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "marked as seen") {
-		t.Errorf("textContent.Text does not contain %v", "marked as seen")
-	}
-
-	if !strings.Contains(textContent.Text, "123") {
-		t.Errorf("textContent.Text does not contain %v", "123")
-	}
-}
-
-func TestLinodeAccountEventSeenToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyEventID: float64(accountEventID), keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to mark linode_account_event_seen") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to mark linode_account_event_seen")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-func TestLinodeAccountEventSeenToolValidation(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true}, want: errEventIDRequired},
-		{name: caseString, args: map[string]any{keyEventID: "123", keyConfirm: true}, want: errEventIDPositive},
-		{name: loginIDCaseZero, args: map[string]any{keyEventID: float64(0), keyConfirm: true}, want: errEventIDPositive},
-		{name: loginIDCaseNegative, args: map[string]any{keyEventID: float64(-1), keyConfirm: true}, want: errEventIDPositive},
-		{name: loginIDCaseFractional, args: map[string]any{keyEventID: 123.5, keyConfirm: true}, want: errEventIDPositive},
-		{name: "overflow", args: map[string]any{keyEventID: 1e100, keyConfirm: true}, want: errEventIDPositive},
-		{name: caseSlash, args: map[string]any{keyEventID: "12/3", keyConfirm: true}, want: errEventIDPositive},
-		{name: caseQuery, args: map[string]any{keyEventID: "12?3", keyConfirm: true}, want: errEventIDPositive},
-		{name: caseDotTraversal, args: map[string]any{keyEventID: pathTraversalValue, keyConfirm: true}, want: errEventIDPositive},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountEventSeenTool(cfg)
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.want) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.want)
-			}
-		})
-	}
-}
-
 func TestLinodeAccountServiceTransferGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountServiceTransferGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountServiceTransferGetTool(cfg)
 
 	if tool.Name != "linode_account_service_transfer_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfer_get")
@@ -11804,7 +8239,7 @@ func TestLinodeAccountServiceTransferGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountServiceTransferGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountServiceTransferGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken})
 
@@ -11870,7 +8305,7 @@ func TestLinodeAccountServiceTransferGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountServiceTransferGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountServiceTransferGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken})
 
@@ -11892,8 +8327,8 @@ func TestLinodeAccountServiceTransferGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_service_transfer_get") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_service_transfer_get")
+	if !strings.Contains(textContent.Text, "Failed to retrieve service transfer") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve service transfer")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -11922,7 +8357,7 @@ func TestLinodeAccountServiceTransferGetToolInvalidTokenRejectsBeforeClient(t *t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountServiceTransferGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountServiceTransferGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -11951,796 +8386,12 @@ func TestLinodeAccountServiceTransferGetToolInvalidTokenRejectsBeforeClient(t *t
 	}
 }
 
-// End-to-end verification of account service transfer creation.
-func TestLinodeAccountServiceTransferCreateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
-
-	if tool.Name != "linode_account_service_transfer_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfer_create")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	if !strings.Contains(raw, keyLinodeIDs) {
-		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeIDs)
-	}
-
-	if !strings.Contains(raw, keyConfirm) {
-		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountServiceTransferCreateToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
-
-			args := map[string]any{keyLinodeIDs: []any{float64(123)}}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountServiceTransferCreateToolInvalidLinodeIdsRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: "missing linode_ids", args: map[string]any{keyConfirm: true}, wantMessage: "linode_ids is required"},
-		{name: "empty linode_ids", args: map[string]any{keyLinodeIDs: []any{}, keyConfirm: true}, wantMessage: "linode_ids must include at least one ID"},
-		{name: "string linode_ids", args: map[string]any{keyLinodeIDs: "123", keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
-		{name: "string element", args: map[string]any{keyLinodeIDs: []any{"123"}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
-		{name: "zero element", args: map[string]any{keyLinodeIDs: []any{float64(0)}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
-		{name: "negative element", args: map[string]any{keyLinodeIDs: []any{float64(-1)}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
-		{name: "fractional element", args: map[string]any{keyLinodeIDs: []any{1.5}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
-		{name: "overflow element", args: map[string]any{keyLinodeIDs: []any{float64(1 << 63)}, keyConfirm: true}, wantMessage: errLinodeIDsPositiveArray},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
-
-			req := createRequestWithArgs(t, tt.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, tt.wantMessage)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountServiceTransferCreateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != accountServiceTransfersTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountServiceTransfersTestPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		var got linode.CreateAccountServiceTransferRequest
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(got.Entities["linodes"], []any{float64(123), float64(456)}) {
-			t.Errorf("got.Entities[linodes] = %v, want %v", got.Entities["linodes"], []int{123, 456})
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.AccountEntityTransfer{
-			Entities: linode.AccountEntityTransferEntities{Linodes: []int{123, 456}},
-			Status:   statusPending,
-			Token:    "service-transfer-token",
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyLinodeIDs: []any{float64(123), float64(456)}, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if len(result.Content) == 0 {
-		t.Fatal("result.Content is empty")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "service-transfer-token") {
-		t.Errorf("textContent.Text does not contain %v", "service-transfer-token")
-	}
-
-	if !strings.Contains(textContent.Text, "Account service transfer created successfully") {
-		t.Errorf("textContent.Text does not contain the success message")
-	}
-}
-
-func TestLinodeAccountServiceTransferCreateToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != accountServiceTransfersTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountServiceTransfersTestPath)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountServiceTransferCreateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyLinodeIDs: []any{float64(123)}, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to create linode_account_service_transfer_create") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to create linode_account_service_transfer_create")
-	}
-
-	if !strings.Contains(textContent.Text, errForbidden) {
-		t.Errorf("textContent.Text does not contain %v", errForbidden)
-	}
-}
-
-func TestLinodeAccountServiceTransferAcceptToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountServiceTransferAcceptTool(cfg)
-
-	if tool.Name != "linode_account_service_transfer_accept" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfer_accept")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyToken) {
-		t.Errorf("RawInputSchema missing key %v", keyToken)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountServiceTransferAcceptToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountServiceTransferAcceptTool(cfg)
-
-			args := map[string]any{keyToken: accountServiceTransferToken}
-			if testCase.set {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountServiceTransferAcceptToolInvalidTokenRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true}, wantMessage: errTokenRequired},
-		{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true}, wantMessage: errTokenNonEmpty},
-		{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true}, wantMessage: errTokenNonEmpty},
-		{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true}, wantMessage: errTokenNoSeparators},
-		{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true}, wantMessage: errTokenNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true}, wantMessage: errTokenNoSeparators},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountServiceTransferAcceptTool(cfg)
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountServiceTransferAcceptToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/service-transfers/service-token-example/accept" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/service-transfers/service-token-example/accept")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		_, writeErr := w.Write([]byte(`{}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountServiceTransferAcceptTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, accountServiceTransferToken) {
-		t.Errorf("error text %q does not contain %q", text.Text, accountServiceTransferToken)
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "accepted successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "accepted successfully")
-	}
-}
-
-func TestLinodeAccountServiceTransferAcceptToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/service-transfers/service-token-example/accept" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/service-transfers/service-token-example/accept")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountServiceTransferAcceptTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to accept linode_account_service_transfer_accept") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to accept linode_account_service_transfer_accept")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-// End-to-end verification of account service transfer cancellation.
-func TestLinodeAccountServiceTransferDeleteToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountServiceTransferDeleteTool(cfg)
-
-	if tool.Name != "linode_account_service_transfer_delete" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_service_transfer_delete")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyToken) {
-		t.Errorf("RawInputSchema missing key %v", keyToken)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountServiceTransferDeleteToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountServiceTransferDeleteTool(cfg)
-
-			args := map[string]any{keyToken: accountServiceTransferToken}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountServiceTransferDeleteToolInvalidTokenRejectsBeforeClient(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenRequired},
-		{name: caseEmpty, args: map[string]any{keyToken: "", keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNonEmpty},
-		{name: caseString, args: map[string]any{keyToken: 123, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNonEmpty},
-		{name: caseSlash, args: map[string]any{keyToken: accountEntityTransferTokenSlash, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
-		{name: caseQuery, args: map[string]any{keyToken: accountEntityTransferTokenQuery, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
-		{name: caseDotTraversal, args: map[string]any{keyToken: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantMessage: errTokenNoSeparators},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountServiceTransferDeleteTool(cfg)
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountServiceTransferDeleteToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcAccountServiceTransfersServiceTokenExample {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfersServiceTokenExample)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		_, writeErr := w.Write([]byte(`{}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountServiceTransferDeleteTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, accountServiceTransferToken) {
-		t.Errorf("error text %q does not contain %q", text.Text, accountServiceTransferToken)
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "canceled successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "canceled successfully")
-	}
-}
-
-func TestLinodeAccountServiceTransferDeleteToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
-		}
-
-		if r.URL.Path != tcAccountServiceTransfersServiceTokenExample {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccountServiceTransfersServiceTokenExample)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountServiceTransferDeleteTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyToken: accountServiceTransferToken, keyConfirm: true, keyConfirmedDryRun: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to delete linode_account_service_transfer_delete") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to delete linode_account_service_transfer_delete")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
 // End-to-end verification of enrolled account beta program retrieval.
 func TestLinodeAccountBetaGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountBetaGetTool(cfg)
 
 	if tool.Name != "linode_account_beta_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_beta_get")
@@ -12814,7 +8465,7 @@ func TestLinodeAccountBetaGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountBetaGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
@@ -12876,7 +8527,7 @@ func TestLinodeAccountBetaGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountBetaGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyBetaIDPath: betaExampleOpen})
 
@@ -12893,8 +8544,8 @@ func TestLinodeAccountBetaGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_beta_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_beta_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve account beta program") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve account beta program")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -12925,7 +8576,7 @@ func TestLinodeAccountBetaGetToolInvalidIdRejectsBeforeClient(t *testing.T) {
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountBetaGetTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountBetaGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -12946,540 +8597,6 @@ func TestLinodeAccountBetaGetToolInvalidIdRejectsBeforeClient(t *testing.T) {
 				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
 			}
 		})
-	}
-}
-
-// End-to-end verification of child account proxy user token creation.
-func TestLinodeAccountChildAccountTokenToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
-
-	if tool.Name != "linode_account_child_account_token_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_child_account_token_create")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyEUUID) {
-		t.Errorf("RawInputSchema missing key %v", keyEUUID)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountChildAccountTokenToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
-
-			args := map[string]any{keyEUUID: childAccountEUUID}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountChildAccountTokenToolInvalidEuuidRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: "missing euuid", args: map[string]any{keyConfirm: true}, wantMessage: "euuid is required"},
-		{name: "empty euuid", args: map[string]any{keyEUUID: "", keyConfirm: true}, wantMessage: errEUUIDNonEmpty},
-		{name: "numeric euuid", args: map[string]any{keyEUUID: 123, keyConfirm: true}, wantMessage: errEUUIDNonEmpty},
-		{name: "euuid with slash", args: map[string]any{keyEUUID: "child/account", keyConfirm: true}, wantMessage: errEUUIDNoSeparators},
-		{name: "euuid with query separator", args: map[string]any{keyEUUID: "child?account", keyConfirm: true}, wantMessage: errEUUIDNoSeparators},
-		{name: "euuid with traversal", args: map[string]any{keyEUUID: pathTraversalValue, keyConfirm: true}, wantMessage: errEUUIDNoSeparators},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountChildAccountTokenToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.ProxyUserToken{ID: 918, Label: "proxy-token", Scopes: "*", Token: "abcdefghijklmnop", Expiry: "2024-05-01T00:16:01"}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "abcdefghijklmnop") {
-		t.Errorf("error text %q does not contain %q", text.Text, "abcdefghijklmnop")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "proxy-token") {
-		t.Errorf("error text %q does not contain %q", text.Text, "proxy-token")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Child account proxy token created successfully") {
-		t.Errorf("text %q does not contain the success message", text.Text)
-	}
-}
-
-func TestLinodeAccountChildAccountTokenToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/child-accounts/A1BC2DEF-34GH-567I-J890KLMN12O34P56/token")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountChildAccountTokenTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyEUUID: childAccountEUUID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to create linode_account_child_account_token_create") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to create linode_account_child_account_token_create")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-// End-to-end verification of account beta enrollment.
-func TestLinodeAccountBetaEnrollToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
-
-	if tool.Name != "linode_account_beta_enroll" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_beta_enroll")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyBetaID) {
-		t.Errorf("RawInputSchema missing key %v", keyBetaID)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeAccountBetaEnrollToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
-
-			args := map[string]any{keyBetaID: betaExampleOpen}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountBetaEnrollToolInvalidIdRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissingConfirm, args: map[string]any{keyConfirm: true}, wantMessage: errBetaIDRequired},
-		{name: caseEmpty, args: map[string]any{keyBetaID: "", keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
-		{name: caseBlank, args: map[string]any{keyBetaID: blankString, keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
-		{name: caseNumeric, args: map[string]any{keyBetaID: 123, keyConfirm: true}, wantMessage: errBetaIDNonEmpty},
-		{name: caseSlash, args: map[string]any{keyBetaID: invalidBetaIDSlash, keyConfirm: true}, wantMessage: errBetaIDChars},
-		{name: caseQuery, args: map[string]any{keyBetaID: invalidBetaIDQuery, keyConfirm: true}, wantMessage: errBetaIDChars},
-		{name: caseDotTraversal, args: map[string]any{keyBetaID: pathTraversalValue, keyConfirm: true}, wantMessage: errBetaIDChars},
-		{name: caseWhitespacePadded, args: map[string]any{keyBetaID: invalidBetaIDPadded, keyConfirm: true}, wantMessage: errBetaIDChars},
-		{name: "control", args: map[string]any{keyBetaID: "example\nopen", keyConfirm: true}, wantMessage: errBetaIDChars},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, testCase.wantMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantMessage)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountBetaEnrollToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != accountBetasTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountBetasTestPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(body[keyBetaID], betaExampleOpen) {
-			t.Errorf("body[keyBetaID] = %v, want %v", body[keyBetaID], betaExampleOpen)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		_, writeErr := w.Write([]byte(`{}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Account beta enrollment requested successfully") {
-		t.Errorf("textContent.Text does not contain %v", "Account beta enrollment requested successfully")
-	}
-
-	if !strings.Contains(textContent.Text, betaExampleOpen) {
-		t.Errorf("textContent.Text does not contain %v", betaExampleOpen)
-	}
-}
-
-func TestLinodeAccountBetaEnrollToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != accountBetasTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountBetasTestPath)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: errForbidden}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountBetaEnrollTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyBetaID: betaExampleOpen, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to enroll linode_account_beta_enroll") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to enroll linode_account_beta_enroll")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
-		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
 	}
 }
 
@@ -13488,7 +8605,7 @@ func TestLinodeAccountAvailabilityToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountAvailabilityListTool(cfg)
 
 	if tool.Name != "linode_account_availability_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_availability_list")
@@ -13554,7 +8671,7 @@ func TestLinodeAccountAvailabilityToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountAvailabilityListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -13616,7 +8733,7 @@ func TestLinodeAccountAvailabilityToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountAvailabilityListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -13669,7 +8786,7 @@ func TestLinodeAccountAvailabilityToolInvalidPaginationRejectsBeforeClient(t *te
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeAccountAvailabilityTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountAvailabilityListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -13698,289 +8815,12 @@ func TestLinodeAccountAvailabilityToolInvalidPaginationRejectsBeforeClient(t *te
 	}
 }
 
-// End-to-end verification of account agreement acknowledgement.
-func TestLinodeAccountAgreementsAcknowledgeToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
-
-	if tool.Name != "linode_account_agreement_acknowledge" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_agreement_acknowledge")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-
-	if !strings.Contains(rawSchema, "billing_agreement") {
-		t.Errorf("RawInputSchema missing key %v", "billing_agreement")
-	}
-}
-
-func TestLinodeAccountAgreementsAcknowledgeToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
-
-			args := map[string]any{keyPrivacyPolicy: true}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountAgreementsAcknowledgeToolEmptyAcknowledgementRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "at least one account agreement field is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "at least one account agreement field is required")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountAgreementsAcknowledgeToolFalseAgreementRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyPrivacyPolicy: false, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "privacy_policy must be true when provided") {
-		t.Errorf("error text %q does not contain %q", text.Text, "privacy_policy must be true when provided")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountAgreementsAcknowledgeToolMalformedFieldRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyPrivacyPolicy: boolStringTrue, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "privacy_policy must be a boolean") {
-		t.Errorf("error text %q does not contain %q", text.Text, "privacy_policy must be a boolean")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountAgreementsAcknowledgeToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != accountAgreementsTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountAgreementsTestPath)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(body["billing_agreement"], true) {
-			t.Errorf("got %v, want %v", body["billing_agreement"], true)
-		}
-
-		if !reflect.DeepEqual(body[keyPrivacyPolicy], true) {
-			t.Errorf("body[keyPrivacyPolicy] = %v, want %v", body[keyPrivacyPolicy], true)
-		}
-
-		if _, ok := body["eu_model"]; ok {
-			t.Errorf("body has unexpected key %v", "eu_model")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		_, writeErr := w.Write([]byte(`{}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountAgreementsAcknowledgeTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{"billing_agreement": true, keyPrivacyPolicy: true, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Account agreements acknowledged successfully") {
-		t.Errorf("textContent.Text does not contain %v", "Account agreements acknowledged successfully")
-	}
-}
-
 // End-to-end verification of region listing and filtering.
 func TestLinodeRegionsListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeRegionListTool(cfg)
+	tool, _, handler := gentools.NewLinodeRegionListTool(cfg)
 
 	if tool.Name != "linode_region_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_region_list")
@@ -14029,7 +8869,7 @@ func TestLinodeRegionsListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeRegionListTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -14091,7 +8931,7 @@ func TestLinodeRegionsListToolFilterByCountry(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeRegionListTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{"country": countryUS})
 
@@ -14135,7 +8975,7 @@ func TestLinodeTypesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeTypeListTool(cfg)
+	tool, _, handler := gentools.NewLinodeTypeListTool(cfg)
 
 	if tool.Name != "linode_type_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_type_list")
@@ -14184,7 +9024,7 @@ func TestLinodeTypesListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -14254,7 +9094,7 @@ func TestLinodeTypesListToolFilterByClass(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{"class": classStandard})
 
@@ -14290,7 +9130,7 @@ func TestLinodeVolumeTypesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeVolumeTypeListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeVolumeTypeListTool(cfg)
 
 	if tool.Name != "linode_volume_type_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_type_list")
@@ -14351,7 +9191,7 @@ func TestLinodeVolumeTypesListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -14416,7 +9256,7 @@ func TestLinodeVolumeTypesListToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -14448,7 +9288,7 @@ func TestLinodeVolumesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeVolumeListTool(cfg)
+	tool, _, handler := gentools.NewLinodeVolumeListTool(cfg)
 
 	if tool.Name != "linode_volume_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_volume_list")
@@ -14497,7 +9337,7 @@ func TestLinodeVolumesListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeListTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -14558,7 +9398,7 @@ func TestLinodeVolumesListToolFilterByRegion(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeListTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRegion: regionUSEast})
 
@@ -14624,7 +9464,7 @@ func TestLinodeVolumesListToolFilterByLabel(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeVolumeListTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{"label_contains": "backup"})
 
@@ -14664,7 +9504,7 @@ func TestLinodeImagesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeImageListTool(cfg)
+	tool, _, handler := gentools.NewLinodeImageListTool(cfg)
 
 	if tool.Name != "linode_image_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_list")
@@ -14713,7 +9553,7 @@ func TestLinodeImagesListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -14774,7 +9614,7 @@ func TestLinodeImagesListToolFilterByPublic(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{"is_public": "false"})
 
@@ -14839,7 +9679,7 @@ func TestLinodeImagesListToolFilterByDeprecated(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{"deprecated": boolStringTrue})
 
@@ -14878,7 +9718,7 @@ func TestLinodeImageShareGroupTokensListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupTokensListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupTokenListTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_token_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_token_list")
@@ -14965,7 +9805,7 @@ func TestLinodeImageShareGroupTokensListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupTokensListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -15004,7 +9844,7 @@ func TestLinodeImageShareGroupTokensListToolInvalidPagination(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeImageShareGroupTokensListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPageSize: 24})
 
@@ -15053,7 +9893,7 @@ func TestLinodeImageShareGroupTokensListToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupTokensListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -15088,7 +9928,7 @@ func TestLinodeImageShareGroupsListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupListTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_list")
@@ -15175,7 +10015,7 @@ func TestLinodeImageShareGroupsListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -15214,7 +10054,7 @@ func TestLinodeImageShareGroupsListToolInvalidPagination(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPageSize: 24})
 
@@ -15263,7 +10103,7 @@ func TestLinodeImageShareGroupsListToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupsListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -15357,732 +10197,12 @@ func listResponseCount(t *testing.T, text string) int {
 	return decoded.Count
 }
 
-// End-to-end verification of account cancellation.
-func TestLinodeAccountCancelToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountCancelTool(cfg)
-
-	if tool.Name != "linode_account_cancel" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_cancel")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-
-	if !strings.Contains(rawSchema, keyComments) {
-		t.Errorf("RawInputSchema missing key %v", keyComments)
-	}
-}
-
-func TestLinodeAccountCancelToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissingConfirm, set: false},
-		{name: caseRequiresConfirm, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountCancelTool(cfg)
-
-			args := map[string]any{keyComments: "leaving"}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountCancelToolMalformedCommentsRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountCancelTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyComments: 123, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "comments must be a string") {
-		t.Errorf("error text %q does not contain %q", text.Text, "comments must be a string")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountCancelToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/cancel" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/cancel")
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(body[keyComments], "leaving") {
-			t.Errorf("body[keyComments] = %v, want %v", body[keyComments], "leaving")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		_, writeErr := w.Write([]byte(`{"survey_link":"https://example.test/survey"}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountCancelTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyComments: "leaving", keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Account canceled successfully") {
-		t.Errorf("textContent.Text does not contain %v", "Account canceled successfully")
-	}
-
-	if !strings.Contains(textContent.Text, "https://example.test/survey") {
-		t.Errorf("textContent.Text does not contain %v", "https://example.test/survey")
-	}
-}
-
-func TestLinodeAccountCancelToolApiError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != "/account/cancel" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/cancel")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-
-		_, writeErr := w.Write([]byte(`{"errors":[{"reason":"could not charge card"}]}`))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountCancelTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to cancel account") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to cancel account")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "could not charge card") {
-		t.Errorf("error text %q does not contain %q", text.Text, "could not charge card")
-	}
-}
-
-// End-to-end verification of account update.
-func TestLinodeAccountUpdateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountUpdateTool(cfg)
-
-	if tool.Name != "linode_account_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_update")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-
-	if !strings.Contains(rawSchema, "email") {
-		t.Errorf("RawInputSchema missing key %v", "email")
-	}
-}
-
-func TestLinodeAccountUpdateToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissing, set: false},
-		{name: caseConfirmFalse, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-
-				w.WriteHeader(http.StatusNoContent)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{
-				Environments: map[string]config.EnvironmentConfig{
-					envKeyDefault: {
-						Label:  envLabelDefault,
-						Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-					},
-				},
-			}
-			_, _, handler := tools.NewLinodeAccountUpdateTool(cfg)
-
-			args := map[string]any{keyEmail: emailUpdatedExample}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountUpdateToolEmptyUpdateRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {
-				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-			},
-		},
-	}
-	_, _, handler := tools.NewLinodeAccountUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "at least one account field is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "at least one account field is required")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountUpdateToolMalformedFieldRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {
-				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-			},
-		},
-	}
-	_, _, handler := tools.NewLinodeAccountUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyEmail: 123, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "email must be a string") {
-		t.Errorf("error text %q does not contain %q", text.Text, "email must be a string")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountUpdateToolApiErrorProducesToolError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != tcAccount {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccount)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{"field": "email", keyReason: "invalid email format"}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {
-				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-			},
-		},
-	}
-	_, _, handler := tools.NewLinodeAccountUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyEmail: emailUpdatedExample, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update account") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update account")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "invalid email format") {
-		t.Errorf("error text %q does not contain %q", text.Text, "invalid email format")
-	}
-}
-
-func TestLinodeAccountUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	account := linode.Account{FirstName: nameUpdatedTest, LastName: "User", Email: emailUpdatedExample}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != tcAccount {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccount)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(body["email"], emailUpdatedExample) {
-			t.Errorf("got %v, want %v", body["email"], emailUpdatedExample)
-		}
-
-		if !reflect.DeepEqual(body["first_name"], nameUpdatedTest) {
-			t.Errorf("got %v, want %v", body["first_name"], nameUpdatedTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(account); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {
-				Label:  envLabelDefault,
-				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
-			},
-		},
-	}
-	_, _, handler := tools.NewLinodeAccountUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyEmail: emailUpdatedExample, "first_name": nameUpdatedTest, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Account updated successfully") {
-		t.Errorf("textContent.Text does not contain %v", "Account updated successfully")
-	}
-
-	if !strings.Contains(textContent.Text, emailUpdatedExample) {
-		t.Errorf("textContent.Text does not contain %v", emailUpdatedExample)
-	}
-}
-
-// TestLinodeAccountUpdateToolDryRun covers the Phase 1 dry-run path
-// on the Admin-tier reference tool. Kept as a sibling function (not a
-// subtest of TestLinodeAccountUpdateTool) so the parent function's
-// maintidx stays under the per-function threshold.
-func TestLinodeAccountUpdateToolDryRunSchemaProperty(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-
-	tool, _, _ := tools.NewLinodeAccountUpdateTool(cfg)
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, "dry_run") {
-		t.Errorf("RawInputSchema missing key %v", "dry_run")
-	}
-}
-
-func TestLinodeAccountUpdateToolDryRunReturnsPreviewWithoutMutating(t *testing.T) {
-	t.Parallel()
-
-	var methodsSeen []string
-
-	accountBody := `{"company":"Acme Corp","email":"ops@acme.example","first_name":"Pat","last_name":"Lee","phone":"+1-555-0100","city":"Springfield","country":"US"}`
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		methodsSeen = append(methodsSeen, r.Method)
-		if r.URL.Path != tcAccount {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcAccount)
-		}
-
-		if r.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(accountBody))
-
-			return
-		}
-
-		t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	dryRunCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, dryRunHandler := tools.NewLinodeAccountUpdateTool(dryRunCfg)
-
-	req := createRequestWithArgs(t, map[string]any{
-		keyDryRun: true,
-	})
-
-	result, err := dryRunHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Fatal("result.IsError = true, want false")
-	}
-
-	textContent, isText := result.Content[0].(mcp.TextContent)
-	if !isText {
-		t.Fatal("isText = false, want true")
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !reflect.DeepEqual(body[keyDryRun], true) {
-		t.Errorf("body[keyDryRun] = %v, want %v", body[keyDryRun], true)
-	}
-
-	if !reflect.DeepEqual(body["tool"], "linode_account_update") {
-		t.Errorf("got %v, want %v", body["tool"], "linode_account_update")
-	}
-
-	would, isWouldObject := body["would_execute"].(map[string]any)
-	if !isWouldObject {
-		t.Fatal("isWouldObject = false, want true")
-	}
-
-	if !reflect.DeepEqual(would["method"], "PUT") {
-		t.Errorf("got %v, want %v", would["method"], "PUT")
-	}
-
-	if !reflect.DeepEqual(would["path"], tcAccount) {
-		t.Errorf("got %v, want %v", would["path"], tcAccount)
-	}
-
-	state, stateIsObject := body["current_state"].(map[string]any)
-	if !stateIsObject {
-		t.Fatal("stateIsObject = false, want true")
-	}
-
-	if !reflect.DeepEqual(state["company"], "Acme Corp") {
-		t.Errorf("got %v, want %v", state["company"], "Acme Corp")
-	}
-
-	if !reflect.DeepEqual(state["phone"], "+1-555-0100") {
-		t.Errorf("got %v, want %v", state["phone"], "+1-555-0100")
-	}
-
-	if !reflect.DeepEqual(methodsSeen, []string{http.MethodGet}) {
-		t.Errorf("methodsSeen = %v, want %v", methodsSeen, []string{http.MethodGet})
-	}
-}
-
-func TestLinodeAccountUpdateToolDryRunDoesNotRequireConfirm(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"company":"NoConfirm Inc","email":"x@example.com"}`))
-	}))
-	defer srv.Close()
-
-	dryRunCfg := &config.Config{
-		Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
-		},
-	}
-	_, _, dryRunHandler := tools.NewLinodeAccountUpdateTool(dryRunCfg)
-
-	// Intentionally omit confirm; the dry-run path must not gate on it.
-	req := createRequestWithArgs(t, map[string]any{
-		keyDryRun: true,
-	})
-
-	result, err := dryRunHandler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-}
-
 // End-to-end verification of the SSH key get workflow.
 func TestLinodeSSHKeyGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+	tool, _, handler := gentools.NewLinodeSshkeyGetTool(cfg)
 
 	if tool.Name != "linode_sshkey_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_sshkey_get")
@@ -16108,7 +10228,7 @@ func TestLinodeSSHKeyGetToolMissingSshkeyId(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+	_, _, handler := gentools.NewLinodeSshkeyGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -16137,7 +10257,7 @@ func TestLinodeSSHKeyGetToolZeroSshkeyId(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+	_, _, handler := gentools.NewLinodeSshkeyGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(0)})
 
@@ -16166,7 +10286,7 @@ func TestLinodeSSHKeyGetToolNegativeSshkeyId(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+	_, _, handler := gentools.NewLinodeSshkeyGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(-1)})
 
@@ -16210,7 +10330,7 @@ func TestLinodeSSHKeyGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+	_, _, handler := gentools.NewLinodeSshkeyGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(42)})
 
@@ -16269,7 +10389,7 @@ func TestLinodeSSHKeyGetToolAPIError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeSSHKeyGetTool(cfg)
+	_, _, handler := gentools.NewLinodeSshkeyGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keySSHKeyID: float64(999)})
 
@@ -16291,7 +10411,7 @@ func TestLinodeDomainZoneFileGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDomainZoneFileGetTool(cfg)
 
 	if tool.Name != "linode_domain_zone_file_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_zone_file_get")
@@ -16345,7 +10465,7 @@ func TestLinodeDomainZoneFileGetToolInvalidDomainIdRejectedBeforeClientCall(t *t
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			}}
-			_, _, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+			_, _, handler := gentools.NewLinodeDomainZoneFileGetTool(cfg)
 
 			args := map[string]any{}
 			if tt.set {
@@ -16421,7 +10541,7 @@ func TestLinodeDomainZoneFileGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainZoneFileGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyDomainID: 123})
 
@@ -16485,7 +10605,7 @@ func TestLinodeDomainZoneFileGetToolApiErrorMapsToToolError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeDomainZoneFileGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainZoneFileGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyDomainID: 999})
 
@@ -16736,7 +10856,7 @@ func TestLinodeAccountSettingsManagedEnableToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountSettingsManagedEnableTool(cfg)
 
 	if tool.Name != "linode_account_settings_managed_enable" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_settings_managed_enable")
@@ -16787,7 +10907,7 @@ func TestLinodeAccountSettingsManagedEnableToolConfirmRequiredBeforeClientCall(t
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountSettingsManagedEnableTool(cfg)
 
 			args := map[string]any{}
 			if tt.set {
@@ -16844,7 +10964,7 @@ func TestLinodeAccountSettingsManagedEnableToolApiErrorProducesToolError(t *test
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountSettingsManagedEnableTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
@@ -16900,7 +11020,7 @@ func TestLinodeAccountSettingsManagedEnableToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsManagedEnableTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountSettingsManagedEnableTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
@@ -16924,360 +11044,5 @@ func TestLinodeAccountSettingsManagedEnableToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "Linode Managed enabled successfully") {
 		t.Errorf("textContent.Text does not contain %v", "Linode Managed enabled successfully")
-	}
-}
-
-// End-to-end verification of account settings update.
-func TestLinodeAccountSettingsUpdateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-	if tool.Name != "linode_account_settings_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_account_settings_update")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapAdmin {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("RawInputSchema missing key %v", keyConfirm)
-	}
-
-	if !strings.Contains(rawSchema, tcBackupsEnabled) {
-		t.Errorf("RawInputSchema missing key %v", tcBackupsEnabled)
-	}
-}
-
-func TestLinodeAccountSettingsUpdateToolConfirmRequiredBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		value any
-		name  string
-		set   bool
-	}{
-		{name: caseMissing, set: false},
-		{name: caseConfirmFalse, value: false, set: true},
-		{name: caseString, value: boolStringTrue, set: true},
-		{name: caseNumeric, value: 1, set: true},
-	}
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var calls int32
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				atomic.AddInt32(&calls, 1)
-
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer srv.Close()
-
-			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-			args := map[string]any{tcNetworkHelper: false}
-			if tt.set {
-				args[keyConfirm] = tt.value
-			}
-
-			req := createRequestWithArgs(t, args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errConfirmEqualsTrue) {
-				t.Errorf("error text %q does not contain %q", text.Text, errConfirmEqualsTrue)
-			}
-
-			if calls != int32(0) {
-				t.Errorf("calls = %v, want %v", calls, int32(0))
-			}
-		})
-	}
-}
-
-func TestLinodeAccountSettingsUpdateToolEmptyUpdateRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "at least one account settings field is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "at least one account settings field is required")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountSettingsUpdateToolMalformedFieldRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{tcBackupsEnabled: "true", keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "backups_enabled must be a boolean") {
-		t.Errorf("error text %q does not contain %q", text.Text, "backups_enabled must be a boolean")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-// TestLinodeAccountSettingsUpdateToolUnsupportedFieldRejectedBeforeClientCall pins
-// the unknown-field rejection ported from Python (strictest-wins): Go previously
-// ignored unknown args, now rejects them locally before any HTTP call.
-func TestLinodeAccountSettingsUpdateToolUnsupportedFieldRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{tcBackupsEnabled: true, "bogus_field": "x", keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil || !result.IsError {
-		t.Fatal("expected an error result")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Unsupported account settings field(s): bogus_field") {
-		t.Errorf("error text %q does not contain the unsupported-field message", text.Text)
-	}
-}
-
-func TestLinodeAccountSettingsUpdateToolMalformedStringFieldRejectedBeforeClientCall(t *testing.T) {
-	t.Parallel()
-
-	var calls int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&calls, 1)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyMaintenancePolicy: 123, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "maintenance_policy must be a string") {
-		t.Errorf("error text %q does not contain %q", text.Text, "maintenance_policy must be a string")
-	}
-
-	if calls != int32(0) {
-		t.Errorf("calls = %v, want %v", calls, int32(0))
-	}
-}
-
-func TestLinodeAccountSettingsUpdateToolApiErrorProducesToolError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != accountSettingsTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountSettingsTestPath)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{"field": keyMaintenancePolicy, keyReason: "invalid maintenance policy"}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{keyMaintenancePolicy: "invalid", keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update account settings") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update account settings")
-	}
-
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "invalid maintenance policy") {
-		t.Errorf("error text %q does not contain %q", text.Text, "invalid maintenance policy")
-	}
-}
-
-func TestLinodeAccountSettingsUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	settings := linode.AccountSettings{BackupsEnabled: true, NetworkHelper: false, MaintenancePolicy: maintenancePolicyMigrate}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != accountSettingsTestPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, accountSettingsTestPath)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		for key, want := range map[string]any{
-			tcBackupsEnabled:     true,
-			tcNetworkHelper:      false,
-			keyMaintenancePolicy: maintenancePolicyMigrate,
-		} {
-			if !reflect.DeepEqual(body[key], want) {
-				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(settings); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountSettingsUpdateTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{tcBackupsEnabled: true, tcNetworkHelper: false, keyMaintenancePolicy: maintenancePolicyMigrate, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Account settings updated successfully") {
-		t.Errorf("textContent.Text does not contain %v", "Account settings updated successfully")
-	}
-
-	if !strings.Contains(textContent.Text, maintenancePolicyMigrate) {
-		t.Errorf("textContent.Text does not contain %v", maintenancePolicyMigrate)
 	}
 }

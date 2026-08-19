@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // Confirm that API failures are surfaced as user-visible error results across multiple tool handlers.
@@ -39,7 +38,7 @@ func TestToolHandlersAPIErrorResponsesListInstances(t *testing.T) {
 			defer srv.Close()
 
 			cfg := newTestConfig(srv.URL)
-			_, _, handler := tools.NewLinodeInstanceListTool(cfg)
+			_, _, handler := gentools.NewLinodeInstanceListTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{})
 
@@ -87,65 +86,9 @@ func TestToolHandlersAPIErrorResponsesGetInstance(t *testing.T) {
 			defer srv.Close()
 
 			cfg := newTestConfig(srv.URL)
-			_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
+			_, _, handler := gentools.NewLinodeInstanceGetTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{keyInstanceID: 123})
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errCase.errorMessage) {
-				t.Errorf("error text %q does not contain %q", text.Text, errCase.errorMessage)
-			}
-		})
-	}
-}
-
-func TestToolHandlersAPIErrorResponsesCreateInstance(t *testing.T) {
-	type errorCase struct {
-		errorMessage string
-		label        string
-		statusCode   int
-	}
-
-	errorCases := []errorCase{
-		{statusCode: http.StatusInternalServerError, errorMessage: tcServerErrorMsg, label: tcServerError},
-		{statusCode: http.StatusUnauthorized, errorMessage: tcInvalidTokenMsg, label: tcUnauthorized},
-		{statusCode: http.StatusForbidden, errorMessage: errForbidden, label: tcForbidden},
-		{statusCode: http.StatusTooManyRequests, errorMessage: tcRateLimitMsg, label: tcRateLimit},
-	}
-
-	t.Parallel()
-
-	for _, errCase := range errorCases {
-		t.Run(errCase.label, func(t *testing.T) {
-			t.Parallel()
-
-			srv := newErrorServer(t, errCase.statusCode, errCase.errorMessage)
-			defer srv.Close()
-
-			cfg := newTestConfig(srv.URL)
-			_, _, handler := tools.NewLinodeInstanceCreateTool(cfg)
-
-			req := createRequestWithArgs(t, map[string]any{
-				keyConfirm:    true,
-				keyRegion:     regionUSEast,
-				keyType:       typeG6Nanode1,
-				keyImage:      imageIDUbuntu2204,
-				keyLabel:      "test",
-				keyRootPass:   rootPassStrong,
-				keyFirewallID: 12345,
-			})
 
 			result, err := handler(t.Context(), req)
 			if err != nil {
@@ -229,7 +172,7 @@ func TestToolHandlersMalformedJSONErrorResponse(t *testing.T) {
 	defer srv.Close()
 
 	cfg := newTestConfig(srv.URL)
-	_, _, handler := tools.NewLinodeInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 

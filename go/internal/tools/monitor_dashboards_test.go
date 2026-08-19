@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -32,7 +32,7 @@ func TestLinodeMonitorDashboardGetToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorDashboardGetTool(cfg)
 	if tool.Name != monitorDashboardGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorDashboardGetToolName)
 	}
@@ -84,7 +84,7 @@ func TestLinodeMonitorDashboardGetToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorDashboardGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorDashboardIDParam: monitorDashboardToolID})
 
@@ -141,7 +141,7 @@ func TestLinodeMonitorDashboardGetToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorDashboardGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorDashboardIDParam: monitorDashboardToolID})
 
@@ -163,8 +163,8 @@ func TestLinodeMonitorDashboardGetToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorDashboardGetToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorDashboardGetToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve monitor dashboard") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve monitor dashboard")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -193,7 +193,7 @@ func TestLinodeMonitorDashboardGetToolInvalidDashboardIdRejectsBeforeClient(t *t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorDashboardGetTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorDashboardGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -227,7 +227,7 @@ func TestLinodeMonitorDashboardsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorDashboardListTool(cfg)
 	if tool.Name != monitorDashboardsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorDashboardsToolName)
 	}
@@ -283,7 +283,7 @@ func TestLinodeMonitorDashboardsToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorDashboardListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -351,7 +351,7 @@ func TestLinodeMonitorDashboardsToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorDashboardListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -402,7 +402,7 @@ func TestLinodeMonitorDashboardsToolInvalidPaginationRejectsBeforeClient(t *test
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorDashboardsTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorDashboardListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 

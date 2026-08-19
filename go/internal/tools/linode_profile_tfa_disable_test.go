@@ -12,15 +12,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeProfileTFADisableToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileTFADisableTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileTfaDisableTool(cfg)
 
 	if tool.Name != "linode_profile_tfa_disable" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_profile_tfa_disable")
@@ -79,7 +79,7 @@ func TestLinodeProfileTFADisableToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTFADisableTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileTfaDisableTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
@@ -112,7 +112,7 @@ func TestLinodeProfileTFADisableToolDryRunPreviewsWithoutPost(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTFADisableTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileTfaDisableTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyDryRun: true})
 
 	result, err := handler(t.Context(), req)
@@ -201,7 +201,7 @@ func TestLinodeProfileTFADisableToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTFADisableTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileTfaDisableTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyConfirm: true})
 
 	result, err := handler(t.Context(), req)
@@ -217,8 +217,8 @@ func TestLinodeProfileTFADisableToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to disable linode_profile_tfa_disable") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to disable linode_profile_tfa_disable")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to disable two-factor authentication") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to disable two-factor authentication")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -252,7 +252,7 @@ func TestLinodeProfileTFADisableToolConfirmRequiredBeforeClient(t *testing.T) {
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileTFADisableTool(cfg)
+			_, _, handler := gentools.NewLinodeProfileTfaDisableTool(cfg)
 
 			args := map[string]any{}
 			if testCase.name != caseMissing {

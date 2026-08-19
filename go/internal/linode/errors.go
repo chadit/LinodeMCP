@@ -16,16 +16,27 @@ var (
 	errResponseBodyNotJSONObject = errors.New("response body is not a JSON object")
 )
 
+// ErrShapeMismatch reports a collection fetched through the wrong primitive for
+// its declared envelope. Answering anyway would drop the cursor a marker-paged
+// caller resumes from, or invent one for a page that carries none.
+var ErrShapeMismatch = errors.New("list envelope does not match the primitive it was fetched through")
+
+// ErrWriteResponseNotObject rejects a mutation response that is not a JSON
+// object. Callers prefix the call it belongs to, so the sentence a client sees
+// names which mutation answered badly rather than which decoder complained;
+// the Python client emits the same wording so one fixture covers both.
+var ErrWriteResponseNotObject = errors.New("response must be a JSON object")
+
+// ErrStateMemberMissing rejects a state read whose answer does not carry the
+// member the contract says the resource sits under. Decoding the envelope
+// instead would report an empty resource as the state a delete is about to
+// remove, which a plan would then hash and a preview would show.
+var ErrStateMemberMissing = errors.New("state response carries no member")
+
 // ErrFirewallHistoryNotObject rejects a firewall history body that is not the
 // documented firewall-shaped object, so a shape change upstream fails loudly
 // instead of decoding into an empty snapshot.
 var ErrFirewallHistoryNotObject = errors.New("firewall history response is not a firewall object")
-
-// ErrReservedIPListNotObject reports a reserved IP list body that is not the
-// documented {data:[...]} object. The wording matches what the Python client
-// emits so one behavior fixture covers both clients; decoding straight into
-// the envelope struct would reject the body too, but name a Go type instead.
-var ErrReservedIPListNotObject = errors.New("list response must be an object")
 
 // ErrCircuitOpen is returned when the circuit breaker is open and rejecting
 // requests. Callers can check this sentinel to distinguish "we never tried"
@@ -99,12 +110,6 @@ var ErrNodeBalancerIDPositive = errors.New("nodebalancer_id must be a positive i
 
 // ErrNodeIDPositive is returned when a node ID argument is not positive.
 var ErrNodeIDPositive = errors.New("node_id must be a positive integer")
-
-// ErrStatsYearRange is returned when a statistics year path argument is out of range.
-var ErrStatsYearRange = errors.New("year must be an integer between 2000 and 2037")
-
-// ErrStatsMonthRange is returned when a statistics month path argument is out of range.
-var ErrStatsMonthRange = errors.New("month must be an integer between 1 and 12")
 
 // ErrDiskIDPositive is returned when a disk ID argument is not positive.
 var ErrDiskIDPositive = errors.New("disk_id must be a positive integer")

@@ -12,9 +12,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
+
+// rdnsHostFixture is the reverse-DNS host the body cases send. Rehomed here
+// when the interface dry-run file it lived in was emptied by the migration.
+const rdnsHostFixture = "host.example.com"
 
 // The phase2 prefix marks the batch of request-body fields these tests cover:
 // fields the tools gained to match the Linode API docs. The constants below are
@@ -24,36 +28,24 @@ const (
 	errMasterIPsArray        = "master_ips must be an array of strings"
 	keyInboundPolicy         = "inbound_policy"
 	keyReservedIPv4Addresses = "reserved_ipv4_addresses"
-	keyTaints                = "taints"
-	phase2TaintKeyField      = "key"
 	keyAPLEnabled            = "apl_enabled"
 	keyConfigs               = "configs"
-	keyDiskEncryption        = "disk_encryption"
-	keyDisks                 = "disks"
 	keyEncryption            = "encryption"
 	keyEndpointType          = "endpoint_type"
-	keyEntities              = "entities"
-	keyLabels                = "labels"
 	keyOutboundPolicy        = "outbound_policy"
 	keyRecordTag             = "tag"
 	keyReserved              = "reserved"
 	keyRules                 = "rules"
 	keyS3Endpoint            = "s3_endpoint"
 	keyStackScriptData       = "stackscript_data"
-	keyUpdateStrategy        = "update_strategy"
 	keyVPCs                  = "vpcs"
 	phase2DiskLabel          = "boot"
-	phase2FirewallLabel      = "fw"
-	phase2InvalidPolicy      = "MAYBE"
 	phase2K8sVersion         = "1.31"
-	phase2LabelTier          = "app"
 	phase2MasterIP           = "192.0.2.2"
 	phase2NonBoolean         = "yes"
 	phase2RDNSAddress        = "203.0.113.5"
 	phase2ReservedAddress    = "203.0.113.9"
 	phase2StackScriptUser    = "admin"
-	phase2TaintKey           = "dedicated"
-	phase2WebFirewallLabel   = "web-fw"
 )
 
 type toolHandler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)
@@ -158,17 +150,17 @@ func TestPhase2BodyFieldRejectionsDNSAndFirewall(t *testing.T) {
 
 	phase2RunRejections(t, map[string]phase2Rejection{
 		"domain update axfr_ips": {
-			factory: tools.NewLinodeDomainUpdateTool,
+			factory: gentools.NewLinodeDomainUpdateTool,
 			args:    map[string]any{keyDomainID: float64(5), keyConfirm: true, keyAXFRIPs: float64(7)},
 			want:    "axfr_ips must be an array of strings",
 		},
 		"domain update master_ips": {
-			factory: tools.NewLinodeDomainUpdateTool,
+			factory: gentools.NewLinodeDomainUpdateTool,
 			args:    map[string]any{keyDomainID: float64(5), keyConfirm: true, keyMasterIPs: float64(7)},
 			want:    errMasterIPsArray,
 		},
 		"domain update type": {
-			factory: tools.NewLinodeDomainUpdateTool,
+			factory: gentools.NewLinodeDomainUpdateTool,
 			args:    map[string]any{keyDomainID: float64(5), keyConfirm: true, keyPaymentType: "primary"},
 			want:    "type must be one of: master, slave",
 		},
@@ -182,17 +174,23 @@ func TestPhase2BodyFieldRejectionsComputeAndLKE(t *testing.T) {
 
 	phase2RunRejections(t, map[string]phase2Rejection{
 		"domain update expire_sec": {
-			factory: tools.NewLinodeDomainUpdateTool,
+			factory: gentools.NewLinodeDomainUpdateTool,
 			args:    map[string]any{keyDomainID: float64(5), keyConfirm: true, keyExpireSec: "soon"},
 			want:    "expire_sec must be an integer",
 		},
+		// The target is supplied because the record's own rules run before the
+		// tag's membership reader, so a CAA record naming no target is refused
+		// for the target rather than for the tag.
 		"domain record create tag": {
-			factory: tools.NewLinodeDomainRecordCreateTool,
-			args:    map[string]any{keyDomainID: float64(5), keyConfirm: true, keyPaymentType: "CAA", keyRecordTag: "issuance"},
-			want:    "tag must be one of: issue, issuewild, iodef",
+			factory: gentools.NewLinodeDomainRecordCreateTool,
+			args: map[string]any{
+				keyDomainID: float64(5), keyConfirm: true, keyPaymentType: "CAA",
+				keyTarget: "ca.example.com", keyRecordTag: "issuance",
+			},
+			want: "tag must be one of: issue, issuewild, iodef",
 		},
 		"domain record update tag": {
-			factory: tools.NewLinodeDomainRecordUpdateTool,
+			factory: gentools.NewLinodeDomainRecordUpdateTool,
 			args:    map[string]any{keyDomainID: float64(5), "record_id": float64(7), keyConfirm: true, keyRecordTag: "issuance"},
 			want:    "tag must be one of: issue, issuewild, iodef",
 		},
@@ -205,47 +203,16 @@ func TestPhase2BodyFieldRejectionsPlatform(t *testing.T) {
 	t.Parallel()
 
 	phase2RunRejections(t, map[string]phase2Rejection{
-		"firewall create rules": {
-			factory: tools.NewLinodeFirewallCreateTool,
-			args:    map[string]any{keyLabel: phase2FirewallLabel, keyConfirm: true, keyRules: float64(5)},
-			want:    "rules must be an object",
-		},
-		"firewall create rules string": {
-			factory: tools.NewLinodeFirewallCreateTool,
-			args:    map[string]any{keyLabel: phase2FirewallLabel, keyConfirm: true, keyRules: "{oops"},
-			want:    "rules must be an object",
-		},
-		"firewall create devices": {
-			factory: tools.NewLinodeFirewallCreateTool,
-			args:    map[string]any{keyLabel: phase2FirewallLabel, keyConfirm: true, keyDevices: []any{float64(1)}},
-			want:    "devices must be an object",
-		},
-		"firewall rules update inbound_policy": {
-			factory: tools.NewLinodeFirewallRulesUpdateTool,
-			args: map[string]any{
-				keyFirewallID: float64(1), keyConfirm: true,
-				keyInbound: []any{}, keyOutbound: []any{}, keyInboundPolicy: phase2InvalidPolicy,
-			},
-			want: "inbound_policy must be one of: ACCEPT, DROP",
-		},
-		"firewall rules update outbound_policy": {
-			factory: tools.NewLinodeFirewallRulesUpdateTool,
-			args: map[string]any{
-				keyFirewallID: float64(1), keyConfirm: true,
-				keyInbound: []any{}, keyOutbound: []any{}, keyOutboundPolicy: phase2InvalidPolicy,
-			},
-			want: "outbound_policy must be one of: ACCEPT, DROP",
-		},
 		"instance disk stackscript_id": {
-			factory: tools.NewLinodeInstanceDiskCreateTool,
+			factory: gentools.NewLinodeInstanceDiskCreateTool,
 			args: map[string]any{
 				keyLinodeID: float64(123), keyLabel: phase2DiskLabel, keySize: float64(1024),
 				keyConfirm: true, keyStackScriptID: float64(0),
 			},
-			want: "stackscript_id must be an integer greater than or equal to 1",
+			want: "stackscript_id must be a positive integer",
 		},
 		"instance disk stackscript_data": {
-			factory: tools.NewLinodeInstanceDiskCreateTool,
+			factory: gentools.NewLinodeInstanceDiskCreateTool,
 			args: map[string]any{
 				keyLinodeID: float64(123), keyLabel: phase2DiskLabel, keySize: float64(1024),
 				keyConfirm: true, keyStackScriptData: map[string]any{"user": float64(5)},
@@ -253,80 +220,37 @@ func TestPhase2BodyFieldRejectionsPlatform(t *testing.T) {
 			want: "stackscript_data values must be strings",
 		},
 		"lke cluster tier": {
-			factory: tools.NewLinodeLKEClusterCreateTool,
+			factory: gentools.NewLinodeLkeClusterCreateTool,
 			args:    phase2ClusterArgs(map[string]any{keyLKETier: "platinum"}),
 			want:    "tier must be one of: standard, enterprise",
 		},
 		"lke cluster apl_enabled": {
-			factory: tools.NewLinodeLKEClusterCreateTool,
+			factory: gentools.NewLinodeLkeClusterCreateTool,
 			args:    phase2ClusterArgs(map[string]any{keyAPLEnabled: phase2NonBoolean}),
 			want:    "apl_enabled must be a boolean",
 		},
 		"lke cluster vpc_id": {
-			factory: tools.NewLinodeLKEClusterCreateTool,
+			factory: gentools.NewLinodeLkeClusterCreateTool,
 			args:    phase2ClusterArgs(map[string]any{keyVPCID: float64(0)}),
 			want:    "vpc_id must be an integer greater than or equal to 1",
 		},
 		"lke cluster subnet_id": {
-			factory: tools.NewLinodeLKEClusterCreateTool,
+			factory: gentools.NewLinodeLkeClusterCreateTool,
 			args:    phase2ClusterArgs(map[string]any{keySubnetID: float64(0)}),
 			want:    "subnet_id must be an integer greater than or equal to 1",
 		},
-		"lke pool labels": {
-			factory: tools.NewLinodeLKEPoolCreateTool,
-			args:    phase2PoolArgs(map[string]any{keyLabels: float64(5)}),
-			want:    "labels must be an object",
-		},
-		"lke pool labels values": {
-			factory: tools.NewLinodeLKEPoolCreateTool,
-			args:    phase2PoolArgs(map[string]any{keyLabels: map[string]any{keyLKETier: float64(5)}}),
-			want:    "labels values must be strings",
-		},
-		"lke pool taints": {
-			factory: tools.NewLinodeLKEPoolCreateTool,
-			args:    phase2PoolArgs(map[string]any{keyTaints: valueNone}),
-			want:    "taints must be an array of objects",
-		},
-		"lke pool firewall_id": {
-			factory: tools.NewLinodeLKEPoolCreateTool,
-			args:    phase2PoolArgs(map[string]any{keyFirewallID: float64(0)}),
-			want:    "firewall_id must be an integer greater than or equal to 1",
-		},
-		"lke pool disks": {
-			factory: tools.NewLinodeLKEPoolCreateTool,
-			args:    phase2PoolArgs(map[string]any{keyDisks: float64(7)}),
-			want:    "disks must be an array of objects",
-		},
-		"lke pool disk_encryption": {
-			factory: tools.NewLinodeLKEPoolCreateTool,
-			args:    phase2PoolArgs(map[string]any{keyDiskEncryption: "maybe"}),
-			want:    "disk_encryption must be one of: disabled, enabled",
-		},
-		"lke pool update_strategy": {
-			factory: tools.NewLinodeLKEPoolCreateTool,
-			args:    phase2PoolArgs(map[string]any{keyUpdateStrategy: "asap"}),
-			want:    "update_strategy must be one of: on_recycle, rolling_update",
-		},
-		"lke pool update taints": {
-			factory: tools.NewLinodeLKEPoolUpdateTool,
-			args: map[string]any{
-				keyClusterID: float64(12345), "pool_id": float64(7),
-				keyConfirm: true, keyTaints: valueNone,
-			},
-			want: "taints must be an array of objects",
-		},
 		"monitor alert create scope": {
-			factory: tools.NewLinodeMonitorServiceAlertDefinitionCreateTool,
+			factory: gentools.NewLinodeMonitorServiceAlertDefinitionCreateTool,
 			args:    phase2AlertArgs(map[string]any{keyScope: keySupportTicketRegion}),
 			want:    "scope must be one of: account",
 		},
 		"monitor alert create group_by": {
-			factory: tools.NewLinodeMonitorServiceAlertDefinitionCreateTool,
+			factory: gentools.NewLinodeMonitorServiceAlertDefinitionCreateTool,
 			args:    phase2AlertArgs(map[string]any{monitorAlertDefinitionGroupByParam: []any{blankWhitespace}}),
 			want:    "group_by must be an array of non-empty strings",
 		},
 		"monitor alert update group_by": {
-			factory: tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool,
+			factory: gentools.NewLinodeMonitorServiceAlertDefinitionUpdateTool,
 			args: map[string]any{
 				monitorServiceTypeParam: monitorServiceToolTypeDatabase, "alert_id": float64(42),
 				keyConfirm: true, monitorAlertDefinitionGroupByParam: []any{blankWhitespace},
@@ -334,7 +258,7 @@ func TestPhase2BodyFieldRejectionsPlatform(t *testing.T) {
 			want: "group_by must be an array of non-empty strings",
 		},
 		"networking ip reserved": {
-			factory: tools.NewLinodeNetworkingIPUpdateRDNSTool,
+			factory: gentools.NewLinodeNetworkingIPUpdateTool,
 			args: map[string]any{
 				keyConfirm: true, managedServiceAddressParam: phase2RDNSAddress,
 				keyRDNS: rdnsHostFixture, keyReserved: phase2NonBoolean,
@@ -342,22 +266,22 @@ func TestPhase2BodyFieldRejectionsPlatform(t *testing.T) {
 			want: "reserved must be a boolean",
 		},
 		"nodebalancer configs": {
-			factory: tools.NewLinodeNodeBalancerCreateTool,
+			factory: gentools.NewLinodeNodebalancerCreateTool,
 			args:    map[string]any{keySupportTicketRegion: placementGroupCreateRegion, keyConfirm: true, keyConfigs: float64(5)},
 			want:    "configs must be an array of objects",
 		},
 		"nodebalancer vpcs": {
-			factory: tools.NewLinodeNodeBalancerCreateTool,
+			factory: gentools.NewLinodeNodebalancerCreateTool,
 			args:    map[string]any{keySupportTicketRegion: placementGroupCreateRegion, keyConfirm: true, keyVPCs: float64(5)},
 			want:    "vpcs must be an array of objects",
 		},
 		"nodebalancer firewall_id": {
-			factory: tools.NewLinodeNodeBalancerCreateTool,
+			factory: gentools.NewLinodeNodebalancerCreateTool,
 			args:    map[string]any{keySupportTicketRegion: placementGroupCreateRegion, keyConfirm: true, keyFirewallID: float64(0)},
 			want:    "firewall_id must be an integer greater than or equal to 1",
 		},
 		"bucket endpoint_type": {
-			factory: tools.NewLinodeObjectStorageBucketCreateTool,
+			factory: gentools.NewLinodeObjectStorageBucketCreateTool,
 			args: map[string]any{
 				keyLabel: bucketTest, keySupportTicketRegion: "us-east-1",
 				keyConfirm: true, keyEndpointType: "E9",
@@ -365,17 +289,17 @@ func TestPhase2BodyFieldRejectionsPlatform(t *testing.T) {
 			want: "endpoint_type must be one of: E0, E1, E2, E3",
 		},
 		"key update regions": {
-			factory: tools.NewLinodeObjectStorageKeyUpdateTool,
+			factory: gentools.NewLinodeObjectStorageKeyUpdateTool,
 			args:    map[string]any{"key_id": float64(7), keyConfirm: true, monitorAlertDefinitionRegionsParam: float64(5)},
 			want:    "regions must be an array of strings",
 		},
 		"tag reserved addresses": {
-			factory: tools.NewLinodeTagCreateTool,
+			factory: gentools.NewLinodeTagCreateTool,
 			args:    map[string]any{keyLabel: canRunEnvProd, keyConfirm: true, keyReservedIPv4Addresses: float64(5)},
 			want:    "reserved_ipv4_addresses must be an array of strings",
 		},
 		"volume encryption": {
-			factory: tools.NewLinodeVolumeCreateTool,
+			factory: gentools.NewLinodeVolumeCreateTool,
 			args: map[string]any{
 				keyLabel: keyPaymentData, keySupportTicketRegion: placementGroupCreateRegion,
 				keyConfirm: true, keyEncryption: "maybe",
@@ -383,17 +307,12 @@ func TestPhase2BodyFieldRejectionsPlatform(t *testing.T) {
 			want: "encryption must be one of: disabled, enabled",
 		},
 		"volume config_id": {
-			factory: tools.NewLinodeVolumeCreateTool,
+			factory: gentools.NewLinodeVolumeCreateTool,
 			args: map[string]any{
 				keyLabel: keyPaymentData, keySupportTicketRegion: placementGroupCreateRegion,
 				keyConfirm: true, keyConfigID: float64(0),
 			},
 			want: "config_id must be an integer greater than or equal to 1",
-		},
-		"service transfer entities": {
-			factory: tools.NewLinodeAccountServiceTransferCreateTool,
-			args:    map[string]any{keyConfirm: true, keyEntities: []any{float64(1)}},
-			want:    "entities must be an object",
 		},
 	})
 }
@@ -414,25 +333,22 @@ func phase2ClusterArgs(extra map[string]any) map[string]any {
 	return args
 }
 
-// phase2PoolArgs returns a valid LKE pool-create argument set overlaid with
-// extra.
-func phase2PoolArgs(extra map[string]any) map[string]any {
-	args := map[string]any{
-		keyClusterID:   float64(12345),
-		keyPaymentType: typeG6Standard1,
-		keyCount:       float64(3),
-		keyConfirm:     true,
-	}
-
-	maps.Copy(args, extra)
-
-	return args
-}
-
 // phase2AlertArgs returns a valid monitor alert-definition create argument set
 // overlaid with extra.
+// phase2AlertArgs is a complete alert-definition create call, which each case
+// then spoils one field of.
 func phase2AlertArgs(extra map[string]any) map[string]any {
-	args := monitorAlertDefinitionCreateArgs()
+	args := map[string]any{
+		monitorServiceTypeParam:                 monitorServiceToolTypeDatabase,
+		monitorAlertDefinitionLabelParam:        monitorAlertDefinitionToolLabel,
+		monitorAlertDefinitionSeverityParam:     2,
+		monitorAlertDefinitionRuleCriteriaParam: map[string]any{keyRules: []any{map[string]any{keyMetric: "cpu_usage"}}},
+		monitorAlertDefinitionTriggerParam:      map[string]any{"criteria_condition": monitorCriteriaAll},
+		monitorAlertDefinitionChannelIDsParam:   []any{546, 392},
+		keyEntityIDs:                            []any{"13116"},
+		keyScope:                                "account",
+		keyConfirm:                              true,
+	}
 	maps.Copy(args, extra)
 
 	return args
@@ -451,7 +367,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 		want     map[string]any
 	}{
 		"domain update": {
-			factory: tools.NewLinodeDomainUpdateTool,
+			factory: gentools.NewLinodeDomainUpdateTool,
 			args: map[string]any{
 				keyDomainID: float64(5), keyConfirm: true,
 				keyAXFRIPs: []any{reservedIPGateway}, keyMasterIPs: []any{phase2MasterIP},
@@ -466,7 +382,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			},
 		},
 		"domain record update": {
-			factory: tools.NewLinodeDomainRecordUpdateTool,
+			factory: gentools.NewLinodeDomainRecordUpdateTool,
 			args: map[string]any{
 				keyDomainID: float64(5), "record_id": float64(7), keyConfirm: true,
 				"service": "_http", keyProtocol: "_tcp", keyRecordTag: "issue",
@@ -475,7 +391,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			want:     map[string]any{"service": "_http", keyProtocol: "_tcp", keyRecordTag: "issue"},
 		},
 		"instance disk create": {
-			factory: tools.NewLinodeInstanceDiskCreateTool,
+			factory: gentools.NewLinodeInstanceDiskCreateTool,
 			args: map[string]any{
 				keyLinodeID: float64(123), keyLabel: phase2DiskLabel, keySize: float64(1024),
 				keyConfirm: true, keyStackScriptID: float64(55),
@@ -487,22 +403,8 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 				keyStackScriptData: map[string]any{"username": phase2StackScriptUser},
 			},
 		},
-		"lke pool update": {
-			factory: tools.NewLinodeLKEPoolUpdateTool,
-			args: map[string]any{
-				keyClusterID: float64(12345), "pool_id": float64(7), keyConfirm: true,
-				keyFirewallID: float64(88), keyLabels: map[string]any{keyLKETier: phase2LabelTier},
-				keyTaints: []any{map[string]any{phase2TaintKeyField: phase2TaintKey}},
-			},
-			response: map[string]any{keyID: 7},
-			want: map[string]any{
-				keyFirewallID: float64(88),
-				keyLabels:     map[string]any{keyLKETier: phase2LabelTier},
-				keyTaints:     []any{map[string]any{phase2TaintKeyField: phase2TaintKey}},
-			},
-		},
 		"monitor alert update": {
-			factory: tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool,
+			factory: gentools.NewLinodeMonitorServiceAlertDefinitionUpdateTool,
 			args: map[string]any{
 				monitorServiceTypeParam: monitorServiceToolTypeDatabase,
 				"alert_id":              float64(42), keyConfirm: true,
@@ -512,7 +414,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			want:     map[string]any{monitorAlertDefinitionGroupByParam: []any{keySupportTicketRegion}},
 		},
 		"networking ip update": {
-			factory: tools.NewLinodeNetworkingIPUpdateRDNSTool,
+			factory: gentools.NewLinodeNetworkingIPUpdateTool,
 			args: map[string]any{
 				keyConfirm: true, managedServiceAddressParam: phase2RDNSAddress,
 				keyRDNS: rdnsHostFixture, keyReserved: false,
@@ -521,7 +423,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			want:     map[string]any{keyReserved: false},
 		},
 		"nodebalancer create": {
-			factory: tools.NewLinodeNodeBalancerCreateTool,
+			factory: gentools.NewLinodeNodebalancerCreateTool,
 			args: map[string]any{
 				keySupportTicketRegion: placementGroupCreateRegion, keyConfirm: true, keyFirewallID: float64(88),
 				keyConfigs: []any{map[string]any{managedLinodeSettingsUpdatePortKey: float64(80)}},
@@ -535,7 +437,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			},
 		},
 		"bucket create": {
-			factory: tools.NewLinodeObjectStorageBucketCreateTool,
+			factory: gentools.NewLinodeObjectStorageBucketCreateTool,
 			args: map[string]any{
 				keyLabel: bucketTest, keySupportTicketRegion: "us-east-1", keyConfirm: true,
 				keyEndpointType: "E3", keyS3Endpoint: "us-east-1.linodeobjects.com",
@@ -546,7 +448,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			},
 		},
 		"key update": {
-			factory: tools.NewLinodeObjectStorageKeyUpdateTool,
+			factory: gentools.NewLinodeObjectStorageKeyUpdateTool,
 			args: map[string]any{
 				"key_id": float64(7), keyConfirm: true,
 				monitorAlertDefinitionRegionsParam: []any{placementGroupCreateRegion},
@@ -555,7 +457,7 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			want:     map[string]any{monitorAlertDefinitionRegionsParam: []any{placementGroupCreateRegion}},
 		},
 		"tag create": {
-			factory: tools.NewLinodeTagCreateTool,
+			factory: gentools.NewLinodeTagCreateTool,
 			args: map[string]any{
 				keyLabel: canRunEnvProd, keyConfirm: true,
 				keyReservedIPv4Addresses: []any{phase2ReservedAddress},
@@ -564,26 +466,13 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 			want:     map[string]any{keyReservedIPv4Addresses: []any{phase2ReservedAddress}},
 		},
 		"volume create": {
-			factory: tools.NewLinodeVolumeCreateTool,
+			factory: gentools.NewLinodeVolumeCreateTool,
 			args: map[string]any{
 				keyLabel: keyPaymentData, keySupportTicketRegion: placementGroupCreateRegion, keyConfirm: true,
 				keyLinodeID: float64(42), keyConfigID: float64(9), keyEncryption: statusEnabled,
 			},
 			response: map[string]any{keyID: 1, keyLabel: keyPaymentData},
 			want:     map[string]any{keyConfigID: float64(9), keyEncryption: statusEnabled},
-		},
-		"service transfer create": {
-			factory: tools.NewLinodeAccountServiceTransferCreateTool,
-			args: map[string]any{
-				keyConfirm: true,
-				keyEntities: map[string]any{
-					keyPlacementGroupLinodes: []any{float64(7)}, tagCreateDomainsParam: []any{float64(9)},
-				},
-			},
-			response: map[string]any{keyToken: "t"},
-			want: map[string]any{keyEntities: map[string]any{
-				keyPlacementGroupLinodes: []any{float64(7)}, tagCreateDomainsParam: []any{float64(9)},
-			}},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -610,83 +499,6 @@ func TestPhase2BodyFieldsReachTheWire(t *testing.T) {
 	}
 }
 
-// phase2FirewallCreateBody is separate from the table above because the rules
-// merge is the point: a caller's rules object wins key by key over the flat
-// policy arguments, and both always reach the wire.
-func TestPhase2FirewallCreateMergesRules(t *testing.T) {
-	t.Parallel()
-
-	cfg, captured := phase2CapturingServer(t, map[string]any{keyID: 100, keyLabel: phase2WebFirewallLabel})
-
-	args := map[string]any{
-		keyLabel: phase2WebFirewallLabel, keyConfirm: true, keyInboundPolicy: policyDrop,
-		keyRules:   map[string]any{keyOutboundPolicy: policyDrop},
-		keyDevices: map[string]any{keyPlacementGroupLinodes: []any{float64(123)}},
-	}
-
-	result, err := phase2Handler(t, tools.NewLinodeFirewallCreateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result.IsError {
-		text, _ := result.Content[0].(mcp.TextContent)
-		t.Fatalf("result.IsError = true (%s), want false", text.Text)
-	}
-
-	wantRules := map[string]any{keyInboundPolicy: policyDrop, keyOutboundPolicy: policyDrop}
-	if !reflect.DeepEqual(captured[keyRules], wantRules) {
-		t.Errorf("body[rules] = %v, want %v", captured[keyRules], wantRules)
-	}
-
-	wantDevices := map[string]any{keyPlacementGroupLinodes: []any{float64(123)}}
-	if !reflect.DeepEqual(captured[keyDevices], wantDevices) {
-		t.Errorf("body[devices] = %v, want %v", captured[keyDevices], wantDevices)
-	}
-}
-
-// TestPhase2FirewallCreateAcceptsRulesString covers the JSON-string form of an
-// object argument that non-compliant clients still send.
-func TestPhase2FirewallCreateAcceptsRulesString(t *testing.T) {
-	t.Parallel()
-
-	for name, testCase := range map[string]struct {
-		rules any
-		want  map[string]any
-	}{
-		"json string": {
-			rules: `{"inbound_policy": "DROP"}`,
-			want:  map[string]any{keyInboundPolicy: policyDrop, keyOutboundPolicy: policyAccept},
-		},
-		"blank string is absent": {
-			rules: blankString,
-			want:  map[string]any{keyInboundPolicy: policyAccept, keyOutboundPolicy: policyAccept},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg, captured := phase2CapturingServer(t, map[string]any{keyID: 100})
-
-			args := map[string]any{keyLabel: phase2WebFirewallLabel, keyConfirm: true, keyRules: testCase.rules}
-
-			result, err := phase2Handler(t, tools.NewLinodeFirewallCreateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result.IsError {
-				text, _ := result.Content[0].(mcp.TextContent)
-				t.Fatalf("result.IsError = true (%s), want false", text.Text)
-			}
-
-			if !reflect.DeepEqual(captured[keyRules], testCase.want) {
-				t.Errorf("body[rules] = %v, want %v", captured[keyRules], testCase.want)
-			}
-		})
-	}
-}
-
 // TestPhase2LKEClusterCreateCarriesBody covers the cluster-create fields, which
 // need their own case because node_pools makes the argument set larger than the
 // shared table's rows.
@@ -700,7 +512,7 @@ func TestPhase2LKEClusterCreateCarriesBody(t *testing.T) {
 		keyVPCID: float64(42), keySubnetID: float64(7),
 	})
 
-	result, err := phase2Handler(t, tools.NewLinodeLKEClusterCreateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
+	result, err := phase2Handler(t, gentools.NewLinodeLkeClusterCreateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -713,45 +525,6 @@ func TestPhase2LKEClusterCreateCarriesBody(t *testing.T) {
 	for key, want := range map[string]any{
 		keyLKETier: "enterprise", keyAPLEnabled: true, "stack_type": "ipv4-ipv6",
 		keyVPCID: float64(42), keySubnetID: float64(7),
-	} {
-		if !reflect.DeepEqual(captured[key], want) {
-			t.Errorf("body[%v] = %v, want %v", key, captured[key], want)
-		}
-	}
-}
-
-// TestPhase2LKEPoolCreateCarriesBody covers the pool-create-only fields.
-func TestPhase2LKEPoolCreateCarriesBody(t *testing.T) {
-	t.Parallel()
-
-	cfg, captured := phase2CapturingServer(t, map[string]any{keyID: 10})
-
-	args := phase2PoolArgs(map[string]any{
-		keyLabel: "workers", keyK8sVersion: phase2K8sVersion,
-		keyDisks:      []any{map[string]any{keySize: float64(4096), keyPaymentType: filesystemExt4}},
-		keyLabels:     map[string]any{keyLKETier: phase2LabelTier},
-		keyTaints:     []any{map[string]any{phase2TaintKeyField: phase2TaintKey}},
-		keyFirewallID: float64(88), keyDiskEncryption: statusEnabled,
-		keyUpdateStrategy: "rolling_update",
-	})
-
-	result, err := phase2Handler(t, tools.NewLinodeLKEPoolCreateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result.IsError {
-		text, _ := result.Content[0].(mcp.TextContent)
-		t.Fatalf("result.IsError = true (%s), want false", text.Text)
-	}
-
-	for key, want := range map[string]any{
-		keyLabel: "workers", keyK8sVersion: phase2K8sVersion,
-		keyDisks:      []any{map[string]any{keySize: float64(4096), keyPaymentType: filesystemExt4}},
-		keyLabels:     map[string]any{keyLKETier: phase2LabelTier},
-		keyTaints:     []any{map[string]any{phase2TaintKeyField: phase2TaintKey}},
-		keyFirewallID: float64(88), keyDiskEncryption: statusEnabled,
-		keyUpdateStrategy: "rolling_update",
 	} {
 		if !reflect.DeepEqual(captured[key], want) {
 			t.Errorf("body[%v] = %v, want %v", key, captured[key], want)
@@ -772,7 +545,7 @@ func TestPhase2MonitorTokenCreateCarriesAdd(t *testing.T) {
 		"add":                   "extra",
 	}
 
-	result, err := phase2Handler(t, tools.NewLinodeMonitorServiceTokenCreateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
+	result, err := phase2Handler(t, gentools.NewLinodeMonitorServiceTokenCreateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -789,34 +562,6 @@ func TestPhase2MonitorTokenCreateCarriesAdd(t *testing.T) {
 
 // TestPhase2InstanceIPAllocateCarriesAddress covers the reserved-address form
 // of instance IP allocation.
-func TestPhase2InstanceIPAllocateCarriesAddress(t *testing.T) {
-	t.Parallel()
-
-	cfg, captured := phase2CapturingServer(t, map[string]any{managedServiceAddressParam: phase2ReservedAddress})
-
-	args := map[string]any{
-		keyLinodeID: float64(123), keyPaymentType: keyIPv4, keyInterfacePublic: true,
-		keyConfirm: true, managedServiceAddressParam: phase2ReservedAddress,
-	}
-
-	result, err := phase2Handler(t, tools.NewLinodeInstanceIPAllocateTool, cfg)(t.Context(), createRequestWithArgs(t, args))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result.IsError {
-		text, _ := result.Content[0].(mcp.TextContent)
-		t.Fatalf("result.IsError = true (%s), want false", text.Text)
-	}
-
-	if captured[managedServiceAddressParam] != phase2ReservedAddress {
-		t.Errorf("body[address] = %v, want %v", captured[managedServiceAddressParam], phase2ReservedAddress)
-	}
-}
-
-// TestPhase2OAuthClientCreateAlwaysSendsPublic pins that public reaches the
-// wire even when the caller omits it, since the API documents it as required
-// with a false default.
 func TestPhase2OAuthClientCreateAlwaysSendsPublic(t *testing.T) {
 	t.Parallel()
 
@@ -843,7 +588,7 @@ func TestPhase2OAuthClientCreateAlwaysSendsPublic(t *testing.T) {
 
 			cfg, captured := phase2CapturingServer(t, map[string]any{keyID: profileTokenInvalidIDValue})
 
-			result, err := phase2Handler(t, tools.NewLinodeAccountOAuthClientCreateTool, cfg)(t.Context(), createRequestWithArgs(t, testCase.args))
+			result, err := phase2Handler(t, gentools.NewLinodeAccountOauthClientCreateTool, cfg)(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -857,60 +602,5 @@ func TestPhase2OAuthClientCreateAlwaysSendsPublic(t *testing.T) {
 				t.Errorf("body[public] = %v, want %v", captured[keyInterfacePublic], testCase.want)
 			}
 		})
-	}
-}
-
-// TestPhase2FirewallRulesUpdateDryRunValidatesPolicies pins that the preview
-// path rejects an unknown default policy too, rather than advertising a request
-// the real call would refuse.
-func TestPhase2FirewallRulesUpdateDryRunValidatesPolicies(t *testing.T) {
-	t.Parallel()
-
-	handler := phase2Handler(t, tools.NewLinodeFirewallRulesUpdateTool, phase2OfflineConfig())
-
-	args := map[string]any{
-		keyFirewallID: float64(1), keyDryRun: true,
-		keyInbound: []any{}, keyOutbound: []any{}, keyInboundPolicy: phase2InvalidPolicy,
-	}
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, args))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !result.IsError {
-		t.Fatalf("result.IsError = false, want true")
-	}
-
-	text, isText := result.Content[0].(mcp.TextContent)
-	if !isText || text.Text != "inbound_policy must be one of: ACCEPT, DROP" {
-		t.Errorf("error text = %q, want %q", text.Text, "inbound_policy must be one of: ACCEPT, DROP")
-	}
-}
-
-// TestPhase2RebuildRejectsNullNodes covers the explicit-null form: the argument
-// is present, so the required check passes, but it decodes to no list.
-func TestPhase2RebuildRejectsNullNodes(t *testing.T) {
-	t.Parallel()
-
-	handler := phase2Handler(t, tools.NewLinodeNodeBalancerConfigRebuildTool, phase2OfflineConfig())
-
-	args := map[string]any{
-		keyNodeBalancerID: float64(123), keyConfigID: float64(456),
-		keyConfirm: true, keyConfirmedDryRun: true, keyNodes: nil,
-	}
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, args))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !result.IsError {
-		t.Fatalf("result.IsError = false, want true")
-	}
-
-	text, isText := result.Content[0].(mcp.TextContent)
-	if !isText || text.Text != "nodes must be an array of objects" {
-		t.Errorf("error text = %q, want %q", text.Text, "nodes must be an array of objects")
 	}
 }

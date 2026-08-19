@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -27,7 +27,7 @@ func TestLinodeLKETierVersionGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeLKETierVersionGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeLkeTierVersionGetTool(cfg)
 
 	t.Parallel()
 
@@ -56,7 +56,7 @@ func TestLinodeLKETierVersionGetToolTestCase(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeLKETierVersionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeLkeTierVersionGetTool(cfg)
 
 	for _, testCase := range []struct {
 		name string
@@ -131,7 +131,7 @@ func TestLinodeLKETierVersionGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeLKETierVersionGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeLkeTierVersionGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{lkeTierParam: classStandard, databaseVersionParam: lkeVersion129})
 
@@ -181,7 +181,7 @@ func TestLinodeLKETierVersionGetToolClientError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeLKETierVersionGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeLkeTierVersionGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{lkeTierParam: classStandard, databaseVersionParam: lkeVersion129})
 

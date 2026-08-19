@@ -14,6 +14,10 @@ var (
 	// ErrTemplate reports a path template whose slots do not parse, or a route
 	// whose slots disagree with its template.
 	ErrTemplate = errors.New("malformed path template")
+	// ErrAPISurface reports a declared surface this build cannot address. It is
+	// refused rather than defaulted to v4: a beta-only route answered on /v4 is
+	// a 404, and a surface with no path segment is not reachable by swapping one.
+	ErrAPISurface = errors.New("unknown API surface")
 	// ErrDeclaration reports a message whose options do not describe exactly
 	// one tool at exactly one capability tier.
 	ErrDeclaration = errors.New("broken tool declaration")
@@ -30,5 +34,6 @@ func IsContractError(err error) bool {
 		errors.Is(err, ErrValueCount) ||
 		errors.Is(err, ErrValueType) ||
 		errors.Is(err, ErrEmptyValue) ||
-		errors.Is(err, ErrTemplate)
+		errors.Is(err, ErrTemplate) ||
+		errors.Is(err, ErrAPISurface)
 }

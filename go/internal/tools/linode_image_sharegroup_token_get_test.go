@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeImageShareGroupTokenGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupTokenGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupTokenGetTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_token_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_token_get")
@@ -98,7 +98,7 @@ func TestLinodeImageShareGroupTokenGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID})
 
@@ -161,7 +161,7 @@ func TestLinodeImageShareGroupTokenGetToolRejectsInvalidTokenUuidBeforeClientCal
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeImageShareGroupTokenGetTool(cfg)
+			_, _, handler := gentools.NewLinodeImageSharegroupTokenGetTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{keyTokenUUID: value})
 
@@ -189,7 +189,7 @@ func TestLinodeImageShareGroupTokenGetToolMissingTokenUuid(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeImageShareGroupTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -229,7 +229,7 @@ func TestLinodeImageShareGroupTokenGetToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupTokenGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID})
 

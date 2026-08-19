@@ -1,14 +1,14 @@
 package tools_test
 
 import (
-	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/mcp"
-
+	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
@@ -63,35 +63,9 @@ func canRunCall(toolName, env string) map[string]any {
 func callCanRun(t *testing.T, profile func() profiles.Profile, calls []any) map[string]any {
 	t.Helper()
 
-	_, _, handler := tools.NewLinodeProfileCanRunTool(canRunFixtureCatalog, profile)
+	state := builderState(builder.NewRegistry(), canRunFixtureCatalog(), profile)
 
-	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{"calls": calls}
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Error("ok = false, want true")
-	}
-
-	var out map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	return out
+	return builderBody(t, callAnswer(t, state, tools.ProfileCanRunAnswer, nil, map[string]any{"calls": calls}))
 }
 
 // canRunResults extracts the typed results slice (checked, for forcetypeassert).
@@ -128,7 +102,7 @@ func TestLinodeProfileCanRunToolSchemaAndCapability(t *testing.T) {
 
 	t.Parallel()
 
-	tool, capability, _ := tools.NewLinodeProfileCanRunTool(canRunFixtureCatalog, canRunFixtureProfile)
+	tool, capability, _ := gentools.NewLinodeProfileCanRunTool(&config.Config{})
 	if tool.Name != canRunToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, canRunToolName)
 	}
@@ -139,6 +113,38 @@ func TestLinodeProfileCanRunToolSchemaAndCapability(t *testing.T) {
 
 	if !strings.Contains(string(tool.RawInputSchema), "calls") {
 		t.Errorf("tool.RawInputSchema missing key %v", "calls")
+	}
+}
+
+// TestLinodeProfileCanRunSkipsEntriesThatAreNotObjects covers the shape guard
+// on the calls array. The schema says each entry is an object, but the pre-check
+// reads the arguments as they arrived, so a bare string among them must be
+// passed over rather than counted or crashed on: the verdicts that follow it
+// still have to be answered.
+func TestLinodeProfileCanRunSkipsEntriesThatAreNotObjects(t *testing.T) {
+	t.Parallel()
+
+	body := callCanRun(t, canRunFixtureProfile, []any{
+		"not-an-object",
+		canRunCall(canRunReadTool, ""),
+	})
+
+	results := canRunResults(t, body)
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1: the malformed entry must be skipped", len(results))
+	}
+
+	if results[0][canRunKeyTool] != canRunReadTool {
+		t.Errorf("results[0] tool = %v, want %v", results[0][canRunKeyTool], canRunReadTool)
+	}
+
+	summary, ok := body["summary"].(map[string]any)
+	if !ok {
+		t.Fatal("summary must be an object")
+	}
+
+	if summary["total"] != float64(1) {
+		t.Errorf("summary total = %v, want 1", summary["total"])
 	}
 }
 
@@ -320,5 +326,41 @@ func TestLinodeProfileCanRunToolWildcardAllowedEnvironmentsPermitsAnyEnvironment
 
 	if !reflect.DeepEqual(results[0]["allowed"], true) {
 		t.Errorf("got %v, want %v", results[0]["allowed"], true)
+	}
+}
+
+// TestLinodeProfileCanRunToolRemediesMatchThePythonWording pins the four remedy
+// sentences. They are an exact-match contract with the Python implementation the
+// same way the reason strings above are, and they were the half of that contract
+// neither language pinned, so a one-sided reword read as green in both.
+func TestLinodeProfileCanRunToolRemediesMatchThePythonWording(t *testing.T) {
+	t.Parallel()
+
+	body := callCanRun(t, canRunFixtureProfile, []any{
+		canRunCall(canRunReadTool, ""),
+		canRunCall(canRunReadTool, canRunEnvDev),
+		canRunCall(canRunWriteTool, ""),
+		canRunCall(canRunDestroyTool, ""),
+		canRunCall(canRunUnknownTool, ""),
+	})
+
+	results := canRunResults(t, body)
+	if len(results) != 5 {
+		t.Fatalf("len(results) = %d, want %d", len(results), 5)
+	}
+
+	for index, want := range map[int]string{
+		1: "target an environment in the profile's allowed_environments, or switch to a profile that permits this environment",
+		2: "switch to a profile that permits linode_instance_create, or add it to the current profile",
+		3: "switch to a profile that permits linode_instance_delete, or use yolo on a profile that allows it",
+		4: "check spelling or call linode_profile_list_tools to discover the registered tool surface",
+	} {
+		if !reflect.DeepEqual(results[index]["remedy"], want) {
+			t.Errorf("results[%d][remedy] = %v, want %q", index, results[index]["remedy"], want)
+		}
+	}
+
+	if _, present := results[0]["remedy"]; present {
+		t.Errorf("results[0] carries a remedy %v, want none on an allowed call", results[0]["remedy"])
 	}
 }

@@ -10,15 +10,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeInstanceTransferGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceTransferGetTool(cfg)
 
 	if tool.Name != "linode_instance_transfer_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_transfer_get")
@@ -68,7 +68,7 @@ func TestLinodeInstanceTransferGetToolInvalid(t *testing.T) {
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
+			_, _, handler := gentools.NewLinodeInstanceTransferGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -130,7 +130,7 @@ func TestLinodeInstanceTransferGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceTransferGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 
@@ -187,7 +187,7 @@ func TestLinodeInstanceTransferGetToolApiError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceTransferGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceTransferGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 

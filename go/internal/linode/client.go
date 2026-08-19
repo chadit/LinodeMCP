@@ -16,6 +16,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 	"github.com/chadit/LinodeMCP/go/internal/config"
@@ -51,7 +52,13 @@ type Client struct {
 	limiter    *RateLimiter
 	baseURL    string
 	token      string
-	retryCfg   retryConfig
+	// objectStorage rides the client because the Object Storage execute hook is
+	// handed a client and no config, and widening that hook signature is an
+	// emitter change. The client is already the resolved-per-call object every
+	// other setting arrives through, so the data-plane budgets sit beside the
+	// retry policy rather than in a second channel.
+	objectStorage config.ObjectStorageConfig
+	retryCfg      retryConfig
 }
 
 // WithMaxRetries sets the maximum number of retry attempts.
@@ -86,9 +93,10 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 	retryCfg := defaultRetryConfig()
 
 	var (
-		cbThreshold int
-		cbTimeout   time.Duration
-		rateLimit   int
+		cbThreshold   int
+		cbTimeout     time.Duration
+		rateLimit     int
+		objectStorage config.ObjectStorageConfig
 	)
 
 	if cfg != nil {
@@ -107,6 +115,7 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 		cbThreshold = cfg.Resilience.CircuitBreakerThreshold
 		cbTimeout = cfg.Resilience.CircuitBreakerTimeout
 		rateLimit = cfg.Resilience.RateLimitPerMinute
+		objectStorage = cfg.ObjectStorage
 	}
 
 	for _, opt := range opts {
@@ -122,12 +131,19 @@ func NewClient(apiURL, token string, cfg *config.Config, opts ...Option) *Client
 				IdleConnTimeout:     defaultIdleTimeout,
 			},
 		},
-		baseURL:  apiURL,
-		token:    token,
-		retryCfg: retryCfg,
-		circuit:  NewCircuitBreaker(cbThreshold, cbTimeout),
-		limiter:  NewRateLimiter(rateLimit),
+		baseURL:       apiURL,
+		token:         token,
+		retryCfg:      retryCfg,
+		objectStorage: objectStorage,
+		circuit:       NewCircuitBreaker(cbThreshold, cbTimeout),
+		limiter:       NewRateLimiter(rateLimit),
 	}
+}
+
+// ObjectStorage reports the data-plane budgets this client was built with, for
+// the transfers that follow a presigned URL instead of calling a route.
+func (c *Client) ObjectStorage() config.ObjectStorageConfig {
+	return c.objectStorage
 }
 
 // makeRequest builds and executes an authenticated HTTP request against the
@@ -149,18 +165,34 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, paylo
 	return c.makeRequestWithContentType(ctx, method, endpoint, body, contentTypeJSON)
 }
 
+// onSurface answers the client that addresses one API surface, which is how a
+// route declaring a non-default surface reaches it without any request
+// primitive learning about surfaces. The copy shares the transport, the rate
+// limiter, and the circuit breaker, so a beta call spends the same budget and
+// trips the same breaker as everything else.
+//
+// The default surface is not special-cased: BaseFor answers the configured base
+// unchanged for it, so every unannotated call addresses exactly what it did
+// before surfaces existed, and the branch that would say so cannot go stale.
+func (c *Client) onSurface(segment string) *Client {
+	surfaced := *c
+	surfaced.baseURL = linoderoute.BaseFor(c.baseURL, segment)
+
+	return &surfaced
+}
+
 // makeRouteRequest resolves a tool's method and path from the proto contract,
 // so a route is declared once on its input message instead of once per client
 // method here and again in the Python client. values fill the path template's
 // slots in declared order. Resolution failures return before any request is
 // built: a path assembled from the wrong pieces still addresses a real resource.
 func (c *Client) makeRouteRequest(ctx context.Context, tool string, payload any, values ...any) (*http.Response, error) {
-	method, endpoint, err := routedRequest(tool, "", values)
+	method, endpoint, segment, err := routedRequest(tool, "", values)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.makeRequest(ctx, method, endpoint, payload)
+	return c.onSurface(segment).makeRequest(ctx, method, endpoint, payload)
 }
 
 // makeRouteRequestQuery is makeRouteRequest for a call site that also sends an
@@ -173,12 +205,12 @@ func (c *Client) makeRouteRequestQuery(
 	payload any,
 	values ...any,
 ) (*http.Response, error) {
-	method, endpoint, err := routedRequest(tool, rawQuery, values)
+	method, endpoint, segment, err := routedRequest(tool, rawQuery, values)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.makeRequest(ctx, method, endpoint, payload)
+	return c.onSurface(segment).makeRequest(ctx, method, endpoint, payload)
 }
 
 // makeRouteRequestContentType is makeRouteRequest for a call site that sends a
@@ -192,25 +224,25 @@ func (c *Client) makeRouteRequestContentType(
 	body io.Reader,
 	values ...any,
 ) (*http.Response, error) {
-	method, endpoint, err := routedRequest(tool, "", values)
+	method, endpoint, segment, err := routedRequest(tool, "", values)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.makeRequestWithContentType(ctx, method, endpoint, body, contentType)
+	return c.onSurface(segment).makeRequestWithContentType(ctx, method, endpoint, body, contentType)
 }
 
 // routedRequest resolves the method and path a tool declares and attaches the
 // query the call site composed. It is the only place in this package that turns
 // a tool name into a request target, so every contract failure reads the same
 // and stays distinguishable from a transport failure.
-func routedRequest(tool, rawQuery string, values []any) (string, string, error) {
-	method, endpoint, err := linoderoute.Resolve(tool, values...)
+func routedRequest(tool, rawQuery string, values []any) (string, string, string, error) {
+	method, endpoint, segment, err := linoderoute.Resolve(tool, values...)
 	if err != nil {
-		return "", "", fmt.Errorf("route request: %w", err)
+		return "", "", "", fmt.Errorf("route request: %w", err)
 	}
 
-	return method, withRawQuery(endpoint, rawQuery), nil
+	return method, withRawQuery(endpoint, rawQuery), segment, nil
 }
 
 // withRawQuery attaches an already-encoded query string to a resolved path. The
@@ -226,11 +258,20 @@ func withRawQuery(path, rawQuery string) string {
 }
 
 func (c *Client) makeRequestWithContentType(ctx context.Context, method, endpoint string, body io.Reader, contentType string) (*http.Response, error) {
+	return c.makeSurfacedRequestWithContentType(ctx, c.baseURL, method, endpoint, body, contentType)
+}
+
+func (c *Client) makeSurfacedRequestWithContentType(
+	ctx context.Context,
+	base, method, endpoint string,
+	body io.Reader,
+	contentType string,
+) (*http.Response, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 
-	rawURL := c.baseURL + endpoint
+	rawURL := base + endpoint
 
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
@@ -308,9 +349,22 @@ func (c *Client) handleResponse(resp *http.Response, target any) error {
 // decoding with protojson and discarding fields the message does not model,
 // since the Linode API may return more fields than a message declares.
 func (c *Client) handleProtoResponse(resp *http.Response, msg proto.Message) error {
+	_, err := c.handleProtoResponseSubject(resp, "", msg)
+
+	return err
+}
+
+// handleProtoResponseSubject also answers with the body it decoded, for the
+// tools whose answer restores what the decode drops. subject names the call in
+// the report when the API answers with something that is not a JSON object,
+// which a decoder's own complaint cannot do. An empty subject skips that check,
+// which is the read path, where no tool pins the wording.
+func (c *Client) handleProtoResponseSubject(
+	resp *http.Response, subject string, msg proto.Message,
+) (json.RawMessage, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	if resp.StatusCode >= httpBadRequest {
@@ -319,14 +373,43 @@ func (c *Client) handleProtoResponse(resp *http.Response, msg proto.Message) err
 			typed.Method = resp.Request.Method
 		}
 
-		return apiErr
+		return nil, apiErr
+	}
+
+	// A free-form payload is the one shape a JSON null has an exact reading in:
+	// the API sent no members, which is the empty object. protojson refuses the
+	// literal itself, and on any other message a null would be a guess at what
+	// the API meant, so it stays refused there.
+	if isFreeForm(msg) && isNullBody(body) {
+		body = []byte("{}")
+	}
+
+	// Only a body that parsed reaches the shape check: bytes that are not JSON
+	// at all are the decoder's to report, and Python draws the same line, so a
+	// truncated answer names its position in both languages.
+	if subject != "" && json.Valid(body) && !IsObjectBody(body) {
+		return nil, fmt.Errorf("%s %w", subject, ErrWriteResponseNotObject)
 	}
 
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, msg); err != nil {
-		return fmt.Errorf("failed to unmarshal proto response: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal proto response: %w", err)
 	}
 
-	return nil
+	return body, nil
+}
+
+// isNullBody reports whether an answer is the JSON null literal and nothing
+// else, which is how the API says it sent no members at all.
+func isNullBody(raw json.RawMessage) bool {
+	return bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+// isFreeForm reports whether a decode target is the well-known Struct, the
+// shape a route with no schema to model answers into.
+func isFreeForm(msg proto.Message) bool {
+	_, ok := msg.(*structpb.Struct)
+
+	return ok
 }
 
 func (*Client) handleErrorResponse(statusCode int, body []byte, resp *http.Response) error {
@@ -385,4 +468,43 @@ func parseRetryAfter(resp *http.Response) time.Duration {
 	}
 
 	return 0
+}
+
+// routedGet resolves the tool's contracted route, issues the request, and
+// decodes the answer into one T, so a typed getter states only its tool,
+// operation, and path values. It resolves the route and calls makeRequest
+// itself because cmd/route-dump reads a tool-carrying builder only one hop
+// from the request layer.
+func routedGet[T any](ctx context.Context, client *Client, operation, tool string, values ...any) (*T, error) {
+	method, endpoint, segment, err := routedRequest(tool, "", values)
+	if err != nil {
+		return nil, wrapRequestError(operation, err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := client.onSurface(segment).makeRequest(ctx, method, endpoint, nil)
+	if err != nil {
+		return nil, wrapRequestError(operation, err)
+	}
+
+	defer drainClose(resp)
+
+	var out T
+	if err := client.handleResponse(resp, &out); err != nil {
+		return nil, err
+	}
+
+	return &out, nil
+}
+
+// listData unwraps a fetched paginated envelope, passing a fetch error
+// through, so list methods can ride routedGet without restating the unwrap.
+func listData[T any](response *PaginatedResponse[T], err error) ([]T, error) {
+	if err != nil {
+		return nil, err
+	}
+
+	return response.Data, nil
 }

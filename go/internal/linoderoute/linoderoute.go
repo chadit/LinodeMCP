@@ -35,18 +35,90 @@ type Route struct {
 	Method   string
 	Template string
 	Slots    []string
+	// Surface is kept as declared rather than resolved to a segment, so Validate
+	// reports a value this build cannot address at startup instead of leaving it
+	// to surface as a failed request.
+	Surface linodev1.ApiSurface
+}
+
+// DefaultSurfaceSegment is the base path segment nearly every route answers on,
+// and what an undeclared surface reads as.
+const DefaultSurfaceSegment = "v4"
+
+// SurfacedTools names every tool whose route answers on something other than
+// the default surface, tool-sorted. It is the contract's own answer to "what is
+// on beta", which a startup check counts to decide whether a base it cannot
+// re-point matters.
+//
+// A surface that does not resolve is left out: Validate reports that, and
+// saying it twice in different words would not help.
+func SurfacedTools() []string {
+	found := make([]string, 0)
+
+	for _, route := range All() {
+		segment, err := SurfaceSegment(route.Surface)
+		if err != nil || segment == DefaultSurfaceSegment {
+			continue
+		}
+
+		found = append(found, route.Tool)
+	}
+
+	return found
+}
+
+// Repointable reports whether a configured base is one the surface swap can move
+// off the default. A base that is not gets used exactly as configured, which is
+// right for a mock or a proxy and wrong for a typo, and nothing in the request
+// path can tell those apart.
+func Repointable(base string) bool {
+	return strings.HasSuffix(base, "/"+DefaultSurfaceSegment)
+}
+
+// BaseFor is the base one surface's calls go to, given the configured one.
+//
+// Only a base whose last segment is the default surface is re-pointed, so a
+// proxy, a mock, or a base an environment already pointed at the beta surface is
+// used exactly as configured. That is what keeps the per-environment apiUrl
+// override winning: the surface chooses among versions of the same deployment,
+// it does not choose the deployment.
+//
+// It lives here rather than on the client because which base a surface answers
+// on is what the contract means, and both languages implement this one rule.
+func BaseFor(base, segment string) string {
+	trimmed, found := strings.CutSuffix(base, "/"+DefaultSurfaceSegment)
+	if !found {
+		return base
+	}
+
+	return trimmed + "/" + segment
+}
+
+// SurfaceSegment is the base path segment a declared surface names. An unknown
+// value is an error rather than the default: answering a beta-only route on /v4
+// is a 404, and answering a v4 route on /v4beta reaches a different resource
+// surface, so guessing either way addresses the wrong thing.
+func SurfaceSegment(surface linodev1.ApiSurface) (string, error) {
+	switch surface {
+	case linodev1.ApiSurface_API_SURFACE_UNSPECIFIED, linodev1.ApiSurface_API_SURFACE_V4:
+		return DefaultSurfaceSegment, nil
+	case linodev1.ApiSurface_API_SURFACE_V4BETA:
+		return "v4beta", nil
+	}
+
+	return "", fmt.Errorf("%w: %s", ErrAPISurface, surface)
 }
 
 // For returns the route a tool declares.
 func For(tool string) (Route, error) {
 	var found Route
 
-	walk(func(declared *linodev1.ToolRoute) bool {
+	walk(func(message protoreflect.MessageDescriptor, declared *linodev1.ToolRoute) bool {
 		if declared.GetTool() != tool {
 			return true
 		}
 
-		found = newRoute(declared)
+		found = newRoute(message, declared)
 
 		return false
 	})
@@ -62,8 +134,8 @@ func For(tool string) (Route, error) {
 func All() []Route {
 	routes := make([]Route, 0)
 
-	walk(func(declared *linodev1.ToolRoute) bool {
-		routes = append(routes, newRoute(declared))
+	walk(func(message protoreflect.MessageDescriptor, declared *linodev1.ToolRoute) bool {
+		routes = append(routes, newRoute(message, declared))
 
 		return true
 	})
@@ -75,27 +147,43 @@ func All() []Route {
 	return routes
 }
 
-// Resolve returns the method and the filled path a tool's declared route
-// produces, both in one call because a request needs both.
-func Resolve(tool string, values ...any) (string, string, error) {
+// Resolve returns the method, the filled path, and the base path segment a
+// tool's declared route produces, the three in one call because a request needs
+// all three. Resolving the segment here rather than at the call site is what
+// lets a hand-written client method reach a beta route without naming it.
+func Resolve(tool string, values ...any) (string, string, string, error) {
 	route, err := For(tool)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
-	endpoint, err := route.Endpoint(values...)
+	return route.Target(values...)
+}
+
+// Target is the method, filled path, and base segment one route produces. It
+// takes the route rather than a tool name so the refusals below can be reached
+// with a route built by hand: the shipped contract declares no surface this
+// build cannot address, which is what the gates are for, so nothing generated
+// can exercise them.
+func (r *Route) Target(values ...any) (string, string, string, error) {
+	endpoint, err := r.Endpoint(values...)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
-	return route.Method, endpoint, nil
+	segment, err := SurfaceSegment(r.Surface)
+	if err != nil {
+		return "", "", "", fmt.Errorf("%w: %s", err, r.Tool)
+	}
+
+	return r.Method, endpoint, segment, nil
 }
 
 // Endpoint fills Template's slots from values, in declared order. A wrong value
 // count or an empty value is an error rather than a shorter path: "/tags/" still
 // reaches the API and addresses the parent collection instead of one resource,
 // which for a DELETE is every resource in it.
-func (r Route) Endpoint(values ...any) (string, error) {
+func (r *Route) Endpoint(values ...any) (string, error) {
 	if len(values) != len(r.Slots) {
 		return "", fmt.Errorf("%w: %s takes %d, got %d",
 			ErrValueCount, r.Tool, len(r.Slots), len(values))
@@ -134,7 +222,7 @@ func (r Route) Endpoint(values ...any) (string, error) {
 // check reports a route whose slots disagree with its template. Reading the
 // slots back out proves both describe the same path, which is what a caller
 // relies on when it passes values positionally.
-func (r Route) check() error {
+func (r *Route) check() error {
 	parts, err := split(r.Template)
 	if err != nil {
 		return err
@@ -143,6 +231,12 @@ func (r Route) check() error {
 	if found := slotNames(parts); !slices.Equal(found, r.Slots) {
 		return fmt.Errorf("%w: %s declares slots %v for %s",
 			ErrTemplate, r.Tool, r.Slots, r.Template)
+	}
+
+	// A surface this build cannot address has to stop the server, not wait to
+	// come out as one tool's failed request.
+	if _, err := SurfaceSegment(r.Surface); err != nil {
+		return fmt.Errorf("%w: %s", err, r.Tool)
 	}
 
 	return nil
@@ -155,7 +249,23 @@ func (r Route) check() error {
 // call. It takes no arguments because tool_meta tells a meta tool apart from a
 // tool someone forgot to route, so no caller has to supply the routed set.
 func Validate() error {
-	return ValidateContract(declarations(), All())
+	return ValidateAll(inputArguments(), declarations(), All())
+}
+
+// ValidateAll is Validate over supplied inputs, exported for the same reason
+// ValidateContract is: the gates refuse every shape below before it can be
+// generated, so proving the checks still bite means handing them a broken
+// contract directly.
+//
+// The argument guard runs first because it is the one defect that makes the
+// rest meaningless: a tool taking its surface as an argument answers on
+// whichever surface the caller asked for, whatever the route says.
+func ValidateAll(inputs map[string][]string, declared []Declaration, routes []Route) error {
+	if err := ValidateArguments(inputs); err != nil {
+		return err
+	}
+
+	return ValidateContract(declared, routes)
 }
 
 // ValidateContract is Validate over supplied inputs. Exported for the same
@@ -246,7 +356,7 @@ func writeValue(built *strings.Builder, value any, slot, tool string) error {
 		return fmt.Errorf("%w: %s slot %s", ErrEmptyValue, tool, slot)
 	}
 
-	built.WriteString(escapeSegment(text))
+	built.WriteString(EscapeSegment(text))
 
 	return nil
 }
@@ -269,13 +379,20 @@ func slotText(value any) (string, error) {
 	return "", fmt.Errorf("%w: %T", ErrValueType, value)
 }
 
-// newRoute builds the route one declaration describes.
-func newRoute(declared *linodev1.ToolRoute) Route {
+// newRoute builds the route one declaration describes. The surface rides on the
+// message rather than inside ToolRoute, so it is read from the same descriptor
+// here instead of costing a second walk.
+func newRoute(message protoreflect.MessageDescriptor, declared *linodev1.ToolRoute) Route {
+	surface, _ := proto.GetExtension(
+		message.Options(), linodev1.E_ToolApiSurface,
+	).(linodev1.ApiSurface)
+
 	route := Route{
 		Tool:     declared.GetTool(),
 		Method:   declared.GetMethod(),
 		Template: declared.GetPath(),
 		Slots:    nil,
+		Surface:  surface,
 	}
 
 	// A template that does not parse leaves the slots empty, which check
@@ -293,7 +410,7 @@ func newRoute(declared *linodev1.ToolRoute) Route {
 // out here. Nothing memoizes, since this repo bans package-level state; passing
 // the declaration rather than a built Route keeps that affordable, because a
 // lookup parses no other tool's template and the descriptors are compiled in.
-func walk(visit func(declared *linodev1.ToolRoute) bool) {
+func walk(visit func(message protoreflect.MessageDescriptor, declared *linodev1.ToolRoute) bool) {
 	walkMessages(func(message protoreflect.MessageDescriptor) bool {
 		declared, isRoute := proto.GetExtension(
 			message.Options(), linodev1.E_ToolRoute,
@@ -302,7 +419,7 @@ func walk(visit func(declared *linodev1.ToolRoute) bool) {
 			return true
 		}
 
-		return visit(declared)
+		return visit(message, declared)
 	})
 }
 

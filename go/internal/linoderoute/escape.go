@@ -7,7 +7,7 @@ import "strings"
 // escape the same label into the same bytes.
 const hexDigits = "0123456789ABCDEF"
 
-// escapeSegment percent-encodes value so it fills exactly one path segment.
+// EscapeSegment percent-encodes value so it fills exactly one path segment.
 //
 // The kept set is RFC 3986's unreserved characters plus the colon, stricter than
 // net/url's PathEscape: that leaves the sub-delimiters ("@&+=,;$" among them)
@@ -26,7 +26,10 @@ const hexDigits = "0123456789ABCDEF"
 //
 // Escaping here rather than at the hundreds of call sites keeps a forgotten call
 // from addressing a different route without failing.
-func escapeSegment(value string) string {
+// It is exported for the generated previews, which fill a path template
+// themselves instead of routing through Resolve and would otherwise report a
+// slash-bearing id as extra path segments the live call never sends.
+func EscapeSegment(value string) string {
 	if allDots(value) {
 		return strings.Repeat("%2E", len(value))
 	}
@@ -84,7 +87,7 @@ func needsEscape(value string) bool {
 }
 
 // keptLiteral reports whether a byte stands for itself in a path segment: the
-// RFC 3986 unreserved set plus the colon, per the escapeSegment comment.
+// RFC 3986 unreserved set plus the colon, per the EscapeSegment comment.
 // Non-ASCII bytes fall through to false, which encodes a multi-byte rune as the
 // percent-escaped UTF-8 the API expects.
 func keptLiteral(char byte) bool {

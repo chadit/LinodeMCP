@@ -14,18 +14,34 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 const (
-	keyMode      = "mode"
-	keyPlanID    = "plan_id"
+	// instanceUpdatedStamp is the fixed timestamp the drift cases hold an
+	// instance's Updated at. Rehomed here when the profile TFA confirm tests it
+	// used to share went out with that tool's migration.
+	instanceUpdatedStamp = "2026-01-01T00:00:00"
+
+	keyMode   = "mode"
+	keyPlanID = "plan_id"
+	// toolInstanceResize is the one CapWrite tool on the plan/apply flow, named
+	// by its opt-in config, its staged tests, and its generated factory's tests.
+	toolInstanceResize = "linode_instance_resize"
+
 	labelWebProd = "web-prod-01"
 	// tsCosmeticBump is the post-plan value a two-stage test writes into a
 	// hash-ignore field to prove a cosmetic change does not refuse the apply.
 	tsCosmeticBump = "2026-09-09T09:09:09"
+
+	// keyStateID is the bare identifier a fetched resource state carries, as
+	// opposed to the path argument the tool is called with.
+	keyStateID = "id"
+	// keyVLANLinodes is the attached-instance list a VLAN state carries.
+	keyVLANLinodes = "linodes"
 )
 
 // twoStageDeleteServer serves GET /linode/instances/123 from the supplied
@@ -83,7 +99,7 @@ func TestInstanceDeleteTwoStagePlanThenApply(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -163,7 +179,7 @@ func TestInstanceDeleteTwoStageApplyDrift(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	id := makePlan(ctx, t, handler)
 
@@ -213,7 +229,7 @@ func TestTwoStagePlanIncludesDependencies(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeDeleteTool(cfg)
 
 	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyVolumeID: float64(123),
@@ -263,76 +279,6 @@ func rebuildServer(
 	}}
 }
 
-// TestInstanceRebuildTwoStagePlanThenApply proves the CapDestroy rebuild action,
-// which routes through the shared destroy flow, honors plan/apply: the plan
-// produces an id and runs the dependency walk (so the body carries warnings)
-// without rebuilding, and the apply issues the POST.
-func TestInstanceRebuildTwoStagePlanThenApply(t *testing.T) {
-	t.Parallel()
-
-	state := instanceState()
-	rebuilt := &atomic.Bool{}
-	cfg := rebuildServer(t, state, rebuilt)
-
-	store := twostage.NewPlanStore()
-	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceRebuildTool(cfg)
-
-	rebuildArgs := map[string]any{
-		keyLinodeID: float64(123),
-		keyImage:    "linode/ubuntu24.04",
-		keyRootPass: "Abcdefgh1234", // betterleaks:allow test fixture
-	}
-
-	planArgs := maps.Clone(rebuildArgs)
-	planArgs[keyMode] = twostage.ModePlan
-
-	planResult, err := handler(ctx, createRequestWithArgs(t, planArgs))
-	if err != nil {
-		t.Fatalf("plan returned error: %v", err)
-	}
-
-	if planResult.IsError {
-		t.Fatalf("plan IsError, text: %s", dryRunResultText(t, planResult))
-	}
-
-	if rebuilt.Load() {
-		t.Fatal("plan must not issue a rebuild")
-	}
-
-	plan := decodeBody(t, dryRunResultText(t, planResult))
-
-	id, _ := plan["plan_id"].(string)
-	if id == "" {
-		t.Fatalf("plan response has no plan_id: %v", plan)
-	}
-
-	if _, ok := plan["warnings"].([]any); !ok {
-		t.Errorf("rebuild plan should carry the walk's warnings, got: %v", plan["warnings"])
-	}
-
-	applyArgs := maps.Clone(rebuildArgs)
-	applyArgs[keyMode] = twostage.ModeApply
-	applyArgs[keyPlanID] = id
-
-	applyResult, err := handler(ctx, createRequestWithArgs(t, applyArgs))
-	if err != nil {
-		t.Fatalf("apply returned error: %v", err)
-	}
-
-	if applyResult.IsError {
-		t.Fatalf("apply IsError, text: %s", dryRunResultText(t, applyResult))
-	}
-
-	if !rebuilt.Load() {
-		t.Fatal("apply must issue a rebuild")
-	}
-
-	if !strings.Contains(dryRunResultText(t, applyResult), "rebuilt with image") {
-		t.Errorf("apply text does not confirm rebuild: %s", dryRunResultText(t, applyResult))
-	}
-}
-
 // resizeServer serves the GET instance and GET disks that the resize composite
 // fetch reads, and records the POST that applies the resize. The disk list is
 // stable across plan and apply, so only an intentional change would drift.
@@ -351,7 +297,7 @@ func resizeServer(
 			resized.Store(true)
 			w.WriteHeader(http.StatusOK)
 		case strings.HasSuffix(r.URL.Path, "/disks"):
-			disks := map[string]any{keyData: []any{map[string]any{"id": 1, keySize: 25600, "filesystem": "ext4"}}}
+			disks := map[string]any{keyData: []any{map[string]any{keySupportTicketID: 1, keySize: 25600, "filesystem": "ext4"}}}
 			if err := json.NewEncoder(w).Encode(disks); err != nil {
 				t.Errorf("encode disks: %v", err)
 			}
@@ -379,11 +325,11 @@ func TestInstanceResizeTwoStageOptInPlanThenApply(t *testing.T) {
 
 	resized := &atomic.Bool{}
 	cfg := resizeServer(t, box, resized)
-	cfg.TwoStage = config.TwoStageConfig{OptIn: map[string]bool{"linode_instance_resize": true}}
+	cfg.TwoStage = config.TwoStageConfig{OptIn: map[string]bool{toolInstanceResize: true}}
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceResizeTool(cfg)
 
 	resizeArgs := map[string]any{keyInstanceID: float64(123), keyType: typeG6Standard1}
 
@@ -446,7 +392,7 @@ func TestInstanceResizeTwoStageDefaultOff(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceResizeTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceResizeTool(cfg)
 
 	if _, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -465,6 +411,50 @@ func TestInstanceResizeTwoStageDefaultOff(t *testing.T) {
 	}
 }
 
+// TestInstanceResizeTwoStageRefusesABadArgumentBeforeReadingState proves the
+// staged branch answers the argument first: a plan that fetched state for a call
+// it was going to refuse would spend a request saying so.
+//
+// It is also the one order the migration changed. The hand handler entered the
+// flow only with both arguments present and otherwise fell through to the
+// confirm gate, so a staged call naming no type used to answer the confirm
+// sentence; Python's hand handler answered the argument, and both languages now
+// do.
+func TestInstanceResizeTwoStageRefusesABadArgumentBeforeReadingState(t *testing.T) {
+	t.Parallel()
+
+	box := &atomic.Pointer[linode.Instance]{}
+	box.Store(&linode.Instance{ID: 123, Type: typeG6Nanode1})
+
+	resized := &atomic.Bool{}
+	cfg := resizeServer(t, box, resized)
+	cfg.TwoStage = config.TwoStageConfig{OptIn: map[string]bool{toolInstanceResize: true}}
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := gentools.NewLinodeInstanceResizeTool(cfg)
+
+	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
+		keyInstanceID: float64(123),
+		keyMode:       twostage.ModePlan,
+	}))
+	if err != nil {
+		t.Fatalf("plan call returned error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Fatalf("plan accepted a call naming no type, answering: %s", dryRunResultText(t, result))
+	}
+
+	if got := dryRunResultText(t, result); got != "type is required" {
+		t.Errorf("refusal = %q, want %q", got, "type is required")
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("a refused plan must store nothing, store.Len() = %d", store.Len())
+	}
+}
+
 // TestInstanceDeleteTwoStageApplyUnknownPlan covers an apply that references a
 // plan id the store never held.
 func TestInstanceDeleteTwoStageApplyUnknownPlan(t *testing.T) {
@@ -476,7 +466,7 @@ func TestInstanceDeleteTwoStageApplyUnknownPlan(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -508,7 +498,7 @@ func TestInstanceDeleteTwoStageApplyExpired(t *testing.T) {
 	current := time.Now()
 	store := twostage.NewPlanStore(twostage.WithClock(func() time.Time { return current }))
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	id := makePlan(ctx, t, handler)
 
@@ -543,7 +533,7 @@ func TestInstanceDeleteTwoStageApplyArgsMismatch(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	id := makePlan(ctx, t, handler)
 
@@ -601,7 +591,7 @@ func TestInstanceDeleteTwoStageIgnoresCosmeticDrift(t *testing.T) {
 
 	state := &atomic.Pointer[linode.Instance]{}
 	state.Store(&linode.Instance{
-		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: tfaConfirmExpiry,
+		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: instanceUpdatedStamp,
 	})
 
 	deleted := &atomic.Bool{}
@@ -609,7 +599,7 @@ func TestInstanceDeleteTwoStageIgnoresCosmeticDrift(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	id := makePlan(ctx, t, handler)
 
@@ -680,202 +670,6 @@ type twoStageSingleIDCase struct {
 	idKey     string
 }
 
-// twoStageSingleIDCases lists the opted-in single-ID delete tools whose fetched
-// state carries an "updated" timestamp the per-type HashIgnore list strips. The
-// table lives in its own function so the test body stays within maintidx's
-// maintainability bound.
-func twoStageSingleIDCases() []twoStageSingleIDCase {
-	return []twoStageSingleIDCase{
-		{
-			name: "volume_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeVolumeDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyVolumeID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "data-01", keyStatus: statusActive, keyUpdated: "2025-12-01T00:00:00"},
-		},
-		{
-			name: "lke_cluster_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeLKEClusterDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyClusterID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "lke-prod", keyStatus: statusReady, keyUpdated: "2025-11-01T00:00:00"},
-		},
-		{
-			name: "firewall_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeFirewallDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyFirewallID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "fw-edge", keyStatus: statusEnabled, keyUpdated: "2025-10-01T00:00:00"},
-		},
-		{
-			name: "nodebalancer_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeNodeBalancerDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyNodeBalancerID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "nb-app", keyUpdated: "2025-09-01T00:00:00"},
-		},
-		{
-			name: "vpc_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeVPCDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyVPCID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "vpc-core", keyUpdated: "2025-08-01T00:00:00"},
-		},
-		{
-			name: "domain_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeDomainDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyDomainID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyStatus: statusActive, keyUpdated: "2025-07-01T00:00:00"},
-		},
-		{
-			name: "stackscript_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeStackScriptDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyStackScriptID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "deploy-web", "deployments_total": float64(7), keyUpdated: "2025-06-01T00:00:00"},
-		},
-		{
-			name: "sshkey_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeSSHKeyDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keySSHKeyID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "laptop-key", keyUpdated: "2025-05-01T00:00:00"},
-		},
-		{
-			name: "placement_group_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodePlacementGroupDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyPlacementGroupID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "pg-rack", keyUpdated: "2025-04-01T00:00:00"},
-		},
-		{
-			name: "image_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeImageDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyImageID,
-			idVal:     "private/123",
-			baseState: map[string]any{keyLabel: "golden-img", keyStatus: statusAvailable, keyUpdated: "2025-03-01T00:00:00"},
-		},
-		{
-			name: "database_instance_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyInstanceID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "db-prod", keyStatus: statusActive, keyUpdated: "2025-02-01T00:00:00"},
-		},
-		{
-			name: "database_postgresql_instance_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyInstanceID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "pg-prod", keyStatus: statusActive, keyUpdated: "2025-01-15T00:00:00"},
-		},
-		{
-			name: "image_sharegroup_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeImageShareGroupDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyShareGroupID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "share-team", keyUpdated: "2025-01-10T00:00:00"},
-		},
-		{
-			name: "image_sharegroup_token_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeImageShareGroupTokenDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyTokenUUID,
-			idVal:     "11111111-1111-1111-1111-111111111111",
-			baseState: map[string]any{keyLabel: "share-team", keyUpdated: "2025-01-09T00:00:00"},
-		},
-		{
-			name: "instance_backups_cancel",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeInstanceBackupsCancelTool(cfg)
-
-				return h
-			},
-			idKey:     keyLinodeID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "web-01", keyStatus: statusRunning, keyUpdated: "2025-01-08T00:00:00"},
-		},
-		{
-			name: "lke_kubeconfig_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeLKEKubeconfigDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyClusterID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "lke-kc", keyStatus: statusReady, keyUpdated: "2025-01-07T00:00:00"},
-		},
-		{
-			name: "lke_service_token_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
-
-				return h
-			},
-			idKey:     keyClusterID,
-			idVal:     float64(123),
-			baseState: map[string]any{keyLabel: "lke-st", keyStatus: statusReady, keyUpdated: "2025-01-06T00:00:00"},
-		},
-	}
-}
-
 // TestTwoStageDeleteToolsAcrossResources runs plan then apply against each
 // opted-in single-ID delete tool, bumping only a hash-ignore field between the
 // two calls. Each tool must produce a plan_id, skip the DELETE during plan, then
@@ -932,7 +726,10 @@ func TestTwoStageDeleteToolsAcrossResources(t *testing.T) {
 }
 
 // twoStagePlanID runs the plan call for a delete tool, asserts the plan did not
-// delete and was stored, and returns its plan_id for the follow-up apply.
+// delete and was stored, and returns its plan_id for the follow-up apply. It
+// also fails a row whose fetched state drops the timestamp the caller is about
+// to bump, since that row would pass without the HashIgnore list it claims to
+// prove.
 func twoStagePlanID(
 	ctx context.Context,
 	t *testing.T,
@@ -960,9 +757,16 @@ func twoStagePlanID(
 		t.Fatal("plan must not issue a DELETE")
 	}
 
-	id, _ := decodeBody(t, dryRunResultText(t, planResult))["plan_id"].(string)
+	body := decodeBody(t, dryRunResultText(t, planResult))
+
+	id, _ := body["plan_id"].(string)
 	if id == "" {
 		t.Fatalf("plan response has no plan_id")
+	}
+
+	current, _ := body["current_state"].(map[string]any)
+	if _, carried := current[keyUpdated]; !carried {
+		t.Fatalf("fetched state has no %q field, so bumping it proves nothing: %v", keyUpdated, current)
 	}
 
 	if store.Len() != 1 {
@@ -1034,7 +838,7 @@ func TestTwoStageTwoIDDeleteTools(t *testing.T) {
 		{
 			name: "instance_disk_delete",
 			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeInstanceDiskDeleteTool(cfg)
+				_, _, h := gentools.NewLinodeInstanceDiskDeleteTool(cfg)
 
 				return h
 			},
@@ -1047,7 +851,7 @@ func TestTwoStageTwoIDDeleteTools(t *testing.T) {
 		{
 			name: "vpc_subnet_delete",
 			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeVPCSubnetDeleteTool(cfg)
+				_, _, h := gentools.NewLinodeVPCSubnetDeleteTool(cfg)
 
 				return h
 			},
@@ -1060,7 +864,7 @@ func TestTwoStageTwoIDDeleteTools(t *testing.T) {
 		{
 			name: "domain_record_delete",
 			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeDomainRecordDeleteTool(cfg)
+				_, _, h := gentools.NewLinodeDomainRecordDeleteTool(cfg)
 
 				return h
 			},
@@ -1073,7 +877,7 @@ func TestTwoStageTwoIDDeleteTools(t *testing.T) {
 		{
 			name: "lke_pool_delete",
 			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeLKEPoolDeleteTool(cfg)
+				_, _, h := gentools.NewLinodeLkePoolDeleteTool(cfg)
 
 				return h
 			},
@@ -1086,7 +890,7 @@ func TestTwoStageTwoIDDeleteTools(t *testing.T) {
 		{
 			name: "firewall_device_delete",
 			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeFirewallDeviceDeleteTool(cfg)
+				_, _, h := gentools.NewLinodeFirewallDeviceDeleteTool(cfg)
 
 				return h
 			},
@@ -1159,7 +963,7 @@ func TestTwoStageConfigTTLOverride(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -1199,7 +1003,7 @@ func TestTwoStageConfigOptOutFallsThrough(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -1237,7 +1041,7 @@ func TestTwoStageConfigPerToolTTLOverride(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	planResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -1280,7 +1084,7 @@ func TestTwoStagePlanFetchError(t *testing.T) {
 
 	store := twostage.NewPlanStore()
 	ctx := tools.WithPlanStore(t.Context(), store)
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceDeleteTool(cfg)
 
 	result, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -1320,7 +1124,7 @@ func TestTwoStagePlanRejectsUndecodableState(t *testing.T) {
 	result, err := tools.RunDestructiveAction(ctx, &request, cfg, &tools.DestructiveAction{
 		ToolName: "linode_instance_delete",
 		Method:   http.MethodDelete,
-		Path:     instanceUpdatePath,
+		Path:     instancePath123,
 		FetchState: func(context.Context, *linode.Client) (any, error) {
 			return map[string]any{"transfer_bytes": json.Number("1e1000")}, nil
 		},
@@ -1355,139 +1159,24 @@ func decodeBody(t *testing.T, text string) map[string]any {
 	return body
 }
 
-// twoStageMultiArgCase drives a delete tool whose path is keyed by something
-// other than a single int or two ints (region/label, an IP address, a string
-// node id, an IPv6 range, a tag label). args is the tool's full non-control
-// argument set, replayed identically on plan and apply.
-type twoStageMultiArgCase struct {
+// twoStageUnchangedStateCase drives a delete tool through plan then apply with
+// nothing moving in between. args is the tool's full non-control argument set,
+// replayed identically on both calls.
+type twoStageUnchangedStateCase struct {
 	handlerOf func(*config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	args      map[string]any
 	baseState map[string]any
 	name      string
 }
 
-// twoStageMultiArgCases lists the opted-in delete tools that take a non-int-ID
-// path. Their fetched state carries no cosmetic timestamp (HashIgnore is nil),
-// so the plan and apply run against identical state and the apply must execute
-// without a drift refusal. The table lives in its own function to keep the test
-// body within maintidx's bound.
-func twoStageMultiArgCases() []twoStageMultiArgCase {
-	return []twoStageMultiArgCase{
-		{
-			name: "instance_ip_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeInstanceIPDeleteTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.7"},
-			baseState: map[string]any{keyAddress: "203.0.113.7", keyType: keyIPv4, keyInterfacePublic: true},
-		},
-		{
-			name: "reserved_ip_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeReservedIPDeleteTool(cfg)
-
-				return h
-			},
-			args: map[string]any{keyAddress: reservedIPAddressFixture},
-			baseState: map[string]any{
-				keyAddress: reservedIPAddressFixture, "assigned_entity": nil, keyInterfacePublic: true, "tags": []any{}, keyType: keyIPv4,
-			},
-		},
-		{
-			name: "instance_password_reset",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeInstancePasswordResetTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{keyLinodeID: float64(123), keyRootPass: "Sup3rSecretPass99"},
-			baseState: map[string]any{keyLabel: "web-02", keyStatus: "offline"},
-		},
-		{
-			name: "lke_node_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeLKENodeDeleteTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{keyClusterID: float64(123), keyNodeID: "node-xyz"},
-			baseState: map[string]any{keySupportTicketID: "node-xyz", "instance_id": float64(456), keyStatus: statusReady},
-		},
-		{
-			name: "ipv6_range_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeIPv6RangeDeleteTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{"range": "2001:db8::/64"},
-			baseState: map[string]any{"range": "2001:db8::", keyRegion: placementGroupCreateRegion, "prefix": float64(64)},
-		},
-		{
-			name: "tag_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeTagDeleteTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{"tag_label": "prod"},
-			baseState: map[string]any{keyData: []any{}},
-		},
-		{
-			name: "vlan_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeVLANDeleteTool(cfg)
-
-				return h
-			},
-			args: map[string]any{keyRegionID: placementGroupCreateRegion, keyLabel: "vl-app"},
-			baseState: map[string]any{
-				keyData: []any{map[string]any{keyRegion: placementGroupCreateRegion, keyLabel: "vl-app", keyPlacementGroupLinodes: []any{}}},
-			},
-		},
-		{
-			name: "object_storage_bucket_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeObjectStorageBucketDeleteTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest},
-			baseState: map[string]any{keyLabel: bucketTest, keyRegion: regionUSEast1, "objects": float64(0)},
-		},
-		{
-			name: "object_storage_ssl_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeObjectStorageSSLDeleteTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest},
-			baseState: map[string]any{"ssl": true},
-		},
-		{
-			name: "object_storage_key_delete",
-			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				_, _, h := tools.NewLinodeObjectStorageKeyDeleteTool(cfg)
-
-				return h
-			},
-			args:      map[string]any{keyKeyID: float64(123)},
-			baseState: map[string]any{keyLabel: "ci-key", "access_key": "AK", "id": float64(123)},
-		},
-	}
-}
-
-// TestTwoStageMultiArgDeleteTools drives each opted-in delete tool whose path is
-// not a plain single or paired int ID through plan then apply against identical
-// state. With no drift, the apply must execute the DELETE, proving the tool is
-// opted in and its plan/apply wiring works end to end.
-func TestTwoStageMultiArgDeleteTools(t *testing.T) {
+// TestTwoStageUnchangedStateDeleteTools drives each tool the drift table cannot
+// take through plan then apply against identical state. With nothing moving,
+// the apply must execute the mutation, proving the tool is opted in and its
+// plan/apply wiring works end to end.
+func TestTwoStageUnchangedStateDeleteTools(t *testing.T) {
 	t.Parallel()
 
-	for _, testCase := range twoStageMultiArgCases() {
+	for _, testCase := range twoStageUnchangedStateCases() {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1544,5 +1233,389 @@ func TestTwoStageMultiArgDeleteTools(t *testing.T) {
 				t.Errorf("store.Len() = %d, want 0 (plan consumed)", store.Len())
 			}
 		})
+	}
+}
+
+// twoStageSingleIDCases lists the opted-in single-ID delete tools whose fetched
+// state carries an "updated" timestamp the per-type HashIgnore list strips. A
+// tool belongs here only when the struct its FetchState decodes into declares
+// that field: the bump goes through a struct round-trip, so a fixture key the
+// struct drops would hash the same either way and prove nothing. The table
+// lives in its own function so the test body stays within maintidx's
+// maintainability bound.
+func twoStageSingleIDCases() []twoStageSingleIDCase {
+	return []twoStageSingleIDCase{
+		{
+			name: "volume_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeVolumeDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyVolumeID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "data-01", keyStatus: statusActive, keyUpdated: "2025-12-01T00:00:00"},
+		},
+		{
+			name: "lke_cluster_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeLkeClusterDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyClusterID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "lke-prod", keyStatus: statusReady, keyUpdated: "2025-11-01T00:00:00"},
+		},
+		{
+			name: "firewall_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeFirewallDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyFirewallID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "fw-edge", keyStatus: statusEnabled, keyUpdated: "2025-10-01T00:00:00"},
+		},
+		{
+			name: "nodebalancer_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeNodebalancerDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyNodeBalancerID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "nb-app", keyUpdated: "2025-09-01T00:00:00"},
+		},
+		{
+			name: "vpc_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeVPCDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyVPCID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "vpc-core", keyUpdated: "2025-08-01T00:00:00"},
+		},
+		{
+			name: "domain_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeDomainDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyDomainID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyStatus: statusActive, keyUpdated: "2025-07-01T00:00:00"},
+		},
+		{
+			name: "stackscript_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeStackscriptDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyStackScriptID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "deploy-web", "deployments_total": float64(7), keyUpdated: "2025-06-01T00:00:00"},
+		},
+		{
+			name: "database_instance_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyInstanceID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "db-prod", keyStatus: statusActive, keyUpdated: "2025-02-01T00:00:00"},
+		},
+		{
+			name: "database_postgresql_instance_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyInstanceID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "pg-prod", keyStatus: statusActive, keyUpdated: "2025-01-15T00:00:00"},
+		},
+		{
+			name: "image_sharegroup_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeImageSharegroupDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyShareGroupID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "share-team", keyUpdated: "2025-01-10T00:00:00"},
+		},
+		{
+			name: "image_sharegroup_token_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeImageSharegroupTokenDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyTokenUUID,
+			idVal:     "11111111-1111-1111-1111-111111111111",
+			baseState: map[string]any{keyLabel: "share-team", keyUpdated: "2025-01-09T00:00:00"},
+		},
+		{
+			name: "instance_backups_cancel",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeInstanceBackupsCancelTool(cfg)
+
+				return h
+			},
+			idKey:     keyLinodeID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "web-01", keyStatus: statusRunning, keyUpdated: "2025-01-08T00:00:00"},
+		},
+		{
+			name: "lke_kubeconfig_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeLkeKubeconfigDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyClusterID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "lke-kc", keyStatus: statusReady, keyUpdated: "2025-01-07T00:00:00"},
+		},
+		{
+			name: "lke_service_token_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeLkeServiceTokenDeleteTool(cfg)
+
+				return h
+			},
+			idKey:     keyClusterID,
+			idVal:     float64(123),
+			baseState: map[string]any{keyLabel: "lke-st", keyStatus: statusReady, keyUpdated: "2025-01-06T00:00:00"},
+		},
+	}
+}
+
+// twoStageUnchangedStateCases lists the opted-in delete tools whose plan and
+// apply run against identical state, so a non-refusing apply proves the tool is
+// opted in and its plan/apply wiring works end to end. A tool lands here when
+// the drift table cannot take it: either its path is not a plain int ID, or the
+// struct its FetchState decodes into carries no cosmetic field to bump (image,
+// SSH key, placement group). Nothing here rides on HashIgnore, which is nil for
+// most of these types and populated for the instance the password reset fetches.
+// The table lives in its own function to keep the test body within maintidx's
+// bound.
+func twoStageUnchangedStateCases() []twoStageUnchangedStateCase {
+	return []twoStageUnchangedStateCase{
+		{
+			name: "sshkey_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeSshkeyDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keySSHKeyID: float64(123)},
+			baseState: map[string]any{keyLabel: "laptop-key", keyCreated: "2025-05-01T00:00:00"},
+		},
+		{
+			name: "placement_group_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodePlacementGroupDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyPlacementGroupID: float64(123)},
+			baseState: map[string]any{keyLabel: "pg-rack", keyRegion: placementGroupCreateRegion},
+		},
+		{
+			name: "image_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeImageDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyImageID: "private/123"},
+			baseState: map[string]any{keyLabel: "golden-img", keyStatus: statusAvailable, keyCreated: "2025-03-01T00:00:00"},
+		},
+		{
+			name: "instance_ip_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeInstanceIPDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.7"},
+			baseState: map[string]any{keyAddress: "203.0.113.7", keyType: keyIPv4, keyInterfacePublic: true},
+		},
+		{
+			name: "reserved_ip_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeNetworkingReservedIPDeleteTool(cfg)
+
+				return h
+			},
+			args: map[string]any{keyAddress: reservedIPAddressFixture},
+			baseState: map[string]any{
+				keyAddress: reservedIPAddressFixture, "assigned_entity": nil, keyInterfacePublic: true, "tags": []any{}, keyType: keyIPv4,
+			},
+		},
+		{
+			name: "instance_password_reset",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeInstancePasswordResetTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyLinodeID: float64(123), keyRootPass: "Sup3rSecretPass99"},
+			baseState: map[string]any{keyLabel: "web-02", keyStatus: "offline"},
+		},
+		{
+			name: "lke_node_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeLkeNodeDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyClusterID: float64(123), keyNodeID: "node-xyz"},
+			baseState: map[string]any{keyStateID: "node-xyz", keyInstanceID: float64(456), keyStatus: statusReady},
+		},
+		{
+			name: "ipv6_range_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeIPv6RangeDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{"range": "2001:db8::/64"},
+			baseState: map[string]any{"range": "2001:db8::", keyRegion: placementGroupCreateRegion, "prefix": float64(64)},
+		},
+		{
+			name: "tag_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeTagDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{"tag_label": "prod"},
+			baseState: map[string]any{keyData: []any{}},
+		},
+		{
+			name: "vlan_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeVlanDeleteTool(cfg)
+
+				return h
+			},
+			args: map[string]any{keyRegionID: placementGroupCreateRegion, keyLabel: "vl-app"},
+			baseState: map[string]any{
+				keyData: []any{map[string]any{keyRegion: placementGroupCreateRegion, keyLabel: "vl-app", keyVLANLinodes: []any{}}},
+			},
+		},
+		{
+			name: "object_storage_bucket_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeObjectStorageBucketDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest},
+			baseState: map[string]any{keyLabel: bucketTest, keyRegion: regionUSEast1, "objects": float64(0)},
+		},
+		{
+			name: "object_storage_ssl_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeObjectStorageSSLDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyRegion: regionUSEast1, keyLabel: bucketTest},
+			baseState: map[string]any{"ssl": true},
+		},
+		{
+			name: "object_storage_key_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := gentools.NewLinodeObjectStorageKeyDeleteTool(cfg)
+
+				return h
+			},
+			args:      map[string]any{keyKeyID: float64(123)},
+			baseState: map[string]any{keyLabel: "ci-key", "access_key": "AK", "id": float64(123)},
+		},
+	}
+}
+
+// TestInstanceRebuildTwoStagePlanThenApply proves the CapDestroy rebuild action,
+// which routes through the shared destroy flow, honors plan/apply: the plan
+// produces an id and runs the dependency walk (so the body carries warnings)
+// without rebuilding, and the apply issues the POST.
+func TestInstanceRebuildTwoStagePlanThenApply(t *testing.T) {
+	t.Parallel()
+
+	state := instanceState()
+	rebuilt := &atomic.Bool{}
+	cfg := rebuildServer(t, state, rebuilt)
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	_, _, handler := gentools.NewLinodeInstanceRebuildTool(cfg)
+
+	rebuildArgs := map[string]any{
+		keyLinodeID: float64(123),
+		keyImage:    "linode/ubuntu24.04",
+		keyRootPass: "Abcdefgh1234", // betterleaks:allow test fixture
+	}
+
+	planArgs := maps.Clone(rebuildArgs)
+	planArgs[keyMode] = twostage.ModePlan
+
+	planResult, err := handler(ctx, createRequestWithArgs(t, planArgs))
+	if err != nil {
+		t.Fatalf("plan returned error: %v", err)
+	}
+
+	if planResult.IsError {
+		t.Fatalf("plan IsError, text: %s", dryRunResultText(t, planResult))
+	}
+
+	if rebuilt.Load() {
+		t.Fatal("plan must not issue a rebuild")
+	}
+
+	plan := decodeBody(t, dryRunResultText(t, planResult))
+
+	id, _ := plan["plan_id"].(string)
+	if id == "" {
+		t.Fatalf("plan response has no plan_id: %v", plan)
+	}
+
+	if _, ok := plan["warnings"].([]any); !ok {
+		t.Errorf("rebuild plan should carry the walk's warnings, got: %v", plan["warnings"])
+	}
+
+	applyArgs := maps.Clone(rebuildArgs)
+	applyArgs[keyMode] = twostage.ModeApply
+	applyArgs[keyPlanID] = id
+
+	applyResult, err := handler(ctx, createRequestWithArgs(t, applyArgs))
+	if err != nil {
+		t.Fatalf("apply returned error: %v", err)
+	}
+
+	if applyResult.IsError {
+		t.Fatalf("apply IsError, text: %s", dryRunResultText(t, applyResult))
+	}
+
+	if !rebuilt.Load() {
+		t.Fatal("apply must issue a rebuild")
+	}
+
+	if !strings.Contains(dryRunResultText(t, applyResult), "rebuilt with image") {
+		t.Errorf("apply text does not confirm rebuild: %s", dryRunResultText(t, applyResult))
 	}
 }

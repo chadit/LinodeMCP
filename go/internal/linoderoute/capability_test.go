@@ -17,6 +17,10 @@ const (
 	secondMessage = "linode.mcp.v1.SecondInput"
 )
 
+// ordinaryArgument stands in for any argument a tool legitimately takes, beside
+// the reserved ones the guard refuses.
+const ordinaryArgument = "label"
+
 // instanceDelete comes from the route tests; these add a meta and a read tool.
 const (
 	versionTool = "version"
@@ -145,6 +149,27 @@ func TestValidateContractRejectsBrokenDeclarations(t *testing.T) {
 			Message:    brokenMessage,
 			RouteTool:  instanceDelete,
 			Capability: linodev1.ToolCapability_TOOL_CAPABILITY_META,
+		},
+		"surface on a tool that reaches no route": {
+			Message:         brokenMessage,
+			MetaTool:        versionTool,
+			Capability:      linodev1.ToolCapability_TOOL_CAPABILITY_META,
+			Surface:         linodev1.ApiSurface_API_SURFACE_V4BETA,
+			SurfaceDeclared: true,
+		},
+		"the default surface written out": {
+			Message:         brokenMessage,
+			RouteTool:       instanceDelete,
+			Capability:      linodev1.ToolCapability_TOOL_CAPABILITY_DESTROY,
+			Surface:         linodev1.ApiSurface_API_SURFACE_V4,
+			SurfaceDeclared: true,
+		},
+		"the zero surface written out": {
+			Message:         brokenMessage,
+			RouteTool:       instanceDelete,
+			Capability:      linodev1.ToolCapability_TOOL_CAPABILITY_DESTROY,
+			Surface:         linodev1.ApiSurface_API_SURFACE_UNSPECIFIED,
+			SurfaceDeclared: true,
 		},
 	} {
 		err := linoderoute.ValidateContract([]linoderoute.Declaration{declared}, nil)
@@ -278,4 +303,109 @@ func declaredNames(t *testing.T) []string {
 	}
 
 	return names
+}
+
+// A routed tool on a real non-default surface is the case the option exists
+// for, so it has to pass the same validator that refuses the other shapes.
+func TestValidateContractAcceptsANonDefaultSurface(t *testing.T) {
+	t.Parallel()
+
+	declared := linoderoute.Declaration{
+		Message:         brokenMessage,
+		RouteTool:       instanceDelete,
+		Capability:      linodev1.ToolCapability_TOOL_CAPABILITY_DESTROY,
+		Surface:         linodev1.ApiSurface_API_SURFACE_V4BETA,
+		SurfaceDeclared: true,
+	}
+
+	if err := linoderoute.ValidateContract([]linoderoute.Declaration{declared}, nil); err != nil {
+		t.Errorf("ValidateContract() = %v, want nil", err)
+	}
+}
+
+// The surface is a declaration, so no tool input may name it as an argument: a
+// caller reading the advertised schema could otherwise ask for a call on a
+// surface the contract never declared. Nothing generated can carry one, so the
+// input is handed over directly.
+func TestValidateArgumentsRefusesASurfaceArgument(t *testing.T) {
+	t.Parallel()
+
+	for _, argument := range []string{"api_version", "api_surface", "surface", "beta"} {
+		inputs := map[string][]string{brokenMessage: {ordinaryArgument, argument}}
+
+		err := linoderoute.ValidateArguments(inputs)
+		if !errors.Is(err, linoderoute.ErrDeclaration) {
+			t.Errorf("ValidateArguments(%q) error = %v, want ErrDeclaration", argument, err)
+
+			continue
+		}
+
+		// The message names the argument, since renaming it is the fix and a
+		// finding that did not say which field would not point at one.
+		want := linoderoute.ErrDeclaration.Error() + ": " + brokenMessage +
+			`: declares argument "` + argument +
+			`", and the API surface is a per-tool declaration rather than an argument`
+		if err.Error() != want {
+			t.Errorf("ValidateArguments(%q) error = %v, want %v", argument, err, want)
+		}
+	}
+}
+
+// The guard reads tool inputs only. VersionResponse declares an api_version
+// field legitimately, and a response is not something a caller fills, so a
+// guard that walked every message would fail the shipped contract on sight.
+func TestValidateArgumentsLeavesOrdinaryArgumentsAlone(t *testing.T) {
+	t.Parallel()
+
+	inputs := map[string][]string{
+		brokenMessage: {ordinaryArgument, "region", "api_version_note", "betas"},
+	}
+
+	if err := linoderoute.ValidateArguments(inputs); err != nil {
+		t.Errorf("ValidateArguments() = %v, want nil", err)
+	}
+}
+
+// The shipped inputs carry no such argument, read through the same walk the
+// server validates with, so the guard is proven against the real contract too.
+func TestTheShippedInputsNameNoSurfaceArgument(t *testing.T) {
+	t.Parallel()
+
+	if err := linoderoute.Validate(); err != nil {
+		t.Errorf("Validate() = %v, want nil", err)
+	}
+}
+
+// ValidateAll runs the argument guard ahead of the rest, because a tool taking
+// its surface as an argument answers on whichever surface the caller asked for,
+// which makes every other reading of the contract beside the point.
+func TestValidateAllReportsASurfaceArgumentFirst(t *testing.T) {
+	t.Parallel()
+
+	inputs := map[string][]string{brokenMessage: {"beta"}}
+
+	err := linoderoute.ValidateAll(inputs, nil, nil)
+	if !errors.Is(err, linoderoute.ErrDeclaration) {
+		t.Fatalf("ValidateAll() error = %v, want ErrDeclaration", err)
+	}
+
+	// Compared whole rather than searched, so this pins that the argument guard
+	// is what answered and not the contract half reporting something else.
+	want := linoderoute.ErrDeclaration.Error() + ": " + brokenMessage +
+		`: declares argument "beta", and the API surface is a per-tool` +
+		" declaration rather than an argument"
+	if err.Error() != want {
+		t.Errorf("ValidateAll() error = %v, want %v", err, want)
+	}
+}
+
+// Clean inputs pass both halves, which is what the shipped contract is.
+func TestValidateAllAcceptsACleanContract(t *testing.T) {
+	t.Parallel()
+
+	inputs := map[string][]string{brokenMessage: {ordinaryArgument, "region"}}
+
+	if err := linoderoute.ValidateAll(inputs, nil, nil); err != nil {
+		t.Errorf("ValidateAll() = %v, want nil", err)
+	}
 }

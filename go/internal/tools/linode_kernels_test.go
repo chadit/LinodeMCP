@@ -11,15 +11,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeKernelListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, _, handler := tools.NewLinodeKernelListTool(cfg)
+	tool, _, handler := gentools.NewLinodeKernelListTool(cfg)
 
 	if tool.Name != "linode_kernel_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_kernel_list")
@@ -73,7 +73,7 @@ func TestLinodeKernelListToolSuccessWithPagination(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeKernelListTool(cfg)
+	_, _, handler := gentools.NewLinodeKernelListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: float64(3), keyPageSize: float64(25)})
 
@@ -134,7 +134,7 @@ func TestLinodeKernelListToolInvalidPaginationRejectedBeforeClientCall(t *testin
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeKernelListTool(cfg)
+			_, _, handler := gentools.NewLinodeKernelListTool(cfg)
 
 			req := createRequestWithArgs(t, args)
 

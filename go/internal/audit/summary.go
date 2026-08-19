@@ -218,7 +218,11 @@ func loadWindowJSONL(dir string, since time.Time, includeMeta bool) ([]Event, er
 	var events []Event
 
 	for _, name := range files {
-		fileEvents := readEventsFromFile(root, name)
+		fileEvents, err := readEventsFromFile(root, name)
+		if err != nil {
+			return nil, err
+		}
+
 		for idx := range fileEvents {
 			event := &fileEvents[idx]
 			if !includeMeta && event.ToolCapability == CapabilityMeta {

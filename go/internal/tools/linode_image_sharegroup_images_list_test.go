@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeImageShareGroupImagesListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupImagesListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupImageListTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_image_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_image_list")
@@ -93,7 +93,7 @@ func TestLinodeImageShareGroupImagesListToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupImagesListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123, keyPage: 2, keyPageSize: 25})
 
@@ -155,7 +155,7 @@ func TestLinodeImageShareGroupImagesListToolRejectsInvalidSharegroupIdBeforeClie
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeImageShareGroupImagesListTool(cfg)
+			_, _, handler := gentools.NewLinodeImageSharegroupImageListTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{keyShareGroupID: value})
 
@@ -183,7 +183,7 @@ func TestLinodeImageShareGroupImagesListToolMissingSharegroupId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeImageShareGroupImagesListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -223,7 +223,7 @@ func TestLinodeImageShareGroupImagesListToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupImagesListTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupImageListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123})
 

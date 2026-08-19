@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeInstanceInterfaceHistoryListToolDefinition(t *testing.T) {
@@ -20,7 +20,7 @@ func TestLinodeInstanceInterfaceHistoryListToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeInstanceInterfaceHistoryListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceInterfaceHistoryListTool(cfg)
 
 	t.Parallel()
 
@@ -56,7 +56,7 @@ func TestLinodeInstanceInterfaceHistoryListToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceInterfaceHistoryListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceInterfaceHistoryListTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -140,7 +140,7 @@ func TestLinodeInstanceInterfaceHistoryListToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfaceHistoryListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceInterfaceHistoryListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyPage: float64(2), keyPageSize: float64(50)})
 
@@ -190,7 +190,7 @@ func TestLinodeInstanceInterfaceHistoryListToolClientError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceInterfaceHistoryListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceInterfaceHistoryListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 

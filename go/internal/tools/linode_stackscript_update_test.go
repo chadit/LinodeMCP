@@ -12,9 +12,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -28,7 +28,7 @@ func TestLinodeStackScriptUpdateToolDefinition(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 	}}
-	tool, capability, handler := tools.NewLinodeStackScriptUpdateTool(cfg)
+	tool, capability, handler := gentools.NewLinodeStackscriptUpdateTool(cfg)
 
 	t.Parallel()
 
@@ -78,7 +78,7 @@ func TestLinodeStackScriptUpdateToolValidation(t *testing.T) {
 		{name: caseNoUpdateFields, args: map[string]any{keyStackScriptID: 12345, keyConfirm: true}, wantContains: "at least one editable field is required"},
 		{name: "empty label", args: map[string]any{keyStackScriptID: 12345, keyLabel: " ", keyConfirm: true}, wantContains: databaseLabelRequiredMessage},
 		{name: "empty script", args: map[string]any{keyStackScriptID: 12345, keyScript: " ", keyConfirm: true}, wantContains: "script must be a non-empty string"},
-		{name: "empty images", args: map[string]any{keyStackScriptID: 12345, keyImages: []any{" "}, keyConfirm: true}, wantContains: "images must contain at least one image ID"},
+		{name: "empty images", args: map[string]any{keyStackScriptID: 12345, keyImages: []any{" "}, keyConfirm: true}, wantContains: "at least one editable field is required"},
 		{name: "query image", args: map[string]any{keyStackScriptID: 12345, keyImages: []any{configIDQueryValue}, keyConfirm: true}, wantContains: errStackScriptImagesValid},
 		{name: "fragment image", args: map[string]any{keyStackScriptID: 12345, keyImages: []any{"linode/debian12#fragment"}, keyConfirm: true}, wantContains: errStackScriptImagesValid},
 		{name: "extra separator image", args: map[string]any{keyStackScriptID: 12345, keyImages: []any{"private/15/extra"}, keyConfirm: true}, wantContains: errStackScriptImagesValid},
@@ -99,7 +99,7 @@ func TestLinodeStackScriptUpdateToolValidation(t *testing.T) {
 			validationCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			}}
-			_, _, validationHandler := tools.NewLinodeStackScriptUpdateTool(validationCfg)
+			_, _, validationHandler := gentools.NewLinodeStackscriptUpdateTool(validationCfg)
 
 			req := createRequestWithArgs(t, tt.args)
 
@@ -176,7 +176,7 @@ func TestLinodeStackScriptUpdateToolSuccessfulUpdate(t *testing.T) {
 	successCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, successHandler := tools.NewLinodeStackScriptUpdateTool(successCfg)
+	_, _, successHandler := gentools.NewLinodeStackscriptUpdateTool(successCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyStackScriptID:       12345,
@@ -237,7 +237,7 @@ func TestLinodeStackScriptUpdateToolClientErrorPropagates(t *testing.T) {
 	errCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, errHandler := tools.NewLinodeStackScriptUpdateTool(errCfg)
+	_, _, errHandler := gentools.NewLinodeStackscriptUpdateTool(errCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 12345, keyLabel: testStackScriptLabel, keyConfirm: true})
 

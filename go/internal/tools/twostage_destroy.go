@@ -253,16 +253,24 @@ func executeDestroy(
 	}
 
 	if execErr := action.Execute(ctx, client); execErr != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("%s failed: %v", action.ToolName, execErr)), nil
+		return mcp.NewToolResultError(destroyFailureText(action, execErr)), nil
 	}
 
 	return MarshalProtoToolResponse(action.Success())
 }
 
-// stateHash returns a stable hash of the resource state with the named cosmetic
-// fields stripped first, so a plan does not refuse on drift the user never
-// caused. Go's json.Marshal sorts map keys, so the same state always encodes
-// the same way.
+// destroyFailureText words a failed removal. A tool declaring error_message
+// means to say something its family's callers recognize, naming the resource it
+// could not remove, so the declaration wins wherever there is one. That is the
+// rule the list tier already follows.
+func destroyFailureText(action *DestructiveAction, cause error) string {
+	if action.Failure != nil {
+		return action.Failure(cause)
+	}
+
+	return fmt.Sprintf("%s failed: %v", action.ToolName, cause)
+}
+
 // stateHashAndFields hashes a resource's state for drift detection and also
 // returns its normalized top-level field map with the hash-ignore fields
 // stripped. The map lets the apply path report which fields changed on a drift

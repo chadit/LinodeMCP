@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const accountUserGrantsToolName = "linode_account_user_grants_get"
@@ -22,7 +22,7 @@ func TestLinodeAccountUserGrantsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeAccountUserGrantsGetTool(cfg)
 
 	if tool.Name != accountUserGrantsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, accountUserGrantsToolName)
@@ -84,7 +84,7 @@ func TestLinodeAccountUserGrantsToolInvalidUsernameRejectedBeforeClientCall(t *t
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
+			_, _, handler := gentools.NewLinodeAccountUserGrantsGetTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 
@@ -148,7 +148,7 @@ func TestLinodeAccountUserGrantsToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountUserGrantsGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyUsername: accountLoginUsername})
 
@@ -213,7 +213,7 @@ func TestLinodeAccountUserGrantsToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeAccountUserGrantsTool(cfg)
+	_, _, handler := gentools.NewLinodeAccountUserGrantsGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyUsername: accountLoginUsername})
 
@@ -230,8 +230,8 @@ func TestLinodeAccountUserGrantsToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_account_user_grants_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_account_user_grants_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve grants for account user") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve grants for account user")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

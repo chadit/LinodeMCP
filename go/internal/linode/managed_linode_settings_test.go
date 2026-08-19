@@ -15,14 +15,13 @@ import (
 )
 
 const (
-	managedLinodeSettingsID       = 234
-	managedLinodeSettingsPath     = "/managed/linode-settings/234"
-	managedLinodeSettingsListPath = "/managed/linode-settings"
-	managedLinodeSettingsLabel    = "linode123"
-	managedLinodeSettingsGroup    = "linodes"
-	managedLinodeSettingsIP       = "203.0.113.1"
-	managedLinodeSettingsSSHUser  = "linode"
-	managedLinodeSettingsSSHPort  = 22
+	managedLinodeSettingsID      = 234
+	managedLinodeSettingsPath    = "/managed/linode-settings/234"
+	managedLinodeSettingsLabel   = "linode123"
+	managedLinodeSettingsGroup   = "linodes"
+	managedLinodeSettingsIP      = "203.0.113.1"
+	managedLinodeSettingsSSHUser = "linode"
+	managedLinodeSettingsSSHPort = 22
 )
 
 func TestClientGetManagedLinodeSettingsSuccess(t *testing.T) {

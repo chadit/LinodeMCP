@@ -12,55 +12,31 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
-// NewLinodeAuditReportTool returns the linode_audit_report query tool.
-// It runs a user-defined named report from audit.reports against the
-// active event store. CapMeta so it is available in every profile. The
-// report definition is resolved from cfg at call time, so editing the
-// report file takes effect on the next call.
-func NewLinodeAuditReportTool(
+// AuditReportAnswer runs a user-defined named report from audit.reports
+// against the active event store. The definition is resolved from cfg at call
+// time, so editing the report file takes effect on the next call.
+func AuditReportAnswer(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
 	cfg *config.Config,
-) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewToolWithRawSchema(
-		"linode_audit_report",
-		"Run a named custom audit report from config (audit.reports). "+
-			"Reads SQLite when enabled, else the JSONL log. Returns a "+
-			"summary of counts or a list of matching events depending on "+
-			"the report's output mode.",
-		toolschemas.Schema("linode.mcp.v1.AuditReportInput"),
-	)
+) (*mcp.CallToolResult, error) {
+	name := request.GetString("name", "")
 
-	sqlitePath := resolveAuditSQLitePath(cfg)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		name := request.GetString("name", "")
-		if name == "" {
-			return mcp.NewToolResultError("report name is required"), nil
-		}
-
-		report, ok := cfg.Audit.Reports[name]
-		if !ok {
-			return mcp.NewToolResultError(fmt.Sprintf("unknown report: %q", name)), nil
-		}
-
-		result, err := runReport(ctx, sqlitePath, audit.ResolveDefaultAuditDir(), name, &report, time.Now())
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to run report: %v", err)), nil
-		}
-
-		return MarshalProtoToolResponse(result)
+	report, ok := cfg.Audit.Reports[name]
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf("unknown report: %q", name)), nil
 	}
 
-	return tool, profiles.CapMeta, handler
+	result, err := runReport(
+		ctx, resolveAuditSQLitePath(cfg), audit.ResolveDefaultAuditDir(), name, &report, time.Now(),
+	)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to run report: %v", err)), nil
+	}
+
+	return MarshalProtoToolResponse(result)
 }
 
 // runReport loads the windowed events for the report, applies the
@@ -95,7 +71,7 @@ func runReport(
 	result := &linodev1.AuditReportResponse{
 		Name:        name,
 		Output:      report.Output,
-		TotalEvents: linodeIDToInt32(len(filtered)),
+		TotalEvents: IDToInt32(len(filtered)),
 	}
 
 	if report.Output == config.ReportOutputSummary {
@@ -112,15 +88,10 @@ func runReport(
 	// list output
 	if report.Limit > 0 && len(filtered) > report.Limit {
 		filtered = filtered[:report.Limit]
-		result.TotalEvents = linodeIDToInt32(len(filtered))
+		result.TotalEvents = IDToInt32(len(filtered))
 	}
 
-	protoEvents, err := auditEventsProto(filtered)
-	if err != nil {
-		return nil, err
-	}
-
-	result.Events = protoEvents
+	result.Events = auditEventsProto(filtered)
 
 	return result, nil
 }

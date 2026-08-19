@@ -11,97 +11,72 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
 	temporaryFailure = "temporary failure"
 
-	databaseEnginesPath                       = "/databases/engines"
-	databaseTypesPath                         = "/databases/types"
-	databaseTypeID                            = "g6-dedicated-1"
-	databaseTypeIDParam                       = "type_id"
-	databaseTypeEscapedPath                   = "/databases/types/g6-dedicated-1"
-	databaseTypeIDRequiredMessage             = "type_id must be a non-empty string"
-	databaseTypeIDSeparatorMessage            = "type_id must not contain separators, query, fragment, or traversal segments"
-	databaseTypeLabel                         = "DBaaS - Dedicated 80GB"
-	databaseEngineEscapedPath                 = "/databases/engines/mysql%2F8.0.26"
-	databaseEngineID                          = "mysql/8.0.26"
-	databaseEngineIDParam                     = "engine_id"
-	databaseEngineIDRequiredMessage           = "engine_id must be a non-empty string"
-	databaseEngineIDShapeMessage              = "engine_id must use the engine/version format"
-	databaseEngineIDSeparatorMessage          = "engine_id must not contain query, fragment, or traversal segments"
-	databaseEngineName                        = "mysql"
-	databaseVersion                           = "8.0.26"
-	databaseInstancesPath                     = "/databases/mysql/instances"
-	databasePostgreSQLInstancesPath           = "/databases/postgresql/instances"
-	databaseMySQLConfigPath                   = "/databases/mysql/config"
-	databasePostgreSQLConfigPath              = "/databases/postgresql/config"
-	databaseInstanceID                        = 123
-	databaseInstanceIDParam                   = "instance_id"
-	databaseInstanceIDMessage                 = "instance_id must be a positive integer"
-	databaseInstanceIDRequiredMessage         = "instance_id is required"
-	databaseInstancePath                      = "/databases/mysql/instances/123"
-	databasePostgreSQLInstancePath            = "/databases/postgresql/instances/123"
-	databasePostgreSQLInstancePatchPath       = "/databases/postgresql/instances/123/patch"
-	databaseInstanceSSLPath                   = "/databases/mysql/instances/123/ssl"
-	databasePostgreSQLInstanceSSLPath         = "/databases/postgresql/instances/123/ssl"
-	databaseSSLCACertificate                  = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
-	databaseInstanceCredentialsPath           = "/databases/mysql/instances/123/credentials"
-	databasePostgreSQLInstanceCredentialsPath = "/databases/postgresql/instances/123/credentials"
-	databaseInstanceCredentialsResetPath      = "/databases/mysql/instances/123/credentials/reset"
-	databasePostgreSQLCredentialsResetPath    = "/databases/postgresql/instances/123/credentials/reset"
-	databaseInstancePatchPath                 = "/databases/mysql/instances/123/patch"
-	databaseInstanceSuspendPath               = "/databases/mysql/instances/123/suspend"
-	databasePostgreSQLInstanceSuspendPath     = "/databases/postgresql/instances/123/suspend"
-	databaseInstanceResumePath                = "/databases/mysql/instances/123/resume"
-	databasePostgreSQLInstanceResumePath      = "/databases/postgresql/instances/123/resume"
-	databaseInstanceLabel                     = "primary-db"
-	databaseInstanceType                      = typeG6Standard2
-	databaseCredentialsPassword               = "secret"
-	databaseConfigMaxConnections              = "max_connections"
-	caseStringInstanceID                      = "string instance id"
-	caseZeroInstanceID                        = "zero instance id"
-	caseNegativeInstanceID                    = "negative instance id"
-	caseFractionalInstanceID                  = "fractional instance id"
-	caseSlashInstanceID                       = "slash instance id"
-	caseTraversalInstanceID                   = "traversal instance id"
-	databaseEngineParam                       = "engine"
-	databaseInvalidInstanceIDQuery            = "123?x=1"
-	databaseInvalidAPIURL                     = "https://example.invalid"
-	caseQueryInstanceID                       = "query instance id"
-	databaseAllowListParam                    = "allow_list"
-	databaseEngineConfigParam                 = "engine_config"
-	databasePrivateNetworkParam               = "private_network"
-	databaseUpdatesParam                      = "updates"
-	databaseVersionParam                      = "version"
-	databaseAllowListNotArray                 = "allow_list must be an array of strings"
-	databaseEngineConfigNotObject             = "engine_config must be an object"
-	databasePrivateNetworkNotObject           = "private_network must be an object"
-	databaseUpdatesNotObject                  = "updates must be an object"
-	databasePostgreSQLConfigNamespace         = "pg"
-	databaseJSONNull                          = "null"
-	databaseJSONArray                         = "[]"
-	caseFalseConfirm                          = "false confirm"
-	caseStringConfirm                         = "string confirm"
-	caseNumericConfirm                        = "numeric confirm"
-	invalidJSON                               = "not-json"
-	databaseEnginePostgreSQLID                = "postgresql/16"
-	databaseEnginePostgreSQL                  = "postgresql"
-	databaseSSLConnectionParam                = "ssl_connection"
-	databaseLabelRequiredMessage              = "label must be a non-empty string"
-	caseInvalidAllowList                      = "invalid allow list"
-	caseInvalidEngineConfig                   = "invalid engine config"
-	caseInvalidPrivateNetwork                 = "invalid private network"
+	databaseEnginesPath               = "/databases/engines"
+	databaseTypesPath                 = "/databases/types"
+	databaseTypeID                    = "g6-dedicated-1"
+	databaseTypeIDParam               = "type_id"
+	databaseTypeEscapedPath           = "/databases/types/g6-dedicated-1"
+	databaseTypeIDRequiredMessage     = "type_id must be a non-empty string"
+	databaseTypeIDSeparatorMessage    = "type_id must not contain separators, query, fragment, or traversal segments"
+	databaseTypeLabel                 = "DBaaS - Dedicated 80GB"
+	databaseEngineEscapedPath         = "/databases/engines/mysql%2F8.0.26"
+	databaseEngineID                  = "mysql/8.0.26"
+	databaseEngineIDParam             = "engine_id"
+	databaseEngineIDRequiredMessage   = "engine_id must be a non-empty string"
+	databaseEngineIDShapeMessage      = "engine_id must use the engine/version format"
+	databaseEngineIDSeparatorMessage  = "engine_id must not contain query, fragment, or traversal segments"
+	databaseEngineName                = "mysql"
+	databaseVersion                   = "8.0.26"
+	databaseInstancesPath             = "/databases/mysql/instances"
+	databasePostgreSQLInstancesPath   = "/databases/postgresql/instances"
+	databaseMySQLConfigPath           = "/databases/mysql/config"
+	databasePostgreSQLConfigPath      = "/databases/postgresql/config"
+	databaseInstanceID                = 123
+	databaseInstanceIDParam           = "instance_id"
+	databaseInstanceIDMessage         = "instance_id must be a positive integer"
+	databaseInstanceIDRequiredMessage = "instance_id is required"
+	databaseInstanceIDPositiveMessage = "instance_id must be a positive integer"
+	databaseInstancePath              = "/databases/mysql/instances/123"
+	databasePostgreSQLInstancePath    = "/databases/postgresql/instances/123"
+	databaseInstanceSSLPath           = "/databases/mysql/instances/123/ssl"
+	databasePostgreSQLInstanceSSLPath = "/databases/postgresql/instances/123/ssl"
+	databaseSSLCACertificate          = "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
+	databaseInstanceLabel             = "primary-db"
+	databaseInstanceType              = typeG6Standard2
+	databaseConfigMaxConnections      = "max_connections"
+	caseStringInstanceID              = "string instance id"
+	caseZeroInstanceID                = "zero instance id"
+	caseNegativeInstanceID            = "negative instance id"
+	caseFractionalInstanceID          = "fractional instance id"
+	caseSlashInstanceID               = "slash instance id"
+	caseTraversalInstanceID           = "traversal instance id"
+	databaseInvalidInstanceIDQuery    = "123?x=1"
+	databaseInvalidAPIURL             = "https://example.invalid"
+	caseQueryInstanceID               = "query instance id"
+	databaseVersionParam              = "version"
+	databasePostgreSQLConfigNamespace = "pg"
+	databaseJSONNull                  = "null"
+	databaseJSONArray                 = "[]"
+	caseFalseConfirm                  = "false confirm"
+	caseStringConfirm                 = "string confirm"
+	caseNumericConfirm                = "numeric confirm"
+	databaseEnginePostgreSQL          = "postgresql"
+	databaseLabelRequiredMessage      = "label must be a non-empty string"
 )
 
 func TestLinodeDatabaseEngineListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseEngineListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseEngineListTool(cfg)
 
 	if tool.Name != "linode_database_engine_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_engine_list")
@@ -169,7 +144,7 @@ func TestLinodeDatabaseEngineListToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseEngineListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -219,7 +194,7 @@ func TestLinodeDatabaseEngineListToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseEngineListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -250,7 +225,7 @@ func TestLinodeDatabaseEngineListToolClientConfigurationError(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseEngineListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -272,7 +247,7 @@ func TestLinodeDatabaseEngineListToolPaginationValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseEngineListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineListTool(cfg)
 
 	cases := []struct {
 		name        string
@@ -321,7 +296,7 @@ func TestLinodeDatabaseTypeListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseTypeListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseTypeListTool(cfg)
 
 	if tool.Name != "linode_database_type_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_type_list")
@@ -399,7 +374,7 @@ func TestLinodeDatabaseTypeListToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -449,7 +424,7 @@ func TestLinodeDatabaseTypeListToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -480,7 +455,7 @@ func TestLinodeDatabaseTypeListToolClientConfigurationError(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseTypeListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -502,7 +477,7 @@ func TestLinodeDatabaseTypeListToolPaginationValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseTypeListTool(cfg)
 
 	cases := []struct {
 		name        string
@@ -551,7 +526,7 @@ func TestLinodeDatabaseTypeGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseTypeGetTool(cfg)
 
 	if tool.Name != "linode_database_type_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_type_get")
@@ -608,7 +583,7 @@ func TestLinodeDatabaseTypeGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseTypeGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseTypeIDParam: databaseTypeID, keyPage: 2, keyPageSize: 25})
 
@@ -658,7 +633,7 @@ func TestLinodeDatabaseTypeGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseTypeGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseTypeIDParam: databaseTypeID})
 
@@ -689,7 +664,7 @@ func TestLinodeDatabaseTypeGetToolTypeIdValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseTypeGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseTypeGetTool(cfg)
 
 	cases := []struct {
 		name        string
@@ -740,7 +715,7 @@ func TestLinodeDatabaseMySQLConfigGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseMysqlConfigGetTool(cfg)
 
 	if tool.Name != "linode_database_mysql_config_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_config_get")
@@ -802,7 +777,7 @@ func TestLinodeDatabaseMySQLConfigGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -852,7 +827,7 @@ func TestLinodeDatabaseMySQLConfigGetToolSortsKeys(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlConfigGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -888,7 +863,7 @@ func TestLinodeDatabaseMySQLConfigGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -919,7 +894,7 @@ func TestLinodeDatabaseMySQLConfigGetToolClientConfigurationError(t *testing.T) 
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -941,7 +916,7 @@ func TestLinodeDatabasePostgreSQLConfigGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLConfigGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabasePostgresqlConfigGetTool(cfg)
 
 	if tool.Name != "linode_database_postgresql_config_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_config_get")
@@ -1003,7 +978,7 @@ func TestLinodeDatabasePostgreSQLConfigGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1053,7 +1028,7 @@ func TestLinodeDatabasePostgreSQLConfigGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1084,7 +1059,7 @@ func TestLinodeDatabasePostgreSQLConfigGetToolClientConfigurationError(t *testin
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1106,7 +1081,7 @@ func TestLinodeDatabaseInstanceListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseMysqlInstanceListTool(cfg)
 
 	if tool.Name != "linode_database_mysql_instance_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_list")
@@ -1174,7 +1149,7 @@ func TestLinodeDatabaseInstanceListToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -1224,7 +1199,7 @@ func TestLinodeDatabaseInstanceListToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1255,7 +1230,7 @@ func TestLinodeDatabaseInstanceListToolClientConfigurationError(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1277,7 +1252,7 @@ func TestLinodeDatabaseInstanceListToolPaginationValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceListTool(cfg)
 
 	cases := []struct {
 		name        string
@@ -1326,7 +1301,7 @@ func TestLinodeDatabasePostgreSQLInstanceListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabasePostgresqlInstanceListTool(cfg)
 
 	if tool.Name != "linode_database_postgresql_instance_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_list")
@@ -1394,7 +1369,7 @@ func TestLinodeDatabasePostgreSQLInstanceListToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -1444,7 +1419,7 @@ func TestLinodeDatabasePostgreSQLInstanceListToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1475,7 +1450,7 @@ func TestLinodeDatabasePostgreSQLInstanceListToolClientConfigurationError(t *tes
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -1497,7 +1472,7 @@ func TestLinodeDatabasePostgreSQLInstanceListToolPaginationValidation(t *testing
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceListTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceListTool(cfg)
 
 	cases := []struct {
 		name        string
@@ -1546,7 +1521,7 @@ func TestLinodeDatabaseInstanceGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseMysqlInstanceGetTool(cfg)
 
 	if tool.Name != "linode_database_mysql_instance_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_get")
@@ -1605,7 +1580,7 @@ func TestLinodeDatabaseInstanceGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -1659,7 +1634,7 @@ func TestLinodeDatabaseInstanceGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -1690,7 +1665,7 @@ func TestLinodeDatabaseInstanceGetToolClientConfigurationError(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -1712,7 +1687,7 @@ func TestLinodeDatabaseInstanceGetToolInstanceIdValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceGetTool(cfg)
 
 	cases := []struct {
 		args map[string]any
@@ -1768,7 +1743,7 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabasePostgresqlInstanceGetTool(cfg)
 
 	if tool.Name != "linode_database_postgresql_instance_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_get")
@@ -1827,7 +1802,7 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -1881,7 +1856,7 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -1912,7 +1887,7 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolInstanceIdValidation(t *testing.
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceGetTool(cfg)
 
 	cases := []struct {
 		args map[string]any
@@ -1968,7 +1943,7 @@ func TestLinodeDatabaseInstanceSSLGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceSSLGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseMysqlInstanceSSLGetTool(cfg)
 
 	if tool.Name != "linode_database_mysql_instance_ssl_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_ssl_get")
@@ -2025,7 +2000,7 @@ func TestLinodeDatabaseInstanceSSLGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceSSLGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -2075,7 +2050,7 @@ func TestLinodeDatabaseInstanceSSLGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceSSLGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -2106,7 +2081,7 @@ func TestLinodeDatabaseInstanceSSLGetToolClientConfigurationError(t *testing.T) 
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceSSLGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -2128,7 +2103,7 @@ func TestLinodeDatabaseInstanceSSLGetToolInstanceIdValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceSSLGetTool(cfg)
 
 	cases := []struct {
 		args map[string]any
@@ -2184,7 +2159,7 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabasePostgresqlInstanceSSLGetTool(cfg)
 
 	if tool.Name != "linode_database_postgresql_instance_ssl_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_ssl_get")
@@ -2241,7 +2216,7 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceSSLGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -2291,7 +2266,7 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceSSLGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -2322,7 +2297,7 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolClientConfigurationError(t *t
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceSSLGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID})
 
@@ -2344,7 +2319,7 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolInstanceIdValidation(t *testi
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceSSLGetTool(cfg)
 
 	cases := []struct {
 		args map[string]any
@@ -2391,1932 +2366,6 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolInstanceIdValidation(t *testi
 				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsGetToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
-
-	if tool.Name != "linode_database_mysql_instance_credentials_get" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_credentials_get")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
-		t.Errorf("rawSchema missing key %v", databaseInstanceIDParam)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("rawSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsGetToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != databaseInstanceCredentialsPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: keyGrantLinode, Password: databaseCredentialsPassword}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, keyGrantLinode) {
-		t.Errorf("textContent.Text does not contain %v", keyGrantLinode)
-	}
-
-	if !strings.Contains(textContent.Text, databaseCredentialsPassword) {
-		t.Errorf("textContent.Text does not contain %v", databaseCredentialsPassword)
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsGetToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databaseInstanceCredentialsPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to retrieve MySQL Managed Database credentials") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve MySQL Managed Database credentials")
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsGetToolClientConfigurationError(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
-
-	req := createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true})
-
-	result, err := handler(t.Context(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsGetToolInstanceIdValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
-		{name: caseZeroInstanceID, args: map[string]any{databaseInstanceIDParam: 0}},
-		{name: caseNegativeInstanceID, args: map[string]any{databaseInstanceIDParam: -1}},
-		{name: caseFractionalInstanceID, args: map[string]any{databaseInstanceIDParam: 123.4}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/"}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsResetToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
-
-	if tool.Name != "linode_database_mysql_instance_credentials_reset" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_credentials_reset")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
-		t.Errorf("rawSchema missing key %v", databaseInstanceIDParam)
-	}
-
-	if !strings.Contains(rawSchema, keyConfirm) {
-		t.Errorf("rawSchema missing key %v", keyConfirm)
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsResetToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsResetToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databaseInstanceCredentialsResetPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsResetPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseCredentials{Username: keyGrantLinode, Password: databaseCredentialsPassword}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "credentials reset") {
-		t.Errorf("textContent.Text does not contain %v", "credentials reset")
-	}
-
-	// The canonical response is the id-echo only: the rotated credentials never
-	// reach the tool output.
-	if !strings.Contains(textContent.Text, `"instance_id"`) {
-		t.Errorf("textContent.Text does not contain %v", `"instance_id"`)
-	}
-
-	if strings.Contains(textContent.Text, keyGrantLinode) {
-		t.Errorf("textContent.Text leaks the credential username %v", keyGrantLinode)
-	}
-
-	if strings.Contains(textContent.Text, databaseCredentialsPassword) {
-		t.Errorf("textContent.Text leaks the credential password")
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsResetToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databaseInstanceCredentialsResetPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceCredentialsResetPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to reset MySQL Managed Database credentials") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to reset MySQL Managed Database credentials")
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsResetToolClientConfigurationError(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-func TestLinodeDatabaseInstanceCredentialsResetToolInstanceIdValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-		{name: caseZeroInstanceID, args: map[string]any{databaseInstanceIDParam: 0, keyConfirm: true}},
-		{name: caseNegativeInstanceID, args: map[string]any{databaseInstanceIDParam: -1, keyConfirm: true}},
-		{name: caseFractionalInstanceID, args: map[string]any{databaseInstanceIDParam: 123.4, keyConfirm: true}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
-
-	if tool.Name != "linode_database_postgresql_instance_credentials_reset" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_credentials_reset")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("rawSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databasePostgreSQLCredentialsResetPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLCredentialsResetPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "PostgreSQL Managed Database credentials reset") {
-		t.Errorf("textContent.Text does not contain %v", "PostgreSQL Managed Database credentials reset")
-	}
-
-	if !strings.Contains(textContent.Text, "instance_id") {
-		t.Errorf("textContent.Text does not contain %v", "instance_id")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databasePostgreSQLCredentialsResetPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLCredentialsResetPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to reset PostgreSQL Managed Database credentials") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to reset PostgreSQL Managed Database credentials")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolClientConfigurationError(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolInstanceIdValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-		{name: caseZeroInstanceID, args: map[string]any{databaseInstanceIDParam: 0, keyConfirm: true}},
-		{name: caseNegativeInstanceID, args: map[string]any{databaseInstanceIDParam: -1, keyConfirm: true}},
-		{name: caseFractionalInstanceID, args: map[string]any{databaseInstanceIDParam: 123.4, keyConfirm: true}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceCreateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
-
-	if tool.Name != "linode_database_mysql_instance_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_create")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{keyConfirm, keyLabel, keyType, databaseEngineParam, keyRegion} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabaseInstanceCreateToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceCreateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databaseInstancesPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancesPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		for key, want := range map[string]any{
-			keyLabel:                   databaseInstanceLabel,
-			keyType:                    databaseInstanceType,
-			databaseEngineParam:        databaseEngineID,
-			keyRegion:                  regionUSEast,
-			databaseSSLConnectionParam: true,
-		} {
-			if !reflect.DeepEqual(body[key], want) {
-				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseSSLConnectionParam: true, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, databaseInstanceLabel) {
-		t.Errorf("textContent.Text does not contain %v", databaseInstanceLabel)
-	}
-
-	if !strings.Contains(textContent.Text, "created") {
-		t.Errorf("textContent.Text does not contain %v", "created")
-	}
-}
-
-func TestLinodeDatabaseInstanceCreateToolRequiredFieldValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissingLabel, args: map[string]any{keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
-		{name: caseMissingType, args: map[string]any{keyLabel: databaseInstanceLabel, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "type must be a non-empty string"},
-		{name: "missing engine", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "engine must be a non-empty string"},
-		{name: "missing region", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyConfirm: true}, wantMessage: "region must be a non-empty string"},
-		{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
-		{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
-		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "fork must be an object"},
-		{name: caseInvalidPrivateNetwork, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
-		{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
-		{name: "unsupported argument", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "bogus_field": true, keyConfirm: true}, wantMessage: "unsupported argument: bogus_field"},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, testCase.wantMessage) {
-				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceCreateToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databaseInstancesPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancesPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to create Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to create Managed Database instance")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCreateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
-
-	if tool.Name != "linode_database_postgresql_instance_create" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_create")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{keyConfirm, keyLabel, keyType, databaseEngineParam, keyRegion} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCreateToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{{name: caseMissingConfirm}, {name: caseFalseConfirm, value: false}, {name: caseStringConfirm, value: boolStringTrue}, {name: caseNumericConfirm, value: 1}}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCreateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databasePostgreSQLInstancesPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancesPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		for key, want := range map[string]any{
-			keyLabel:                   databaseInstanceLabel,
-			keyType:                    databaseInstanceType,
-			databaseEngineParam:        databaseEnginePostgreSQLID,
-			keyRegion:                  regionUSEast,
-			databaseSSLConnectionParam: true,
-		} {
-			if !reflect.DeepEqual(body[key], want) {
-				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseSSLConnectionParam: true, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, databaseInstanceLabel) {
-		t.Errorf("textContent.Text does not contain %v", databaseInstanceLabel)
-	}
-
-	if !strings.Contains(textContent.Text, "created") {
-		t.Errorf("textContent.Text does not contain %v", "created")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCreateToolRequiredFieldValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissingLabel, args: map[string]any{keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
-		{name: caseMissingType, args: map[string]any{keyLabel: databaseInstanceLabel, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "type must be a non-empty string"},
-		{name: "missing engine", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, keyRegion: regionUSEast, keyConfirm: true}, wantMessage: "engine must be a non-empty string"},
-		{name: "missing region", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyConfirm: true}, wantMessage: "region must be a non-empty string"},
-		{name: caseInvalidAllowList, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
-		{name: "invalid cluster size", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "cluster_size": "3", keyConfirm: true}, wantMessage: "cluster_size must be a positive integer"},
-		{name: caseInvalidEngineConfig, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "fork must be an object"},
-		{name: caseInvalidPrivateNetwork, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
-		{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, testCase.wantMessage) {
-				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceCreateToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databasePostgreSQLInstancesPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancesPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: temporaryFailure}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEnginePostgreSQLID, keyRegion: regionUSEast, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to create PostgreSQL Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to create PostgreSQL Managed Database instance")
-	}
-}
-
-func TestLinodeDatabaseInstanceUpdateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
-
-	if tool.Name != "linode_database_mysql_instance_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_update")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm, keyLabel, keyType, databaseUpdatesParam, databaseVersionParam} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabaseInstanceUpdateToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: databaseInstanceLabel}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != databaseInstancePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		for key, want := range map[string]any{
-			keyLabel:                    databaseInstanceLabel,
-			keyType:                     databaseInstanceType,
-			databaseVersionParam:        databaseVersion,
-			databaseAllowListParam:      []any{tcLit},
-			databaseUpdatesParam:        map[string]any{tcFrequency: tcWeekly, tcHourOfDay: float64(1)},
-			databasePrivateNetworkParam: map[string]any{tcPublicAccess: false, keyVPCID: float64(123)},
-		} {
-			if !reflect.DeepEqual(body[key], want) {
-				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		databaseInstanceIDParam:     databaseInstanceID,
-		keyLabel:                    databaseInstanceLabel,
-		keyType:                     databaseInstanceType,
-		databaseVersionParam:        databaseVersion,
-		databaseAllowListParam:      `["203.0.113.0/24"]`,
-		databaseUpdatesParam:        `{"frequency":"weekly","hour_of_day":1}`,
-		databasePrivateNetworkParam: `{"public_access":false,"vpc_id":123}`,
-		databaseEngineConfigParam:   `{"binlog_retention_period":600}`,
-		keyConfirm:                  true,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, databaseInstanceLabel) {
-		t.Errorf("textContent.Text does not contain %v", databaseInstanceLabel)
-	}
-
-	if !strings.Contains(textContent.Text, "updated") {
-		t.Errorf("textContent.Text does not contain %v", "updated")
-	}
-}
-
-// An explicit null on private_network detaches the instance from its VPC. The
-// wire body must carry "private_network":null rather than rejecting the value or
-// dropping the field, matching the Linode API and the Python implementation.
-func TestLinodeDatabaseInstanceUpdateToolPrivateNetworkDetach(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]json.RawMessage
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		raw, present := body[databasePrivateNetworkParam]
-		if !present {
-			t.Error("private_network key missing from body, want present")
-		}
-
-		if string(raw) != databaseJSONNull {
-			t.Errorf("body[private_network] = %q, want null", string(raw))
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		databaseInstanceIDParam:     databaseInstanceID,
-		databasePrivateNetworkParam: nil,
-		keyConfirm:                  true,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-}
-
-// When private_network is absent the field must be omitted from the wire body
-// entirely so the existing VPC binding is left untouched.
-func TestLinodeDatabaseInstanceUpdateToolPrivateNetworkAbsentOmits(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]json.RawMessage
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if _, present := body[databasePrivateNetworkParam]; present {
-			t.Errorf("body contains private_network key, want omitted")
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		databaseInstanceIDParam: databaseInstanceID,
-		keyLabel:                databaseInstanceLabel,
-		keyConfirm:              true,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-}
-
-// PostgreSQL update must detach on explicit null exactly like the MySQL path so
-// the two engines stay at parity.
-func TestLinodeDatabasePostgreSQLInstanceUpdateToolPrivateNetworkDetach(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databasePostgreSQLInstancePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
-		}
-
-		var body map[string]json.RawMessage
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		raw, present := body[databasePrivateNetworkParam]
-		if !present {
-			t.Error("private_network key missing from body, want present")
-		}
-
-		if string(raw) != databaseJSONNull {
-			t.Errorf("body[private_network] = %q, want null", string(raw))
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		databaseInstanceIDParam:     databaseInstanceID,
-		databasePrivateNetworkParam: nil,
-		keyConfirm:                  true,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-}
-
-func TestLinodeDatabaseInstanceUpdateToolInputValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDRequiredMessage},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
-		{name: "empty update", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}, wantMessage: "at least one update field must be provided"},
-		{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
-		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
-		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: caseInvalidPrivateNetwork, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
-		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
-		{name: "numeric version", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseVersionParam: 8, keyConfirm: true}, wantMessage: "version must be a non-empty string"},
-		{name: "non-string allow list entry", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: []any{1}, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
-		{name: "object allow list", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: jsonObjectEmpty, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
-		{name: "null engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONNull, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: "array engine config", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: "array private network", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: databaseJSONArray, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
-		{name: "null updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONNull, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
-		{name: "array updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: databaseJSONArray, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, testCase.wantMessage) {
-				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceUpdateToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databaseInstancePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: databaseInstanceLabel, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to update Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to update Managed Database instance")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceUpdateToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
-
-	if tool.Name != "linode_database_postgresql_instance_update" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_update")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	raw := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm, keyLabel, keyType, databaseUpdatesParam, databaseVersionParam} {
-		if !strings.Contains(raw, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceUpdateToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: databaseInstanceLabel}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceUpdateToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != databasePostgreSQLInstancePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		for key, want := range map[string]any{
-			keyLabel:                    databaseInstanceLabel,
-			keyType:                     databaseInstanceType,
-			databaseVersionParam:        databaseVersion,
-			databaseAllowListParam:      []any{tcLit},
-			databaseUpdatesParam:        map[string]any{tcFrequency: tcWeekly, tcHourOfDay: float64(1)},
-			databaseEngineConfigParam:   map[string]any{databasePostgreSQLConfigNamespace: map[string]any{"timezone": "UTC"}},
-			databasePrivateNetworkParam: map[string]any{tcPublicAccess: false, keyVPCID: float64(123)},
-		} {
-			if !reflect.DeepEqual(body[key], want) {
-				t.Errorf("body[%v] = %v, want %v", key, body[key], want)
-			}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		databaseInstanceIDParam:     databaseInstanceID,
-		keyLabel:                    databaseInstanceLabel,
-		keyType:                     databaseInstanceType,
-		databaseVersionParam:        databaseVersion,
-		databaseAllowListParam:      `["203.0.113.0/24"]`,
-		databaseUpdatesParam:        `{"frequency":"weekly","hour_of_day":1}`,
-		databasePrivateNetworkParam: `{"public_access":false,"vpc_id":123}`,
-		databaseEngineConfigParam:   `{"pg":{"timezone":"UTC"}}`,
-		keyConfirm:                  true,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, databaseInstanceLabel) {
-		t.Errorf("textContent.Text does not contain %v", databaseInstanceLabel)
-	}
-
-	if !strings.Contains(textContent.Text, "PostgreSQL Managed Database") {
-		t.Errorf("textContent.Text does not contain %v", "PostgreSQL Managed Database")
-	}
-
-	if !strings.Contains(textContent.Text, "updated") {
-		t.Errorf("textContent.Text does not contain %v", "updated")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceUpdateToolInputValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
-
-	cases := []struct {
-		name        string
-		args        map[string]any
-		wantMessage string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDRequiredMessage},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
-		{name: "empty update", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}, wantMessage: "at least one update field must be provided"},
-		{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
-		{name: caseInvalidAllowList, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseAllowListParam: invalidJSON, keyConfirm: true}, wantMessage: databaseAllowListNotArray},
-		{name: caseInvalidEngineConfig, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseEngineConfigParam: invalidJSON, keyConfirm: true}, wantMessage: databaseEngineConfigNotObject},
-		{name: caseInvalidPrivateNetwork, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
-		{name: "invalid updates", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, databaseUpdatesParam: invalidJSON, keyConfirm: true}, wantMessage: databaseUpdatesNotObject},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, testCase.wantMessage) {
-				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceUpdateToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databasePostgreSQLInstancePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstancePath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: databaseInstanceLabel, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to update PostgreSQL Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to update PostgreSQL Managed Database instance")
 	}
 }
 
@@ -4324,7 +2373,7 @@ func TestLinodeDatabaseInstanceDeleteToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(cfg)
 
 	if tool.Name != "linode_database_mysql_instance_delete" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_delete")
@@ -4354,7 +2403,7 @@ func TestLinodeDatabaseInstanceDeleteToolConfirmValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(cfg)
 
 	cases := []struct {
 		value any
@@ -4433,7 +2482,7 @@ func TestLinodeDatabaseInstanceDeleteToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 	if err != nil {
@@ -4466,7 +2515,7 @@ func TestLinodeDatabaseInstanceDeleteToolInputValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(cfg)
 
 	cases := []struct {
 		args map[string]any
@@ -4503,7 +2552,7 @@ func TestLinodeDatabaseInstanceDeleteToolInputValidation(t *testing.T) {
 
 			wantInstanceIDMessage := databaseInstanceIDMessage
 			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+				wantInstanceIDMessage = databaseInstanceIDPositiveMessage
 			}
 
 			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
@@ -4532,7 +2581,7 @@ func TestLinodeDatabaseInstanceDeleteToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 	if err != nil {
@@ -4561,7 +2610,7 @@ func TestLinodeDatabaseInstanceDeleteToolClientError(t *testing.T) {
 func TestLinodeDatabaseInstanceDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeDatabaseInstanceDeleteTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -4596,7 +2645,7 @@ func TestLinodeDatabaseInstanceDeleteToolDryRunPreviewWithoutMutating(t *testing
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		databaseInstanceIDParam: databaseInstanceID,
@@ -4649,7 +2698,7 @@ func TestLinodeDatabaseInstanceDeleteToolDryRunPreviewWithoutMutating(t *testing
 func TestLinodeDatabaseInstanceDeleteToolDryRunStillValidatesInstanceId(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeDatabaseMysqlInstanceDeleteTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
 	if err != nil {
@@ -4660,8 +2709,8 @@ func TestLinodeDatabaseInstanceDeleteToolDryRunStillValidatesInstanceId(t *testi
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDRequiredMessage) {
-		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDRequiredMessage)
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDPositiveMessage) {
+		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDPositiveMessage)
 	}
 }
 
@@ -4669,7 +2718,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(cfg)
 
 	if tool.Name != "linode_database_postgresql_instance_delete" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_delete")
@@ -4699,7 +2748,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolConfirmValidation(t *testing.
 	t.Parallel()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(cfg)
 
 	cases := []struct {
 		value any
@@ -4778,7 +2827,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 	if err != nil {
@@ -4811,7 +2860,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolInputValidation(t *testing.T)
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(cfg)
 
 	cases := []struct {
 		args map[string]any
@@ -4848,7 +2897,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolInputValidation(t *testing.T)
 
 			wantInstanceIDMessage := databaseInstanceIDMessage
 			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+				wantInstanceIDMessage = databaseInstanceIDPositiveMessage
 			}
 
 			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
@@ -4877,7 +2926,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true, keyConfirmedDryRun: true}))
 	if err != nil {
@@ -4906,7 +2955,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolClientError(t *testing.T) {
 func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -4941,7 +2990,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunPreviewWithoutMutating(
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		databaseInstanceIDParam: databaseInstanceID,
@@ -4990,7 +3039,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunPreviewWithoutMutating(
 func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunStillValidatesInstanceId(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeDatabasePostgresqlInstanceDeleteTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
 	if err != nil {
@@ -5001,1193 +3050,8 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunStillValidatesInstanceI
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDRequiredMessage) {
-		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDRequiredMessage)
-	}
-}
-
-func TestLinodeDatabaseInstancePatchToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
-
-	if tool.Name != "linode_database_mysql_instance_patch" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_patch")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("rawSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabaseInstancePatchToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstancePatchToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databaseInstancePatchPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePatchPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "patch started") {
-		t.Errorf("textContent.Text does not contain %v", "patch started")
-	}
-
-	if !strings.Contains(textContent.Text, "123") {
-		t.Errorf("textContent.Text does not contain %v", "123")
-	}
-}
-
-func TestLinodeDatabaseInstancePatchToolInputValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstancePatchToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databaseInstancePatchPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstancePatchPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to patch Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to patch Managed Database instance")
-	}
-}
-
-func TestLinodeDatabaseInstanceSuspendToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
-
-	if tool.Name != "linode_database_mysql_instance_suspend" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_suspend")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("rawSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabaseInstanceSuspendToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceSuspendToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databaseInstanceSuspendPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceSuspendPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "suspend started") {
-		t.Errorf("textContent.Text does not contain %v", "suspend started")
-	}
-
-	if !strings.Contains(textContent.Text, "123") {
-		t.Errorf("textContent.Text does not contain %v", "123")
-	}
-}
-
-func TestLinodeDatabaseInstanceSuspendToolInputValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceSuspendToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databaseInstanceSuspendPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceSuspendPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to suspend Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to suspend Managed Database instance")
-	}
-}
-
-func TestLinodeDatabaseInstanceResumeToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
-
-	if tool.Name != "linode_database_mysql_instance_resume" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_mysql_instance_resume")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("rawSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabaseInstanceResumeToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceResumeToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databaseInstanceResumePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceResumePath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "resume started") {
-		t.Errorf("textContent.Text does not contain %v", "resume started")
-	}
-
-	if !strings.Contains(textContent.Text, "123") {
-		t.Errorf("textContent.Text does not contain %v", "123")
-	}
-}
-
-func TestLinodeDatabaseInstanceResumeToolInputValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabaseInstanceResumeToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databaseInstanceResumePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databaseInstanceResumePath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to resume Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to resume Managed Database instance")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceSuspendToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg)
-
-	if tool.Name != "linode_database_postgresql_instance_suspend" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_suspend")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("rawSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceSuspendToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceSuspendToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databasePostgreSQLInstanceSuspendPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceSuspendPath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "suspend started") {
-		t.Errorf("textContent.Text does not contain %v", "suspend started")
-	}
-
-	if !strings.Contains(textContent.Text, "123") {
-		t.Errorf("textContent.Text does not contain %v", "123")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceSuspendToolInputValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceSuspendToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databasePostgreSQLInstanceSuspendPath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceSuspendPath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to suspend PostgreSQL Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to suspend PostgreSQL Managed Database instance")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceResumeToolDefinition(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg)
-
-	if tool.Name != "linode_database_postgresql_instance_resume" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_postgresql_instance_resume")
-	}
-
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
-	}
-
-	if capability != profiles.CapWrite {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("rawSchema missing key %v", key)
-		}
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceResumeToolConfirmValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: databaseInvalidAPIURL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg)
-
-	cases := []struct {
-		value any
-		name  string
-	}{
-		{name: caseMissingConfirm},
-		{name: caseFalseConfirm, value: false},
-		{name: caseStringConfirm, value: boolStringTrue},
-		{name: caseNumericConfirm, value: 1},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			args := map[string]any{databaseInstanceIDParam: databaseInstanceID}
-			if testCase.value != nil {
-				args[keyConfirm] = testCase.value
-			}
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			if !strings.Contains(textContent.Text, "confirm=true") {
-				t.Errorf("textContent.Text does not contain %v", "confirm=true")
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceResumeToolSuccess(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != databasePostgreSQLInstanceResumePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceResumePath)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != "Bearer "+tokenTest {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
-		}
-
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.IsError {
-		t.Error("result.IsError = true, want false")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "resume started") {
-		t.Errorf("textContent.Text does not contain %v", "resume started")
-	}
-
-	if !strings.Contains(textContent.Text, "123") {
-		t.Errorf("textContent.Text does not contain %v", "123")
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceResumeToolInputValidation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg)
-
-	cases := []struct {
-		args map[string]any
-		name string
-	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
-		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
-		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyConfirm: true}},
-		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyConfirm: true}},
-		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyConfirm: true}},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			wantInstanceIDMessage := databaseInstanceIDMessage
-			if testCase.name == caseMissingInstanceID {
-				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
-			}
-
-			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
-			}
-		})
-	}
-}
-
-func TestLinodeDatabasePostgreSQLInstanceResumeToolClientError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != databasePostgreSQLInstanceResumePath {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, databasePostgreSQLInstanceResumePath)
-		}
-
-		w.WriteHeader(http.StatusInternalServerError)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyErrors: []map[string]string{{keyReason: temporaryFailure}},
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if !result.IsError {
-		t.Error("result.IsError = false, want true")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, "Failed to resume PostgreSQL Managed Database instance") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to resume PostgreSQL Managed Database instance")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDPositiveMessage) {
+		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDPositiveMessage)
 	}
 }
 
@@ -6195,7 +3059,7 @@ func TestLinodeDatabaseEngineGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDatabaseEngineGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDatabaseEngineGetTool(cfg)
 
 	if tool.Name != "linode_database_engine_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_database_engine_get")
@@ -6252,7 +3116,7 @@ func TestLinodeDatabaseEngineGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseEngineGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseEngineIDParam: databaseEngineID})
 
@@ -6302,7 +3166,7 @@ func TestLinodeDatabaseEngineGetToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeDatabaseEngineGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseEngineIDParam: databaseEngineID})
 
@@ -6333,7 +3197,7 @@ func TestLinodeDatabaseEngineGetToolClientConfigurationError(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseEngineGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{databaseEngineIDParam: databaseEngineID})
 
@@ -6355,7 +3219,7 @@ func TestLinodeDatabaseEngineGetToolEngineIdValidation(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDatabaseEngineGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDatabaseEngineGetTool(cfg)
 
 	cases := []struct {
 		name        string

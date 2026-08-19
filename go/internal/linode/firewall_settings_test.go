@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	endpointFirewallSettings  = "/networking/firewalls/settings"
-	firewallSettingsKeyLinode = "linode"
+	endpointFirewallSettings = "/networking/firewalls/settings"
 )
 
 func TestClientListFirewallSettingsSuccess(t *testing.T) {

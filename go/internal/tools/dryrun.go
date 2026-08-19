@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
@@ -67,8 +68,9 @@ func IsDryRun(request *mcp.CallToolRequest) bool {
 // result with the v0 wire shape. Tool handlers call this from their
 // dry_run branch after fetching current_state.
 //
-// toolName is the registered MCP tool name (e.g.
-// "linode_instance_delete"). environment is the operator-selected
+// toolName is the registered MCP tool name; no example is named here
+// because a tool named in this tree reads to the generated-tools gate as
+// one still served by hand. environment is the operator-selected
 // Linode environment; pass empty when the tool's caller did not
 // specify one. method and path describe the HTTP call the tool would
 // have made. currentState is the resource as it exists right now,
@@ -221,6 +223,33 @@ func billingDeltaToProto(delta *DryRunBillingDelta) *linodev1.DryRunBillingDelta
 	}
 
 	return out
+}
+
+// ProtoStateList is the current_state a preview reports for a fetched
+// collection: each element serialized through its descriptor rather than
+// through whatever the Go struct's own tags happen to say, so the state reads
+// the way the elements in the tool's answer do and the other language builds
+// the same array from the same descriptor.
+//
+// It takes the fetch's error the way the hook helpers do, so a preview reads
+// one call rather than a check around it.
+func ProtoStateList[T proto.Message](items []T, err error) (any, error) {
+	if err != nil {
+		return nil, err
+	}
+
+	state := make([]json.RawMessage, 0, len(items))
+
+	for _, item := range items {
+		element, marshalErr := MarshalProtoJSON(item)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+
+		state = append(state, element)
+	}
+
+	return state, nil
 }
 
 // toProtoValue converts an arbitrary current_state or body value into a

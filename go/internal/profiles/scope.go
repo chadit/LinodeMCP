@@ -183,8 +183,11 @@ func scopeCategory(toolName string) string {
 	return ""
 }
 
-// prefixRule pairs tool-name prefixes with the scope category they
-// resolve to.
+// prefixRule pairs tool-name prefixes with the category they resolve to.
+// Shared by the two prefix tables this package keeps, scopePrefixTable for
+// Linode scope categories and categoryTable for profile categories, which
+// name different things and are read differently: the first match wins for a
+// scope, every match counts for a profile.
 type prefixRule struct {
 	category string
 	prefixes []string
@@ -205,6 +208,10 @@ func scopePrefixTable() []prefixRule {
 			prefixes: []string{
 				"linode_account_", "linode_managed_", "linode_tag_",
 				"linode_support_ticket_", "linode_profile_", "linode_sshkey_",
+				// Resource locks span every lockable family, and the API
+				// gates /locks on account:* rather than on the scope of the
+				// resource a lock protects.
+				"linode_lock_",
 			},
 			category: categoryAccount,
 		},
@@ -272,8 +279,10 @@ func isScopelessRoute(toolName string) bool {
 		return true
 	// Token-only or otherwise scopeless per the spec: betas,
 	// maintenance, the caller's own profile, Longview subscription
-	// plans, VPC reads, the OAuth-client thumbnail, and the metrics
-	// query endpoint.
+	// plans, VPC reads, the OAuth-client thumbnail, the metrics
+	// query endpoint, the IAM role catalog, the per-user IAM access
+	// level, and the IDP configuration surface, which the spec gates
+	// on the token alone even for the writes.
 	case "linode_beta_get", "linode_beta_list",
 		"linode_maintenance_policy_list", "linode_account_maintenance_list",
 		"linode_profile_get",
@@ -281,7 +290,39 @@ func isScopelessRoute(toolName string) bool {
 		"linode_vpc_get", "linode_vpc_list",
 		"linode_vpc_subnet_get", "linode_vpc_subnet_list",
 		"linode_account_oauth_client_thumbnail_get",
-		"linode_monitor_service_metric_query":
+		"linode_monitor_service_metric_query",
+		"linode_iam_role_permission_list",
+		"linode_iam_user_role_permission_get",
+		"linode_iam_user_role_permission_update",
+		"linode_iam_idp_config_list",
+		"linode_iam_idp_config_get",
+		"linode_iam_idp_config_create",
+		"linode_iam_idp_config_update",
+		"linode_iam_idp_config_delete",
+		"linode_iam_idp_config_certificate_list",
+		"linode_iam_idp_config_certificate_create",
+		"linode_iam_idp_config_certificate_delete",
+		"linode_iam_idp_config_excluded_user_list",
+		"linode_iam_idp_config_excluded_user_update",
+		"linode_iam_idp_config_included_user_list",
+		"linode_iam_idp_config_included_user_update":
+		return true
+	// The account-delegation surface, which the spec gates on the
+	// token alone for every route including the writes and the
+	// delegate-token mint.
+	case "linode_iam_delegation_child_account_list",
+		"linode_iam_delegation_child_account_user_list",
+		"linode_iam_delegation_child_account_user_update",
+		"linode_iam_delegation_default_role_permission_get",
+		"linode_iam_delegation_default_role_permission_update",
+		"linode_iam_delegation_profile_child_account_list",
+		"linode_iam_delegation_profile_child_account_get",
+		"linode_iam_delegation_profile_child_account_token_create",
+		"linode_iam_delegation_user_child_account_list":
+		return true
+	// The entity catalog the IAM surface grants over, which the spec
+	// gates on the token alone.
+	case "linode_entity_list":
 		return true
 	}
 
@@ -324,6 +365,10 @@ func scopeOverrides() map[string][]Scope {
 		"linode_lke_kubeconfig_get":           {ScopeLKEReadWrite},
 		"linode_lke_node_get":                 {ScopeLKEReadWrite},
 		"linode_nodebalancer_config_node_get": {ScopeNodeBalancersReadWrite},
+		// The connection-pool collection read is documented as
+		// databases:read_write while the single-pool read beside it stays
+		// databases:read_only.
+		"linode_database_postgresql_connection_pool_list": {ScopeDatabasesReadWrite},
 		// The docs put this instance-interface read under the
 		// NodeBalancers scope; encoded as documented.
 		"linode_instance_interface_firewall_list": {ScopeNodeBalancersReadOnly},

@@ -10,8 +10,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // healthResult mirrors the subset of the linode_audit_health JSON
@@ -22,29 +21,6 @@ type healthResult struct {
 	ActiveLogExists  bool   `json:"active_log_exists"`
 	RotatedFileCount int    `json:"rotated_file_count"`
 	DroppedEvents    int64  `json:"dropped_events"`
-}
-
-// TestLinodeAuditHealthDefinition pins the tool identity.
-func TestLinodeAuditHealthDefinition(t *testing.T) {
-	t.Parallel()
-
-	tool, capability, handler := tools.NewLinodeAuditHealthTool(&config.Config{})
-
-	if tool.Name != "linode_audit_health" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_audit_health")
-	}
-
-	if capability != profiles.CapMeta {
-		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
-	}
-
-	if handler == nil {
-		t.Fatal("handler is nil")
-	}
-
-	if _, ok := tool.InputSchema.Properties["confirm"]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", "confirm")
-	}
 }
 
 // TestLinodeAuditHealthReportsJSONL drives the handler against a temp
@@ -63,7 +39,7 @@ func TestLinodeAuditHealthReportsJSONL(t *testing.T) {
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
 	})
 
-	_, _, handler := tools.NewLinodeAuditHealthTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditHealthTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {

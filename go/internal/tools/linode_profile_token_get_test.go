@@ -11,21 +11,22 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
 	profileTokenGetToolName = "linode_profile_token_get"
 	keyTokenID              = "token_id"
+	profileTokenScopesParam = "scopes"
 )
 
 func TestLinodeProfileTokenGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeProfileTokenGetTool(cfg)
 
 	if tool.Name != profileTokenGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, profileTokenGetToolName)
@@ -84,7 +85,7 @@ func TestLinodeProfileTokenGetToolInvalidTokenIdRejectedBeforeClientCall(t *test
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+			_, _, handler := gentools.NewLinodeProfileTokenGetTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
@@ -144,7 +145,7 @@ func TestLinodeProfileTokenGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileTokenGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenID: 12345}))
 	if err != nil {
@@ -199,7 +200,7 @@ func TestLinodeProfileTokenGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeProfileTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeProfileTokenGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyTokenID: 12345}))
 	if err != nil {
@@ -214,8 +215,8 @@ func TestLinodeProfileTokenGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_profile_token_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_profile_token_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve personal access token") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve personal access token")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
@@ -38,7 +39,7 @@ func TestDestroyBypassDryRunGate(t *testing.T) {
 	t.Run("confirm without a dry-run assertion is rejected", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
+		_, _, handler := gentools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(789),
@@ -65,7 +66,7 @@ func TestDestroyBypassDryRunGate(t *testing.T) {
 	t.Run("bypass without confirm is rejected", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
+		_, _, handler := gentools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID:            float64(789),
@@ -83,7 +84,7 @@ func TestDestroyBypassDryRunGate(t *testing.T) {
 	t.Run("both bypass and confirmed flags is rejected", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
+		_, _, handler := gentools.NewLinodeVolumeDeleteTool(dryRunNoCallServer(t))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID:            float64(789),
@@ -128,7 +129,7 @@ func TestDestroyYoloBypass(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeDeleteTool(cfg)
 
 	// No confirm, no confirmed_dry_run; only the yolo-marked context.
 	ctx := tools.WithYoloAllowed(t.Context())

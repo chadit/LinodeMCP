@@ -12,8 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // TestLinodeDomainCreateContract freezes what POST /v4/domains advertises:
@@ -22,7 +22,7 @@ import (
 func TestLinodeDomainCreateContract(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, _ := tools.NewLinodeDomainCreateTool(&config.Config{})
+	tool, capability, _ := gentools.NewLinodeDomainCreateTool(&config.Config{})
 	if capability != profiles.CapWrite {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
@@ -87,7 +87,7 @@ func TestLinodeDomainCreateContract(t *testing.T) {
 func TestLinodeDomainCreateValidationContract(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDomainCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeDomainCreateTool(&config.Config{})
 
 	tests := []struct {
 		name string
@@ -165,9 +165,14 @@ func TestLinodeDomainCreateValidationContract(t *testing.T) {
 			want: "master_ips must be an array of strings",
 		},
 		{
+			// tags reads through the surface-wide tags reader now that the
+			// body is generated, so this create answers what every other tool
+			// answers for a tags argument that is not an array. It used to
+			// answer the generic array wording its own hand-written builder
+			// produced, which was the only place on the surface that did.
 			name: "tags type",
 			args: map[string]any{keyDomain: domainExample, keyType: keyMaster, keySoaEmail: domainSOAEmailExample, keyTags: 1, keyConfirm: true},
-			want: "tags must be an array of strings",
+			want: errTagsNotJSONArray,
 		},
 		{
 			name: "expire sec type",
@@ -248,7 +253,7 @@ func TestLinodeDomainCreateForwardsOptionalBody(t *testing.T) {
 		keyTTLSec:      float64(300),
 	}
 
-	_, _, handler := tools.NewLinodeDomainCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeDomainCreateTool(&config.Config{})
 
 	args := map[string]any{
 		keyDomain:      domainExample,
@@ -297,7 +302,7 @@ func TestLinodeDomainCreateForwardsOptionalBody(t *testing.T) {
 func TestLinodeDomainCreateOmitsAbsentOptionalBody(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDomainCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeDomainCreateTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyDomain:   domainExample,

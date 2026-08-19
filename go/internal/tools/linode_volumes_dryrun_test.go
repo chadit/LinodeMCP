@@ -11,14 +11,14 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeVolumeCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeVolumeCreateTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeVolumeCreateTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -36,7 +36,7 @@ func TestLinodeVolumeCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeVolumeCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeCreateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyLabel:  "vol-01",
@@ -100,7 +100,7 @@ func TestLinodeVolumeCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 func TestLinodeVolumeCreateToolDryRunStillValidatesLabel(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeVolumeCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeVolumeCreateTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast,
@@ -125,7 +125,7 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeVolumeAttachTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeVolumeAttachTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -135,7 +135,7 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
-		_, _, handler := tools.NewLinodeVolumeAttachTool(cfg)
+		_, _, handler := gentools.NewLinodeVolumeAttachTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
@@ -190,7 +190,7 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 	t.Run("still validates volume_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeVolumeAttachTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeVolumeAttachTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyLinodeID: float64(444),
@@ -213,7 +213,7 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 func TestLinodeVolumeDetachToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeVolumeDetachTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeVolumeDetachTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -223,7 +223,7 @@ func TestLinodeVolumeDetachToolDryRunPreviewWithoutDetaching(t *testing.T) {
 	t.Parallel()
 
 	cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
-	_, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeDetachTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyVolumeID: float64(333),
@@ -271,7 +271,7 @@ func TestLinodeVolumeDetachToolDryRunPreviewSurfacesCurrentAttachment(t *testing
 	attachedTo := 444
 	cfg, _ := dryRunGetStateServer(t, "/volumes/333",
 		linode.Volume{ID: 333, Label: testVolumeLabel, LinodeID: &attachedTo})
-	_, _, handler := tools.NewLinodeVolumeDetachTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeDetachTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyVolumeID: float64(333),
@@ -308,7 +308,7 @@ func TestLinodeVolumeDetachToolDryRunPreviewSurfacesCurrentAttachment(t *testing
 func TestLinodeVolumeDetachToolDryRunStillValidatesVolumeId(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeVolumeDetachTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeVolumeDetachTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyDryRun: true}))
 	if err != nil {
@@ -327,7 +327,7 @@ func TestLinodeVolumeDetachToolDryRunStillValidatesVolumeId(t *testing.T) {
 func TestLinodeVolumeResizeToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeVolumeResizeTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeVolumeResizeTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -338,7 +338,7 @@ func TestLinodeVolumeResizeToolDryRunPreviewWithoutResizing(t *testing.T) {
 
 	cfg, methods := dryRunGetStateServer(t, "/volumes/333",
 		linode.Volume{ID: 333, Label: testVolumeLabel, Size: 50})
-	_, _, handler := tools.NewLinodeVolumeResizeTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeResizeTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyVolumeID: float64(333),
@@ -401,7 +401,7 @@ func TestLinodeVolumeResizeToolDryRunPreviewWithoutResizing(t *testing.T) {
 func TestLinodeVolumeResizeToolDryRunStillValidatesVolumeId(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeVolumeResizeTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeVolumeResizeTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keySize:   float64(100),
@@ -426,7 +426,7 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeVolumeUpdateTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeVolumeUpdateTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -436,7 +436,7 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
-		_, _, handler := tools.NewLinodeVolumeUpdateTool(cfg)
+		_, _, handler := gentools.NewLinodeVolumeUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
@@ -491,7 +491,7 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 	t.Run("still validates editable field", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeVolumeUpdateTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeVolumeUpdateTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
@@ -527,7 +527,7 @@ func TestLinodeVolumeDeleteToolDryRunDependencies(t *testing.T) {
 		LinodeLabel: &attachedLabel,
 	})
 
-	_, _, handler := tools.NewLinodeVolumeDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeVolumeDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyVolumeID: float64(789),

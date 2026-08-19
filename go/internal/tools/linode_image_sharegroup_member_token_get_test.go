@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeImageShareGroupMemberTokenGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupMemberTokenGetTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_member_token_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_member_token_get")
@@ -95,7 +95,7 @@ func TestLinodeImageShareGroupMemberTokenGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupMemberTokenGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyShareGroupID: 123, keyTokenUUID: shareGroupTokenGetUUID})
 
@@ -159,7 +159,7 @@ func TestLinodeImageShareGroupMemberTokenGetToolRejectsInvalidPathParamsBeforeCl
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
+			_, _, handler := gentools.NewLinodeImageSharegroupMemberTokenGetTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, args))
 			if err != nil {
@@ -205,7 +205,7 @@ func TestLinodeImageShareGroupMemberTokenGetToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupMemberTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupMemberTokenGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyShareGroupID: 123, keyTokenUUID: shareGroupTokenGetUUID}))
 	if err != nil {

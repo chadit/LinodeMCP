@@ -1,7 +1,10 @@
 package audit_test
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -9,6 +12,26 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
+
+// TestLoadWindowSurfacesReadError verifies the JSONL window loader
+// propagates a mid-file read failure instead of summarizing a
+// truncated window as if it were complete.
+func TestLoadWindowSurfacesReadError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// 1<<21 is 2MB, past the reader's 1MB scanner token cap.
+	oversized := append(bytes.Repeat([]byte("x"), 1<<21), '\n')
+
+	if err := os.WriteFile(filepath.Join(dir, audit.ActiveLogFileName), oversized, 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := audit.LoadWindow(t.Context(), "", dir, time.Time{}, true); !errors.Is(err, bufio.ErrTooLong) {
+		t.Errorf("err = %v, want %v", err, bufio.ErrTooLong)
+	}
+}
 
 // TestValidateGroupByDefaultsToToolStatus verifies an empty request
 // falls back to the documented default grouping.

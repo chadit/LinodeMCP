@@ -46,12 +46,17 @@ func newCapabilityTestServer(t *testing.T) *server.Server {
 // schemaHasBooleanProp reports whether the input schema declares a property
 // named name with type "boolean". Used by the capability-and-confirm
 // invariant test to detect whether a tool requires explicit confirmation.
+func schemaHasBooleanProp(schema map[string]any, name string) bool {
+	return schemaHasPropOfType(schema, name, "boolean")
+}
+
+// schemaHasPropOfType reports whether the input schema declares a property
+// named name whose type is wantType.
 //
 // The schema is the mcp-go ToolInputSchema struct; Properties is a
 // map[string]any whose entries are JSON-Schema-shaped map[string]any. We
-// look for an entry whose nested "type" field is the literal string
-// "boolean".
-func schemaHasBooleanProp(schema map[string]any, name string) bool {
+// look for an entry whose nested "type" field is the literal wantType.
+func schemaHasPropOfType(schema map[string]any, name, wantType string) bool {
 	entry, found := schema[name]
 	if !found {
 		return false
@@ -64,7 +69,7 @@ func schemaHasBooleanProp(schema map[string]any, name string) bool {
 
 	typeVal, isString := props["type"].(string)
 
-	return isString && typeVal == "boolean"
+	return isString && typeVal == wantType
 }
 
 // toolSchemaProps returns a registered tool's input-schema properties.
@@ -215,6 +220,100 @@ func TestCapabilityAndConfirmInvariants(t *testing.T) {
 			// check runs over the default profile, which excludes Admin
 			// anyway). CapUnknown is gated by the allowlist test above.
 		}
+	}
+}
+
+// singleStepDestroyTools names the CapDestroy tools whose registered schema
+// carries no two-stage control pair, so plan/apply never applies to them.
+// Several are recorded as deliberate in the proto contract, whose input
+// messages carry a "no mode/plan_id" note citing the ground-truth dump.
+//
+// This is a pin, not a ratchet. It does not say these tools should gain the
+// pair; it says a destroy tool cannot change sides without someone editing this
+// list.
+func singleStepDestroyTools() map[string]struct{} {
+	return map[string]struct{}{
+		"linode_database_postgresql_connection_pool_delete": {},
+		"linode_iam_idp_config_certificate_delete":          {},
+		"linode_iam_idp_config_delete":                      {},
+		"linode_image_sharegroup_image_delete":              {},
+		"linode_image_sharegroup_member_token_delete":       {},
+		"linode_instance_config_delete":                     {},
+		"linode_instance_config_interface_delete":           {},
+		"linode_instance_interface_delete":                  {},
+		"linode_lke_acl_delete":                             {},
+		"linode_lke_cluster_recycle":                        {},
+		"linode_lke_cluster_regenerate":                     {},
+		"linode_lke_node_recycle":                           {},
+		"linode_lke_pool_recycle":                           {},
+		"linode_lock_delete":                                {},
+		"linode_longview_client_delete":                     {},
+		"linode_monitor_alert_channel_delete":               {},
+		"linode_monitor_service_alert_definition_delete":    {},
+		"linode_monitor_stream_delete":                      {},
+		"linode_monitor_stream_destination_delete":          {},
+		tcLinodeNodebalancerConfigDelete:                    {},
+		tcLinodeNodebalancerConfigNodeDel:                   {},
+	}
+}
+
+// TestCapabilityAndTwoStageInvariants pins the two-stage control surface across
+// the whole registry. plan_id is the marker for the flow, since mode alone can
+// be a domain field (a NodeBalancer node's mode, a connection pool's mode), and
+// a tool that advertises plan_id without a string mode offers a plan no caller
+// can apply. Every CapDestroy tool then has to advertise the pair unless it is
+// pinned single-step above, and the pin is checked for staleness in both
+// directions, so a destroy tool cannot silently gain or lose plan/apply.
+func TestCapabilityAndTwoStageInvariants(t *testing.T) {
+	t.Parallel()
+
+	srv := newCapabilityTestServer(t)
+
+	infos := srv.AllToolInfos()
+	if len(infos) == 0 {
+		t.Fatal("infos is empty")
+	}
+
+	singleStep := singleStepDestroyTools()
+	registered := make(map[string]struct{}, len(infos))
+
+	for i := range infos {
+		registered[infos[i].Name] = struct{}{}
+
+		checkTwoStageParams(t, &infos[i], singleStep)
+	}
+
+	for name := range singleStep {
+		if _, exists := registered[name]; !exists {
+			t.Errorf("single-step pin %s matches no registered tool", name)
+		}
+	}
+}
+
+// checkTwoStageParams asserts one tool's two-stage control pair: plan_id comes
+// with a string mode, and a CapDestroy tool carries the pair unless it is
+// pinned single-step.
+func checkTwoStageParams(t *testing.T, info *server.ToolInfo, singleStep map[string]struct{}) {
+	t.Helper()
+
+	props := toolSchemaProps(t, info)
+	hasPlanID := schemaHasPropOfType(props, "plan_id", "string")
+
+	if _, declared := props["plan_id"]; declared && !hasPlanID {
+		t.Errorf("tool %s: plan_id is declared but is not a string", info.Name)
+	}
+
+	if hasPlanID && !schemaHasPropOfType(props, "mode", "string") {
+		t.Errorf("tool %s: declares plan_id without a string mode", info.Name)
+	}
+
+	if info.Capability != profiles.CapDestroy {
+		return
+	}
+
+	_, pinned := singleStep[info.Name]
+	if hasPlanID == pinned {
+		t.Errorf("tool %s: advertises two-stage = %v, want %v", info.Name, hasPlanID, !pinned)
 	}
 }
 

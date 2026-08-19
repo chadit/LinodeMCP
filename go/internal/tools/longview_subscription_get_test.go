@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -23,7 +23,7 @@ func TestLinodeLongviewSubscriptionGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeLongviewSubscriptionGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeLongviewSubscriptionGetTool(cfg)
 
 	if tool.Name != "linode_longview_subscription_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_subscription_get")
@@ -84,7 +84,7 @@ func TestLinodeLongviewSubscriptionGetToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewSubscriptionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewSubscriptionGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyLongviewSubscriptionID: longviewSubscriptionID})
 
 	result, err := handler(t.Context(), req)
@@ -136,7 +136,7 @@ func TestLinodeLongviewSubscriptionGetToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewSubscriptionGetTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewSubscriptionGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyLongviewSubscriptionID: longviewSubscriptionID})
 
 	result, err := handler(t.Context(), req)
@@ -152,8 +152,8 @@ func TestLinodeLongviewSubscriptionGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_longview_subscription_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_longview_subscription_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve Longview subscription") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve Longview subscription")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errTemporaryFailure) {
@@ -183,7 +183,7 @@ func TestLinodeLongviewSubscriptionGetToolInvalidSubscriptionIDRejectsBeforeClie
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeLongviewSubscriptionGetTool(cfg)
+			_, _, handler := gentools.NewLinodeLongviewSubscriptionGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)

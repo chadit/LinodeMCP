@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -26,7 +26,7 @@ func TestLinodeManagedLinodeSettingsToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeManagedLinodeSettingsListTool(cfg)
 
 	if tool.Name != managedLinodeSettingsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, managedLinodeSettingsToolName)
@@ -104,7 +104,7 @@ func TestLinodeManagedLinodeSettingsToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+	_, _, handler := gentools.NewLinodeManagedLinodeSettingsListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25}))
 	if err != nil {
@@ -160,7 +160,7 @@ func TestLinodeManagedLinodeSettingsToolInvalidPaginationRejectsBeforeClient(t *
 			t.Cleanup(srv.Close)
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+			_, _, handler := gentools.NewLinodeManagedLinodeSettingsListTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
@@ -208,7 +208,7 @@ func TestLinodeManagedLinodeSettingsToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeManagedLinodeSettingsTool(cfg)
+	_, _, handler := gentools.NewLinodeManagedLinodeSettingsListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {

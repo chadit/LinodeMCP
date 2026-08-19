@@ -12,8 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -29,7 +29,6 @@ const (
 	caseIPv6Address          = "ipv6 address"
 	// The malformed-body half of both write tools' error text, shared with the
 	// Python twin through testdata/behavior so neither side can drift.
-	reservedIPNotObjectText = "reserved IP response must be an object"
 )
 
 // reservedIPBodyFixture is the documented single-address response, carrying the
@@ -42,7 +41,7 @@ func reservedIPBodyFixture() map[string]any {
 		keyInterfaceID:           nil,
 		keySupportTicketLinodeID: nil,
 		keyReservedIPPrefix:      24,
-		"public":                 true,
+		purposePublic:            true,
 		keyRDNS:                  nil,
 		keyRegion:                regionUSEast,
 		"reserved":               true,
@@ -110,7 +109,7 @@ func reservedIPResultBody(t *testing.T, result *mcp.CallToolResult) map[string]a
 func TestLinodeReservedIPGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeReservedIPGetTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeNetworkingReservedIPGetTool(&config.Config{})
 	if tool.Name != "linode_networking_reserved_ip_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_reserved_ip_get")
 	}
@@ -135,7 +134,7 @@ func TestLinodeReservedIPGetToolPreservesExplicitNulls(t *testing.T) {
 	t.Parallel()
 
 	cfg, seen, _ := reservedIPServer(t, reservedIPBodyFixture())
-	_, _, handler := tools.NewLinodeReservedIPGetTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyAddress: reservedIPAddressFixture,
@@ -165,7 +164,7 @@ func TestLinodeReservedIPGetToolPreservesExplicitNulls(t *testing.T) {
 func TestLinodeReservedIPGetToolRejectsInvalidAddressBeforeClient(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeReservedIPGetTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPGetTool(&config.Config{})
 
 	for name, args := range map[string]map[string]any{
 		caseMissing: {},
@@ -190,7 +189,7 @@ func TestLinodeReservedIPGetToolRejectsInvalidAddressBeforeClient(t *testing.T) 
 func TestLinodeReservedIPTypeListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeReservedIPTypeListTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeNetworkingReservedIPTypeListTool(&config.Config{})
 	if tool.Name != "linode_networking_reserved_ip_type_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_reserved_ip_type_list")
 	}
@@ -220,7 +219,7 @@ func TestLinodeReservedIPTypeListToolKeepsNullPrices(t *testing.T) {
 		}},
 		keyPage: 1, keyPages: 1, keyResults: 1,
 	})
-	_, _, handler := tools.NewLinodeReservedIPTypeListTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPTypeListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -259,7 +258,7 @@ func TestLinodeReservedIPTypeListToolKeepsNullPrices(t *testing.T) {
 func TestLinodeReservedIPCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeReservedIPCreateTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeNetworkingReservedIPCreateTool(&config.Config{})
 	if tool.Name != "linode_networking_reserved_ip_create" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_reserved_ip_create")
 	}
@@ -286,7 +285,7 @@ func TestLinodeReservedIPCreateToolOmitsAbsentTags(t *testing.T) {
 	t.Parallel()
 
 	cfg, seen, seenBody := reservedIPServer(t, reservedIPBodyFixture())
-	_, _, handler := tools.NewLinodeReservedIPCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPCreateTool(cfg)
 
 	_, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast, keyConfirm: true,
@@ -317,7 +316,7 @@ func TestLinodeReservedIPCreateToolSendsSuppliedTags(t *testing.T) {
 	t.Parallel()
 
 	cfg, _, seenBody := reservedIPServer(t, reservedIPBodyFixture())
-	_, _, handler := tools.NewLinodeReservedIPCreateTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPCreateTool(cfg)
 
 	_, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyRegion:         regionUSEast,
@@ -345,7 +344,7 @@ func TestLinodeReservedIPCreateToolSendsSuppliedTags(t *testing.T) {
 func TestLinodeReservedIPCreateToolRejectsBadInputBeforeClient(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeReservedIPCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPCreateTool(&config.Config{})
 
 	for name, args := range map[string]map[string]any{
 		caseMissingRegion:  {keyConfirm: true},
@@ -378,7 +377,7 @@ func TestLinodeReservedIPCreateToolRejectsBadInputBeforeClient(t *testing.T) {
 func TestLinodeReservedIPCreateToolDryRunReportsUnknownBilling(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeReservedIPCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPCreateTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast, keyDryRun: true,
@@ -406,7 +405,7 @@ func TestLinodeReservedIPCreateToolDryRunReportsUnknownBilling(t *testing.T) {
 func TestLinodeReservedIPUpdateToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeReservedIPUpdateTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeNetworkingReservedIPUpdateTool(&config.Config{})
 	if tool.Name != "linode_networking_reserved_ip_update" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_networking_reserved_ip_update")
 	}
@@ -433,7 +432,7 @@ func TestLinodeReservedIPUpdateToolSendsEmptyTagsToClear(t *testing.T) {
 	t.Parallel()
 
 	cfg, seen, seenBody := reservedIPServer(t, reservedIPBodyFixture())
-	_, _, handler := tools.NewLinodeReservedIPUpdateTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPUpdateTool(cfg)
 
 	_, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyAddress:        reservedIPAddressFixture,
@@ -462,7 +461,7 @@ func TestLinodeReservedIPUpdateToolSendsEmptyTagsToClear(t *testing.T) {
 func TestLinodeReservedIPUpdateToolRejectsBadInputBeforeClient(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeReservedIPUpdateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPUpdateTool(&config.Config{})
 
 	for name, args := range map[string]map[string]any{
 		"missing address":  {keyReservedIPTags: []any{reservedIPTagFixture}, keyConfirm: true},
@@ -493,7 +492,7 @@ func TestLinodeReservedIPUpdateToolDryRunFetchesStateWithoutUpdating(t *testing.
 	t.Parallel()
 
 	cfg, seen, _ := reservedIPServer(t, reservedIPBodyFixture())
-	_, _, handler := tools.NewLinodeReservedIPUpdateTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPUpdateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyAddress:        reservedIPAddressFixture,
@@ -556,22 +555,22 @@ func reservedIPToolFactories() []reservedIPToolFactory {
 	return []reservedIPToolFactory{
 		{
 			name:       "get",
-			tool:       tools.NewLinodeReservedIPGetTool,
+			tool:       gentools.NewLinodeNetworkingReservedIPGetTool,
 			args:       map[string]any{keyAddress: reservedIPAddressFixture},
-			shapeError: "Failed to get reserved IPv4 address: " + reservedIPNotObjectText,
+			shapeError: "Failed to get reserved IPv4 address: networking reserved ip get response must be a JSON object",
 		},
-		{name: "type_list", tool: tools.NewLinodeReservedIPTypeListTool, args: map[string]any{}},
+		{name: "type_list", tool: gentools.NewLinodeNetworkingReservedIPTypeListTool, args: map[string]any{}},
 		{
 			name:       "create",
-			tool:       tools.NewLinodeReservedIPCreateTool,
+			tool:       gentools.NewLinodeNetworkingReservedIPCreateTool,
 			args:       map[string]any{keyRegion: regionUSEast, keyConfirm: true},
-			shapeError: "Failed to reserve public IPv4 address: " + reservedIPNotObjectText,
+			shapeError: "Failed to reserve public IPv4 address: networking reserved ip create response must be a JSON object",
 		},
 		{
 			name:       "update",
-			tool:       tools.NewLinodeReservedIPUpdateTool,
+			tool:       gentools.NewLinodeNetworkingReservedIPUpdateTool,
 			args:       map[string]any{keyAddress: reservedIPAddressFixture, keyReservedIPTags: []any{reservedIPTagFixture}, keyConfirm: true},
-			shapeError: "Failed to replace reserved IPv4 tags: " + reservedIPNotObjectText,
+			shapeError: "Failed to replace reserved IPv4 tags: networking reserved ip update response must be a JSON object",
 		},
 	}
 }
@@ -680,20 +679,24 @@ func TestReservedIPToolsSurfaceConfigErrors(t *testing.T) {
 	}
 }
 
-// TestReservedIPGetToolRejectsAMalformedBody covers the half of the malformed
-// surface the shape guard deliberately leaves alone: an object whose fields do
-// not fit the proto is still a hard decode error, because only the wrong
-// top-level JSON type has a sentence the Python twin can match.
+// TestReservedIPGetToolRejectsAMalformedBody covers the other half of the
+// malformed surface: an object whose fields do not fit the proto carries no
+// sentence the Python twin can match, so it reaches the caller as the decoder's
+// own complaint rather than as the shared one.
 func TestReservedIPGetToolRejectsAMalformedBody(t *testing.T) {
 	t.Parallel()
 
 	cfg, _, _ := reservedIPServer(t, map[string]any{keyReservedIPPrefix: "not-an-integer"})
-	_, _, handler := tools.NewLinodeReservedIPGetTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkingReservedIPGetTool(cfg)
 
-	_, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyAddress: reservedIPAddressFixture,
 	}))
-	if err == nil {
-		t.Fatal("expected a decode error for a body the proto cannot accept")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %+v, want a decode failure reported to the caller", result)
 	}
 }

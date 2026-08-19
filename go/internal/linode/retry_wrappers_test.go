@@ -92,40 +92,6 @@ func TestRetryWrappersDelegationPatternsGetFirewallReturnsPointer(t *testing.T) 
 	}
 }
 
-func TestRetryWrappersDelegationPatternsDeleteDomainReturnsErrorOnly(t *testing.T) {
-	t.Parallel()
-
-	var requestCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count := requestCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusInternalServerError)
-			writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
-
-			return
-		}
-
-		if r.URL.Path != "/domains/1" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/domains/1")
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-	err := client.DeleteDomain(t.Context(), 1)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if requestCount.Load() != int32(2) {
-		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
-	}
-}
-
 func TestRetryWrappersDelegationPatternsGetFirewallNoRetryOn401(t *testing.T) {
 	t.Parallel()
 
@@ -153,36 +119,6 @@ func TestRetryWrappersDelegationPatternsGetFirewallNoRetryOn401(t *testing.T) {
 
 	if requestCount.Load() != int32(1) {
 		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
-	}
-}
-
-func TestRetryWrappersDelegationPatternsDeleteDomainRecordTwoIdsReturnsError(t *testing.T) {
-	t.Parallel()
-
-	var requestCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		count := requestCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusInternalServerError)
-			writeRawTestResponse(t, w, `{"errors":[{"reason":"server error"}]}`)
-
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
-
-	err := client.DeleteDomainRecord(t.Context(), 1, 2)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if requestCount.Load() != int32(2) {
-		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
 	}
 }
 

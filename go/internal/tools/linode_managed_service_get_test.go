@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -30,7 +30,7 @@ func TestLinodeManagedServiceGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeManagedServiceGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeManagedServiceGetTool(cfg)
 
 	if tool.Name != managedServiceGetToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, managedServiceGetToolName)
@@ -88,7 +88,7 @@ func TestLinodeManagedServiceGetToolInvalidServiceIdRejectedBeforeClientCall(t *
 			}))
 			t.Cleanup(srv.Close)
 
-			_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
+			_, _, handler := gentools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
@@ -149,7 +149,7 @@ func TestLinodeManagedServiceGetToolSuccess(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
+	_, _, handler := gentools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue}))
 	if err != nil {
@@ -201,7 +201,7 @@ func TestLinodeManagedServiceGetToolApiError(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	_, _, handler := tools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
+	_, _, handler := gentools.NewLinodeManagedServiceGetTool(managedServiceConfig(srv.URL))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyManagedServiceID: managedServiceToolIDValue}))
 	if err != nil {
@@ -216,8 +216,8 @@ func TestLinodeManagedServiceGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_managed_service_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_managed_service_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve managed service") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve managed service")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

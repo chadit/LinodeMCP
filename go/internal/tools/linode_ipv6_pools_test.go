@@ -10,15 +10,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeIPv6PoolsListToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeIPv6PoolsListTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeIPv6PoolListTool(&config.Config{})
 
 	if tool.Name != "linode_ipv6_pool_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_ipv6_pool_list")
@@ -82,7 +82,7 @@ func TestLinodeIPv6PoolsListToolSuccessWithPagination(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeIPv6PoolsListTool(cfg)
+	_, _, handler := gentools.NewLinodeIPv6PoolListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25}))
 	if err != nil {
@@ -117,7 +117,7 @@ func TestLinodeIPv6PoolsListToolInvalidPaginationRejectsBeforeClient(t *testing.
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLoopbackClosed, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeIPv6PoolsListTool(cfg)
+	_, _, handler := gentools.NewLinodeIPv6PoolListTool(cfg)
 
 	cases := []struct {
 		name        string

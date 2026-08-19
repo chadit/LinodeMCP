@@ -36,136 +36,128 @@ const (
 )
 
 // Categories returns the list of category names a tool belongs to based on
-// its name. Categorization is prefix-based per the cross-language spec.
-//
-// A tool may belong to multiple categories (e.g. linode_instance_boot is in
-// both "compute" and "compute_actions"). The spec allows collapsing compute,
-// compute_actions, and compute_deep into a single "compute" bucket; we keep
-// them split because some profiles (storage-admin, kubernetes-admin) lift
-// only the deep slice and not the full compute surface.
+// its name. Every matching rule contributes, so a tool sits in each category
+// it fits and a profile elevating any of them serves it.
 //
 // Returns an empty slice for tools whose name matches no known prefix.
 // Phase 8.2 builder tools surface this list via linode_profile_list_tools
 // so the model can filter the catalog by category.
 func Categories(toolName string) []string {
+	if isCoreTool(toolName) {
+		return []string{"core"}
+	}
+
 	cats := make([]string, 0, 2)
 
-	// Core: a small explicit list of meta/account names.
-	switch toolName {
-	case "hello", "version", "linode_profile_get", "linode_profile_preferences_get", "linode_profile_preferences_update", "linode_profile_token_create", "linode_profile_token_delete", "linode_profile_security_question_list", "linode_profile_security_question_answer", "linode_profile_token_list", "linode_profile_token_update", "linode_profile_device_list", "linode_profile_login_get", "linode_profile_tfa_enable", "linode_profile_tfa_enable_confirm", "linode_profile_phone_number_send", "linode_profile_phone_number_delete", "linode_profile_phone_number_verify", "linode_profile_tfa_disable", "linode_profile_app_get", "linode_profile_app_delete", "linode_profile_device_get", "linode_profile_device_revoke", "linode_profile_app_list", "linode_account_get", "linode_beta_list", "linode_beta_get", "linode_account_beta_list", "linode_account_oauth_client_list", "linode_account_payment_method_list", "linode_account_payment_method_get", "linode_account_payment_method_create", "linode_account_payment_method_delete", "linode_account_payment_method_make_default", "linode_account_notification_list", "linode_tag_list", "linode_tag_create", "linode_tag_delete", "linode_maintenance_policy_list", "linode_account_event_list", "linode_tag_object_list", "linode_support_ticket_reply_list", "linode_support_ticket_list", "linode_support_ticket_close", "linode_account_user_list", "linode_account_user_get", "linode_profile_token_get", "linode_account_user_grants_get", "linode_account_user_grants_update", "linode_account_user_update", "linode_account_user_delete", "linode_account_user_create", "linode_support_ticket_create", "linode_support_ticket_attachment_create", "linode_support_ticket_reply_create", "linode_managed_contact_create", "linode_managed_service_create", "linode_account_invoice_list", "linode_account_payment_list", "linode_account_payment_create", "linode_account_promo_credit_add", "linode_account_invoice_item_list", "linode_account_beta_get":
-		cats = append(cats, "core")
-	}
-
-	// compute_deep: per-instance backups, stats, disks, and IPs.
-	if hasAnyPrefix(
-		toolName,
-		"linode_instance_backup_",
-		"linode_instance_stats_",
-		"linode_instance_transfer_",
-		"linode_instance_disk_",
-		"linode_instance_ip_",
-	) {
-		cats = append(cats, "compute_deep")
-	}
-
-	// compute_actions: instance lifecycle that's not a deep sub-resource.
-	if isComputeAction(toolName) {
-		cats = append(cats, "compute_actions")
-	}
-
-	// compute: broad compute surface (instances, regions, types, images,
-	// stackscripts). Sub-resources under linode_instance_ that already
-	// matched compute_deep are still in compute too; profile rules use
-	// the union of categories, so duplication is harmless. Tool names are
-	// singular across verbs (linode_image_list, linode_stackscript_create),
-	// so a single singular prefix per resource covers list/get/write tools.
-	if hasAnyPrefix(
-		toolName,
-		"linode_instance_",
-		"linode_region_",
-		"linode_kernel_",
-		"linode_type_",
-		"linode_placement_group_",
-		"linode_placement_groups_",
-		"linode_image_",
-		"linode_stackscript_",
-	) {
-		cats = append(cats, "compute")
-	}
-
-	if strings.HasPrefix(toolName, "linode_volume_") {
-		cats = append(cats, "block_storage")
-	}
-
-	if strings.HasPrefix(toolName, "linode_object_storage_") {
-		cats = append(cats, "object_storage")
-	}
-
-	if strings.HasPrefix(toolName, "linode_domain_") {
-		cats = append(cats, "dns")
-	}
-
-	if hasAnyPrefix(
-		toolName,
-		"linode_firewall_",
-		"linode_network_transfer_",
-		"linode_networking_ip_",
-		"linode_networking_ips_",
-		"linode_networking_ipv4_",
-		"linode_nodebalancer_",
-		"linode_vlan_",
-		"linode_vlans_",
-		"linode_ipv6_range_",
-		"linode_ipv6_pools_",
-	) {
-		cats = append(cats, "networking")
-	}
-
-	if strings.HasPrefix(toolName, "linode_database_") {
-		cats = append(cats, "databases")
-	}
-
-	if strings.HasPrefix(toolName, "linode_lke_") {
-		cats = append(cats, "lke")
-	}
-
-	if strings.HasPrefix(toolName, "linode_vpc_") {
-		cats = append(cats, "vpcs")
-	}
-
-	if strings.HasPrefix(toolName, "linode_sshkey_") {
-		cats = append(cats, "security")
-	}
-
-	if hasAnyPrefix(toolName, "linode_monitor_", "linode_longview_") {
-		cats = append(cats, "monitor")
+	for _, rule := range categoryTable() {
+		if hasAnyPrefix(toolName, rule.prefixes...) {
+			cats = append(cats, rule.category)
+		}
 	}
 
 	return cats
 }
 
-// isComputeAction reports whether the tool is one of the instance-lifecycle
-// actions that profiles may want to elevate independently of the deep
-// sub-resources. Listed explicitly to avoid sweeping up unrelated names that
-// happen to share a verb suffix.
-func isComputeAction(toolName string) bool {
+// isCoreTool reports whether a tool is one of the four the "core" category
+// holds. Core is the session's own starting point rather than a slice of the
+// Linode surface, so it stands apart from the prefix table and no profile
+// elevates it; account-gated tools live in "account", which one can.
+func isCoreTool(toolName string) bool {
 	switch toolName {
-	case "linode_instance_boot",
-		"linode_instance_reboot",
-		"linode_instance_shutdown",
-		"linode_instance_clone",
-		"linode_instance_migrate",
-		"linode_instance_rebuild",
-		"linode_instance_rescue",
-		"linode_instance_password_reset",
-		"linode_instance_create",
-		"linode_instance_delete",
-		"linode_instance_resize",
-		"linode_instance_get",
-		"linode_instance_list":
+	case "hello", "version", "linode_profile_get", "linode_account_get":
 		return true
 	default:
 		return false
+	}
+}
+
+// categoryTable returns the prefix-to-category rules. This is the same table
+// python/src/linodemcp/profiles/builtin.py declares as _TOOL_CATEGORIES, and
+// `make profile-resolution` holds the two to one answer per tool: a category a
+// tool has in one language and not the other is a profile that serves
+// different tools depending on which client the caller runs.
+//
+// Built fresh per call so the slice doesn't sit as a package-level global,
+// matching scopePrefixTable.
+func categoryTable() []prefixRule {
+	return []prefixRule{
+		// Per-instance sub-resources, listed ahead of compute for reading
+		// order: storage-admin elevates this slice without the rest of compute.
+		{
+			category: "compute_deep",
+			prefixes: []string{
+				"linode_instance_backup_",
+				"linode_instance_backups_",
+				"linode_instance_disk_",
+				"linode_instance_ip_",
+				"linode_instance_stats_",
+				"linode_instance_transfer_",
+			},
+		},
+		// Tool names are singular across verbs (linode_image_list,
+		// linode_stackscript_create), so one prefix per resource covers a
+		// family's reads and writes alike.
+		{
+			category: "compute",
+			prefixes: []string{
+				"linode_image_",
+				"linode_instance_",
+				"linode_kernel_",
+				"linode_placement_group_",
+				"linode_region_",
+				"linode_stackscript_",
+				"linode_type_",
+			},
+		},
+		// What the API gates on account:*, following scope.go's account rule.
+		// The profile prefixes are enumerated rather than swept up under one
+		// linode_profile_ entry because the builder's own draft tools share
+		// that prefix and never reach the API.
+		{
+			category: "account",
+			prefixes: []string{
+				"linode_account_",
+				"linode_beta_",
+				"linode_lock_",
+				"linode_maintenance_policy_",
+				"linode_managed_",
+				"linode_profile_app_",
+				"linode_profile_device_",
+				"linode_profile_grants_",
+				"linode_profile_login_",
+				"linode_profile_phone_number_",
+				"linode_profile_preferences_",
+				"linode_profile_security_",
+				"linode_profile_tfa_",
+				"linode_profile_token_",
+				"linode_profile_update",
+				"linode_support_ticket_",
+				"linode_tag_",
+			},
+		},
+		{category: "block_storage", prefixes: []string{"linode_volume_"}},
+		{category: "databases", prefixes: []string{"linode_database_"}},
+		{category: "object_storage", prefixes: []string{"linode_object_storage_"}},
+		{category: "dns", prefixes: []string{"linode_domain_"}},
+		{
+			category: "networking",
+			prefixes: []string{
+				"linode_firewall_",
+				"linode_ipv6_",
+				"linode_network_transfer_",
+				"linode_networking_",
+				"linode_nodebalancer_",
+				"linode_vlan_",
+			},
+		},
+		{category: "lke", prefixes: []string{"linode_lke_"}},
+		{category: "vpcs", prefixes: []string{"linode_vpc_"}},
+		{category: "security", prefixes: []string{"linode_sshkey_"}},
+		{category: "monitor", prefixes: []string{"linode_monitor_"}},
+		// Longview carries its own longview:* scope, so a profile that
+		// elevates monitor must not reach it.
+		{category: "longview", prefixes: []string{"linode_longview_"}},
+		{category: "iam", prefixes: []string{"linode_iam_"}},
 	}
 }
 
@@ -198,11 +190,11 @@ func elevatedCategories(profileName string) map[string]struct{} {
 	case BuiltinDefault, BuiltinReadonlyFull:
 		// no elevation
 	case BuiltinComputeAdmin:
-		add("compute", "compute_actions", "compute_deep", "block_storage", "security")
+		add("compute", "compute_deep", "block_storage", "security")
 	case BuiltinNetworkAdmin:
 		add("networking", "dns", "vpcs")
 	case BuiltinKubernetesAdmin:
-		add("lke", "compute", "compute_actions", "compute_deep", "vpcs")
+		add("lke", "compute", "compute_deep", "vpcs")
 	case BuiltinStorageAdmin:
 		add("block_storage", "object_storage", "compute_deep")
 	case BuiltinFullAccess, BuiltinEmergency:

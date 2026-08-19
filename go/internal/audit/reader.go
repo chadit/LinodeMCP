@@ -48,8 +48,9 @@ type RecentQuery struct {
 // not an error: querying before the first event is a normal state.
 // Undecodable lines are skipped so a single corrupt record doesn't
 // abort the scan. File-open failures mid-scan are skipped too; the
-// returned error is reserved for a directory that exists but can't be
-// listed.
+// returned error covers a directory that exists but can't be listed
+// and a file that fails mid-read (truncation would silently drop
+// events).
 func ReadRecent(dir string, query *RecentQuery) ([]Event, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -87,7 +88,10 @@ func scanMatching(dir string, query *RecentQuery, limit int) ([]Event, error) {
 	results := make([]Event, 0, limit)
 
 	for _, name := range files {
-		events := readEventsFromFile(root, name)
+		events, err := readEventsFromFile(root, name)
+		if err != nil {
+			return nil, err
+		}
 
 		// Within a file lines are append-order (oldest first); walk
 		// backwards so the accumulator stays newest-first across the
@@ -214,13 +218,14 @@ type rotatedFile struct {
 
 // readEventsFromFile decodes every JSON line in name into an Event,
 // in file order (oldest first). Gzipped rotated files are
-// decompressed transparently. Returns whatever decoded successfully;
-// open failures yield an empty slice (the scan skips the file), and
-// undecodable lines are skipped individually.
-func readEventsFromFile(root *os.Root, name string) []Event {
+// decompressed transparently. Open failures yield an empty slice (the
+// scan skips the file) and undecodable lines are skipped individually,
+// but a read failure mid-file returns an error so a truncated scan is
+// never mistaken for a complete one.
+func readEventsFromFile(root *os.Root, name string) ([]Event, error) {
 	file, err := root.Open(name)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	defer func() { _ = file.Close() }()
@@ -230,7 +235,7 @@ func readEventsFromFile(root *os.Root, name string) []Event {
 	if isGzipName(name) {
 		gzReader, gzErr := gzip.NewReader(file)
 		if gzErr != nil {
-			return nil
+			return nil, nil
 		}
 
 		defer func() { _ = gzReader.Close() }()
@@ -257,7 +262,11 @@ func readEventsFromFile(root *os.Root, name string) []Event {
 		events = append(events, event)
 	}
 
-	return events
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("audit: read audit file %s: %w", name, err)
+	}
+
+	return events, nil
 }
 
 // Scanner buffer sizes. Audit lines are small (a few hundred bytes

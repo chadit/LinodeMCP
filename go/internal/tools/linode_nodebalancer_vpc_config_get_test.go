@@ -11,8 +11,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // expect* helpers are fatal package-local checks from linode_assertions_test.go; check* helpers are nonfatal.
@@ -21,7 +21,7 @@ func TestLinodeNodeBalancerVPCConfigGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeNodeBalancerVPCConfigGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeNodebalancerVPCConfigGetTool(cfg)
 
 	if tool.Name != "linode_nodebalancer_vpc_config_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_nodebalancer_vpc_config_get")
@@ -51,7 +51,7 @@ func TestLinodeNodeBalancerVPCConfigGetToolRequiredArguments(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeNodeBalancerVPCConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerVPCConfigGetTool(cfg)
 
 	cases := []struct {
 		name string
@@ -125,7 +125,7 @@ func TestLinodeNodeBalancerVPCConfigGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeNodeBalancerVPCConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerVPCConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: 123, keyVPCConfigID: 456})
 
@@ -197,7 +197,7 @@ func TestLinodeNodeBalancerVPCConfigGetToolApiError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeNodeBalancerVPCConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerVPCConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: 123, keyVPCConfigID: 456})
 
@@ -231,7 +231,7 @@ func TestLinodeNodeBalancerVPCConfigGetToolValidationRejectsBeforeClientCall(t *
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeNodeBalancerVPCConfigGetTool(cfg)
+	_, _, handler := gentools.NewLinodeNodebalancerVPCConfigGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: 123})
 

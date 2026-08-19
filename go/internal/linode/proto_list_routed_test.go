@@ -1,7 +1,6 @@
 package linode_test
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -70,19 +69,6 @@ func assertRefusedBeforeSending(t *testing.T, err error, operation string, recei
 	}
 }
 
-// An empty tag label would collapse "/tags/{tag_label}" to "/tags/", which lists
-// every tag on the account instead of one tag's objects.
-func TestRoutedProtoListRefusesAnEmptyPathValue(t *testing.T) {
-	t.Parallel()
-
-	srv, received := refusingServer(t)
-	client := linode.NewClient(srv.URL, routedListToken, nil, linode.WithMaxRetries(0))
-
-	_, err := client.ListTaggedObjectsProto(t.Context(), "", 2, 25)
-
-	assertRefusedBeforeSending(t, err, opListTaggedObjects, received)
-}
-
 // Same proof for the request primitive that carries a query string: it resolves
 // its route the same way but reaches the wire directly, not through a list fetcher.
 func TestRoutedQueryRequestRefusesAnEmptyPathValue(t *testing.T) {
@@ -94,111 +80,4 @@ func TestRoutedQueryRequestRefusesAnEmptyPathValue(t *testing.T) {
 	_, err := client.ListTaggedObjects(t.Context(), "", 2, 25)
 
 	assertRefusedBeforeSending(t, err, opListTaggedObjects, received)
-}
-
-// Page controls have to arrive in the query of the resolved path, not appended to
-// a path that already carries one, and the tag label has to be escaped exactly once.
-func TestRoutedPaginatedProtoListSendsPathAndPageControls(t *testing.T) {
-	t.Parallel()
-
-	const (
-		wantPath  = "/tags/prod%2Fweb"
-		wantQuery = "page=2&page_size=25"
-	)
-
-	var (
-		gotPath  string
-		gotQuery string
-	)
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.EscapedPath()
-		gotQuery = r.URL.RawQuery
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{"data": []any{}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, routedListToken, nil, linode.WithMaxRetries(0))
-
-	if _, err := client.ListTaggedObjectsProto(t.Context(), "prod/web", 2, 25); err != nil {
-		t.Fatalf("ListTaggedObjectsProto() error = %v, want no error", err)
-	}
-
-	if gotPath != wantPath {
-		t.Errorf("path = %v, want %v", gotPath, wantPath)
-	}
-
-	if gotQuery != wantQuery {
-		t.Errorf("query = %v, want %v", gotQuery, wantQuery)
-	}
-}
-
-// The other half: a routed list with no filters and no page controls sends the
-// bare declared path. It reads the request target rather than the parsed path and
-// query, because a trailing "?" on an empty query parses back to an empty RawQuery
-// and would pass unnoticed there while every unpaginated routed list sent a URL
-// the unmigrated call sites do not.
-func TestRoutedProtoListOmitsAnEmptyQuery(t *testing.T) {
-	t.Parallel()
-
-	const wantTarget = "/profile/security-questions"
-
-	var gotTarget string
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotTarget = r.RequestURI
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{"security_questions": []any{}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, routedListToken, nil, linode.WithMaxRetries(0))
-
-	if _, err := client.ListProfileSecurityQuestionsProto(t.Context()); err != nil {
-		t.Fatalf("ListProfileSecurityQuestionsProto() error = %v, want no error", err)
-	}
-
-	if gotTarget != wantTarget {
-		t.Errorf("request target = %v, want %v", gotTarget, wantTarget)
-	}
-}
-
-// Swapped ids would still address a real resource, so slot order is worth pinning
-// on the one migrated route with more than one slot.
-func TestRoutedBareProtoListFillsSlotsInDeclaredOrder(t *testing.T) {
-	t.Parallel()
-
-	const wantPath = "/linode/instances/123/configs/456/interfaces"
-
-	var gotPath string
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.EscapedPath()
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode([]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, routedListToken, nil, linode.WithMaxRetries(0))
-
-	if _, err := client.ListInstanceConfigInterfacesProto(t.Context(), 123, 456); err != nil {
-		t.Fatalf("ListInstanceConfigInterfacesProto() error = %v, want no error", err)
-	}
-
-	if gotPath != wantPath {
-		t.Errorf("path = %v, want %v", gotPath, wantPath)
-	}
 }

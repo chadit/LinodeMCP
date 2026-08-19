@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const toolStackScriptGet = "linode_stackscript_get"
@@ -22,7 +22,7 @@ func TestLinodeStackScriptGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeStackScriptGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeStackscriptGetTool(cfg)
 
 	if tool.Name != toolStackScriptGet {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, toolStackScriptGet)
@@ -83,7 +83,7 @@ func TestLinodeStackScriptGetToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
+	_, _, handler := gentools.NewLinodeStackscriptGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 123})
 
@@ -139,7 +139,7 @@ func TestLinodeStackScriptGetToolClientFailureReturnsToolError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
+	_, _, handler := gentools.NewLinodeStackscriptGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyStackScriptID: 123})
 
@@ -200,7 +200,7 @@ func TestLinodeStackScriptGetToolRejectsInvalidStackscriptIdBeforeClientCall(t *
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 				envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 			}}
-			_, _, handler := tools.NewLinodeStackScriptGetTool(cfg)
+			_, _, handler := gentools.NewLinodeStackscriptGetTool(cfg)
 
 			args := map[string]any{}
 			if name != caseMissing {

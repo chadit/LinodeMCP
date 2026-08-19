@@ -2,81 +2,55 @@ package tools
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// enumSentinel is the proto3 zero-value name every MCP enum defines (proto3
-// requires a zero value). It is not a real Linode API value: the generated JSON
-// Schema strips it (scripts/strip_enum_sentinel.py) and enum validation rejects
-// it.
-const enumSentinel = "unspecified"
+// MemberChoiceArgument reads one raw text argument and holds it to the member
+// names its contract declares, for the fields whose vocabulary a rule cannot
+// see: an enum argument naming no member decodes to the enum's zero, the same
+// as an absent one. The generated handlers pass the names, sentinel excluded,
+// in enum-number order.
+//
+// An absent, non-string, or empty argument answers "<name> is required" when
+// the field is required and is accepted when it is optional. Any other string
+// outside the members answers "<name> must be one of: a, b", or
+// "<name> must be <a>" for a vocabulary of one.
+func MemberChoiceArgument(
+	request *mcp.CallToolRequest, name string, required bool, members ...string,
+) (string, string) {
+	return DeclaredMemberChoice(request, name, required, "", "", members...)
+}
 
-// enumValueNames returns a proto enum's API value names, excluding the zero
-// sentinel, ordered by enum number. The input is a generated <Enum>_value map
-// (name -> number), so the allowed set and its order come from the proto enum
-// and stay in sync with the generated schema without a hand-maintained list.
-func enumValueNames(valueMap map[string]int32) []string {
-	names := make([]string, 0, len(valueMap))
-	for name := range valueMap {
-		if name == enumSentinel {
-			continue
+// DeclaredMemberChoice is the membership reader answering the sentences one
+// declaration words. A vocabulary of one reads as "must be <a>" unless the
+// declaration says otherwise, which is how the allocate tools keep the
+// "must be one of: ipv4" a caller has always been answered.
+func DeclaredMemberChoice(
+	request *mcp.CallToolRequest, name string, required bool, absent, refused string, members ...string,
+) (string, string) {
+	value, _ := request.GetArguments()[name].(string)
+	if value == "" {
+		if required {
+			return "", declaredOr(absent, name+" is required")
 		}
 
-		names = append(names, name)
+		return "", ""
 	}
 
-	sort.Slice(names, func(i, j int) bool { return valueMap[names[i]] < valueMap[names[j]] })
-
-	return names
-}
-
-// enumChoiceError validates an already-read enum value against a proto enum's
-// value map. Empty is treated as absent and allowed (callers enforce
-// required-ness separately, before this). The zero sentinel is rejected like
-// any other invalid value. Returns "" when valid or empty, else the
-// "<key> must be one of: ..." message. The text and value order match the
-// Python side so the message-parity gate stays green.
-func enumChoiceError(value, key string, valueMap map[string]int32) string {
-	if value == "" {
-		return ""
+	if slices.Contains(members, value) {
+		return value, ""
 	}
 
-	if _, ok := valueMap[value]; ok && value != enumSentinel {
-		return ""
+	if refused != "" {
+		return "", refused
 	}
 
-	return fmt.Sprintf("%s must be one of: %s", key, strings.Join(enumValueNames(valueMap), ", "))
-}
-
-// optionalEnumChoice reads an optional string argument and validates it against
-// a proto enum's value map. Empty or absent is allowed (the field is optional).
-// The valueMap is a generated <Enum>_value map.
-func optionalEnumChoice(request *mcp.CallToolRequest, key string, valueMap map[string]int32) (string, string) {
-	value := request.GetString(key, "")
-
-	return value, enumChoiceError(value, key, valueMap)
-}
-
-// requiredEnumChoice reads a required string argument and validates it against a
-// proto enum's value map. Unlike optionalEnumChoice, empty or absent is rejected
-// (the field is required), producing the same "<key> must be one of: ..."
-// message as an invalid value. Returns "" when valid.
-func requiredEnumChoice(request *mcp.CallToolRequest, key string, valueMap map[string]int32) string {
-	return requiredEnumChoiceValue(request.GetString(key, ""), key, valueMap)
-}
-
-// requiredEnumChoiceValue validates an already-read enum value against a proto
-// enum's value map with the same required semantics as requiredEnumChoice
-// (empty, absent, sentinel, or unknown all rejected). Callers use it when the
-// raw argument must be transformed first, such as upper-casing a
-// case-insensitive value, which the request-reading requiredEnumChoice cannot do.
-func requiredEnumChoiceValue(value, key string, valueMap map[string]int32) string {
-	if _, ok := valueMap[value]; ok && value != enumSentinel {
-		return ""
+	if len(members) == 1 {
+		return "", fmt.Sprintf("%s must be %s", name, members[0])
 	}
 
-	return fmt.Sprintf("%s must be one of: %s", key, strings.Join(enumValueNames(valueMap), ", "))
+	return "", fmt.Sprintf("%s must be one of: %s", name, strings.Join(members, ", "))
 }

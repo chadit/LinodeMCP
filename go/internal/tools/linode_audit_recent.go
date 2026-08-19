@@ -10,60 +10,36 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
-// NewLinodeAuditRecentTool returns the linode_audit_recent query tool.
-// It reads the most recent audit events from the JSONL sink (active
-// log plus rotated files), newest first, applying optional filters.
-//
-// Capability is CapMeta so the tool is available in every profile,
-// including read-only ones: inspecting what the assistant did should
-// never require write access. Meta events (the audit and profile-
-// builder tools' own calls) are excluded unless include_meta is true,
-// so the default view shows Linode activity rather than the
-// assistant's bookkeeping.
-func NewLinodeAuditRecentTool(
+// AuditRecentAnswer reads the most recent audit events from the JSONL
+// sink (active log plus rotated files), newest first, applying the filters the
+// call names.
+func AuditRecentAnswer(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
 	_ *config.Config,
-) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewToolWithRawSchema(
-		"linode_audit_recent",
-		"Return the most recent audit events (what tools were called, with what "+
-			"outcome), newest first. Reads the on-disk JSONL audit log. Optional "+
-			"filters: limit, since, until, tool (glob), capability, status, include_meta.",
-		toolschemas.Schema("linode.mcp.v1.AuditRecentInput"),
-	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		query, err := buildRecentQuery(&request)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		events, err := audit.ReadRecent(audit.ResolveDefaultAuditDir(), query)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to read audit log: %v", err)), nil
-		}
-
-		protoEvents, err := auditEventsProto(events)
-		if err != nil {
-			return nil, err
-		}
-
-		return MarshalProtoToolResponse(&linodev1.AuditRecentResponse{
-			Count:  linodeIDToInt32(len(events)),
-			Events: protoEvents,
-		})
+) (*mcp.CallToolResult, error) {
+	// audit.ReadRecent takes no context, so cancellation is honored here
+	// rather than after the log walk.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("linode_audit_recent canceled: %w", err)
 	}
 
-	return tool, profiles.CapMeta, handler
+	query, err := buildRecentQuery(request)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	events, err := audit.ReadRecent(audit.ResolveDefaultAuditDir(), query)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read audit log: %v", err)), nil
+	}
+
+	return MarshalProtoToolResponse(&linodev1.AuditRecentResponse{
+		Count:  IDToInt32(len(events)),
+		Events: auditEventsProto(events),
+	})
 }
 
 // buildRecentQuery translates the request parameters into a

@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeInstanceNodeBalancersListToolDefinition(t *testing.T) {
@@ -21,7 +21,7 @@ func TestLinodeInstanceNodeBalancersListToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeInstanceNodeBalancerListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceNodebalancerListTool(cfg)
 
 	t.Parallel()
 
@@ -54,7 +54,7 @@ func TestLinodeInstanceNodeBalancersListToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceNodeBalancerListTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceNodebalancerListTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -121,7 +121,7 @@ func TestLinodeInstanceNodeBalancersListToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceNodeBalancerListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceNodebalancerListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 
@@ -171,7 +171,7 @@ func TestLinodeInstanceNodeBalancersListToolClientError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceNodeBalancerListTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceNodebalancerListTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 

@@ -10,15 +10,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeNetworkTransferPricesToolDefinition(t *testing.T) {
 	t.Parallel()
 
-	tool, capability, handler := tools.NewLinodeNetworkTransferPricesTool(&config.Config{})
+	tool, capability, handler := gentools.NewLinodeNetworkTransferPriceListTool(&config.Config{})
 
 	if tool.Name != "linode_network_transfer_price_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_network_transfer_price_list")
@@ -76,7 +76,7 @@ func TestLinodeNetworkTransferPricesToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
 		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 	}}
-	_, _, handler := tools.NewLinodeNetworkTransferPricesTool(cfg)
+	_, _, handler := gentools.NewLinodeNetworkTransferPriceListTool(cfg)
 
 	result, err := handler(t.Context(), mcp.CallToolRequest{})
 	if err != nil {

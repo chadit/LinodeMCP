@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -24,7 +24,7 @@ func TestLinodeMonitorServiceDashboardsToolDefinition(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	tool, capability, handler := tools.NewLinodeMonitorServiceDashboardsTool(cfg)
+	tool, capability, handler := gentools.NewLinodeMonitorServiceDashboardListTool(cfg)
 	if tool.Name != monitorServiceDashboardsToolName {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, monitorServiceDashboardsToolName)
 	}
@@ -84,7 +84,7 @@ func TestLinodeMonitorServiceDashboardsToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceDashboardsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceDashboardListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -152,7 +152,7 @@ func TestLinodeMonitorServiceDashboardsToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeMonitorServiceDashboardsTool(cfg)
+	_, _, handler := gentools.NewLinodeMonitorServiceDashboardListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{monitorServiceTypeParam: monitorServiceToolTypeDatabase})
 
@@ -203,7 +203,7 @@ func TestLinodeMonitorServiceDashboardsToolInvalidServiceTypeRejectsBeforeClient
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeMonitorServiceDashboardsTool(cfg)
+			_, _, handler := gentools.NewLinodeMonitorServiceDashboardListTool(cfg)
 
 			req := createRequestWithArgs(t, testCase.args)
 

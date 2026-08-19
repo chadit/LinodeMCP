@@ -14,13 +14,13 @@ import (
 // TestCatalogEntriesGroupByCategory checks the catalog builder emits one
 // entry per (tool, category) pair and that a multi-category tool appears
 // under each of its categories, so the grouped list shows it everywhere it
-// belongs. linode_instance_list is in both compute and compute_actions;
+// belongs. linode_instance_backup_list is in both compute_deep and compute;
 // linode_volume_list is block_storage only.
 func TestCatalogEntriesGroupByCategory(t *testing.T) {
 	t.Parallel()
 
 	infos := []server.ToolInfo{
-		{Name: toolInstLst, Capability: profiles.CapRead},
+		{Name: "linode_instance_backup_list", Capability: profiles.CapRead},
 		{Name: "linode_volume_list", Capability: profiles.CapRead},
 	}
 
@@ -31,8 +31,11 @@ func TestCatalogEntriesGroupByCategory(t *testing.T) {
 		categoriesByTool[entry.Name] = append(categoriesByTool[entry.Name], entry.Category)
 	}
 
-	if got := categoriesByTool[toolInstLst]; !slices.Contains(got, "compute") {
-		t.Errorf("%s categories = %v, want to include compute", toolInstLst, got)
+	backupCategories := categoriesByTool["linode_instance_backup_list"]
+	for _, want := range []string{"compute", "compute_deep"} {
+		if !slices.Contains(backupCategories, want) {
+			t.Errorf("linode_instance_backup_list categories = %v, want to include %s", backupCategories, want)
+		}
 	}
 
 	if got := categoriesByTool["linode_volume_list"]; !slices.Contains(got, "block_storage") {

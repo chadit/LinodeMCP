@@ -10,16 +10,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeLongviewClientGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeLongviewClientGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeLongviewClientGetTool(cfg)
 
 	if tool.Name != "linode_longview_client_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_longview_client_get")
@@ -87,7 +87,7 @@ func TestLinodeLongviewClientGetToolSuccessRedactsSecretFields(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewClientGetTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewClientGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyLongviewClientID: float64(789)})
 
 	result, err := handler(t.Context(), req)
@@ -147,7 +147,7 @@ func TestLinodeLongviewClientGetToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeLongviewClientGetTool(cfg)
+	_, _, handler := gentools.NewLinodeLongviewClientGetTool(cfg)
 	req := createRequestWithArgs(t, map[string]any{keyLongviewClientID: float64(789)})
 
 	result, err := handler(t.Context(), req)
@@ -163,8 +163,8 @@ func TestLinodeLongviewClientGetToolApiError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_longview_client_get") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_longview_client_get")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve Longview client") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve Longview client")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errTemporaryFailure) {
@@ -190,7 +190,7 @@ func TestLinodeLongviewClientGetToolInvalidLongviewClientIdRejectsBeforeClient(t
 			t.Parallel()
 
 			cfg := &config.Config{}
-			_, _, handler := tools.NewLinodeLongviewClientGetTool(cfg)
+			_, _, handler := gentools.NewLinodeLongviewClientGetTool(cfg)
 			req := createRequestWithArgs(t, testCase.args)
 
 			result, err := handler(t.Context(), req)

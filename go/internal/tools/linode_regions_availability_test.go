@@ -10,15 +10,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeRegionAvailabilityListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
+	tool, capability, handler := gentools.NewLinodeRegionAvailabilityListTool(cfg)
 
 	if tool.Name != "linode_region_availability_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_region_availability_list")
@@ -71,7 +71,7 @@ func TestLinodeRegionAvailabilityListToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionAvailabilityListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -117,7 +117,7 @@ func TestLinodeRegionAvailabilityListToolApiFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeRegionAvailabilityListTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionAvailabilityListTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -150,7 +150,7 @@ func TestLinodeRegionAvailabilityGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeRegionAvailabilityGetTool(cfg)
 
 	if tool.Name != "linode_region_availability_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_region_availability_get")
@@ -211,7 +211,7 @@ func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionAvailabilityGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
 	if err != nil {
@@ -256,18 +256,18 @@ func TestLinodeRegionAvailabilityGetToolInvalidRegionId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionAvailabilityGetTool(cfg)
 
 	cases := []struct {
 		name string
 		args map[string]any
 		want string
 	}{
-		{name: caseMissingRegion, args: map[string]any{}, want: errRegionIDNonEmpty},
+		{name: caseMissingRegion, args: map[string]any{}, want: keyRegionID + " is required"},
 		{name: caseEmpty, args: map[string]any{keyRegionID: ""}, want: errRegionIDNonEmpty},
-		{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue}, want: errRegionInvalid},
-		{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue}, want: errRegionInvalid},
-		{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue}, want: errRegionInvalid},
+		{name: caseSlash, args: map[string]any{keyRegionID: regionIDSlashValue}, want: errRegionIDSlug},
+		{name: caseQuery, args: map[string]any{keyRegionID: regionIDQueryValue}, want: errRegionIDSlug},
+		{name: caseDotTraversal, args: map[string]any{keyRegionID: pathTraversalValue}, want: errRegionIDSlug},
 	}
 
 	for _, testCase := range cases {
@@ -307,7 +307,7 @@ func TestLinodeRegionAvailabilityGetToolApiFailure(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeRegionAvailabilityGetTool(cfg)
+	_, _, handler := gentools.NewLinodeRegionAvailabilityGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyRegionID: regionUSEast}))
 	if err != nil {

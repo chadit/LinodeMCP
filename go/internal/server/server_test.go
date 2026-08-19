@@ -14,9 +14,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/server"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -702,7 +702,7 @@ func waitForDispatchDone(t *testing.T, dispatchDone <-chan struct{}) {
 func TestHelloToolHandlerDispatch(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewHelloTool(nil)
+	_, _, handler := gentools.NewHelloTool(nil)
 
 	request := mcp.CallToolRequest{}
 	request.Params.Name = "hello"
@@ -792,8 +792,8 @@ func TestToolDescriptorsIncludesNodeBalancerNodeDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_delete", Capability: profiles.CapDestroy}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_delete", Capability: profiles.CapDestroy})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigNodeDel, Capability: profiles.CapDestroy}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigNodeDel, Capability: profiles.CapDestroy})
 	}
 }
 
@@ -819,7 +819,29 @@ func TestToolDescriptorsIncludesNodeBalancerConfigDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_delete", Capability: profiles.CapDestroy}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_delete", Capability: profiles.CapDestroy})
+	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigDelete, Capability: profiles.CapDestroy}) {
+		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigDelete, Capability: profiles.CapDestroy})
+	}
+}
+
+// A base the surface swap cannot re-point is used exactly as configured, which
+// is right for a mock or a proxy and a typo otherwise. Startup says so once,
+// rather than leaving every beta tool to 404 with no explanation. Construction
+// still succeeds: the operator chose that base and may have meant it.
+func TestNewWarnsOnceForABaseNoSurfaceCanRePoint(t *testing.T) {
+	t.Parallel()
+
+	cfg := fullAccessConfig()
+	env := cfg.Environments[envKeyDefault]
+	env.Linode.APIURL = "http://127.0.0.1:8080"
+	cfg.Environments[envKeyDefault] = env
+
+	srv, err := server.New(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if srv == nil {
+		t.Error("New() = nil, want a server despite the unreachable surfaces")
 	}
 }

@@ -11,16 +11,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func TestLinodeImageShareGroupByTokenGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeImageShareGroupByTokenGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeImageSharegroupByTokenGetTool(cfg)
 
 	if tool.Name != "linode_image_sharegroup_by_token_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_image_sharegroup_by_token_get")
@@ -96,7 +96,7 @@ func TestLinodeImageShareGroupByTokenGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupByTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupByTokenGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID})
 
@@ -159,7 +159,7 @@ func TestLinodeImageShareGroupByTokenGetToolRejectsInvalidTokenUuidBeforeClientC
 					},
 				},
 			}
-			_, _, handler := tools.NewLinodeImageShareGroupByTokenGetTool(cfg)
+			_, _, handler := gentools.NewLinodeImageSharegroupByTokenGetTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{keyTokenUUID: value})
 
@@ -187,7 +187,7 @@ func TestLinodeImageShareGroupByTokenGetToolMissingTokenUuid(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeImageShareGroupByTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupByTokenGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -227,7 +227,7 @@ func TestLinodeImageShareGroupByTokenGetToolClientError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeImageShareGroupByTokenGetTool(cfg)
+	_, _, handler := gentools.NewLinodeImageSharegroupByTokenGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyTokenUUID: shareGroupTokenGetUUID})
 

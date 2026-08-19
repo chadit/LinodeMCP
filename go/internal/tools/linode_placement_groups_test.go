@@ -11,9 +11,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -29,7 +29,7 @@ func TestLinodePlacementGroupListToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodePlacementGroupListTool(cfg)
+	tool, capability, handler := gentools.NewLinodePlacementGroupListTool(cfg)
 
 	if tool.Name != "linode_placement_group_list" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_group_list")
@@ -95,7 +95,7 @@ func TestLinodePlacementGroupListToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
 
@@ -130,7 +130,7 @@ func TestLinodePlacementGroupListToolInvalidPageSize(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyPageSize: 24})
 
@@ -163,7 +163,7 @@ func TestLinodePlacementGroupListToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupListTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupListTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{})
 
@@ -194,7 +194,7 @@ func TestLinodePlacementGroupUpdateToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+	tool, capability, handler := gentools.NewLinodePlacementGroupUpdateTool(cfg)
 
 	if tool.Name != "linode_placement_group_update" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_placement_group_update")
@@ -244,7 +244,7 @@ func TestLinodePlacementGroupUpdateToolRequiresConfirm(t *testing.T) {
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+			_, _, handler := gentools.NewLinodePlacementGroupUpdateTool(cfg)
 
 			args := map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel}
 			if testCase.set {
@@ -300,7 +300,7 @@ func TestLinodePlacementGroupUpdateToolInvalidRequest(t *testing.T) {
 			defer srv.Close()
 
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-			_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+			_, _, handler := gentools.NewLinodePlacementGroupUpdateTool(cfg)
 
 			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
@@ -326,7 +326,7 @@ func TestLinodePlacementGroupUpdateToolDryRun(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupUpdateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyDryRun: true}))
 	if err != nil {
@@ -405,7 +405,7 @@ func TestLinodePlacementGroupUpdateToolSuccess(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupUpdateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}))
 	if err != nil {
@@ -452,7 +452,7 @@ func TestLinodePlacementGroupUpdateToolClientError(t *testing.T) {
 	defer srv.Close()
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodePlacementGroupUpdateTool(cfg)
+	_, _, handler := gentools.NewLinodePlacementGroupUpdateTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{placementGroupIDKey: 123, keyLabel: placementGroupUpdatedLabel, keyConfirm: true}))
 	if err != nil {
@@ -467,8 +467,8 @@ func TestLinodePlacementGroupUpdateToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update linode_placement_group_update") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update linode_placement_group_update")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to update placement group 123") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to update placement group 123")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {

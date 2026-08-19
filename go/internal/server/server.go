@@ -55,6 +55,12 @@ type Server struct {
 	// back into Config.Profiles.
 	draftRegistry *builder.Registry
 
+	// builderState is what the profile-builder tools read: the draft registry
+	// above plus the catalog and active-profile readers. The capture
+	// middleware attaches it to every call's context, the way it attaches the
+	// plan store. Built once so drafts outlive the call that started them.
+	builderState *tools.BuilderState
+
 	// auditSink consumes audit events emitted by the per-handler capture
 	// middleware. Defaults to NoopSink; tests inject a CapturingSink via
 	// SetAuditSink to assert handler-call events.
@@ -130,14 +136,47 @@ func New(cfg *config.Config) (*Server, error) {
 		metrics:       noopMetricsRecorder{},
 	}
 
+	// Built once and kept, so every call carries the same pointer and a draft
+	// started by one call is there for the next.
+	srv.builderState = &tools.BuilderState{
+		Drafts:        srv.draftRegistry,
+		Catalog:       srv.ToolCatalog,
+		ActiveProfile: srv.ActiveProfile,
+	}
+
 	srv.allEntries = collectAllToolEntries(cfg)
-	srv.allEntries = append(srv.allEntries, builderToolEntries(srv)...)
 
 	if err := srv.registerTools(); err != nil {
 		return nil, err
 	}
 
+	warnUnreachableSurfaces(cfg)
+
 	return srv, nil
+}
+
+// warnUnreachableSurfaces reports environments whose apiUrl the surface swap
+// cannot re-point, once at startup rather than per call.
+//
+// A base that does not end in the default version segment is used verbatim, so
+// a tool declaring another surface addresses it as written and answers 404.
+// That is correct for a mock or a proxy and a typo otherwise, and nothing in
+// the request path can tell the two apart, so it is said once here instead.
+func warnUnreachableSurfaces(cfg *config.Config) {
+	surfaced := len(linoderoute.SurfacedTools())
+
+	for name, env := range cfg.Environments {
+		base := env.Linode.APIURL
+		// Nothing to warn about when no tool declares another surface, which is
+		// what a contract with every family promoted back to v4 looks like.
+		if surfaced == 0 || base == "" || linoderoute.Repointable(base) {
+			continue
+		}
+
+		slog.Warn("configured apiUrl carries no API version segment, so tools on"+
+			" another API surface will address it as written",
+			"environment", name, "apiUrl", base, "tools", surfaced)
+	}
 }
 
 // ValidateGeneratedSchemas rejects any tool still advertising the permissive
@@ -157,37 +196,6 @@ func ValidateGeneratedSchemas(list []mcp.Tool) error {
 	}
 
 	return nil
-}
-
-// builderToolEntries assembles the profile-builder tool entries. Built outside
-// collectAllToolEntries because the handlers need a closure over the server
-// itself, and tagged CapMeta so the active profile filter always passes them
-// through. ToolCatalog reports the builder tools themselves, which is
-// deliberate: a user composing a new profile wants to see what they inherit.
-func builderToolEntries(srv *Server) []toolEntry {
-	listTool, listCap, listHandler := tools.NewLinodeProfileListToolsTool(srv.ToolCatalog)
-	catTool, catCap, catHandler := tools.NewLinodeProfileListCategoriesTool(srv.ToolCatalog)
-	newTool, newCap, newHandler := tools.NewLinodeProfileDraftNewTool(srv.draftRegistry, srv.LookupProfile)
-	showTool, showCap, showHandler := tools.NewLinodeProfileDraftShowTool(srv.draftRegistry)
-	discardTool, discardCap, discardHandler := tools.NewLinodeProfileDraftDiscardTool(srv.draftRegistry)
-	addToolsTool, addToolsCap, addToolsHandler := tools.NewLinodeProfileDraftAddToolsTool(srv.draftRegistry, srv.ToolCatalog)
-	removeToolsTool, removeToolsCap, removeToolsHandler := tools.NewLinodeProfileDraftRemoveToolsTool(srv.draftRegistry)
-	setTool, setCap, setHandler := tools.NewLinodeProfileDraftSetTool(srv.draftRegistry)
-	saveTool, saveCap, saveHandler := tools.NewLinodeProfileDraftSaveTool(srv.draftRegistry, config.Path)
-	canRunTool, canRunCap, canRunHandler := tools.NewLinodeProfileCanRunTool(srv.ToolCatalog, srv.ActiveProfile)
-
-	return []toolEntry{
-		{tool: listTool, capability: listCap, handler: listHandler},
-		{tool: catTool, capability: catCap, handler: catHandler},
-		{tool: newTool, capability: newCap, handler: newHandler},
-		{tool: showTool, capability: showCap, handler: showHandler},
-		{tool: discardTool, capability: discardCap, handler: discardHandler},
-		{tool: addToolsTool, capability: addToolsCap, handler: addToolsHandler},
-		{tool: removeToolsTool, capability: removeToolsCap, handler: removeToolsHandler},
-		{tool: setTool, capability: setCap, handler: setHandler},
-		{tool: saveTool, capability: saveCap, handler: saveHandler},
-		{tool: canRunTool, capability: canRunCap, handler: canRunHandler},
-	}
 }
 
 type toolWrapper struct {
@@ -235,33 +243,6 @@ func (s *Server) ActiveProfile() profiles.Profile {
 	defer s.profileMu.RUnlock()
 
 	return s.activeProfile
-}
-
-// LookupProfile resolves a profile by name across both built-in and
-// user-defined entries, returning the materialized Profile and true on hit.
-// Ignores the Disabled flag so _draft_new can clone from disabled built-ins
-// like full-access and emergency. User-defined entries shadow built-ins by
-// name, matching ResolveActiveProfile's precedence.
-func (s *Server) LookupProfile(name string) (profiles.Profile, bool) {
-	s.profileMu.RLock()
-	defer s.profileMu.RUnlock()
-
-	descriptors := make([]profiles.ToolDescriptor, len(s.allEntries))
-	for i := range s.allEntries {
-		descriptors[i] = profiles.ToolDescriptor{
-			Name:       s.allEntries[i].tool.Name,
-			Capability: s.allEntries[i].capability,
-		}
-	}
-
-	return profiles.LookupProfile(name, s.config, descriptors)
-}
-
-// DraftRegistry returns the server's in-memory profile-builder draft
-// registry. The pointer is stable for the server's lifetime; tests get a fresh
-// registry by constructing their own Server.
-func (s *Server) DraftRegistry() *builder.Registry {
-	return s.draftRegistry
 }
 
 // ToolCatalog returns a snapshot of every tool the server could register,
@@ -630,6 +611,7 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 		}
 
 		ctx = tools.WithPlanStore(ctx, s.planStore)
+		ctx = tools.WithBuilderState(ctx, s.builderState)
 		ctx = linode.WithAPIRecorder(ctx, s.metrics)
 
 		result, err := handler(ctx, req)
@@ -964,308 +946,23 @@ func collectAllToolEntries(cfg *config.Config) []toolEntry {
 }
 
 func coreToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewHelloTool,
-		tools.NewVersionTool,
-		tools.NewLinodeProfileTool,
-		tools.NewLinodeProfilePreferencesTool,
-		tools.NewLinodeProfilePreferencesUpdateTool,
-		tools.NewLinodeProfileTokenCreateTool,
-		tools.NewLinodeProfileTokenDeleteTool,
-		tools.NewLinodeProfileSecurityQuestionsTool,
-		tools.NewLinodeProfileSecurityQuestionsAnswerTool,
-		tools.NewLinodeProfileTokensTool,
-		tools.NewLinodeProfileTokenUpdateTool,
-		tools.NewLinodeProfileLoginsTool,
-		tools.NewLinodeAccountTool,
-		tools.NewLinodeAccountTransferTool,
-		tools.NewLinodeAccountSettingsTool,
-		tools.NewLinodeAccountSettingsUpdateTool,
-		tools.NewLinodeAccountSettingsManagedEnableTool,
-		tools.NewLinodeManagedCredentialsTool,
-		tools.NewLinodeManagedCredentialUpdateTool,
-		tools.NewLinodeManagedCredentialUsernamePasswordUpdateTool,
-		tools.NewLinodeManagedSSHKeyTool,
-		tools.NewLinodeManagedCredentialCreateTool,
-		tools.NewLinodeManagedCredentialGetTool,
-		tools.NewLinodeManagedCredentialRevokeTool,
-		tools.NewLinodeManagedServiceCreateTool,
-		tools.NewLinodeManagedLinodeSettingsGetTool,
-		tools.NewLinodeManagedContactGetTool,
-		tools.NewLinodeLongviewClientGetTool,
-		tools.NewLinodeLongviewSubscriptionGetTool,
-		tools.NewLinodeAccountAgreementsTool,
-		tools.NewLinodeAccountMaintenanceTool,
-		tools.NewLinodeTagsTool,
-		tools.NewLinodeTagDeleteTool,
-		tools.NewLinodeMaintenancePoliciesTool,
-		tools.NewLinodeManagedContactDeleteTool,
-		tools.NewLinodeManagedContactsTool,
-		tools.NewLinodeManagedLinodeSettingsTool,
-		tools.NewLinodeManagedStatsTool,
-		tools.NewLinodeManagedLinodeSettingsUpdateTool,
-		tools.NewLinodeManagedServiceDeleteTool,
-		tools.NewLinodeManagedServiceDisableTool,
-		tools.NewLinodeManagedServiceEnableTool,
-		tools.NewLinodeManagedServiceGetTool,
-		tools.NewLinodeManagedServiceUpdateTool,
-		tools.NewLinodeManagedServicesTool,
-		tools.NewLinodeManagedIssueGetTool,
-		tools.NewLinodeManagedIssuesTool,
-		tools.NewLinodeManagedContactUpdateTool,
-		tools.NewLinodeAccountNotificationsTool,
-		tools.NewLinodeLongviewPlanTool,
-		tools.NewLinodeLongviewTypesTool,
-		tools.NewLinodeLongviewSubscriptionsTool,
-		tools.NewLinodeMonitorServicesTool,
-		tools.NewLinodeMonitorServiceGetTool,
-		tools.NewLinodeMonitorServiceMetricDefinitionsTool,
-		tools.NewLinodeMonitorServiceAlertDefinitionsTool,
-		tools.NewLinodeMonitorServiceDashboardsTool,
-		tools.NewLinodeMonitorServiceMetricsTool,
-		tools.NewLinodeMonitorServiceTokenCreateTool,
-		tools.NewLinodeMonitorServiceAlertDefinitionGetTool,
-		tools.NewLinodeMonitorServiceAlertDefinitionCreateTool,
-		tools.NewLinodeMonitorServiceAlertDefinitionCloneTool,
-		tools.NewLinodeMonitorServiceAlertDefinitionDeleteTool,
-
-		tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool,
-		tools.NewLinodeMonitorDashboardsTool,
-		tools.NewLinodeMonitorDashboardGetTool,
-		tools.NewLinodeMonitorAlertDefinitionsTool,
-		tools.NewLinodeMonitorAlertChannelsTool,
-		tools.NewLinodeLongviewClientCreateTool,
-		tools.NewLinodeLongviewPlanUpdateTool,
-		tools.NewLinodeBetasTool,
-		tools.NewLinodeBetaGetTool,
-		tools.NewLinodeAccountBetasTool,
-		tools.NewLinodeProfileTFAEnableTool,
-		tools.NewLinodeProfilePhoneNumberSendTool,
-		tools.NewLinodeProfilePhoneNumberDeleteTool,
-		tools.NewLinodeProfilePhoneNumberVerifyTool,
-		tools.NewLinodeProfileTFADisableTool,
-		tools.NewLinodeProfileTFAEnableConfirmTool,
-		tools.NewLinodeProfileDevicesTool,
-		tools.NewLinodeProfileAppGetTool,
-		tools.NewLinodeProfileAppDeleteTool,
-		tools.NewLinodeProfileDeviceGetTool,
-		tools.NewLinodeProfileDeviceRevokeTool,
-		tools.NewLinodeAccountOAuthClientsTool,
-		tools.NewLinodeProfileAppsTool,
-		tools.NewLinodeLongviewClientsTool,
-		tools.NewLinodeLongviewClientUpdateTool,
-		tools.NewLinodeLongviewClientDeleteTool,
-		tools.NewLinodeAccountPaymentMethodsTool,
-		tools.NewLinodeAccountPaymentMethodGetTool,
-		tools.NewLinodeAccountPaymentMethodCreateTool,
-		tools.NewLinodeAccountPaymentMethodDeleteTool,
-		tools.NewLinodeAccountPaymentMethodMakeDefaultTool,
-		tools.NewLinodeAccountOAuthClientGetTool,
-		tools.NewLinodeAccountOAuthClientCreateTool,
-		tools.NewLinodeAccountOAuthClientUpdateTool,
-		tools.NewLinodeAccountOAuthClientThumbnailUpdateTool,
-		tools.NewLinodeAccountOAuthClientThumbnailGetTool,
-		tools.NewLinodeAccountOAuthClientDeleteTool,
-		tools.NewLinodeAccountOAuthClientResetSecretTool,
-		tools.NewLinodeAccountEventsTool,
-		tools.NewLinodeTaggedObjectsTool,
-		tools.NewLinodeSupportTicketGetTool,
-		tools.NewLinodeSupportTicketRepliesTool,
-		tools.NewLinodeSupportTicketsTool,
-		tools.NewLinodeSupportTicketCloseTool,
-		tools.NewLinodeAccountUsersTool,
-		tools.NewLinodeAccountUserGetTool,
-		tools.NewLinodeProfileTokenGetTool,
-		tools.NewLinodeAccountUserGrantsTool,
-		tools.NewLinodeAccountUserGrantsUpdateTool,
-		tools.NewLinodeAccountUserUpdateTool,
-		tools.NewLinodeAccountUserDeleteTool,
-		tools.NewLinodeAccountUserCreateTool,
-		tools.NewLinodeAccountSupportTicketCreateTool,
-		tools.NewLinodeAccountSupportTicketAttachmentCreateTool,
-		tools.NewLinodeAccountSupportTicketReplyCreateTool,
-		tools.NewLinodeManagedContactCreateTool,
-		tools.NewLinodeAccountLoginsTool,
-		tools.NewLinodeAccountLoginGetTool,
-		tools.NewLinodeProfileLoginGetTool,
-		tools.NewLinodeAccountInvoicesTool,
-		tools.NewLinodeAccountPaymentsTool,
-		tools.NewLinodeAccountPaymentGetTool,
-		tools.NewLinodeAccountPaymentCreateTool,
-		tools.NewLinodeAccountPromoCreditTool,
-		tools.NewLinodeAccountInvoiceGetTool,
-		tools.NewLinodeAccountInvoiceItemsTool,
-		tools.NewLinodeAccountChildAccountsTool,
-		tools.NewLinodeAccountServiceTransfersTool,
-		tools.NewLinodeAccountServiceTransferGetTool,
-		tools.NewLinodeAccountServiceTransferCreateTool,
-		tools.NewLinodeAccountServiceTransferDeleteTool,
-		tools.NewLinodeAccountServiceTransferAcceptTool,
-		tools.NewLinodeAccountEventGetTool,
-		tools.NewLinodeAccountEventSeenTool,
-		tools.NewLinodeAccountChildAccountGetTool,
-		tools.NewLinodeAccountChildAccountTokenTool,
-		tools.NewLinodeAccountBetaGetTool,
-		tools.NewLinodeAccountBetaEnrollTool,
-		tools.NewLinodeAccountAvailabilityTool,
-		tools.NewLinodeAccountAvailabilityGetTool,
-		tools.NewLinodeTagCreateTool,
-		tools.NewLinodeAccountAgreementsAcknowledgeTool,
-		tools.NewLinodeAccountCancelTool,
-		tools.NewLinodeAccountUpdateTool,
-		tools.NewLinodeAuditRecentTool,
-		tools.NewLinodeAuditSummaryTool,
-		tools.NewLinodeAuditHealthTool,
-		tools.NewLinodeAuditExportTool,
-		tools.NewLinodeAuditReportTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 func computeToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeInstanceListTool,
-		tools.NewLinodeInstanceGetTool,
-		tools.NewLinodeInstanceStatsByYearMonthTool,
-		tools.NewLinodeInstanceTransferGetTool,
-		tools.NewLinodePlacementGroupAssignTool,
-		tools.NewLinodePlacementGroupGetTool,
-		tools.NewLinodePlacementGroupDeleteTool,
-		tools.NewLinodeRegionListTool,
-		tools.NewLinodeRegionGetTool,
-		tools.NewLinodeRegionAvailabilityListTool,
-		tools.NewLinodeRegionAvailabilityGetTool,
-		tools.NewLinodePlacementGroupListTool,
-		tools.NewLinodePlacementGroupUpdateTool,
-		tools.NewLinodeKernelListTool,
-		tools.NewLinodeKernelGetTool,
-		tools.NewLinodeTypeListTool,
-		tools.NewLinodeTypeGetTool,
-		tools.NewLinodeImageListTool,
-		tools.NewLinodeImageGetTool,
-		tools.NewLinodeImageDeleteTool,
-		tools.NewLinodeImageUploadTool,
-		tools.NewLinodeImageReplicateTool,
-		tools.NewLinodePlacementGroupCreateTool,
-		tools.NewLinodePlacementGroupUnassignTool,
-		tools.NewLinodeImageUpdateTool,
-
-		tools.NewLinodeImageShareGroupsListTool,
-		tools.NewLinodeImageShareGroupGetTool,
-		tools.NewLinodeImageShareGroupsByImageListTool,
-		tools.NewLinodeImageShareGroupImagesListTool,
-		tools.NewLinodeImageShareGroupMembersListTool,
-		tools.NewLinodeImageShareGroupMemberTokenGetTool,
-		tools.NewLinodeImageShareGroupMemberUpdateTool,
-
-		tools.NewLinodeImageShareGroupCreateTool,
-		tools.NewLinodeImageShareGroupImagesAddTool,
-		tools.NewLinodeImageShareGroupImageUpdateTool,
-		tools.NewLinodeImageShareGroupMembersAddTool,
-		tools.NewLinodeImageShareGroupUpdateTool,
-
-		tools.NewLinodeImageShareGroupDeleteTool,
-		tools.NewLinodeImageShareGroupImageDeleteTool,
-		tools.NewLinodeImageShareGroupTokensListTool,
-		tools.NewLinodeImageShareGroupTokenCreateTool,
-		tools.NewLinodeImageShareGroupTokenGetTool,
-		tools.NewLinodeImageShareGroupTokenDeleteTool,
-		tools.NewLinodeImageShareGroupMemberTokenDeleteTool,
-		tools.NewLinodeImageShareGroupTokenImagesListTool,
-		tools.NewLinodeImageShareGroupTokenUpdateTool,
-		tools.NewLinodeImageShareGroupByTokenGetTool,
-		tools.NewLinodeImageCreateTool,
-		tools.NewLinodeSSHKeyListTool,
-		tools.NewLinodeSSHKeyGetTool,
-		tools.NewLinodeStackScriptGetTool,
-		tools.NewLinodeStackScriptListTool,
-		tools.NewLinodeStackScriptCreateTool,
-		tools.NewLinodeStackScriptDeleteTool,
-		tools.NewLinodeStackScriptUpdateTool,
-		tools.NewLinodeSSHKeyCreateTool,
-		tools.NewLinodeSSHKeyUpdateTool,
-		tools.NewLinodeSSHKeyDeleteTool,
-		tools.NewLinodeInstanceBootTool,
-		tools.NewLinodeInstanceRebootTool,
-		tools.NewLinodeInstanceShutdownTool,
-		tools.NewLinodeInstanceCreateTool,
-		tools.NewLinodeInstanceUpdateTool,
-		tools.NewLinodeInstanceDeleteTool,
-		tools.NewLinodeInstanceResizeTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 func networkingToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeFirewallListTool,
-		tools.NewLinodeFirewallGetTool,
-		tools.NewLinodeVLANsListTool,
-		tools.NewLinodeVLANDeleteTool,
-		tools.NewLinodeFirewallRulesListTool,
-		tools.NewLinodeFirewallRulesUpdateTool,
-		tools.NewLinodeFirewallRuleVersionsListTool,
-		tools.NewLinodeFirewallRuleVersionGetTool,
-		tools.NewLinodeFirewallDevicesListTool,
-		tools.NewLinodeFirewallDeviceGetTool,
-		tools.NewLinodeFirewallDeviceCreateTool,
-		tools.NewLinodeFirewallDeviceDeleteTool,
-		tools.NewLinodeFirewallSettingsListTool,
-		tools.NewLinodeFirewallTemplatesListTool,
-		tools.NewLinodeFirewallTemplateGetTool,
-		tools.NewLinodeFirewallSettingsUpdateTool,
-		tools.NewLinodeNetworkTransferPricesTool,
-		tools.NewLinodeNetworkingIPListTool,
-		tools.NewLinodeNetworkingIPGetTool,
-		tools.NewLinodeNetworkingIPUpdateRDNSTool,
-		tools.NewLinodeNetworkingIPAllocateTool,
-		tools.NewLinodeNetworkingIPAssignTool,
-		tools.NewLinodeNetworkingIPShareTool,
-		tools.NewLinodeNetworkingIPv4AssignTool,
-		tools.NewLinodeNetworkingIPv4ShareTool,
-		tools.NewLinodeReservedIPListTool,
-		tools.NewLinodeReservedIPGetTool,
-		tools.NewLinodeReservedIPTypeListTool,
-		tools.NewLinodeReservedIPCreateTool,
-		tools.NewLinodeReservedIPUpdateTool,
-		tools.NewLinodeReservedIPDeleteTool,
-		tools.NewLinodeIPv6PoolsListTool,
-		tools.NewLinodeIPv6RangesListTool,
-		tools.NewLinodeIPv6RangeGetTool,
-		tools.NewLinodeIPv6RangeCreateTool,
-		tools.NewLinodeIPv6RangeDeleteTool,
-		tools.NewLinodeNodeBalancerTypesTool,
-		tools.NewLinodeNodeBalancerListTool,
-		tools.NewLinodeNodeBalancerGetTool,
-		tools.NewLinodeNodeBalancerStatsGetTool,
-		tools.NewLinodeNodeBalancerVPCConfigGetTool,
-		tools.NewLinodeNodeBalancerFirewallListTool,
-		tools.NewLinodeNodeBalancerFirewallUpdateTool,
-		tools.NewLinodeNodeBalancerVPCListTool,
-		tools.NewLinodeNodeBalancerConfigListTool,
-		tools.NewLinodeNodeBalancerConfigNodesListTool,
-		tools.NewLinodeNodeBalancerConfigGetTool,
-
-		tools.NewLinodeNodeBalancerConfigNodeGetTool,
-		tools.NewLinodeNodeBalancerConfigCreateTool,
-		tools.NewLinodeNodeBalancerNodeCreateTool,
-		tools.NewLinodeNodeBalancerNodeDeleteTool,
-		tools.NewLinodeNodeBalancerConfigUpdateTool,
-		tools.NewLinodeNodeBalancerConfigRebuildTool,
-		tools.NewLinodeNodeBalancerConfigDeleteTool,
-		tools.NewLinodeNodeBalancerNodeUpdateTool,
-		tools.NewLinodeFirewallCreateTool,
-		tools.NewLinodeFirewallUpdateTool,
-		tools.NewLinodeFirewallDeleteTool,
-		tools.NewLinodeNodeBalancerCreateTool,
-		tools.NewLinodeNodeBalancerUpdateTool,
-		tools.NewLinodeNodeBalancerDeleteTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 // generatedToolEntries stages the tools cmd/toolgen emits from the proto
 // contract. They are collected apart from the category lists above because
-// nothing here is a choice a reader can make: the set comes from
-// docs/contracts/generated-tools.txt, and a factory named in a category list
-// would be a second place a generated tool could be added or forgotten.
+// nothing here is a choice a reader can make: the set is every tool the contract
+// declares that docs/contracts/handwritten-tools.txt does not claim, and a
+// factory named in a category list would be a second place a generated tool
+// could be added or forgotten.
 func generatedToolEntries(cfg *config.Config) []toolEntry {
 	generated := gentools.Factories()
 
@@ -1278,128 +975,29 @@ func generatedToolEntries(cfg *config.Config) []toolEntry {
 }
 
 func dnsToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeDomainZoneFileGetTool,
-		tools.NewLinodeDomainImportTool,
-		tools.NewLinodeDomainCreateTool,
-		tools.NewLinodeDomainCloneTool,
-		tools.NewLinodeDomainUpdateTool,
-		tools.NewLinodeDomainDeleteTool,
-		tools.NewLinodeDomainRecordCreateTool,
-		tools.NewLinodeDomainRecordUpdateTool,
-		tools.NewLinodeDomainRecordDeleteTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 func volumeToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeVolumeListTool,
-		tools.NewLinodeVolumeGetTool,
-		tools.NewLinodeVolumeTypeListTool,
-		tools.NewLinodeVolumeCreateTool,
-		tools.NewLinodeVolumeCloneTool,
-		tools.NewLinodeVolumeUpdateTool,
-		tools.NewLinodeVolumeAttachTool,
-		tools.NewLinodeVolumeDetachTool,
-		tools.NewLinodeVolumeResizeTool,
-		tools.NewLinodeVolumeDeleteTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 func objectStorageToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeObjectStorageBucketListTool,
-		tools.NewLinodeObjectStorageBucketListByRegionTool,
-		tools.NewLinodeObjectStorageBucketGetTool,
-		tools.NewLinodeObjectStorageBucketContentsTool,
-		tools.NewLinodeObjectStorageEndpointListTool,
-		tools.NewLinodeObjectStorageTypeListTool,
-		tools.NewLinodeObjectStorageQuotasListTool,
-		tools.NewLinodeObjectStorageKeyListTool,
-		tools.NewLinodeObjectStorageKeyGetTool,
-		tools.NewLinodeObjectStorageTransferTool,
-		tools.NewLinodeObjectStorageQuotaGetTool,
-		tools.NewLinodeObjectStorageQuotaUsageTool,
-		tools.NewLinodeObjectStorageCancelTool,
-		tools.NewLinodeObjectStorageBucketAccessGetTool,
-		tools.NewLinodeObjectStorageBucketCreateTool,
-		tools.NewLinodeObjectStorageBucketDeleteTool,
-		tools.NewLinodeObjectStorageBucketAccessAllowTool,
-		tools.NewLinodeObjectStorageBucketAccessUpdateTool,
-		tools.NewLinodeObjectStorageKeyCreateTool,
-		tools.NewLinodeObjectStorageKeyUpdateTool,
-		tools.NewLinodeObjectStorageKeyDeleteTool,
-		tools.NewLinodeObjectStoragePresignedURLTool,
-		tools.NewLinodeObjectStorageObjectACLGetTool,
-		tools.NewLinodeObjectStorageObjectACLUpdateTool,
-		tools.NewLinodeObjectStorageSSLGetTool,
-		tools.NewLinodeObjectStorageSSLDeleteTool,
-		tools.NewLinodeObjectStorageSSLUploadTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 func databaseToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeDatabaseEngineListTool,
-		tools.NewLinodeDatabaseTypeListTool,
-		tools.NewLinodeDatabaseTypeGetTool,
-		tools.NewLinodeDatabaseEngineGetTool,
-		tools.NewLinodeDatabaseMySQLConfigGetTool,
-		tools.NewLinodeDatabasePostgreSQLConfigGetTool,
-		tools.NewLinodeDatabaseAllInstancesListTool,
-		tools.NewLinodeDatabaseInstanceListTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceListTool,
-		tools.NewLinodeDatabaseInstanceGetTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceGetTool,
-		tools.NewLinodeDatabaseInstanceSSLGetTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceSSLGetTool,
-		tools.NewLinodeDatabaseInstanceCredentialsGetTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceCredentialsGetTool,
-		tools.NewLinodeDatabaseInstanceCredentialsResetTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool,
-		tools.NewLinodeDatabaseInstanceCreateTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceCreateTool,
-		tools.NewLinodeDatabaseInstanceUpdateTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool,
-		tools.NewLinodeDatabaseInstanceDeleteTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool,
-		tools.NewLinodeDatabaseInstancePatchTool,
-		tools.NewLinodeDatabasePostgreSQLInstancePatchTool,
-		tools.NewLinodeDatabaseInstanceSuspendTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool,
-		tools.NewLinodeDatabaseInstanceResumeTool,
-		tools.NewLinodeDatabasePostgreSQLInstanceResumeTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 func vpcToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeVPCListTool,
-		tools.NewLinodeVPCGetTool,
-		tools.NewLinodeVPCIPsListTool,
-		tools.NewLinodeVPCIPListTool,
-		tools.NewLinodeVPCSubnetListTool,
-		tools.NewLinodeVPCSubnetGetTool,
-		tools.NewLinodeVPCCreateTool,
-		tools.NewLinodeVPCUpdateTool,
-		tools.NewLinodeVPCDeleteTool,
-		tools.NewLinodeVPCSubnetCreateTool,
-		tools.NewLinodeVPCSubnetUpdateTool,
-		tools.NewLinodeVPCSubnetDeleteTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }
 
 func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
-	backupFactories := instanceBackupToolFactories()
-	factories := make([]toolFactory, 0, 1+len(backupFactories))
-	factories = append(
-		factories,
-		tools.NewLinodeInstanceStatsGetTool,
-		tools.NewLinodeInstanceTransferMonthGetTool,
-	)
-	factories = append(factories, backupFactories...)
-	factories = append(factories, instanceFirewallToolFactories()...)
-	factories = append(factories, instanceInterfaceToolFactories()...)
+	interfaceFactories := instanceInterfaceToolFactories()
+	factories := make([]toolFactory, 0, len(interfaceFactories))
+	factories = append(factories, interfaceFactories...)
 	factories = append(factories, instanceConfigToolFactories()...)
 	factories = append(factories, instanceNodeBalancerToolFactories()...)
 	factories = append(factories, instanceDiskToolFactories()...)
@@ -1409,127 +1007,30 @@ func instanceDeepToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, factories)
 }
 
-func instanceBackupToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInstanceBackupListTool,
-		tools.NewLinodeInstanceBackupGetTool,
-		tools.NewLinodeInstanceBackupCreateTool,
-		tools.NewLinodeInstanceBackupRestoreTool,
-		tools.NewLinodeInstanceBackupsEnableTool,
-		tools.NewLinodeInstanceBackupsCancelTool,
-	}
-}
-
-func instanceFirewallToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInstanceFirewallsUpdateTool,
-		tools.NewLinodeInstanceFirewallsApplyTool,
-		tools.NewLinodeInstanceFirewallListTool,
-	}
-}
-
 func instanceInterfaceToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInterfacesUpgradeTool,
-		tools.NewLinodeInstanceInterfacesListTool,
-		tools.NewLinodeInstanceInterfaceGetTool,
-		tools.NewLinodeInstanceInterfaceFirewallsListTool,
-		tools.NewLinodeInstanceInterfaceDeleteTool,
-		tools.NewLinodeInstanceInterfaceSettingsGetTool,
-		tools.NewLinodeInstanceInterfaceSettingsUpdateTool,
-		tools.NewLinodeInstanceInterfaceHistoryListTool,
-		tools.NewLinodeInstanceInterfaceAddTool,
-		tools.NewLinodeInstanceInterfaceUpdateTool,
-	}
+	return []toolFactory{}
 }
 
 func instanceConfigToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInstanceConfigListTool,
-		tools.NewLinodeInstanceVolumeListTool,
-		tools.NewLinodeInstanceConfigGetTool,
-		tools.NewLinodeInstanceConfigInterfacesListTool,
-		tools.NewLinodeInstanceConfigCreateTool,
-		tools.NewLinodeInstanceConfigInterfaceAddTool,
-		tools.NewLinodeInstanceConfigInterfaceGetTool,
-		tools.NewLinodeInstanceConfigInterfaceUpdateTool,
-		tools.NewLinodeInstanceConfigInterfaceDeleteTool,
-		tools.NewLinodeInstanceConfigUpdateTool,
-		tools.NewLinodeInstanceConfigInterfacesReorderTool,
-		tools.NewLinodeInstanceConfigDeleteTool,
-	}
+	return []toolFactory{}
 }
 
 func instanceNodeBalancerToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInstanceNodeBalancerListTool,
-	}
+	return []toolFactory{}
 }
 
 func instanceDiskToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInstanceDiskListTool,
-		tools.NewLinodeInstanceDiskGetTool,
-		tools.NewLinodeInstanceDiskCreateTool,
-		tools.NewLinodeInstanceDiskUpdateTool,
-		tools.NewLinodeInstanceDiskDeleteTool,
-		tools.NewLinodeInstanceDiskCloneTool,
-		tools.NewLinodeInstanceDiskResizeTool,
-		tools.NewLinodeInstanceDiskPasswordResetTool,
-	}
+	return []toolFactory{}
 }
 
 func instanceIPToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInstanceIPListTool,
-		tools.NewLinodeInstanceIPGetTool,
-		tools.NewLinodeInstanceIPAllocateTool,
-		tools.NewLinodeInstanceIPUpdateRDNSTool,
-		tools.NewLinodeInstanceIPDeleteTool,
-	}
+	return []toolFactory{}
 }
 
 func instanceActionToolFactories() []toolFactory {
-	return []toolFactory{
-		tools.NewLinodeInstanceCloneTool,
-		tools.NewLinodeInstanceMigrateTool,
-		tools.NewLinodeInstanceMutateTool,
-		tools.NewLinodeInstanceRebuildTool,
-		tools.NewLinodeInstanceRescueTool,
-		tools.NewLinodeInstancePasswordResetTool,
-	}
+	return []toolFactory{}
 }
 
 func lkeToolEntries(cfg *config.Config) []toolEntry {
-	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeLKEClusterListTool,
-		tools.NewLinodeLKEClusterGetTool,
-		tools.NewLinodeLKEPoolListTool,
-		tools.NewLinodeLKEPoolGetTool,
-		tools.NewLinodeLKENodeGetTool,
-		tools.NewLinodeLKEKubeconfigGetTool,
-		tools.NewLinodeLKEDashboardGetTool,
-		tools.NewLinodeLKEAPIEndpointListTool,
-		tools.NewLinodeLKEACLGetTool,
-		tools.NewLinodeLKEVersionListTool,
-		tools.NewLinodeLKEVersionGetTool,
-		tools.NewLinodeLKETypeListTool,
-		tools.NewLinodeLKETierVersionListTool,
-		tools.NewLinodeLKETierVersionGetTool,
-		tools.NewLinodeLKEClusterCreateTool,
-		tools.NewLinodeLKEClusterUpdateTool,
-		tools.NewLinodeLKEClusterDeleteTool,
-		tools.NewLinodeLKEClusterRecycleTool,
-		tools.NewLinodeLKEClusterRegenerateTool,
-		tools.NewLinodeLKEPoolCreateTool,
-		tools.NewLinodeLKEPoolUpdateTool,
-		tools.NewLinodeLKEPoolDeleteTool,
-		tools.NewLinodeLKEPoolRecycleTool,
-		tools.NewLinodeLKENodeDeleteTool,
-		tools.NewLinodeLKENodeRecycleTool,
-		tools.NewLinodeLKEKubeconfigDeleteTool,
-		tools.NewLinodeLKEServiceTokenDeleteTool,
-		tools.NewLinodeLKEACLUpdateTool,
-		tools.NewLinodeLKEACLDeleteTool,
-	})
+	return entriesFromFactories(cfg, []toolFactory{})
 }

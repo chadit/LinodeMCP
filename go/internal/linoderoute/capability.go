@@ -35,6 +35,10 @@ type Declaration struct {
 	RouteTool  string
 	MetaTool   string
 	Capability linodev1.ToolCapability
+	Surface    linodev1.ApiSurface
+	// SurfaceDeclared separates a message that wrote the option out from one that
+	// left it absent, which read back the same otherwise: both answer v4.
+	SurfaceDeclared bool
 }
 
 // Name is the tool a declaration belongs to. A well-formed declaration carries
@@ -75,7 +79,32 @@ func (d Declaration) defects() []string {
 			"%s: declares %s but no marker names its tool", d.Message, d.Capability))
 	}
 
+	found = append(found, d.surfaceDefects()...)
+
 	return append(found, d.tierDefects()...)
+}
+
+// surfaceDefects lists the ways a declared surface cannot apply. A meta tool
+// reaches no Linode API, so it has no surface to answer on, and writing the
+// default out gives v4 a second spelling the emitter relies on not existing.
+func (d Declaration) surfaceDefects() []string {
+	if !d.SurfaceDeclared {
+		return nil
+	}
+
+	if d.RouteTool == "" {
+		return []string{fmt.Sprintf(
+			"%s: declares %s but no tool_route", d.Message, d.Surface)}
+	}
+
+	if d.Surface == linodev1.ApiSurface_API_SURFACE_UNSPECIFIED ||
+		d.Surface == linodev1.ApiSurface_API_SURFACE_V4 {
+		return []string{fmt.Sprintf(
+			"%s: declares %s, which is the default an unannotated tool already gets",
+			d.Message, d.Surface)}
+	}
+
+	return nil
 }
 
 // tierDefects lists the ways a declared tier disagrees with the marker beside
@@ -218,13 +247,92 @@ func declarations() []Declaration {
 		capability, _ := proto.GetExtension(
 			options, linodev1.E_ToolCapability,
 		).(linodev1.ToolCapability)
+		surface, _ := proto.GetExtension(
+			options, linodev1.E_ToolApiSurface,
+		).(linodev1.ApiSurface)
 
 		found = append(found, Declaration{
-			Message:    string(message.FullName()),
-			RouteTool:  route.GetTool(),
-			MetaTool:   meta.GetTool(),
-			Capability: capability,
+			Message:         string(message.FullName()),
+			RouteTool:       route.GetTool(),
+			MetaTool:        meta.GetTool(),
+			Capability:      capability,
+			Surface:         surface,
+			SurfaceDeclared: proto.HasExtension(options, linodev1.E_ToolApiSurface),
 		})
+
+		return true
+	})
+
+	return found
+}
+
+// reservedArgument reports an argument name a tool input may never declare. The
+// surface a tool answers on is a property of the tool, and an argument by any of
+// these names would let a caller, or a model reading the advertised schema, move
+// a call to a surface the contract did not declare.
+func reservedArgument(name string) bool {
+	switch name {
+	case "api_version", "api_surface", "surface", "beta":
+		return true
+	}
+
+	return false
+}
+
+// ValidateArguments reports tool inputs that name the API surface as an
+// argument, keyed by message name.
+//
+// Exported for the reason ValidateContract is: `make tool-routes` refuses the
+// shape before it can be generated, so proving the check still bites means
+// handing it an input that carries one.
+//
+// Callers pass tool inputs only. VersionResponse legitimately declares an
+// api_version field, and a response is not something a caller fills.
+func ValidateArguments(inputs map[string][]string) error {
+	defects := make([]string, 0)
+
+	for message, arguments := range inputs {
+		for _, argument := range arguments {
+			if !reservedArgument(argument) {
+				continue
+			}
+
+			defects = append(defects, fmt.Sprintf(
+				"%s: declares argument %q, and the API surface is a per-tool"+
+					" declaration rather than an argument", message, argument))
+		}
+	}
+
+	if len(defects) == 0 {
+		return nil
+	}
+
+	slices.Sort(defects)
+
+	return fmt.Errorf("%w: %s", ErrDeclaration, strings.Join(defects, "; "))
+}
+
+// inputArguments is the field-name list of every message that names a tool.
+func inputArguments() map[string][]string {
+	found := make(map[string][]string)
+
+	walkMessages(func(message protoreflect.MessageDescriptor) bool {
+		options := message.Options()
+		route, _ := proto.GetExtension(options, linodev1.E_ToolRoute).(*linodev1.ToolRoute)
+		meta, _ := proto.GetExtension(options, linodev1.E_ToolMeta).(*linodev1.ToolMeta)
+
+		if route.GetTool() == "" && meta.GetTool() == "" {
+			return true
+		}
+
+		fields := message.Fields()
+		names := make([]string, 0, fields.Len())
+
+		for i := range fields.Len() {
+			names = append(names, string(fields.Get(i).Name()))
+		}
+
+		found[string(message.FullName())] = names
 
 		return true
 	})

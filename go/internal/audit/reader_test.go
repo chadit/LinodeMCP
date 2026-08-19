@@ -1,8 +1,11 @@
 package audit_test
 
 import (
+	"bufio"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -293,7 +296,7 @@ func TestReadRecentSkipsCorruptLines(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "audit.log")
 
-	good := makeTestEvent("tool_ok", audit.CapabilityRead, audit.StatusSuccess, day(19, 8))
+	good := makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8))
 
 	line, err := json.Marshal(&good)
 	if err != nil {
@@ -314,8 +317,81 @@ func TestReadRecentSkipsCorruptLines(t *testing.T) {
 		t.Fatalf("len(got) = %d, want %d", len(got), 1)
 	}
 
-	if got[0].Tool != "tool_ok" {
-		t.Errorf("got[0].Tool = %v, want %v", got[0].Tool, "tool_ok")
+	if got[0].Tool != toolOK {
+		t.Errorf("got[0].Tool = %v, want %v", got[0].Tool, toolOK)
+	}
+}
+
+// TestReadRecentSkipsUnopenableFile verifies a listed file the sandboxed
+// root refuses to open is skipped, keeping open failures distinct from
+// the read failures that abort the scan.
+func TestReadRecentSkipsUnopenableFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeJSONLFile(t, filepath.Join(dir, audit.ActiveLogFileName), false, []audit.Event{
+		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
+	})
+
+	// os.Root refuses a symlink that escapes the audit dir, so opening
+	// this listed rotated name fails without permission tricks.
+	if err := os.Symlink(filepath.Join(dir, "..", "outside.log"), filepath.Join(dir, "audit-2026-05-18.log")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := audit.ReadRecent(dir, &audit.RecentQuery{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Tool != toolOK {
+		t.Errorf("got = %v, want one tool_ok event", got)
+	}
+}
+
+// TestReadRecentSkipsCorruptGzipHeader verifies a rotated .gz whose
+// header does not parse is skipped like an open failure, while other
+// files still contribute events.
+func TestReadRecentSkipsCorruptGzipHeader(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeJSONLFile(t, filepath.Join(dir, audit.ActiveLogFileName), false, []audit.Event{
+		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
+	})
+
+	if err := os.WriteFile(filepath.Join(dir, "audit-2026-05-18.log.gz"), []byte("not gzip data"), 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := audit.ReadRecent(dir, &audit.RecentQuery{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 || got[0].Tool != toolOK {
+		t.Errorf("got = %v, want one tool_ok event", got)
+	}
+}
+
+// TestReadRecentSurfacesReadError verifies a line past the scanner's
+// token cap fails the scan, since a truncated read must not pass for a
+// complete one.
+func TestReadRecentSurfacesReadError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// 1<<21 is 2MB, past the reader's 1MB scanner token cap.
+	oversized := bytes.Repeat([]byte("x"), 1<<21)
+	oversized = append(oversized, '\n')
+
+	if err := os.WriteFile(filepath.Join(dir, audit.ActiveLogFileName), oversized, 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := audit.ReadRecent(dir, &audit.RecentQuery{}); !errors.Is(err, bufio.ErrTooLong) {
+		t.Errorf("err = %v, want %v", err, bufio.ErrTooLong)
 	}
 }
 

@@ -1,6 +1,8 @@
 package tools_test
 
 import (
+	"math"
+	"slices"
 	"strings"
 	"testing"
 
@@ -76,7 +78,7 @@ func TestRequireConfirm(t *testing.T) {
 		},
 		{
 			name:    "string yes not recognized by GetBool",
-			args:    map[string]any{keyConfirm: "yes"},
+			args:    map[string]any{keyConfirm: phase2NonBoolean},
 			wantNil: false,
 		},
 	}
@@ -265,6 +267,142 @@ func TestFilterByContains(t *testing.T) {
 				if filtered[idx].Name != wantName {
 					t.Errorf("filtered[idx].Name = %v, want %v", filtered[idx].Name, wantName)
 				}
+			}
+		})
+	}
+}
+
+// TestIntSliceArgument pins the ID-array reader the generated hooks reach. It
+// is exercised through the exported helper rather than through a tool because
+// the last handler that read an array of ids by hand moved to the generator.
+func TestIntSliceArgument(t *testing.T) {
+	t.Parallel()
+
+	const name = "configs"
+
+	positiveIntegers := name + " must be an array of positive integers"
+	atLeastOne := name + " must include at least one ID"
+
+	cases := map[string]struct {
+		raw     any
+		message string
+		want    []int
+	}{
+		"typed slice":            {raw: []int{11, 22}, want: []int{11, 22}},
+		"empty typed slice":      {raw: []int{}, message: atLeastOne},
+		"typed slice with zero":  {raw: []int{11, 0}, message: positiveIntegers},
+		"json numbers":           {raw: []any{float64(11), float64(22)}, want: []int{11, 22}},
+		"empty json array":       {raw: []any{}, message: atLeastOne},
+		"fractional json number": {raw: []any{1.5}, message: positiveIntegers},
+		"negative json number":   {raw: []any{float64(-1)}, message: positiveIntegers},
+		"boundary json number":   {raw: []any{math.MaxFloat64}, message: positiveIntegers},
+		"untyped int":            {raw: []any{7}, want: []int{7}},
+		"untyped int below one":  {raw: []any{0}, message: positiveIntegers},
+		"entry of another kind":  {raw: []any{"11"}, message: positiveIntegers},
+		"not an array":           {raw: "11,22", message: positiveIntegers},
+	}
+
+	for testName, testCase := range cases {
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
+
+			ids, message := tools.IntSliceArgument(testCase.raw, name)
+			if message != testCase.message {
+				t.Fatalf("message = %q, want %q", message, testCase.message)
+			}
+
+			if !slices.Equal(ids, testCase.want) {
+				t.Errorf("ids = %v, want %v", ids, testCase.want)
+			}
+		})
+	}
+}
+
+// TestObjectMapArgumentReadsBothObjectForms covers every branch of the reader
+// the service-transfer entities argument still goes through: the native map the
+// schema produces, the JSON-string form some clients send, and the blank value
+// that means the caller sent nothing.
+const (
+	// entityKindTransfer is the one value the entities reader table carries,
+	// named so the table states what a service transfer's entities object holds.
+	entityKindTransfer = "service-transfer"
+	// errEntitiesNotObject is the sentence the reader answers for every shape
+	// that is not an object.
+	errEntitiesNotObject = "entities must be an object"
+)
+
+func TestObjectMapArgumentReadsBothObjectForms(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		raw     any
+		want    string
+		message string
+	}{
+		"absent":       {raw: nil},
+		"native map":   {raw: map[string]any{"kind": entityKindTransfer}, want: entityKindTransfer},
+		"json string":  {raw: `{"kind":"service-transfer"}`, want: entityKindTransfer},
+		"blank string": {raw: "   "},
+		"bad json":     {raw: "{oops", message: errEntitiesNotObject},
+		"array":        {raw: []any{entityKindTransfer}, message: errEntitiesNotObject},
+		caseNumeric:    {raw: float64(5), message: errEntitiesNotObject},
+	}
+
+	for name, testCase := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			value, message := tools.ObjectMapArgument(testCase.raw, "entities")
+			if message != testCase.message {
+				t.Errorf("message = %q, want %q", message, testCase.message)
+			}
+
+			var kind string
+			if raw, found := value["kind"]; found {
+				kind, _ = raw.(string)
+			}
+
+			if kind != testCase.want {
+				t.Errorf("value[\"kind\"] = %q, want %q", kind, testCase.want)
+			}
+		})
+	}
+}
+
+// TestRequiredPresentArgumentReadsPresenceNotValue pins the one question this
+// reader answers: did the caller send the argument. An empty list is a value
+// the routes using it act on (it removes every assignment), so it has to pass
+// where an absent argument is refused.
+func TestRequiredPresentArgumentReadsPresenceNotValue(t *testing.T) {
+	t.Parallel()
+
+	const firewallIDsKey = "firewall_ids"
+
+	missing := firewallIDsKey + " is required"
+
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{absentEnvironment, map[string]any{}, missing},
+		{"empty list is a value", map[string]any{firewallIDsKey: []any{}}, ""},
+		{"populated list", map[string]any{firewallIDsKey: []any{float64(1)}}, ""},
+		{"explicit null is a value", map[string]any{firewallIDsKey: nil}, ""},
+		{
+			"another argument does not answer for it",
+			map[string]any{keyManagedLinodeSettingsLinodeID: float64(1)},
+			missing,
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := createRequestWithArgs(t, testCase.args)
+			if got := tools.RequiredPresentArgument(&request, firewallIDsKey); got != testCase.want {
+				t.Errorf("RequiredPresentArgument = %q, want %q", got, testCase.want)
 			}
 		})
 	}

@@ -10,8 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 func writeToolInstanceStatsFixture(t *testing.T, w http.ResponseWriter) {
@@ -42,7 +42,7 @@ func TestLinodeInstanceStatsGetToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeInstanceStatsGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceStatsGetTool(cfg)
 
 	t.Parallel()
 
@@ -75,7 +75,7 @@ func TestLinodeInstanceStatsGetToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceStatsGetTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceStatsGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -139,7 +139,7 @@ func TestLinodeInstanceStatsGetToolSuccess(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceStatsGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceStatsGetTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)})
 
@@ -204,7 +204,7 @@ func TestLinodeInstanceStatsGetToolApiError(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
 		},
 	}
-	_, _, srvHandler := tools.NewLinodeInstanceStatsGetTool(srvCfg)
+	_, _, srvHandler := gentools.NewLinodeInstanceStatsGetTool(srvCfg)
 
 	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123)}))
 	if err != nil {
@@ -232,7 +232,7 @@ const (
 	toolLinodeInstanceStatsMonthGet = "linode_instance_stats_month_get"
 	keyStatsYear                    = "year"
 	keyStatsMonth                   = "month"
-	errStatsYearRange               = "year must be an integer between 2000 and 2037"
+	errStatsYearRange               = "year must be an integer between 1970 and 9999"
 	errStatsMonthRange              = "month must be an integer between 1 and 12"
 )
 
@@ -242,7 +242,7 @@ func TestLinodeInstanceStatsByYearMonthToolDefinition(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	tool, capability, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
+	tool, capability, handler := gentools.NewLinodeInstanceStatsMonthGetTool(cfg)
 
 	t.Parallel()
 
@@ -277,7 +277,7 @@ func TestLinodeInstanceStatsByYearMonthToolValidation(t *testing.T) {
 			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
 		},
 	}
-	_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceStatsMonthGetTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -287,7 +287,7 @@ func TestLinodeInstanceStatsByYearMonthToolValidation(t *testing.T) {
 		{name: caseMissingLinodeID, args: map[string]any{keyStatsYear: float64(2024), keyStatsMonth: float64(8)}, wantContains: errLinodeIDRequired},
 		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyStatsYear: float64(2024), keyStatsMonth: float64(8)}, wantContains: "linode_id must be a positive integer"},
 		{name: "missing year", args: map[string]any{keyLinodeID: float64(123), keyStatsMonth: float64(8)}, wantContains: errStatsYearRange},
-		{name: "year too low", args: map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(1999), keyStatsMonth: float64(8)}, wantContains: errStatsYearRange},
+		{name: "year below the epoch floor", args: map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(1969), keyStatsMonth: float64(8)}, wantContains: errStatsYearRange},
 		{name: "year separator", args: map[string]any{keyLinodeID: float64(123), keyStatsYear: "2024/..", keyStatsMonth: float64(8)}, wantContains: errStatsYearRange},
 		{name: "missing month", args: map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024)}, wantContains: errStatsMonthRange},
 		{name: "month too high", args: map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024), keyStatsMonth: float64(13)}, wantContains: errStatsMonthRange},
@@ -351,7 +351,7 @@ func TestLinodeInstanceStatsByYearMonthToolSuccess(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceStatsMonthGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024), keyStatsMonth: float64(8)}))
 	if err != nil {
@@ -406,7 +406,7 @@ func TestLinodeInstanceStatsByYearMonthToolApiError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
-	_, _, handler := tools.NewLinodeInstanceStatsByYearMonthTool(cfg)
+	_, _, handler := gentools.NewLinodeInstanceStatsMonthGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyLinodeID: float64(123), keyStatsYear: float64(2024), keyStatsMonth: float64(8)}))
 	if err != nil {

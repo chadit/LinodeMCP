@@ -11,7 +11,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // sqliteHealthResult mirrors the SQLite section of the linode_audit_health
@@ -47,7 +47,7 @@ func TestLinodeAuditHealthReportsSQLiteSection(t *testing.T) {
 	cfg.Audit.SQLite.Enabled = true
 	cfg.Audit.SQLite.Path = dbPath
 
-	_, _, handler := tools.NewLinodeAuditHealthTool(cfg)
+	_, _, handler := gentools.NewLinodeAuditHealthTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
@@ -98,7 +98,7 @@ func TestLinodeAuditHealthOmitsSQLiteSectionWhenDisabled(t *testing.T) {
 	stateHome := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateHome)
 
-	_, _, handler := tools.NewLinodeAuditHealthTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeAuditHealthTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {

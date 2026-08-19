@@ -10,69 +10,42 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
-// NewLinodeAuditExportTool returns the linode_audit_export query tool.
-// It dumps a filtered window of audit events to a temp file in JSON,
-// CSV, or NDJSON and returns the path. CapMeta so it is available in
-// every profile.
+// AuditExportAnswer dumps a filtered window of audit events to a temp
+// file in JSON, CSV, or NDJSON and answers with the path.
 //
-// Reads the SQLite store when the SQLite sink is enabled, falling back
-// to the JSONL log otherwise. Bounded by max_records to avoid pulling
-// an unbounded range into memory.
-func NewLinodeAuditExportTool(
+// It reads the SQLite store when that sink is enabled, falling back to the
+// JSONL log otherwise, and is bounded by max_records so an unbounded range
+// never reaches memory.
+func AuditExportAnswer(
+	ctx context.Context,
+	request *mcp.CallToolRequest,
 	cfg *config.Config,
-) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewToolWithRawSchema(
-		"linode_audit_export",
-		"Export a range of audit events to a temp file and return its path. "+
-			"Reads SQLite when enabled, else the JSONL log. Optional filters: "+
-			"since, until, tool (glob), max_records, include_meta.",
-		toolschemas.Schema("linode.mcp.v1.AuditExportInput"),
-	)
+) (*mcp.CallToolResult, error) {
+	format := request.GetString("format", "")
+	ext, _ := exportFileExtension(format)
 
-	sqlitePath := resolveAuditSQLitePath(cfg)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		format := request.GetString("format", "")
-
-		if msg := requiredEnumChoice(&request, "format", linodev1.AuditExportFormat_Value_value); msg != "" {
-			return mcp.NewToolResultError(msg), nil
-		}
-
-		ext, _ := exportFileExtension(format)
-
-		query, err := buildExportQuery(&request)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		events, err := audit.ExportEvents(ctx, sqlitePath, audit.ResolveDefaultAuditDir(), query)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to read audit log: %v", err)), nil
-		}
-
-		path, err := writeExportFile(events, format, ext)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("failed to write export file: %v", err)), nil
-		}
-
-		return MarshalProtoToolResponse(&linodev1.AuditExportResponse{
-			Path:        path,
-			Format:      format,
-			RecordCount: linodeIDToInt32(len(events)),
-		})
+	query, err := buildExportQuery(request)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return tool, profiles.CapMeta, handler
+	events, err := audit.ExportEvents(ctx, resolveAuditSQLitePath(cfg), audit.ResolveDefaultAuditDir(), query)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read audit log: %v", err)), nil
+	}
+
+	path, err := writeExportFile(events, format, ext)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to write export file: %v", err)), nil
+	}
+
+	return MarshalProtoToolResponse(&linodev1.AuditExportResponse{
+		Path:        path,
+		Format:      format,
+		RecordCount: IDToInt32(len(events)),
+	})
 }
 
 // buildExportQuery translates request parameters into a RecentQuery

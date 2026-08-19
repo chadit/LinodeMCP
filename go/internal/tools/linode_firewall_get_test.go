@@ -10,9 +10,9 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const firewallGetFixtureLabel = "edge-firewall"
@@ -21,7 +21,7 @@ func TestLinodeFirewallGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeFirewallGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeFirewallGetTool(cfg)
 
 	if tool.Name != "linode_firewall_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_firewall_get")
@@ -91,7 +91,7 @@ func TestLinodeFirewallGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeFirewallGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: 55}))
 	if err != nil {
@@ -153,7 +153,7 @@ func TestLinodeFirewallGetToolRejectsInvalidFirewallIDBeforeClientCall(t *testin
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeFirewallGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallGetTool(cfg)
 
 	for name, args := range map[string]map[string]any{
 		"missing firewall_id":  {},
@@ -207,7 +207,7 @@ func TestLinodeFirewallGetToolClientFailureReturnsToolError(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeFirewallGetTool(cfg)
+	_, _, handler := gentools.NewLinodeFirewallGetTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyFirewallID: 55}))
 	if err != nil {

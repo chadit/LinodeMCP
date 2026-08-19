@@ -134,7 +134,7 @@ func TestEveryPaginatedToolRejectsBadPagination(t *testing.T) {
 
 		before := requests
 
-		text, isError := callPaginatedTool(t, srv, info.Name, args)
+		isError, text := callServerTool(t, srv, info.Name, args)
 
 		if !isError {
 			t.Errorf("%s: page=%q accepted, want a validation error", info.Name, args[pageArg])
@@ -158,29 +158,4 @@ func TestEveryPaginatedToolRejectsBadPagination(t *testing.T) {
 		t.Errorf("%d of %d paginated tools reported the shared pagination message, want at least %d",
 			withPaginationMessage, checked, minToolsRejectingWithPaginationMessage)
 	}
-}
-
-// callPaginatedTool dispatches one tools/call through the server and returns
-// the result text with its error flag.
-func callPaginatedTool(t *testing.T, srv *server.Server, name string, args map[string]any) (string, bool) {
-	t.Helper()
-
-	message, err := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "tools/call",
-		"params":  map[string]any{callNameKey: name, "arguments": args},
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	rawResponse, err := json.Marshal(srv.HandleMessage(t.Context(), message))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	isError, text := decodeBehaviorResult(t, rawResponse)
-
-	return text, isError
 }

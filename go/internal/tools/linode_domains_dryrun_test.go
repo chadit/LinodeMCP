@@ -12,8 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // dryRunNoCallServer returns a cfg pointed at a server that fails on ANY
@@ -39,7 +39,7 @@ func TestLinodeDomainImportToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeDomainImportTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeDomainImportTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -48,7 +48,7 @@ func TestLinodeDomainImportToolDryRun(t *testing.T) {
 	t.Run("preview without importing", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeDomainImportTool(dryRunNoCallServer(t))
+		_, _, handler := gentools.NewLinodeDomainImportTool(dryRunNoCallServer(t))
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDomain:           domainExample,
@@ -89,7 +89,7 @@ func TestLinodeDomainImportToolDryRun(t *testing.T) {
 	t.Run("still validates domain", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeDomainImportTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeDomainImportTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRemoteNameserver: remoteNameserverExample,
@@ -115,7 +115,7 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeDomainCloneTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeDomainCloneTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -125,7 +125,7 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/domains/333", linode.Domain{ID: 333, Domain: domainExample})
-		_, _, handler := tools.NewLinodeDomainCloneTool(cfg)
+		_, _, handler := gentools.NewLinodeDomainCloneTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(333),
@@ -166,7 +166,7 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 	t.Run("still validates domain_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeDomainCloneTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeDomainCloneTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDomain: domainExample,
@@ -189,7 +189,7 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 func TestLinodeDomainCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeDomainCreateTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeDomainCreateTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -198,7 +198,7 @@ func TestLinodeDomainCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 func TestLinodeDomainCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDomainCreateTool(dryRunNoCallServer(t))
+	_, _, handler := gentools.NewLinodeDomainCreateTool(dryRunNoCallServer(t))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyDomain:   domainExample,
@@ -258,7 +258,7 @@ func TestLinodeDomainCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 func TestLinodeDomainCreateToolDryRunStillValidatesDomain(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDomainCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeDomainCreateTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyType:   "master",
@@ -280,7 +280,7 @@ func TestLinodeDomainCreateToolDryRunStillValidatesDomain(t *testing.T) {
 func TestLinodeDomainRecordCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
-	tool, _, _ := tools.NewLinodeDomainRecordCreateTool(&config.Config{})
+	tool, _, _ := gentools.NewLinodeDomainRecordCreateTool(&config.Config{})
 	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
@@ -289,7 +289,7 @@ func TestLinodeDomainRecordCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) 
 func TestLinodeDomainRecordCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDomainRecordCreateTool(dryRunNoCallServer(t))
+	_, _, handler := gentools.NewLinodeDomainRecordCreateTool(dryRunNoCallServer(t))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyDomainID: float64(333),
@@ -349,7 +349,7 @@ func TestLinodeDomainRecordCreateToolDryRunPreviewWithoutCreating(t *testing.T) 
 func TestLinodeDomainRecordCreateToolDryRunStillValidatesDomainId(t *testing.T) {
 	t.Parallel()
 
-	_, _, handler := tools.NewLinodeDomainRecordCreateTool(&config.Config{})
+	_, _, handler := gentools.NewLinodeDomainRecordCreateTool(&config.Config{})
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyType:   "A",
@@ -364,8 +364,8 @@ func TestLinodeDomainRecordCreateToolDryRunStillValidatesDomainId(t *testing.T) 
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain_id is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "domain_id is required")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errDomainIDPositive) {
+		t.Errorf("error text %q does not contain %q", text.Text, errDomainIDPositive)
 	}
 }
 
@@ -375,7 +375,7 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 	t.Run("schema advertises dry_run", func(t *testing.T) {
 		t.Parallel()
 
-		tool, _, _ := tools.NewLinodeDomainRecordUpdateTool(&config.Config{})
+		tool, _, _ := gentools.NewLinodeDomainRecordUpdateTool(&config.Config{})
 		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
 			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
@@ -386,7 +386,7 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 
 		cfg, methods := dryRunGetStateServer(t, "/domains/333/records/555",
 			linode.DomainRecord{ID: 555, Type: "A"})
-		_, _, handler := tools.NewLinodeDomainRecordUpdateTool(cfg)
+		_, _, handler := gentools.NewLinodeDomainRecordUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyDomainID: float64(333),
@@ -442,7 +442,7 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 	t.Run("still validates domain_id", func(t *testing.T) {
 		t.Parallel()
 
-		_, _, handler := tools.NewLinodeDomainRecordUpdateTool(&config.Config{})
+		_, _, handler := gentools.NewLinodeDomainRecordUpdateTool(&config.Config{})
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyRecordID: float64(555),
@@ -456,8 +456,8 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 			t.Error("result.IsError = false, want true")
 		}
 
-		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "domain_id is required") {
-			t.Errorf("error text %q does not contain %q", text.Text, "domain_id is required")
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errDomainIDPositive) {
+			t.Errorf("error text %q does not contain %q", text.Text, errDomainIDPositive)
 		}
 	})
 }
@@ -478,7 +478,7 @@ func TestLinodeDomainDeleteToolDryRunDependencies(t *testing.T) {
 		},
 	})
 
-	_, _, handler := tools.NewLinodeDomainDeleteTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainDeleteTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyDomainID: float64(888),

@@ -10,20 +10,8 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolvalidate"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
-)
-
-// Shared literals for destroy-tool response building. Extracted so
-// per-tool struct literals don't each repeat them (which trips
-// goconst once enough tools accumulate the same string).
-const (
-	httpMethodDelete = "DELETE"
-	httpMethodPost   = "POST"
-	httpMethodPut    = "PUT"
-
-	// destroyConfirmMessage is the generic confirm gate for destroy tools
-	// whose resource type is already clear from the tool name.
-	destroyConfirmMessage = "This operation is destructive. Set confirm=true to proceed."
 )
 
 // DestructiveAction packages per-tool customization for the destroy
@@ -40,6 +28,15 @@ type DestructiveAction struct {
 	FetchState     func(ctx context.Context, client *linode.Client) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client) error
 	Success        func() proto.Message
+
+	// Failure words a failed removal for the tools whose contract declares
+	// error_message. Nil takes the tier's shared sentence.
+	Failure func(err error) string
+
+	// PreviewBody is the request body a dry run reports beside the route, for
+	// the removals whose call carries one. Nil reports the route alone, which is
+	// all an empty-bodied delete has to say.
+	PreviewBody any
 
 	// DependencyWalk, when non-nil, runs the Phase 2 dependency walk on a
 	// dry-run after FetchState succeeds, enriching the preview with
@@ -96,7 +93,7 @@ func runDestructiveDryRun(
 	env := request.GetString(paramEnvironment, "")
 
 	if action.DependencyWalk == nil {
-		return BuildDryRunResponse(action.ToolName, env, action.Method, action.Path, state)
+		return BuildDryRunResponse(action.ToolName, env, action.Method, action.Path, state, action.PreviewBody)
 	}
 
 	details, walkErr := action.DependencyWalk(ctx, client, state)
@@ -104,7 +101,7 @@ func runDestructiveDryRun(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to compute dry-run dependencies: %v", walkErr)), nil
 	}
 
-	return BuildDryRunResponseDetailed(action.ToolName, env, action.Method, action.Path, state, &details)
+	return BuildDryRunResponseDetailed(action.ToolName, env, action.Method, action.Path, state, &details, action.PreviewBody)
 }
 
 // RunDestructiveAction runs the shared destroy-tool flow. On dry-run:
@@ -239,13 +236,20 @@ func destroyBypassMessage(toolName string) string {
 // FetchState and Execute take the parsed ID directly, sidestepping the
 // closure capture each caller would otherwise need.
 type DestructiveActionByID struct {
-	ToolName       string
+	ToolName string
+	// InputMessage is the full name of the tool's input message, which is what
+	// the flow asks the contract for the tool's declared rules under.
+	InputMessage   string
 	IDParam        string // request arg name, e.g. "domain_id"
 	Method         string
 	PathPattern    string // single %d slot for the ID, e.g. "/domains/%d"
 	ConfirmMessage string
 	FetchState     func(ctx context.Context, client *linode.Client, id int) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client, id int) error
+
+	// Failure words a failed removal for the tools whose contract declares
+	// error_message. Nil takes the tier's shared sentence.
+	Failure func(err error) string
 
 	// SuccessProto builds the success body as a proto message from the parsed
 	// ID, routing the output through the proto-canonical marshaller so it
@@ -265,6 +269,34 @@ type DestructiveActionByID struct {
 	HashIgnore []string
 }
 
+// DestroyID reads one integer id a destroy is addressed by.
+//
+// A value that is not a whole positive number is refused rather than read past:
+// request.GetInt truncates, so 456.5 would otherwise address, and remove,
+// resource 456. An absent or zero argument keeps the sentence this tier has
+// always answered, which is what the behavior fixtures pin.
+//
+// Exported for the generated destroys whose route takes more than one id: they
+// read each slot themselves, and every slot has to answer the same sentences the
+// single-id wrapper answers for the one it parses.
+func DestroyID(request *mcp.CallToolRequest, name string) (int, string) {
+	raw, supplied := request.GetArguments()[name]
+	if !supplied {
+		return 0, name + " is required"
+	}
+
+	value, isNumber := numberArgToInt(raw)
+	if !isNumber || value < 0 {
+		return 0, name + " must be a positive integer"
+	}
+
+	if value == 0 {
+		return 0, name + " is required"
+	}
+
+	return value, ""
+}
+
 // RunDestructiveActionWithID is the single-ID convenience wrapper over
 // RunDestructiveAction. It parses and validates the integer ID arg
 // named by config.IDParam, then delegates to the underlying flow with
@@ -276,9 +308,13 @@ func RunDestructiveActionWithID(
 	cfg *config.Config,
 	params *DestructiveActionByID,
 ) (*mcp.CallToolResult, error) {
-	id := request.GetInt(params.IDParam, 0)
-	if id == 0 {
-		return mcp.NewToolResultError(params.IDParam + " is required"), nil
+	if message := toolvalidate.Check(params.InputMessage, request.GetArguments()); message != "" {
+		return mcp.NewToolResultError(message), nil
+	}
+
+	id, message := DestroyID(request, params.IDParam)
+	if message != "" {
+		return mcp.NewToolResultError(message), nil
 	}
 
 	var walk func(ctx context.Context, client *linode.Client, state any) (DryRunDetails, error)
@@ -300,6 +336,7 @@ func RunDestructiveActionWithID(
 			return params.Execute(ctx, client, id)
 		},
 		Success:        destructiveByIDSuccess(params, id),
+		Failure:        params.Failure,
 		DependencyWalk: walk,
 		HashIgnore:     params.HashIgnore,
 	})
