@@ -31,7 +31,8 @@
 //     (and its nested func-lit bodies), record all called function names.
 //
 //  4. Classify each handler by transitive reachability:
-//     - "MarshalProtoToolResponse" or "MarshalProtoJSON" on any path => proto.
+//     - "MarshalProtoToolResponse", either of its null-restoring variants, or
+//     "MarshalProtoJSON" on any path => proto.
 //     Passing MarshalProtoJSON into a reachable helper counts too, since that
 //     is how handlers preserve documented JSON nulls after canonical proto
 //     serialization.
@@ -69,7 +70,13 @@ const (
 	placeholderTokenLen = 16
 
 	// sink function names.
-	sinkProto          = "MarshalProtoToolResponse"
+	sinkProto = "MarshalProtoToolResponse"
+	// The variant a mutation answers through when it restores the explicit
+	// nulls its decode dropped, which is still the proto marshaller.
+	sinkProtoNulls = "MarshalProtoToolResponseRestoringNulls"
+	// The same variant for a page, which restores each element's nulls rather
+	// than the response's own. Still the proto marshaller.
+	sinkProtoListNulls = "MarshalProtoListResponseRestoringNulls"
 	sinkProtoJSON      = "MarshalProtoJSON"
 	sinkLegacy         = "MarshalToolResponse"
 	sinkMarshalDestroy = "marshalDestroySuccess"
@@ -91,6 +98,12 @@ const (
 	// proto-routed because marshalDestroySuccess routes any proto.Message
 	// through the proto marshaller.
 	successProtoParam = "successProto"
+
+	// successBuilderPrefix names the answer builder a generated destroy calls
+	// from its Success closure. go/cmd/toolgen writes one per tool and returns
+	// its call rather than a literal, so the classifier reads the call the same
+	// way it reads the SuccessProto field the single-id wrapper carries.
+	successBuilderPrefix = "success"
 
 	classifyProto  = "proto"
 	classifyLegacy = "legacy"
@@ -117,6 +130,12 @@ const (
 	// MarshalProtoToolResponse ends at a name nothing in the graph declares and
 	// every generated tool classifies as review.
 	toolsQualifier = "tools."
+
+	// hooksQualifier is the same thing for the hand-written steps a generated
+	// handler declares. A meta tool's whole answer is its answer hook, so the
+	// path from the handler to the message it serializes runs through
+	// internal/toolhooks.
+	hooksQualifier = "toolhooks."
 )
 
 // callRecord records a single outgoing call from a function.
@@ -191,11 +210,15 @@ func main() {
 	}
 }
 
-// locateToolDirs returns the absolute paths of the packages that declare tool
-// factories: the hand-written internal/tools and the generated
-// internal/gentools. A missing generated tree is not an error, since before
-// `make proto` has run there are no generated tools to classify and
-// buildToolSet would have failed first if the server needed them.
+// locateToolDirs returns the absolute paths of the packages a tool's answer is
+// assembled across: the hand-written internal/tools, the generated
+// internal/gentools, and internal/toolhooks, where the steps a contract cannot
+// express live. All three are read as one call graph, because a generated
+// handler's path to the message it serializes can run through any of them.
+//
+// A missing generated tree is not an error, since before `make proto` has run
+// there are no generated tools to classify and buildToolSet would have failed
+// first if the server needed them.
 func locateToolDirs() ([]string, error) {
 	toolsDir, err := locateToolsDir()
 	if err != nil {
@@ -204,9 +227,11 @@ func locateToolDirs() ([]string, error) {
 
 	dirs := []string{toolsDir}
 
-	generated := filepath.Join(filepath.Dir(toolsDir), generatedToolsPackage)
-	if _, statErr := os.Stat(generated); statErr == nil {
-		dirs = append(dirs, generated)
+	for _, sibling := range []string{generatedToolsPackage, hookToolsPackage} {
+		candidate := filepath.Join(filepath.Dir(toolsDir), sibling)
+		if _, statErr := os.Stat(candidate); statErr == nil {
+			dirs = append(dirs, candidate)
+		}
 	}
 
 	return dirs, nil
@@ -215,6 +240,10 @@ func locateToolDirs() ([]string, error) {
 // generatedToolsPackage is the directory name of the emitted tool package,
 // a sibling of internal/tools.
 const generatedToolsPackage = "gentools"
+
+// hookToolsPackage is the directory name of the hand-written hook package,
+// the other sibling of internal/tools a handler's answer can run through.
+const hookToolsPackage = "toolhooks"
 
 // locateToolsDir returns the absolute path to go/internal/tools. It tries
 // executable-relative resolution first (works for built binaries), then falls
@@ -769,9 +798,16 @@ func collectCalls(body *ast.BlockStmt) []callRecord {
 		// package. Record the call as written, then continue with the bare
 		// name so the sink comparisons below see the same function a call from
 		// inside internal/tools would.
-		if bare, qualified := strings.CutPrefix(name, toolsQualifier); qualified {
+		for _, qualifier := range []string{toolsQualifier, hooksQualifier} {
+			bare, qualified := strings.CutPrefix(name, qualifier)
+			if !qualified {
+				continue
+			}
+
 			records = append(records, callRecord{name: name})
 			name = bare
+
+			break
 		}
 
 		for _, arg := range callExpr.Args {
@@ -1030,6 +1066,12 @@ func isProtoResultExpr(expr ast.Expr) bool {
 		return true
 	}
 
+	if call, isCall := expr.(*ast.CallExpr); isCall {
+		callee, namedFunc := call.Fun.(*ast.Ident)
+
+		return namedFunc && strings.HasPrefix(callee.Name, successBuilderPrefix)
+	}
+
 	ident, isIdent := expr.(*ast.Ident)
 
 	return isIdent && ident.Name == successProtoParam
@@ -1206,7 +1248,7 @@ func walkReachability(name string, graph packageCallGraph, visited map[string]bo
 
 	for _, rec := range graph[name] {
 		switch rec.name {
-		case sinkProto, sinkProtoJSON:
+		case sinkProto, sinkProtoNulls, sinkProtoListNulls, sinkProtoJSON:
 			reach.proto = true
 
 		case sinkLegacy, sinkMarshalDestroy:

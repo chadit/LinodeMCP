@@ -1,7 +1,9 @@
 // Command builtin-parity-dump reads a JSON tool catalog from stdin and prints
-// the resolved built-in profile catalog as canonical JSON. Used by the
-// cross-language parity verification script to compare Go and Python
-// catalogs built from the same input fixture.
+// the resolved built-in profile catalog plus the category each tool falls in,
+// as canonical JSON. scripts/verify_profile_resolution.py runs this against
+// the Python twin over one catalog and diffs both halves: the profiles answer
+// what each built-in serves today, the categories answer what any future
+// profile would serve.
 package main
 
 import (
@@ -12,6 +14,14 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
+
+// dump is the shape both languages print. profiles carries each
+// implementation's own canonical catalog export verbatim, so the export the
+// gate reads is the one the language already ships.
+type dump struct {
+	Categories map[string][]string `json:"categories"`
+	Profiles   json.RawMessage     `json:"profiles"`
+}
 
 // inputTool matches the fixture JSON shape: {name, capability}.
 type inputTool struct {
@@ -63,9 +73,19 @@ func run() error {
 		})
 	}
 
-	out, err := profiles.BuiltinCatalogJSON(catalog)
+	resolved, err := profiles.BuiltinCatalogJSON(catalog)
 	if err != nil {
 		return fmt.Errorf("build catalog: %w", err)
+	}
+
+	categories := make(map[string][]string, len(catalog))
+	for _, descriptor := range catalog {
+		categories[descriptor.Name] = profiles.Categories(descriptor.Name)
+	}
+
+	out, err := json.MarshalIndent(dump{Profiles: resolved, Categories: categories}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal dump: %w", err)
 	}
 
 	if _, err := os.Stdout.Write(out); err != nil {

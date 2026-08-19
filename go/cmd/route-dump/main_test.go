@@ -597,20 +597,17 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 		t.Errorf("unresolved call sites in the real client: %v", got.Unresolved)
 	}
 
-	// Assembled from endpointProfile and an http.MethodPut the resolver has to
-	// read off the call, so no search for "PUT /profile" matches the source. It
-	// is the last route the client still builds by hand: when the profile pair
-	// migrates, delete this assertion rather than hunting for a replacement,
-	// since TestDumpAcceptsAClientWithNoBuiltPaths already pins that end state.
-	const assembled = "PUT /profile"
-	if !slices.Contains(got.Routes, assembled) {
-		t.Errorf("route surface is missing %q", assembled)
+	// The dead-client sweep took the last hand-assembled route (PUT /profile)
+	// with its dead method, so the client builds no path by hand anymore:
+	// TestDumpAcceptsAClientWithNoBuiltPaths pins that end state.
+	if len(got.Routes) != 0 {
+		t.Errorf("hand-built routes survived the migration: %v", got.Routes)
 	}
 
 	// A migrated call site names its tool instead of assembling a path, so its
 	// evidence has to survive as a contracted entry or the migration silently
 	// costs the route its coverage.
-	const migratedTool = "linode_instance_interface_list"
+	const migratedTool = "linode_instance_get"
 
 	var migrated bool
 
