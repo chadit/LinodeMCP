@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // DatabaseEngine is one Managed Database engine version.
@@ -30,11 +31,41 @@ message DatabaseEngineGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseEngine";
+  option (linode.mcp.v1.tool_description) = "Retrieves a single Managed Database engine by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Managed Database engine: {error}";
+
+  // The id carries a slash, so no segment reader can judge it and its three
+  // arms are stated here in the order the hand reader answered them.
+  option (buf.validate.message).cel = {
+    id: "database_engine_get.engine_id.non_blank"
+    message: "engine_id must be a non-empty string"
+    expression: "this.engine_id.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_engine_get.engine_id.url_safe"
+    message: "engine_id must not contain query, fragment, or traversal segments"
+    expression: "!this.engine_id.contains('?') && !this.engine_id.contains('#') && !this.engine_id.contains('..') && this.engine_id.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
+  // The character set is Python's, which was the stricter of the two readings:
+  // an engine id carrying anything else addresses no engine, and keeping the
+  // narrower accepted set is what parity means where one language checked more.
+  option (buf.validate.message).cel = {
+    id: "database_engine_get.engine_id.pair"
+    message: "engine_id must use the engine/version format"
+    expression: "this.engine_id.matches('^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Managed Database engine ID, for example mysql/8.0.26 (required).
-  string engine_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string engine_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FREE_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "engine_id must be a non-empty string"
+      unusable: "engine_id must be a non-empty string"
+    }
+  ];
 }
 
 // DatabaseEngineListInput is the input contract for
@@ -47,6 +78,7 @@ message DatabaseEngineListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseEngineListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available Managed Database engines with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

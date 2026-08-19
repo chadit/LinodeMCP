@@ -1,0 +1,695 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "buf/validate/validate.proto";
+import "linode/mcp/v1/options.proto";
+
+// IamIdpConfigCertificate is one SAML signing certificate the account holds for
+// its identity provider. not_before and not_after are read out of the
+// certificate itself, so they arrive even though the caller never sends them.
+message IamIdpConfigCertificate {
+  string certificate = 1;
+  string created = 2;
+  string created_by = 3;
+  string id = 4;
+  string not_after = 5;
+  string not_before = 6;
+}
+
+// IamIdpConfigSaml is the SAML half of a configuration as the read routes
+// return it: the identity provider's own identifiers plus every certificate
+// currently trusted.
+message IamIdpConfigSaml {
+  string entity_id = 1;
+  string identity_element = 2;
+  string idp_url = 3;
+  repeated IamIdpConfigCertificate public_certificates = 4;
+  string user_id_attribute = 5;
+}
+
+// IamIdpConfig mirrors the account's external identity provider configuration.
+// updated and updated_by arrive as JSON null until the configuration is changed
+// for the first time.
+message IamIdpConfig {
+  string created = 1;
+  string created_by = 2;
+  bool enabled = 3;
+  bool enforce = 4;
+  int32 excluded_users_count = 5;
+  string id = 6;
+  int32 included_users_count = 7;
+  string label = 8;
+  IamIdpConfigSaml saml = 9;
+  string updated = 10;
+  string updated_by = 11;
+}
+
+// IamIdpConfigUser is one entry of an included or excluded user list. id carries
+// the username rather than a numeric id, which is what the routes address users
+// by.
+message IamIdpConfigUser {
+  string id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// IamIdpConfigCertificateEntry is one certificate a write carries. Distinct
+// from IamIdpConfigCertificate, which also holds the validity window and the
+// provenance the API derives and a call can never send.
+message IamIdpConfigCertificateEntry {
+  // Public certificate data from the identity provider. The BEGIN and END
+  // CERTIFICATE delimiters are optional.
+  string certificate = 1;
+}
+
+// IamIdpConfigSamlSettings is the saml object a create or update carries.
+// Distinct from IamIdpConfigSaml for the same reason its certificate member is.
+message IamIdpConfigSamlSettings {
+  // Entity identifier (Issuer) of the identity provider (required).
+  string entity_id = 1;
+  // Element of the SAML assertion identifying the user (required): NAME_ID
+  // reads the assertion's NameID, USER_ID_ATTRIBUTE reads the attribute named
+  // by user_id_attribute.
+  string identity_element = 2;
+  // SSO login URL provided by the identity provider (required).
+  string idp_url = 3;
+  // Certificates the assertion signatures are verified against (required, at
+  // least one).
+  repeated IamIdpConfigCertificateEntry public_certificates = 4;
+  // Name of the SAML attribute carrying the user's identifier. Required when
+  // identity_element is USER_ID_ATTRIBUTE.
+  optional string user_id_attribute = 5;
+}
+
+// IamIdpConfigListResponse is the linode_iam_idp_config_list envelope: count and
+// the full proto IamIdpConfig elements. The tool has no filter param, so filter
+// is omitted.
+message IamIdpConfigListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated IamIdpConfig idp_configs = 3;
+}
+
+// IamIdpConfigCertificateListResponse is the
+// linode_iam_idp_config_certificate_list envelope: count and the full proto
+// IamIdpConfigCertificate elements. The tool has no filter param, so filter is
+// omitted.
+message IamIdpConfigCertificateListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated IamIdpConfigCertificate certificates = 3;
+}
+
+// IamIdpConfigUserListResponse is the envelope both user lists answer with, for
+// the reads and for the replacements: the API reports the resulting list in the
+// same page shape its read route does. The tools have no filter param, so filter
+// is omitted.
+message IamIdpConfigUserListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated IamIdpConfigUser users = 3;
+}
+
+// IamIdpConfigWriteResponse is the linode_iam_idp_config_create and _update
+// envelope: a confirmation message plus the configuration the API returned.
+message IamIdpConfigWriteResponse {
+  string message = 1;
+  IamIdpConfig idp_config = 2;
+}
+
+// IamIdpConfigCertificateWriteResponse is the
+// linode_iam_idp_config_certificate_create envelope: a confirmation message plus
+// the certificate the API returned.
+message IamIdpConfigCertificateWriteResponse {
+  string message = 1;
+  IamIdpConfigCertificate certificate = 2;
+}
+
+// IamIdpConfigDeleteResponse is the linode_iam_idp_config_delete envelope: a
+// confirmation message plus the configuration ID the delete acted on. The route
+// answers with an empty body, so the echo is what confirms the target.
+message IamIdpConfigDeleteResponse {
+  string message = 1;
+  string idp_config_id = 2;
+}
+
+// IamIdpConfigCertificateDeleteResponse is the
+// linode_iam_idp_config_certificate_delete envelope: a confirmation message plus
+// both ids the delete was addressed by, since the route answers with an empty
+// body and one id alone would not say which certificate went.
+message IamIdpConfigCertificateDeleteResponse {
+  string message = 1;
+  string idp_config_id = 2;
+  string certificate_id = 3;
+}
+
+// IamIdpConfigListInput is the input contract for linode_iam_idp_config_list.
+// An account holds at most one configuration, so the list answers with zero or
+// one element.
+message IamIdpConfigListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_list"
+    method: "GET"
+    path: "/iam/idp-configs"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the account's external identity provider (SSO) configurations.";
+  option (linode.mcp.v1.error_message) = "Failed to list IDP configurations: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+}
+
+// IamIdpConfigGetInput is the input contract for linode_iam_idp_config_get.
+message IamIdpConfigGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_get"
+    method: "GET"
+    path: "/iam/idp-configs/{idp_config_id}"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfig";
+  option (linode.mcp.v1.tool_description) = "Gets one external identity provider (SSO) configuration by idp_config_id.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve IDP configuration '{idp_config_id}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_get.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID to retrieve, the id the list route reports.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// IamIdpConfigDeleteInput is the input contract for
+// linode_iam_idp_config_delete.
+//
+// It declares no fetch_state hook: the get above reads the same route, so the
+// preview and the plan hash read the configuration through that rather than
+// through a hand-written step per removal.
+//
+// Destroy rather than the Admin its sibling mutators carry, because the tier
+// decides the shape of the handler and only Destroy gates a removal behind the
+// preview every other removal answers. Admin would land it on the acknowledge
+// tier, whose preview reports the call but not the configuration it is about to
+// end. Destroy needs a category to resolve in both languages, which is what the
+// iam entry added to the two category tables is for.
+message IamIdpConfigDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_delete"
+    method: "DELETE"
+    path: "/iam/idp-configs/{idp_config_id}"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes the account's external identity provider (SSO) configuration by idp_config_id, which ends single sign-on for every user it covered. Requires confirm=true. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.confirm_message) = "This deletes the account's single sign-on configuration and ends SSO login for every user it covered. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IDP configuration '{idp_config_id}' deleted";
+  option (linode.mcp.v1.error_message) = "Failed to delete IDP configuration '{idp_config_id}': {error}";
+  // A replay would report a configuration the first attempt already removed as
+  // one that never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_delete.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID to delete, the id the list route reports.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm deleting the configuration. Ignored when
+  // dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamIdpConfigCreateInput is the input contract for
+// linode_iam_idp_config_create. An account holds at most one configuration, so
+// a second create is refused by the API rather than by a rule here.
+message IamIdpConfigCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_create"
+    method: "POST"
+    path: "/iam/idp-configs"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates the account's external identity provider (SSO) configuration from SAML metadata. Requires confirm=true. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.confirm_message) = "This creates the account's single sign-on configuration. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IDP configuration '{label}' created";
+  option (linode.mcp.v1.error_message) = "Failed to create IDP configuration: {error}";
+  // A replay re-creates a configuration the first call already placed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.saml.required"
+    message: "saml is required"
+    expression: "has(this.saml)"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.saml.entity_id.required"
+    message: "saml.entity_id is required"
+    expression: "this.saml.entity_id.matches('[^ \\t\\r\\n]')"
+  };
+  // identity_element stays a string rather than an enum because an enum member
+  // the caller misspells fails the whole argument decode, which would silence
+  // every rule below it instead of answering this sentence.
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.saml.identity_element.known"
+    message: "saml.identity_element must be one of: NAME_ID, USER_ID_ATTRIBUTE"
+    expression: "this.saml.identity_element in ['NAME_ID', 'USER_ID_ATTRIBUTE']"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.saml.user_id_attribute.required"
+    message: "saml.user_id_attribute is required when saml.identity_element is USER_ID_ATTRIBUTE"
+    expression: "this.saml.identity_element != 'USER_ID_ATTRIBUTE' || this.saml.user_id_attribute.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.saml.idp_url.required"
+    message: "saml.idp_url is required"
+    expression: "this.saml.idp_url.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.saml.public_certificates.present"
+    message: "saml.public_certificates must include at least one certificate"
+    expression: "size(this.saml.public_certificates) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_create.saml.public_certificates.entries"
+    message: "saml.public_certificates entries must carry certificate data"
+    expression: "this.saml.public_certificates.all(c, c.certificate.matches('[^ \\t\\r\\n]'))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Unique label for the configuration (required).
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // SAML settings from the identity provider (required).
+  IamIdpConfigSamlSettings saml = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Activate the configuration. SSO is not enforced while this is false, even
+  // when enforce is true. Default false.
+  optional bool enabled = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Require IDP authentication for every user except the excluded list. When
+  // false, only the included list authenticates through the provider. Default
+  // false.
+  optional bool enforce = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm creating the configuration. Ignored when
+  // dry_run=true.
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamIdpConfigUpdateInput is the input contract for
+// linode_iam_idp_config_update. The route changes the members it is given and
+// leaves the rest, so every body field is optional and a call naming none is
+// refused rather than sent.
+message IamIdpConfigUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_update"
+    method: "PUT"
+    path: "/iam/idp-configs/{idp_config_id}"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the account's external identity provider (SSO) configuration. Enabling enforcement locks every user except the excluded list out of password login. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This changes the account's single sign-on configuration. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IDP configuration '{idp_config_id}' updated";
+  option (linode.mcp.v1.error_message) = "Failed to update IDP configuration '{idp_config_id}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.any"
+    message: "at least one update field is required: label, saml, enabled, or enforce"
+    expression: "has(this.label) || has(this.saml) || has(this.enabled) || has(this.enforce)"
+  };
+  // saml replaces the whole object when it is sent, so a partial one would drop
+  // the members it omits.
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.saml.entity_id.required"
+    message: "saml.entity_id is required"
+    expression: "!has(this.saml) || this.saml.entity_id.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.saml.identity_element.known"
+    message: "saml.identity_element must be one of: NAME_ID, USER_ID_ATTRIBUTE"
+    expression: "!has(this.saml) || this.saml.identity_element in ['NAME_ID', 'USER_ID_ATTRIBUTE']"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.saml.user_id_attribute.required"
+    message: "saml.user_id_attribute is required when saml.identity_element is USER_ID_ATTRIBUTE"
+    expression: "this.saml.identity_element != 'USER_ID_ATTRIBUTE' || this.saml.user_id_attribute.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.saml.idp_url.required"
+    message: "saml.idp_url is required"
+    expression: "!has(this.saml) || this.saml.idp_url.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.saml.public_certificates.present"
+    message: "saml.public_certificates must include at least one certificate"
+    expression: "!has(this.saml) || size(this.saml.public_certificates) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_update.saml.public_certificates.entries"
+    message: "saml.public_certificates entries must carry certificate data"
+    expression: "this.saml.public_certificates.all(c, c.certificate.matches('[^ \\t\\r\\n]'))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID to update, the id the list route reports.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // New label for the configuration (optional).
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Replacement SAML settings (optional). Sending this replaces the whole
+  // object, certificates included.
+  IamIdpConfigSamlSettings saml = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Activate the configuration (optional). SSO is not enforced while this is
+  // false, even when enforce is true.
+  optional bool enabled = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Require IDP authentication for every user except the excluded list
+  // (optional). When false, only the included list authenticates through the
+  // provider.
+  optional bool enforce = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm changing the configuration. Ignored when
+  // dry_run=true.
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamIdpConfigCertificateListInput is the input contract for
+// linode_iam_idp_config_certificate_list.
+message IamIdpConfigCertificateListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_certificate_list"
+    method: "GET"
+    path: "/iam/idp-configs/{idp_config_id}/certificates"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigCertificateListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the SAML signing certificates on one external identity provider (SSO) configuration, by idp_config_id.";
+  option (linode.mcp.v1.error_message) = "Failed to list IDP certificates for configuration '{idp_config_id}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_certificate_list.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID whose certificates should be listed.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+}
+
+// IamIdpConfigCertificateCreateInput is the input contract for
+// linode_iam_idp_config_certificate_create. The call adds a certificate beside
+// the ones already trusted rather than replacing them.
+message IamIdpConfigCertificateCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_certificate_create"
+    method: "POST"
+    path: "/iam/idp-configs/{idp_config_id}/certificates"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigCertificateWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Adds a SAML signing certificate to one external identity provider (SSO) configuration. Requires confirm=true. Pass dry_run=true to preview without adding.";
+  option (linode.mcp.v1.confirm_message) = "This adds a signing certificate to the single sign-on configuration. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IDP certificate added to configuration '{idp_config_id}'";
+  option (linode.mcp.v1.error_message) = "Failed to add IDP certificate to configuration '{idp_config_id}': {error}";
+  // A replay adds the certificate a second time.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_certificate_create.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_certificate_create.certificate.required"
+    message: "certificate is required"
+    expression: "this.certificate.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID the certificate is added to.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Public certificate data from the identity provider (required). The BEGIN
+  // and END CERTIFICATE delimiters are optional.
+  string certificate = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm adding the certificate. Ignored when dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamIdpConfigCertificateDeleteInput is the input contract for
+// linode_iam_idp_config_certificate_delete.
+//
+// It declares no fetch_state hook and no read shares its route: the API
+// publishes three certificate routes and none of them reads one certificate.
+// The list above is the parent of this path, and its elements carry the id this
+// route's trailing segment names, so the preview and the plan hash read the
+// certificate out of that page.
+message IamIdpConfigCertificateDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_certificate_delete"
+    method: "DELETE"
+    path: "/iam/idp-configs/{idp_config_id}/certificates/{certificate_id}"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigCertificateDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one SAML signing certificate from an external identity provider (SSO) configuration, by idp_config_id and certificate_id. Assertions signed with it stop verifying, and removing the last one ends SSO login for every user the configuration covered. Requires confirm=true. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.confirm_message) = "This deletes a signing certificate from the single sign-on configuration, and assertions signed with it stop verifying. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IDP certificate '{certificate_id}' deleted from configuration '{idp_config_id}'";
+  option (linode.mcp.v1.error_message) = "Failed to delete IDP certificate '{certificate_id}' from configuration '{idp_config_id}': {error}";
+  // A replay would report a certificate the first attempt already removed as one
+  // the configuration never carried.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_certificate_delete.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_certificate_delete.certificate_id.required"
+    message: "certificate_id is required"
+    expression: "this.certificate_id.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID the certificate belongs to.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Certificate ID to delete, the id the certificate list route reports.
+  string certificate_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm deleting the certificate. Ignored when
+  // dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamIdpConfigExcludedUserListInput is the input contract for
+// linode_iam_idp_config_excluded_user_list. Excluded users keep password login
+// while enforcement is on, which is how an account keeps a way back in.
+message IamIdpConfigExcludedUserListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_excluded_user_list"
+    method: "GET"
+    path: "/iam/idp-configs/{idp_config_id}/users-excluded"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the users excluded from SSO enforcement on one external identity provider configuration, by idp_config_id.";
+  option (linode.mcp.v1.error_message) = "Failed to list excluded users for IDP configuration '{idp_config_id}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_excluded_user_list.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID whose excluded users should be listed.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+}
+
+// IamIdpConfigExcludedUserUpdateInput is the input contract for
+// linode_iam_idp_config_excluded_user_update. The call replaces the whole list
+// rather than adding to it, so an empty usernames clears it and leaves every
+// user on SSO enforcement.
+message IamIdpConfigExcludedUserUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_excluded_user_update"
+    method: "PUT"
+    path: "/iam/idp-configs/{idp_config_id}/users-excluded"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
+  option (linode.mcp.v1.tool_description) = "Replaces the list of users excluded from SSO enforcement. Pass an empty usernames list to clear it, which puts every user behind the identity provider. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This replaces the emergency access list for single sign-on. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to update excluded users for IDP configuration '{idp_config_id}': {error}";
+  // A replay reapplies a list the first call may already have changed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_excluded_user_update.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+  // Entry emptiness is all a rule can see of usernames: the empty list is the
+  // documented way to clear the exclusions, and proto3 collapses an omitted
+  // repeated field onto it.
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_excluded_user_update.usernames.entries"
+    message: "usernames entries must not be blank"
+    expression: "this.usernames.all(u, u.matches('[^ \\t\\r\\n]'))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID whose excluded users should be replaced.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Complete list of usernames to exclude. Use an empty list to clear the
+  // exclusions.
+  repeated string usernames = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm replacing the excluded users. Ignored when
+  // dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamIdpConfigIncludedUserListInput is the input contract for
+// linode_iam_idp_config_included_user_list. The included list is what the
+// configuration applies to while enforcement is off.
+message IamIdpConfigIncludedUserListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_included_user_list"
+    method: "GET"
+    path: "/iam/idp-configs/{idp_config_id}/users-included"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the users the external identity provider configuration applies to while enforcement is off, by idp_config_id.";
+  option (linode.mcp.v1.error_message) = "Failed to list included users for IDP configuration '{idp_config_id}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_included_user_list.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID whose included users should be listed.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+}
+
+// IamIdpConfigIncludedUserUpdateInput is the input contract for
+// linode_iam_idp_config_included_user_update. The call replaces the whole list
+// rather than adding to it, so an empty usernames clears it and leaves the
+// configuration applying to nobody while enforcement is off.
+message IamIdpConfigIncludedUserUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_idp_config_included_user_update"
+    method: "PUT"
+    path: "/iam/idp-configs/{idp_config_id}/users-included"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
+  option (linode.mcp.v1.tool_description) = "Replaces the list of users the external identity provider configuration applies to. Pass an empty usernames list to clear it. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This replaces the single sign-on included user list. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to update included users for IDP configuration '{idp_config_id}': {error}";
+  // A replay reapplies a list the first call may already have changed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_included_user_update.idp_config_id.required"
+    message: "idp_config_id is required"
+    expression: "this.idp_config_id.matches('[^ \\t\\r\\n]')"
+  };
+  // Entry emptiness is all a rule can see of usernames: the empty list is the
+  // documented way to clear the inclusions, and proto3 collapses an omitted
+  // repeated field onto it.
+  option (buf.validate.message).cel = {
+    id: "iam_idp_config_included_user_update.usernames.entries"
+    message: "usernames entries must not be blank"
+    expression: "this.usernames.all(u, u.matches('[^ \\t\\r\\n]'))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // IDP configuration ID whose included users should be replaced.
+  string idp_config_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Complete list of usernames the configuration applies to. Use an empty list
+  // to clear the inclusions.
+  repeated string usernames = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm replacing the included users. Ignored when
+  // dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}

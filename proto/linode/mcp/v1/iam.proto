@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "buf/validate/validate.proto";
+import "linode/mcp/v1/options.proto";
+
+// IamRole is one role the account's identity and access surface offers: a name,
+// the sentence describing it, and the permissions it carries.
+//
+// name and permissions are enumerated in the API spec, and both sets are open
+// ended in practice (the permission list runs to several hundred values that
+// grow with the API surface). They stay plain strings so a value the account
+// gains before this repo hears about it reaches the caller rather than failing
+// to decode.
+message IamRole {
+  string description = 1;
+  string name = 2;
+  repeated string permissions = 3;
+}
+
+// IamEntityRoles is the roles available over one kind of entity. The API
+// reports account-wide roles and per-entity-type roles in the same shape, so
+// both halves of IamRolePermissions are this message.
+message IamEntityRoles {
+  repeated IamRole roles = 1;
+  string type = 2;
+}
+
+// IamRolePermissions is the linode_iam_role_permission_list response: the roles
+// a token holder can be granted, split into the account-wide ones and the ones
+// scoped to a kind of entity.
+//
+// It is not a page. The route answers with an object carrying two collections
+// and no count, which is why the tool serializes one resource rather than
+// running through the list driver, and why its name is not spelled
+// *ListResponse.
+message IamRolePermissions {
+  repeated IamEntityRoles account_access = 1;
+  repeated IamEntityRoles entity_access = 2;
+}
+
+// IamRolePermissionListInput is the input contract for
+// linode_iam_role_permission_list. The route is a catalog: it takes no
+// parameters and publishes no page controls, so nothing but the environment
+// selector travels here.
+message IamRolePermissionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_role_permission_list"
+    method: "GET"
+    path: "/iam/role-permissions"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamRolePermissions";
+  option (linode.mcp.v1.tool_description) = "Lists the account and entity access roles that can be granted to a user, with the permissions each role carries.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve IAM role permissions: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamUserEntityAccess is one entity a user holds roles over. The update request
+// and the read response carry the same object, so one message serves both.
+//
+// Role and entity-type names are enumerated in the API spec and grow with the
+// API surface, so they stay plain strings: a value the account gains before
+// this repo hears about it reaches the caller rather than failing to decode.
+message IamUserEntityAccess {
+  int32 id = 1;
+  repeated string roles = 2;
+  string type = 3;
+}
+
+// IamUserRolePermissions is one user's access level: the account-wide roles and
+// the roles held over individual entities.
+message IamUserRolePermissions {
+  repeated string account_access = 1;
+  repeated IamUserEntityAccess entity_access = 2;
+}
+
+// IamUserRolePermissionsWriteResponse is the
+// linode_iam_user_role_permission_update envelope: a confirmation message plus
+// the access level the API returned.
+message IamUserRolePermissionsWriteResponse {
+  string message = 1;
+  IamUserRolePermissions role_permissions = 2;
+}
+
+// IamUserRolePermissionGetInput is the input contract for
+// linode_iam_user_role_permission_get. This route replaces the deprecated
+// GET /account/users/{username}/grants.
+message IamUserRolePermissionGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_user_role_permission_get"
+    method: "GET"
+    path: "/iam/users/{username}/role-permissions"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamUserRolePermissions";
+  option (linode.mcp.v1.tool_description) = "Gets one user's access level: the account access roles and the entity access roles they hold.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve role permissions for user '{username}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_user_role_permission_get.username.required"
+    message: "username is required"
+    expression: "this.username.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Account username whose access level should be retrieved.
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// IamUserRolePermissionUpdateInput is the input contract for
+// linode_iam_user_role_permission_update. This route replaces the deprecated
+// PUT /account/users/{username}/grants.
+//
+// The call replaces the whole assignment rather than merging into it, so an
+// omitted list is an empty one: passing account_access [] is how the API
+// documents blocking a user's account access.
+message IamUserRolePermissionUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_user_role_permission_update"
+    method: "PUT"
+    path: "/iam/users/{username}/role-permissions"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamUserRolePermissionsWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Replaces one user's access level with the account access and entity access roles given. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This replaces a user's account and entity access roles. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Role permissions updated for user '{username}'";
+  option (linode.mcp.v1.error_message) = "Failed to update role permissions for user '{username}': {error}";
+  // Converged with the deprecated grants update this route replaces: a replayed
+  // attempt would reapply a role set the first call may already have changed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  // Ordered: the username is read before the body it names, matching the
+  // sibling read.
+  option (buf.validate.message).cel = {
+    id: "iam_user_role_permission_update.username.required"
+    message: "username is required"
+    expression: "this.username.matches('[^ \\t\\r\\n]')"
+  };
+  // The runtime item reader owns list shape and per-item typing; this rule adds
+  // the entity checks it cannot express.
+  option (buf.validate.message).cel = {
+    id: "iam_user_role_permission_update.entity_access.entries"
+    message: "entity_access entries must carry an entity id, a type, and at least one role"
+    expression: "this.entity_access.all(e, e.id >= 1 && e.type.matches('[^ \\t\\r\\n]') && size(e.roles) > 0)"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Account username whose access level should be replaced.
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Account access roles to assign, such as account_admin or
+  // account_linode_creator. An empty array blocks the user's account access.
+  repeated string account_access = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Entity access roles to assign, each an entity id and type with the roles
+  // held over it.
+  repeated IamUserEntityAccess entity_access = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm replacing the user's access level. Ignored when
+  // dry_run=true.
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}

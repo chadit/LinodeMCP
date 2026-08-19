@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -145,11 +146,16 @@ message FirewallGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Firewall";
+  option (linode.mcp.v1.tool_description) = "Gets a Cloud Firewall by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve firewall {firewall_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall to retrieve (required).
-  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 firewall_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // FirewallRulesGetInput is the input contract for linode_firewall_rules_get.
@@ -161,11 +167,16 @@ message FirewallRulesGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRules";
+  option (linode.mcp.v1.tool_description) = "Lists rules for a Cloud Firewall.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve rules for firewall {firewall_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose rules to retrieve (required).
-  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 firewall_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // FirewallListInput is the input contract for linode_firewall_list.
@@ -177,6 +188,7 @@ message FirewallListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all Cloud Firewalls on your account. Can filter by status or label.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -199,9 +211,32 @@ message FirewallCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new Cloud Firewall. The firewall is created with no rules by default.";
+  option (linode.mcp.v1.error_message) = "Failed to create firewall: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a Cloud Firewall. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Firewall '{label}' (ID: {id}) created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The preview names the firewall and the policies it would start with; the
+  // firewall does not exist yet, so there is no state to read.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "firewall_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "firewall_create.inbound_policy.known"
+    message: "inbound_policy must be one of: ACCEPT, DROP"
+    expression: "!has(this.inbound_policy) || this.inbound_policy != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "firewall_create.outbound_policy.known"
+    message: "outbound_policy must be one of: ACCEPT, DROP"
+    expression: "!has(this.outbound_policy) || this.outbound_policy != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -231,10 +266,26 @@ message FirewallCreateInput {
   // FirewallRulesUpdateInput keeps free-form rules: decoding through the
   // FirewallRule response type would pad every rule with fields the caller
   // never sent.
-  optional google.protobuf.Struct rules = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  map<string, google.protobuf.Value> rules = 8 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_fold) = {
+      source: [
+        {
+          argument: "inbound_policy"
+          key: "inbound_policy"
+          absent: "ACCEPT"
+        },
+        {
+          argument: "outbound_policy"
+          key: "outbound_policy"
+          absent: "ACCEPT"
+        }
+      ]
+    }
+  ];
   // Resources the new firewall is applied to: an object with linodes and
   // nodebalancers arrays of IDs (optional).
-  optional google.protobuf.Struct devices = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  map<string, google.protobuf.Value> devices = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // FirewallUpdateInput is the input contract for linode_firewall_update.
@@ -246,8 +297,33 @@ message FirewallUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an existing Cloud Firewall. Can modify label, status, and default policies.";
+  option (linode.mcp.v1.error_message) = "Failed to modify firewall {firewall_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Cloud Firewall. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Firewall {firewall_id} modified successfully";
+  // The preview reads the firewall the update changes and states the label and
+  // status changes against it.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // No validate hook, so the derived path check answers an absent id in the
+  // sentence both hand clients used. The policy pair is a rule instead: an
+  // argument naming no member reaches the message as the enum's zero, which is
+  // what these tell from an absent one.
+  option (buf.validate.message).cel = {
+    id: "firewall_update.inbound_policy.known"
+    message: "inbound_policy must be one of: ACCEPT, DROP"
+    expression: "!has(this.inbound_policy) || this.inbound_policy != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "firewall_update.outbound_policy.known"
+    message: "outbound_policy must be one of: ACCEPT, DROP"
+    expression: "!has(this.outbound_policy) || this.outbound_policy != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "firewall_update.status.known"
+    message: "status must be one of: enabled, disabled"
+    expression: "!has(this.status) || this.status in ['enabled','disabled']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -269,6 +345,27 @@ message FirewallUpdateInput {
   // Complete replacement set of tags (optional). Omitting it leaves the
   // firewall's tags unchanged; an empty list removes all of them.
   repeated string tags = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The API reads both default policies inside `rules`, so the two flat
+  // arguments travel one level down or it never sees them. omit_when_empty is
+  // what keeps a label-only update from sending `rules` at all: this route
+  // reads that member as a replacement, unlike the create's, which needs the
+  // defaults on every call.
+  map<string, google.protobuf.Value> rules = 10 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_fold) = {
+      source: [
+        {
+          argument: "inbound_policy"
+          key: "inbound_policy"
+        },
+        {
+          argument: "outbound_policy"
+          key: "outbound_policy"
+        }
+      ]
+      omit_when_empty: true
+    }
+  ];
 }
 
 // FirewallDeleteInput is the input contract for linode_firewall_delete.
@@ -280,8 +377,25 @@ message FirewallDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a Cloud Firewall. WARNING: This will remove all firewall rules and unassign all attached devices. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
   option (linode.mcp.v1.resource_type) = "Firewall";
+  option (linode.mcp.v1.success_message) = "Firewall {firewall_id} removed successfully";
+  // A replay would report a firewall the first attempt already removed as one
+  // that never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The walk lists the devices the firewall guards, so a caller sees what
+  // stops being protected.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_firewall_get"
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+
+  option (buf.validate.message).cel = {
+    id: "firewall_delete.firewall_id.positive"
+    message: "firewall_id must be a positive integer"
+    expression: "this.firewall_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -310,6 +424,8 @@ message FirewallSettingsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallSettings";
+  option (linode.mcp.v1.tool_description) = "Lists default Cloud Firewall assignments for Linodes, NodeBalancers, public interfaces, and VPC interfaces.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve firewall settings: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -329,6 +445,22 @@ message FirewallRuleVersionListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRuleVersionListResponse";
+  // The route answers one firewall-shaped object whose version sits inside its
+  // rules, and the shared FirewallRules message declares no version. Without
+  // the hoist the snapshot answers version 0, which reads as a real one.
+  option (linode.mcp.v1.list_envelope) = {
+    shape: SHAPE_SINGLETON
+    lift: {
+      member: "version"
+      source: "rules.version"
+    }
+  };
+  option (linode.mcp.v1.tool_description) = "Retrieves the rule-version history payload for a Cloud Firewall.";
+  option (buf.validate.message).cel = {
+    id: "firewall_rule_version_list.firewall_id.positive"
+    message: "firewall_id must be a positive integer"
+    expression: "this.firewall_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -346,13 +478,21 @@ message FirewallRuleVersionGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRuleVersion";
+  option (linode.mcp.v1.tool_description) = "Retrieves one rule version for a Cloud Firewall.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve rule version {version} for firewall {firewall_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose rule version should be retrieved.
-  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 firewall_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The firewall rule version number to retrieve.
-  int32 version = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 version = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // FirewallTemplateListInput is the input contract for
@@ -365,6 +505,7 @@ message FirewallTemplateListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallTemplateListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists reusable Cloud Firewall templates for VPC and public interfaces.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -384,11 +525,18 @@ message FirewallTemplateGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallTemplate";
+  option (linode.mcp.v1.tool_description) = "Gets a reusable Cloud Firewall template for VPC or public interfaces.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve firewall template {slug}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Firewall template slug to retrieve. Must be public or vpc.
-  FirewallTemplateSlug.Value slug = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Firewall template slug to retrieve. Must be public or vpc. The membership
+  // reader checks the raw argument, because a slug naming no member decodes to
+  // the enum's zero, the same as an absent one.
+  FirewallTemplateSlug.Value slug = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -409,18 +557,49 @@ message FirewallRulesUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRulesWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Replaces inbound and outbound rules for a Cloud Firewall.";
+  option (linode.mcp.v1.error_message) = "Failed to update firewall {firewall_id} rules: {error}";
   option (linode.mcp.v1.confirm_message) = "This replaces Cloud Firewall rules. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Firewall {firewall_id} rules updated successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the ruleset the replacement overwrites.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_firewall_rules_get"
+  };
+
+  // The path id is checked first, then the optional policies. A validate hook
+  // suppresses only the derived path check, so the id keeps its sentence here.
+  option (buf.validate.message).cel = {
+    id: "firewall_rules_update.firewall_id.positive"
+    message: "firewall_id must be a positive integer"
+    expression: "this.firewall_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "firewall_rules_update.inbound_policy.known"
+    message: "inbound_policy must be one of: ACCEPT, DROP"
+    expression: "!has(this.inbound_policy) || this.inbound_policy != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "firewall_rules_update.outbound_policy.known"
+    message: "outbound_policy must be one of: ACCEPT, DROP"
+    expression: "!has(this.outbound_policy) || this.outbound_policy != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose rules should be replaced.
   int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // Array of inbound firewall rule objects.
-  repeated google.protobuf.Struct inbound = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Array of inbound firewall rule objects. An empty list legally clears the
+  // direction, so only the argument map can tell it from an omitted one.
+  repeated google.protobuf.Struct inbound = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Array of outbound firewall rule objects.
-  repeated google.protobuf.Struct outbound = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  repeated google.protobuf.Struct outbound = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Must be set to true to confirm replacing firewall rules. Ignored when
   // dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -450,9 +629,34 @@ message FirewallSettingsUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallSettingsWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates default Cloud Firewall assignments for Linodes, NodeBalancers, public interfaces, and VPC interfaces.";
+  option (linode.mcp.v1.error_message) = "Failed to update default firewall settings: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates default Cloud Firewall assignments. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Default firewall settings updated successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the assignments the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_firewall_settings_get"
+  };
+
+  // default_firewall_ids is a map, so no rule can see whether the caller sent
+  // one, and each refusal names the key it is about. Neither is something CEL
+  // over a google.protobuf.Value map can say.
+  option (linode.mcp.v1.object_walk) = {
+    field: "default_firewall_ids"
+    absent: "default_firewall_ids is required"
+    unusable: "default_firewall_ids must be a non-empty object"
+    empty: "default_firewall_ids must be a non-empty object"
+    members: {
+      unknown: "{field} contains unsupported key: {key}"
+      key: ["linode", "nodebalancer", "public_interface", "vpc_interface"]
+      value: {
+        kind: VALUE_KIND_INT
+        minimum: 1
+        unusable: "{field}.{key} must be a positive integer"
+      }
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -477,11 +681,15 @@ message InstanceFirewallListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Cloud Firewalls assigned to a Linode instance with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -498,13 +706,20 @@ message InstanceInterfaceFirewallListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Cloud Firewalls assigned to a specific Linode interface.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the Linode interface (required).
-  int32 interface_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 interface_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceFirewallUpdateInput is the input contract for
@@ -521,16 +736,39 @@ message InstanceFirewallUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.tool_description) = "Replaces the Cloud Firewall assignments for a Linode instance. Pass an empty firewall_ids list to remove all assignments.";
+  option (linode.mcp.v1.error_message) = "Failed to update firewall assignments for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This replaces firewall assignments for a Linode instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.retry_disabled) = true;
+  // firewall_ids is required but an empty list is a legal value that removes
+  // every assignment, and proto3 collapses an absent repeated field onto the
+  // empty list, so no rule can tell the two apart and the check reads the
+  // arguments the caller actually sent. The hook owns the path id with it,
+  // which keeps both of the id's sentences rather than collapsing them.
+  // The preview reads the assignments the replacement overwrites.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // Entry positivity is all a rule can see of firewall_ids: a list the caller
+  // omitted arrives here as the empty one, which passes vacuously.
+  option (buf.validate.message).cel = {
+    id: "instance_firewall_update.firewall_ids.positive"
+    message: "firewall_ids entries must be positive integers"
+    expression: "this.firewall_ids.all(f, f >= 1)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Complete list of firewall IDs to assign to the Linode. Use an empty list
   // to remove all firewall assignments.
-  repeated int32 firewall_ids = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  repeated int32 firewall_ids = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).

@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // Image mirrors the Linode image object. expiry and eol are nullable on the wire
@@ -66,11 +67,48 @@ message ImageGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Image";
+  // The API sends these as an explicit null, and the serializer drops them, so
+  // a caller cannot tell an empty value from one the API said nothing about.
+  option (linode.mcp.v1.explicit_null_fields) = "eol";
+  option (linode.mcp.v1.explicit_null_fields) = "expiry";
+  option (linode.mcp.v1.tool_description) = "Gets one Linode image by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve image: {error}";
+
+  // An image id carries a slash, so no segment reader can judge it. The four
+  // arms read in the order the hand reader answered them: the separators come
+  // last because a value that is not a prefixed pair is refused as one first.
+  option (buf.validate.message).cel = {
+    id: "image_get.image_id.non_blank"
+    message: "image_id must be a non-empty string"
+    expression: "this.image_id.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_get.image_id.pair"
+    message: "image_id must be a prefixed image ID such as linode/debian11, private/123, or shared/123"
+    expression: "this.image_id.matches('(?s)^[^/]*[^/\\\\s][^/]*/[^/]*[^/\\\\s][^/]*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_get.image_id.prefix"
+    message: "image_id prefix must be linode, private, or shared"
+    expression: "this.image_id.matches('^(linode|private|shared)/')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_get.image_id.url_safe"
+    message: "image_id must not contain query separators, fragments, or traversal segments"
+    expression: "!this.image_id.contains('?') && !this.image_id.contains('#') && !this.image_id.contains('..')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The image ID to retrieve (required), such as linode/debian11 or private/123.
-  string image_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string image_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FREE_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "image_id must be a non-empty string"
+      unusable: "image_id must be a non-empty string"
+    }
+  ];
 }
 
 // ImageListInput is the input contract for linode_image_list. The three
@@ -84,6 +122,7 @@ message ImageListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -109,8 +148,24 @@ message ImageCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a private Linode image from an existing Linode disk.";
+  option (linode.mcp.v1.error_message) = "Failed to create image: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a private image from a Linode disk. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image '{label}' ({id}) created successfully";
+  // A replayed attempt would capture a second image off the same disk, so Go
+  // called this POST without retry and Python stops here too.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // preview names the source disk and the label the capture starts with,
+  // neither of which a declared sentence can interpolate.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // Go reported "is required" for a negative disk id, which was never true of
+  // the value it refused; Python's sentence is the rule both languages keep.
+  option (buf.validate.message).cel = {
+    id: "image_create.disk_id.required"
+    message: "disk_id must be a positive integer"
+    expression: "this.disk_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -141,8 +196,40 @@ message ImageUploadInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageUploadWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates an upload target for a custom image.";
+  option (linode.mcp.v1.error_message) = "Failed to upload image: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates an image upload. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image upload '{label}' ({id}) created successfully";
+  // The API answers {image, upload_to}: the URL is the whole point of the call
+  // and no argument carries it, so the envelope is what the body decodes into.
+  option (linode.mcp.v1.response_body_fields) = "upload_to";
+  // A replayed attempt would leave a second pending upload behind, so Go called
+  // this POST without retry and Python stops here too.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The two required strings are trimmed before anything reads them, which Go
+  // has always sent trimmed and Python sent as given, so the rules below judge
+  // what reaches the wire.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "region"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The label and the region the pending upload lands in.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A pending image upload labeled \"{label}\" will be created in \"{region}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "image_upload.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_upload.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -173,8 +260,51 @@ message ImageUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates editable metadata for a Linode image.";
+  option (linode.mcp.v1.error_message) = "Failed to update image: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates image metadata. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image '{id}' updated successfully";
+  // Go's hand path sent this PUT through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the image whose metadata the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Image '{image_id}' will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rules run in order under fail-fast, so the required sentence has to
+  // come first: the shape rule below would otherwise answer for a missing id in
+  // words the caller cannot act on.
+  option (buf.validate.message).cel = {
+    id: "image_update.image_id.required"
+    message: "image_id must be a non-empty string"
+    expression: "this.image_id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_update.image_id.editable"
+    message: "image_id must reference an editable private or shared image"
+    expression: "this.image_id.matches('^(private|shared)/[1-9][0-9]*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_update.label.present"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_update.description.present"
+    message: "description must be a non-empty string"
+    expression: "!has(this.description) || this.description.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_update.any"
+    message: "at least one of label, description, or tags is required"
+    expression: "has(this.label) || has(this.description) || size(this.tags) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -203,9 +333,29 @@ message ImageDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the image";
   option (linode.mcp.v1.success_message) = "Image {image_id} deleted successfully";
   option (linode.mcp.v1.resource_type) = "Image";
+  // Neither client has ever retried this DELETE, so a replay cannot re-run it
+  // against an image the first attempt already removed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_get"
+  };
+
+  // Fail-fast runs these in order, so the presence sentence has to come first:
+  // the shape rule below would otherwise answer for an absent id.
+  option (buf.validate.message).cel = {
+    id: "image_delete.image_id.present"
+    message: "image_id must be a non-empty string"
+    expression: "this.image_id.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_delete.image_id.private"
+    message: "image_id must be a private image identifier like private/12345"
+    expression: "this.image_id.matches('^private/[1-9][0-9]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -237,8 +387,49 @@ message ImageReplicateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Replicates an image to one or more compute regions.";
+  option (linode.mcp.v1.error_message) = "Failed to replicate image: {error}";
   option (linode.mcp.v1.confirm_message) = "This replicates an image to the requested regions. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image '{id}' replicated successfully";
+  // Go's hand path sent this POST through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // normalize trims each region slug, which Python has always sent trimmed and
+  // Go refused. preview reads the image, so a caller sees what is replicated,
+  // and names the regions the way Python's twin sentence did.
+  option (linode.mcp.v1.tool_hooks) = "normalize";
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // The rules run in order under fail-fast, so the required sentence has to
+  // come first: the shape rule below would otherwise answer for a missing id in
+  // words the caller cannot act on. The slug rule sees trimmed entries because
+  // normalize runs ahead of every rule.
+  option (buf.validate.message).cel = {
+    id: "image_replicate.image_id.required"
+    message: "image_id must be a non-empty string"
+    expression: "this.image_id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_replicate.image_id.private"
+    message: "image_id must be a private image identifier like private/12345"
+    expression: "this.image_id.matches('^private/[1-9][0-9]*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_replicate.regions.required"
+    message: "regions must contain at least one region"
+    expression: "size(this.regions) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_replicate.regions.entries"
+    message: "regions entries must be non-empty strings"
+    expression: "this.regions.all(r, r != '')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_replicate.regions.slugs"
+    message: "regions entries must be lowercase region slugs"
+    expression: "this.regions.all(r, r.matches('^[a-z0-9-]+$'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

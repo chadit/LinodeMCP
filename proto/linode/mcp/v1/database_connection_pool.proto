@@ -1,0 +1,323 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "buf/validate/validate.proto";
+import "linode/mcp/v1/options.proto";
+
+// DatabaseConnectionPoolMode is the PGBouncer pooling mode a connection pool
+// runs in. See the enum-wrapper convention in nodebalancer_config.proto.
+message DatabaseConnectionPoolMode {
+  enum Value {
+    unspecified = 0;
+    session = 1;
+    statement = 2;
+    transaction = 3;
+  }
+}
+
+// DatabaseConnectionPool mirrors a PGBouncer connection pool on a PostgreSQL
+// Managed Database. username arrives as JSON null when the pool reuses the
+// inbound user.
+message DatabaseConnectionPool {
+  string database = 1;
+  string label = 2;
+  string mode = 3;
+  int32 size = 4;
+  string username = 5;
+}
+
+// DatabaseConnectionPoolListResponse is the
+// linode_database_postgresql_connection_pool_list envelope: count and the full
+// proto DatabaseConnectionPool elements. The tool has no filter param, so
+// filter is omitted.
+message DatabaseConnectionPoolListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DatabaseConnectionPool connection_pools = 3;
+}
+
+// DatabaseConnectionPoolWriteResponse is the
+// linode_database_postgresql_connection_pool_create and _update envelope: a
+// confirmation message plus the pool the API returned.
+message DatabaseConnectionPoolWriteResponse {
+  string message = 1;
+  DatabaseConnectionPool connection_pool = 2;
+}
+
+// DatabaseConnectionPoolDeleteResponse is the
+// linode_database_postgresql_connection_pool_delete envelope: a confirmation
+// message plus the instance ID and pool name the delete acted on. The route
+// answers with an empty body, so the echoes are what confirm the target.
+message DatabaseConnectionPoolDeleteResponse {
+  string message = 1;
+  int32 instance_id = 2;
+  string pool_name = 3;
+}
+
+// DatabaseConnectionPoolListInput is the input contract for
+// linode_database_postgresql_connection_pool_list. The route publishes no page
+// controls in the reviewed spec snapshot, so no page/page_size travels here
+// even though the answer arrives in a paginated envelope.
+message DatabaseConnectionPoolListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_connection_pool_list"
+    method: "GET"
+    path: "/databases/postgresql/instances/{instance_id}/connection-pools"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the PGBouncer connection pools on one PostgreSQL Managed Database, by instance_id.";
+  option (linode.mcp.v1.error_message) = "Failed to list PostgreSQL connection pools: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_list.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // PostgreSQL Managed Database instance ID whose pools should be listed.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// DatabaseConnectionPoolGetInput is the input contract for
+// linode_database_postgresql_connection_pool_get. The pool is addressed by its
+// label, which travels as a path segment.
+message DatabaseConnectionPoolGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_connection_pool_get"
+    method: "GET"
+    path: "/databases/postgresql/instances/{instance_id}/connection-pools/{pool_name}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPool";
+  option (linode.mcp.v1.tool_description) = "Gets one PGBouncer connection pool on a PostgreSQL Managed Database, by instance_id and pool_name.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve PostgreSQL connection pool {pool_name}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_get.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_get.pool_name.non_blank"
+    message: "pool_name must be a non-empty string"
+    expression: "this.pool_name.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_get.pool_name.path_safe"
+    message: "pool_name must not contain path separators, query separators, or traversal segments"
+    expression: "!this.pool_name.contains('/') && !this.pool_name.contains('?') && !this.pool_name.contains('..') && this.pool_name.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // PostgreSQL Managed Database instance ID that holds the pool.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Label of the connection pool to retrieve.
+  string pool_name = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// DatabaseConnectionPoolCreateInput is the input contract for
+// linode_database_postgresql_connection_pool_create. database, mode, and size
+// publish defaults in the spec, so they travel only when the caller sets them.
+message DatabaseConnectionPoolCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_connection_pool_create"
+    method: "POST"
+    path: "/databases/postgresql/instances/{instance_id}/connection-pools"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a PGBouncer connection pool on a PostgreSQL Managed Database. Requires confirm=true. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.confirm_message) = "This creates a PostgreSQL connection pool. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "PostgreSQL connection pool created";
+  // A replay re-creates a pool the first call already added.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.error_message) = "Failed to create PostgreSQL connection pool: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_create.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_create.label.non_blank"
+    message: "label must be a non-empty string"
+    expression: "this.label.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_create.mode.known"
+    message: "mode must be one of: session, statement, transaction"
+    expression: "!has(this.mode) || this.mode != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_create.size.positive"
+    message: "size must be a positive integer"
+    expression: "!has(this.size) || this.size >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // PostgreSQL Managed Database instance ID to add the pool to.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Name of the database the pool connects to (optional, defaults to
+  // "defaultdb").
+  optional string database = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Name of the connection pool (required). It addresses the pool on the
+  // read and update routes.
+  string label = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Pooling mode (optional, defaults to "transaction").
+  optional DatabaseConnectionPoolMode.Value mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Number of connections in the pool (optional, defaults to 10). It cannot
+  // exceed the connections the service plan allows.
+  optional int32 size = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Username the pool connects as (optional). Pass null to reuse the inbound
+  // user.
+  optional string username = 7 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // Must be true to confirm creating a connection pool. Ignored when
+  // dry_run=true.
+  bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// DatabaseConnectionPoolUpdateInput is the input contract for
+// linode_database_postgresql_connection_pool_update. The route replaces the
+// pool's settings, so it carries the same body the create route does, and
+// label renames the pool the path addresses.
+message DatabaseConnectionPoolUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_connection_pool_update"
+    method: "PUT"
+    path: "/databases/postgresql/instances/{instance_id}/connection-pools/{pool_name}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates one PGBouncer connection pool on a PostgreSQL Managed Database, by instance_id and pool_name. This can close connections the pool is currently serving. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This updates a PostgreSQL connection pool and can close its in-use connections. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "PostgreSQL connection pool updated";
+  // A replay re-sends a body the first call already applied.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.error_message) = "Failed to update PostgreSQL connection pool {pool_name}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_update.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_update.pool_name.non_blank"
+    message: "pool_name must be a non-empty string"
+    expression: "this.pool_name.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_update.pool_name.path_safe"
+    message: "pool_name must not contain path separators, query separators, or traversal segments"
+    expression: "!this.pool_name.contains('/') && !this.pool_name.contains('?') && !this.pool_name.contains('..') && this.pool_name.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_update.label.non_blank"
+    message: "label must be a non-empty string"
+    expression: "this.label.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_update.mode.known"
+    message: "mode must be one of: session, statement, transaction"
+    expression: "!has(this.mode) || this.mode != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_update.size.positive"
+    message: "size must be a positive integer"
+    expression: "!has(this.size) || this.size >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // PostgreSQL Managed Database instance ID that holds the pool.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Label of the connection pool to update.
+  string pool_name = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Name of the database the pool connects to (optional, defaults to
+  // "defaultdb").
+  optional string database = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Name of the connection pool (required). A different value renames it.
+  string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Pooling mode (optional, defaults to "transaction").
+  optional DatabaseConnectionPoolMode.Value mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Number of connections in the pool (optional, defaults to 10). It cannot
+  // exceed the connections the service plan allows.
+  optional int32 size = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Username the pool connects as (optional). Pass null to reuse the inbound
+  // user.
+  optional string username = 8 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // Must be true to confirm updating a connection pool. Ignored when
+  // dry_run=true.
+  bool confirm = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// DatabaseConnectionPoolDeleteInput is the input contract for
+// linode_database_postgresql_connection_pool_delete.
+//
+// It declares no fetch_state hook: the get above reads the same route, so the
+// preview and the plan hash read the pool through that rather than through a
+// hand-written step per removal.
+message DatabaseConnectionPoolDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_connection_pool_delete"
+    method: "DELETE"
+    path: "/databases/postgresql/instances/{instance_id}/connection-pools/{pool_name}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one PGBouncer connection pool on a PostgreSQL Managed Database, by instance_id and pool_name. This closes the connections the pool is currently serving. Requires confirm=true. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.confirm_message) = "This deletes a PostgreSQL connection pool and closes its in-use connections. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "PostgreSQL connection pool {pool_name} deleted";
+  option (linode.mcp.v1.error_message) = "Failed to delete PostgreSQL connection pool {pool_name}: {error}";
+  // A replay would report a pool the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_delete.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_delete.pool_name.non_blank"
+    message: "pool_name must be a non-empty string"
+    expression: "this.pool_name.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_connection_pool_delete.pool_name.path_safe"
+    message: "pool_name must not contain path separators, query separators, or traversal segments"
+    expression: "!this.pool_name.contains('/') && !this.pool_name.contains('?') && !this.pool_name.contains('..') && this.pool_name.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // PostgreSQL Managed Database instance ID that holds the pool.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Label of the connection pool to delete.
+  string pool_name = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm deleting a connection pool. Ignored when
+  // dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}

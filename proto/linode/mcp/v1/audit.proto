@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -30,6 +31,8 @@ message AuditHealthInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditHealthResponse";
+  option (linode.mcp.v1.tool_description) = "Report the audit subsystem's status: log path and disk usage, rotated-file count and oldest date, and (when the SQLite sink is enabled) row count, oldest event, and database size.";
+  option (linode.mcp.v1.tool_hooks) = "answer";
 }
 
 // AuditReportInput is the input contract for linode_audit_report. The audit
@@ -40,9 +43,16 @@ message AuditReportInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditReportResponse";
+  option (linode.mcp.v1.tool_description) = "Run a named custom audit report from config (audit.reports). Reads SQLite when enabled, else the JSONL log. Returns a summary of counts or a list of matching events depending on the report's output mode.";
+  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (buf.validate.message).cel = {
+    id: "linode_audit_report.name.required"
+    message: "report name is required"
+    expression: "this.name != ''"
+  };
 
   // Name of the report from audit.reports.
-  string name = 1;
+  string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 
 // AuditRecentInput is the input contract for linode_audit_recent. All filters
@@ -54,23 +64,25 @@ message AuditRecentInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditRecentResponse";
+  option (linode.mcp.v1.tool_description) = "Return the most recent audit events (what tools were called, with what outcome), newest first. Reads the on-disk JSONL audit log. Optional filters: limit, since, until, tool (glob), capability, status, include_meta.";
+  option (linode.mcp.v1.tool_hooks) = "answer";
 
   // Max events to return. Default 20, capped at 200.
-  optional int32 limit = 1;
+  optional int32 limit = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events at or after this RFC 3339 timestamp (e.g.
   // 2026-05-19T00:00:00Z).
-  optional string since = 2;
+  optional string since = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events at or before this RFC 3339 timestamp.
-  optional string until = 3;
+  optional string until = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events whose tool name matches this glob (e.g. "linode_instance_*").
-  optional string tool = 4;
+  optional string tool = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events with this capability: read, write, destroy, admin, or meta.
-  optional string capability = 5;
+  optional string capability = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events with this status: success, error, or refused.
-  optional string status = 6;
+  optional string status = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Include audit/profile meta-tool events. Default false (they are noise for
   // activity review).
-  optional bool include_meta = 7;
+  optional bool include_meta = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 
 // AuditExportInput is the input contract for linode_audit_export. format is
@@ -82,19 +94,28 @@ message AuditExportInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditExportResponse";
+  option (linode.mcp.v1.tool_description) = "Export a range of audit events to a temp file and return its path. Reads SQLite when enabled, else the JSONL log. Optional filters: since, until, tool (glob), max_records, include_meta.";
+  option (linode.mcp.v1.tool_hooks) = "answer";
+  // format has no presence, so a name matching no member arrives as the enum's
+  // zero, the same as an absent one.
+  option (buf.validate.message).cel = {
+    id: "linode_audit_export.format.known"
+    message: "format must be one of: json, csv, ndjson"
+    expression: "this.format != 0"
+  };
 
   // Output format: json, csv, or ndjson.
-  AuditExportFormat.Value format = 1;
+  AuditExportFormat.Value format = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events at or after this RFC 3339 timestamp.
-  optional string since = 2;
+  optional string since = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events at or before this RFC 3339 timestamp.
-  optional string until = 3;
+  optional string until = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Only events whose tool name matches this glob (e.g. "linode_instance_*").
-  optional string tool = 4;
+  optional string tool = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Max events to export. Default 10000, capped at 100000.
-  optional int32 max_records = 5;
+  optional int32 max_records = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Include audit/profile meta-tool events. Default false.
-  optional bool include_meta = 6;
+  optional bool include_meta = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 
 // AuditSummaryInput is the input contract for linode_audit_summary. The tool
@@ -105,14 +126,16 @@ message AuditSummaryInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditSummaryResponse";
+  option (linode.mcp.v1.tool_description) = "Count audit events grouped by tool and status (or other columns) over a time window. Useful for questions like 'how many destroys in the last 24h'. Reads SQLite when enabled, else the JSONL log.";
+  option (linode.mcp.v1.tool_hooks) = "answer";
 
   // Only count events at or after this RFC 3339 timestamp.
-  optional string since = 1;
+  optional string since = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Columns to group by. Allowed: tool, status, capability, profile,
   // environment. Defaults to [tool, status].
-  repeated string group_by = 2;
+  repeated string group_by = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
   // Include audit/profile meta-tool events. Default false.
-  optional bool include_meta = 3;
+  optional bool include_meta = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 
 // AuditEvent mirrors one audit log event as the audit query tools emit it.

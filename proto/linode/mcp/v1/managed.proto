@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -53,11 +54,16 @@ message ManagedServiceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedService";
+  option (linode.mcp.v1.tool_description) = "Gets one service monitored by Linode Managed by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve managed service {service_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Managed service to retrieve (required).
-  int32 service_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 service_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // ManagedServiceListInput is the input contract for
@@ -70,6 +76,7 @@ message ManagedServiceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists services monitored by Linode Managed.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -90,9 +97,56 @@ message ManagedServiceCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a Managed service monitor.";
+  option (linode.mcp.v1.error_message) = "Failed to create the managed service: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a Managed service monitor. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed service monitor {id} created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "service_type"
+    field: "address"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // What the POST does; there is no monitor to read yet.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A Managed service monitor is created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The four members the API assigns.
+  option (linode.mcp.v1.refuse_arguments) = {
+    fields: "created"
+    fields: "id"
+    fields: "status"
+    fields: "updated"
+    message: "Read-only fields are not accepted: {fields}"
+  };
+
+  // The four rules run in the order the hand handlers checked them, which is
+  // what keeps a call missing several of them answering the same sentence it
+  // used to. service_type reads as the number it holds because that is the only
+  // spelling both CEL runtimes accept, and an argument naming no member arrives
+  // as the zero an absent one does, so one rule answers for both.
+  option (buf.validate.message).cel = {
+    id: "managed_service_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_service_create.service_type.known"
+    message: "service_type must be one of: tcp, url"
+    expression: "this.service_type != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_service_create.address.required"
+    message: "address is required"
+    expression: "this.address != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_service_create.timeout.range"
+    message: "timeout must be an integer between 1 and 255"
+    expression: "this.timeout >= 1 && this.timeout <= 255"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -133,9 +187,81 @@ message ManagedServiceUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a service monitored by Linode Managed. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to update managed service {service_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Managed service monitor. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed service monitor {service_id} updated successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The nullable members beside these are left as sent: a null is a value
+  // there, and a string with spaces in it is the caller's.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "address"
+    field: "consultation_group"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the monitor whose settings the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_service_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Managed service monitor {service_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.refuse_arguments) = {
+    fields: "created"
+    fields: "id"
+    fields: "status"
+    fields: "updated"
+    message: "Read-only fields are not accepted: {fields}"
+  };
+  // An explicit null counts as a change: it is how the API is told to clear a
+  // member, so presence rather than value is what this asks.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "label"
+    fields: "service_type"
+    fields: "address"
+    fields: "timeout"
+    fields: "body"
+    fields: "consultation_group"
+    fields: "credentials"
+    fields: "notes"
+    fields: "region"
+    message: "at least one managed service field is required"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_service_update.service_id.positive"
+    message: "service_id must be a positive integer"
+    expression: "this.service_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_service_update.label.nonblank"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_service_update.address.nonblank"
+    message: "address must be a non-empty string"
+    expression: "!has(this.address) || this.address != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_service_update.consultation_group.nonblank"
+    message: "consultation_group must be a non-empty string"
+    expression: "!has(this.consultation_group) || this.consultation_group != ''"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "managed_service_update.service_type.known"
+    message: "service_type must be one of: tcp, url"
+    expression: "!has(this.service_type) || this.service_type != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_service_update.timeout.range"
+    message: "timeout must be an integer between 1 and 255"
+    expression: "!has(this.timeout) || (this.timeout >= 1 && this.timeout <= 255)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -149,16 +275,26 @@ message ManagedServiceUpdateInput {
   optional string address = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated timeout in seconds, 1-255.
   optional int32 timeout = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Updated expected response body text for URL monitors.
-  optional string body = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Updated expected response body text for URL monitors. An explicit null
+  // erases it, which is how the API spells "stop matching a body".
+  optional string body = 7 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // Updated Managed contact group to consult when an issue is detected.
   optional string consultation_group = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated Managed credential IDs used when resolving service issues.
   repeated int32 credentials = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Updated notes for responders.
-  optional string notes = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Updated region for private IP services.
-  optional string region = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Updated notes for responders. An explicit null erases them.
+  optional string notes = 10 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // Updated region for private IP services. An explicit null erases it.
+  optional string region = 11 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // Must be true to confirm Managed service update. Ignored when dry_run=true.
   bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -176,8 +312,29 @@ message ManagedServiceDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a service monitored by Linode Managed. Pass dry_run=true to preview without deleting.";
+  // Undeclared before: Go assembled "Failed to delete <tool name>" in its shared
+  // delete helper, so the sentence is stated here naming the resource instead.
+  option (linode.mcp.v1.error_message) = "Failed to delete Managed service monitor: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes a Managed service monitor. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed service deleted successfully";
+  // Neither language retried this DELETE, matching the enable and disable
+  // actions on the same monitor.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the monitor a caller sees before it stops being watched.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_service_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Managed service monitor {service_id} will be deleted."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_service_delete.service_id.positive"
+    message: "service_id must be a positive integer"
+    expression: "this.service_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -201,7 +358,25 @@ message ManagedServiceDisableInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
+  option (linode.mcp.v1.tool_description) = "Disables monitoring for a Linode Managed service.";
+  option (linode.mcp.v1.error_message) = "Failed to disable Managed service {service_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This disables a Managed service monitor. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed service disabled successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the monitor the disable acts on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_service_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The selected Managed service monitor is disabled."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_service_disable.service_id.positive"
+    message: "service_id must be a positive integer"
+    expression: "this.service_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -225,7 +400,25 @@ message ManagedServiceEnableInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
+  option (linode.mcp.v1.tool_description) = "Enables monitoring for a Linode Managed service.";
+  option (linode.mcp.v1.error_message) = "Failed to enable Managed service {service_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This enables a Managed service monitor. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed service enabled successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the monitor the enable acts on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_service_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Managed service monitor {service_id} will be enabled."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_service_enable.service_id.positive"
+    message: "service_id must be a positive integer"
+    expression: "this.service_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -274,11 +467,16 @@ message ManagedLinodeSettingsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettings";
+  option (linode.mcp.v1.tool_description) = "Gets Managed service settings for one Linode by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve managed settings for instance {linode_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode whose Managed settings to retrieve (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // ManagedLinodeSettingsListInput is the input contract for
@@ -291,6 +489,7 @@ message ManagedLinodeSettingsListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettingsListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Managed service settings for Linodes on the account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -315,9 +514,76 @@ message ManagedLinodeSettingsUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettingsWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates Managed service SSH settings for one Linode.";
+  option (linode.mcp.v1.error_message) = "Failed to update managed settings for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates Managed Linode settings. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed Linode settings for Linode {linode_id} updated successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the SSH block the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_linode_settings_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Managed SSH settings are updated for the selected Linode."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The SSH block. Each member carries its own kind, its own bounds, and a
+  // null that clears the setting, none of which a rule sees inside a map.
+  option (linode.mcp.v1.object_walk) = {
+    field: "ssh"
+    members: {
+      unknown: "{field} contains unsupported fields: {keys}"
+      member: {
+        name: "access"
+        value: {
+          kind: VALUE_KIND_BOOL
+          unusable: "{field}.{key} must be a boolean"
+        }
+      }
+      member: {
+        name: "ip"
+        value: {
+          kind: VALUE_KIND_TEXT
+          non_blank: true
+          unusable: "{field}.{key} must be a non-empty string"
+        }
+      }
+      member: {
+        name: "port"
+        value: {
+          kind: VALUE_KIND_INT
+          nullable: true
+          minimum: 1
+          maximum: 65535
+          unusable: "{field}.{key} must be an integer from {minimum} to {maximum} or null"
+        }
+      }
+      member: {
+        name: "user"
+        value: {
+          kind: VALUE_KIND_TEXT
+          nullable: true
+          max_length: 32
+          unusable: "{field}.{key} must be a string up to {max_length} characters or null"
+        }
+      }
+    }
+  };
+
+  // ssh is a map, which carries no presence bit, so its size is what folds an
+  // absent object and an empty one into the sentence both used to answer. A
+  // value that is not an object is answered by the body builder instead.
+  option (buf.validate.message).cel = {
+    id: "managed_linode_settings_update.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_linode_settings_update.ssh.required"
+    message: "ssh is required and must be an object"
+    expression: "size(this.ssh) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -369,11 +635,16 @@ message ManagedContactGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContact";
+  option (linode.mcp.v1.tool_description) = "Gets one Linode Managed contact by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve managed contact {contact_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Managed contact to retrieve (required).
-  int32 contact_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 contact_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // ManagedContactListInput is the input contract for
@@ -386,6 +657,7 @@ message ManagedContactListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists contacts configured for Linode Managed service alerts.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -408,9 +680,72 @@ message ManagedContactCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a managed contact for service monitor issue handling. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.error_message) = "Failed to create the managed contact: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a managed contact. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed contact {id} created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "name"
+    field: "email"
+    field: "group"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // What the POST does; there is no contact to read yet.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A Managed contact is created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The API assigns both, so a caller naming either is answering for a value
+  // the route would ignore.
+  option (linode.mcp.v1.refuse_arguments) = {
+    fields: ["id", "updated"]
+    message: "id and updated are read-only and cannot be set when creating a managed contact"
+  };
+  // The phone object. A value that is not an object is left to the body
+  // builder, which words that for every free-form member alike.
+  option (linode.mcp.v1.object_walk) = {
+    field: "phone"
+    members: {
+      unknown: "{field} has unknown fields: {keys}"
+      key: ["primary", "secondary"]
+      value: {
+        kind: VALUE_KIND_TEXT
+        nullable: true
+        non_blank: true
+        unusable: "{field}.{key} must be a non-empty string or null"
+      }
+      require: {
+        name: ["primary", "secondary"]
+        any_of: "phone must include primary or secondary"
+      }
+    }
+  };
+
+  // The three text rules run ahead of the at-least-one rule, the order the hand
+  // handlers checked them in. phone is a map, which carries no presence bit, so
+  // its size is what says the caller sent one.
+  option (buf.validate.message).cel = {
+    id: "managed_contact_create.name.nonblank"
+    message: "name must be a non-empty string"
+    expression: "!has(this.name) || this.name != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_contact_create.email.nonblank"
+    message: "email must be a non-empty string"
+    expression: "!has(this.email) || this.email != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_contact_create.group.nonblank"
+    message: "group must be a non-empty string"
+    expression: "!has(this.group) || this.group != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_contact_create.fields.required"
+    message: "at least one managed contact field is required"
+    expression: "has(this.name) || has(this.email) || has(this.group) || size(this.phone) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -443,8 +778,77 @@ message ManagedContactUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a contact configured for Linode Managed service alerts.";
+  option (linode.mcp.v1.error_message) = "Failed to update managed contact {contact_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Managed contact. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed contact {contact_id} updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "name"
+    field: "email"
+    field: "group"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the contact details the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_contact_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Managed contact {contact_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The API assigns both, so a caller naming either is answering for a value
+  // the route would ignore.
+  option (linode.mcp.v1.refuse_arguments) = {
+    fields: ["id", "updated"]
+    message: "Read-only fields are not accepted: {fields}"
+  };
+  // An explicit null counts as naming a field: it is how the API is told to
+  // clear one, so a call carrying only that is a real update.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: ["name", "email", "group", "phone"]
+    message: "at least one mutable contact field is required"
+  };
+  option (linode.mcp.v1.object_walk) = {
+    field: "phone"
+    members: {
+      unknown: "{field} has unknown fields: {keys}"
+      key: ["primary", "secondary"]
+      value: {
+        kind: VALUE_KIND_TEXT
+        nullable: true
+        non_blank: true
+        unusable: "{field}.{key} must be a non-empty string or null"
+      }
+      require: {
+        name: ["primary", "secondary"]
+        any_of: "phone must include primary or secondary"
+      }
+    }
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_contact_update.contact_id.positive"
+    message: "contact_id must be a positive integer"
+    expression: "this.contact_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_contact_update.email.nonblank"
+    message: "email must be a non-empty string"
+    expression: "!has(this.email) || this.email != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_contact_update.name.nonblank"
+    message: "name must be a non-empty string"
+    expression: "!has(this.name) || this.name != ''"
+  };
+  // A null clears the group, so only a supplied string is held to being one.
+  option (buf.validate.message).cel = {
+    id: "managed_contact_update.group.nonblank"
+    message: "group must be a non-empty string or null"
+    expression: "!has(this.group) || this.group != ''"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -454,8 +858,11 @@ message ManagedContactUpdateInput {
   optional string name = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated contact email address (optional).
   optional string email = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Updated contact group (optional).
-  optional string group = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Updated contact group (optional). An explicit null erases it.
+  optional string group = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // Updated phone numbers object: { primary: string, secondary: string }
   // (optional).
   map<string, google.protobuf.Value> phone = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
@@ -477,8 +884,29 @@ message ManagedContactDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactIDResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a contact configured for Linode Managed service alerts. Pass dry_run=true to preview without deleting.";
+  // Undeclared before, for the same reason the service delete's was: Go built
+  // the sentence around the tool name in the shared delete helper.
+  option (linode.mcp.v1.error_message) = "Failed to delete Managed contact: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes a Managed contact. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed contact deleted successfully";
+  // Neither language retried this DELETE, and a replay would report a contact
+  // that is already gone as one that was never configured.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the contact a caller sees before it stops being alerted.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_contact_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The selected Managed contact is deleted."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_contact_delete.contact_id.positive"
+    message: "contact_id must be a positive integer"
+    expression: "this.contact_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -507,6 +935,8 @@ message ManagedSSHKeyGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedSSHKey";
+  option (linode.mcp.v1.tool_description) = "Retrieves the Managed SSH public key assigned to the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve the managed SSH key: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -520,6 +950,8 @@ message ManagedStatsGetInput {
     path: "/managed/stats"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_description) = "Lists Linode Managed statistics from the last 24 hours.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve managed stats: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -542,7 +974,11 @@ message ManagedCredentialListResponse {
   repeated ManagedCredential managed_credentials = 3;
 }
 
-// ManagedCredentialGetInput is the input contract for linode_managed_credential_get.
+// ManagedCredentialGetInput is the input contract for
+// linode_managed_credential_get. It joins the two database credentials reads on
+// the gated-read tier: the route hands back a stored credential record, so the
+// fetch is gated the way a mutation is, and the dry run reports the request it
+// would have made instead of making it.
 message ManagedCredentialGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_managed_credential_get"
@@ -551,6 +987,15 @@ message ManagedCredentialGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredential";
+  option (linode.mcp.v1.tool_description) = "Gets one stored managed credential by ID. This account-level managed credential metadata requires admin capability and confirm=true. Pass dry_run=true to preview the request without retrieving it.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Managed credential {credential_id}: {error}";
+  option (linode.mcp.v1.confirm_message) = "This retrieves a stored Managed credential. Set confirm=true to proceed.";
+
+  option (buf.validate.message).cel = {
+    id: "managed_credential_get.credential_id.positive"
+    message: "credential_id must be a positive integer"
+    expression: "this.credential_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -558,6 +1003,8 @@ message ManagedCredentialGetInput {
   int32 credential_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Preview the request without retrieving it (optional).
   optional bool dry_run = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Must be set to true to retrieve the credential. Ignored when dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedCredentialListInput is the input contract for
@@ -570,6 +1017,7 @@ message ManagedCredentialListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists stored managed credentials for the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -589,15 +1037,51 @@ message ManagedCredentialCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a stored Managed credential for the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to create the managed credential: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a stored Managed credential. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed credential {id} created successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The password is absent by rule rather than by omission: a rewritten
+  // secret is not the credential the caller meant to store.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "username"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // What the POST does; the secret in the body reaches the report redacted.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A Managed credential is created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_credential_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_credential_create.secret.required"
+    message: "password is required"
+    expression: "this.password.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_credential_create.username.nonblank"
+    message: "username must be a non-empty string"
+    expression: "!has(this.username) || this.username != ''"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the Managed credential.
   string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Password to store for the Managed credential.
-  string password = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string password = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    // The secret is the one argument a preview must not echo: a dry run is
+    // read and pasted more widely than the request it stands for.
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Username to store for the Managed credential.
   optional string username = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm creating a stored Managed credential. Ignored
@@ -619,8 +1103,42 @@ message ManagedCredentialUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates one stored managed credential by ID. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to update managed credential {credential_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Managed credential. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed credential {credential_id} updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the credential the update replaces; its GET never carries
+  // the secret.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_credential_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Managed credential {credential_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The two members the API assigns. Neither is a field here, so nothing else
+  // sees a caller who sets one.
+  option (linode.mcp.v1.refuse_arguments) = {
+    fields: "id"
+    fields: "last_decrypted"
+    message: "Read-only fields are not accepted: {fields}"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_credential_update.credential_id.positive"
+    message: "credential_id must be a positive integer"
+    expression: "this.credential_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_credential_update.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -647,15 +1165,54 @@ message ManagedCredentialUsernamePasswordUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialIDResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a stored Managed credential's username and password by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to update the username and password for managed credential {credential_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a stored Managed credential's username and password. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed credential {credential_id} updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The password is absent by rule rather than by omission: a rewritten
+  // secret is not the credential the caller meant to store.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "username"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the stored login being re-keyed; its GET never carries the
+  // secret.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_credential_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Managed credential {credential_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_credential_username_password_update.credential_id.positive"
+    message: "credential_id must be a positive integer"
+    expression: "this.credential_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_credential_username_password_update.secret.required"
+    message: "password is required"
+    expression: "this.password.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "managed_credential_username_password_update.username.nonblank"
+    message: "username must be a non-empty string"
+    expression: "!has(this.username) || this.username != ''"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Managed credential ID to update.
   int32 credential_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Updated password to store for the Managed credential.
-  string password = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string password = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    // The secret is the one argument a preview must not echo: a dry run is
+    // read and pasted more widely than the request it stands for.
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Updated username to store for the Managed credential.
   optional string username = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating a stored Managed credential's username
@@ -676,8 +1233,25 @@ message ManagedCredentialRevokeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialIDResponse";
+  option (linode.mcp.v1.tool_description) = "Revokes one stored managed credential by ID. This credential-affecting action requires admin capability and confirm=true. Pass dry_run=true to preview without revoking.";
+  option (linode.mcp.v1.error_message) = "Failed to revoke managed credential {credential_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This revokes a stored Managed credential. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Managed credential {credential_id} revoked successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the stored login the revoke takes away.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_managed_credential_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A Managed credential is revoked."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "managed_credential_revoke.credential_id.positive"
+    message: "credential_id must be a positive integer"
+    expression: "this.credential_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

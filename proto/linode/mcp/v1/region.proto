@@ -41,11 +41,16 @@ message RegionGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Region";
+  option (linode.mcp.v1.tool_description) = "Gets one Linode region by region ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve region {region_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the region to retrieve, such as us-east (required).
-  string region_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string region_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_REGION_SLUG
+  ];
 }
 
 // RegionListInput is the input contract for linode_region_list. Both filters
@@ -58,6 +63,7 @@ message RegionListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.RegionListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all available Linode regions (datacenters) with optional filtering by country or capabilities";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -65,7 +71,13 @@ message RegionListInput {
   optional string country = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter regions by capability (e.g., 'Linodes', 'Block Storage', 'GPU
   // Linodes').
-  optional string capability = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  optional string capability = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY,
+    (linode.mcp.v1.list_filter) = {
+      match: MATCH_MEMBER
+      field: "capabilities"
+    }
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -82,6 +94,7 @@ message RegionAvailabilityListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.RegionAvailabilityListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists compute instance type availability across Linode regions";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -97,11 +110,17 @@ message RegionAvailabilityGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.RegionAvailabilityListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists compute instance type availability for a Linode region";
+  option (linode.mcp.v1.list_envelope) = {shape: SHAPE_BARE};
+  option (linode.mcp.v1.error_message) = "Failed to retrieve availability for region {region_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region slug to inspect, for example 'us-east'.
-  string region_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string region_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_REGION_SLUG
+  ];
 }
 
 // RegionAvailability mirrors a single compute-type availability entry for a

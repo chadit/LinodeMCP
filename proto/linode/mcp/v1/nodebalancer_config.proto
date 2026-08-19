@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // NodeBalancer config choice enums.
@@ -142,13 +143,21 @@ message NodeBalancerConfigGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfig";
+  option (linode.mcp.v1.tool_description) = "Gets one config for a specific NodeBalancer by IDs.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve config {config_id} for NodeBalancer {nodebalancer_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer (required).
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the NodeBalancer config to retrieve (required).
-  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 config_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // NodeBalancerConfigDeleteResponse is the id-echo envelope
@@ -171,11 +180,15 @@ message NodeBalancerConfigListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists configs for a specific NodeBalancer by its ID.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose configs should be listed.
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page number to retrieve.
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page, from 25 through 500.
@@ -209,9 +222,88 @@ message NodeBalancerConfigCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a config for a specific NodeBalancer by its ID. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.error_message) = "Failed to create config for NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a NodeBalancer config. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "NodeBalancer config {id} created successfully for NodeBalancer {nodebalancer_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The preview reads the NodeBalancer's existing configs, so a caller sees
+  // which ports are already taken before adding one.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
+  // zero, and negative nodebalancer_id alike.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "this.nodebalancer_id >= 1"
+  };
+  // port has no presence either, so the same rule answers an absent port and
+  // one outside the range.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.port.range"
+    message: "port must be an integer from 1 through 65535"
+    expression: "this.port >= 1 && this.port <= 65535"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart. The six rules run
+  // in the order the hand handlers checked them.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.protocol.known"
+    message: "protocol must be one of: http, https, tcp, udp"
+    expression: "!has(this.protocol) || this.protocol != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.algorithm.known"
+    message: "algorithm must be one of: roundrobin, leastconn, source, ring_hash"
+    expression: "!has(this.algorithm) || this.algorithm != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.stickiness.known"
+    message: "stickiness must be one of: none, table, http_cookie, session, source_ip"
+    expression: "!has(this.stickiness) || this.stickiness != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.check.known"
+    message: "check must be one of: none, connection, http, http_body"
+    expression: "!has(this.check) || this.check != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.cipher_suite.known"
+    message: "cipher_suite must be one of: recommended, legacy"
+    expression: "!has(this.cipher_suite) || this.cipher_suite != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.proxy_protocol.known"
+    message: "proxy_protocol must be one of: none, v1, v2"
+    expression: "!has(this.proxy_protocol) || this.proxy_protocol != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.check_interval.min"
+    message: "check_interval must be an integer greater than or equal to 1"
+    expression: "!has(this.check_interval) || this.check_interval >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.check_timeout.min"
+    message: "check_timeout must be an integer greater than or equal to 1"
+    expression: "!has(this.check_timeout) || this.check_timeout >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.check_attempts.min"
+    message: "check_attempts must be an integer greater than or equal to 1"
+    expression: "!has(this.check_attempts) || this.check_attempts >= 1"
+  };
+  // https is member 2 of NodeBalancerProtocol, the one protocol that cannot
+  // terminate TLS without a certificate and key.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.ssl.https"
+    message: "ssl_cert and ssl_key are required when protocol is https"
+    expression: "(!has(this.protocol) || this.protocol != 2) || (has(this.ssl_cert) && this.ssl_cert != '' && has(this.ssl_key) && this.ssl_key != '')"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_create.udp_check_port.min"
+    message: "udp_check_port must be an integer greater than or equal to 1"
+    expression: "!has(this.udp_check_port) || this.udp_check_port >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -243,9 +335,15 @@ message NodeBalancerConfigCreateInput {
   // Optional HTTPS cipher suite: recommended or legacy.
   optional NodeBalancerCipherSuite.Value cipher_suite = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS certificate PEM.
-  optional string ssl_cert = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string ssl_cert = 15 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Optional HTTPS private key PEM.
-  optional string ssl_key = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string ssl_key = 16 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Optional proxy protocol version for TCP configs: none, v1, or v2.
   optional NodeBalancerProxyProtocol.Value proxy_protocol = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check port for UDP configs, from 1 through 65535.
@@ -271,9 +369,99 @@ message NodeBalancerConfigUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a config for a specific NodeBalancer by NodeBalancer and config ID.";
+  option (linode.mcp.v1.error_message) = "Failed to update config {config_id} for NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a NodeBalancer config. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "NodeBalancer config {id} updated successfully for NodeBalancer {nodebalancer_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the config the update rewrites.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_nodebalancer_config_get"
+  };
+  // proto3 collapses an absent int32 onto 0, so one rule per id answers absent,
+  // zero, and negative alike.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "this.nodebalancer_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.port.range"
+    message: "port must be an integer from 1 through 65535"
+    expression: "!has(this.port) || (this.port >= 1 && this.port <= 65535)"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart. The six rules run
+  // in the order the hand handlers checked them.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.protocol.known"
+    message: "protocol must be one of: http, https, tcp, udp"
+    expression: "!has(this.protocol) || this.protocol != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.algorithm.known"
+    message: "algorithm must be one of: roundrobin, leastconn, source, ring_hash"
+    expression: "!has(this.algorithm) || this.algorithm != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.stickiness.known"
+    message: "stickiness must be one of: none, table, http_cookie, session, source_ip"
+    expression: "!has(this.stickiness) || this.stickiness != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.check.known"
+    message: "check must be one of: none, connection, http, http_body"
+    expression: "!has(this.check) || this.check != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.cipher_suite.known"
+    message: "cipher_suite must be one of: recommended, legacy"
+    expression: "!has(this.cipher_suite) || this.cipher_suite != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.proxy_protocol.known"
+    message: "proxy_protocol must be one of: none, v1, v2"
+    expression: "!has(this.proxy_protocol) || this.proxy_protocol != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.check_interval.min"
+    message: "check_interval must be an integer greater than or equal to 1"
+    expression: "!has(this.check_interval) || this.check_interval >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.check_timeout.min"
+    message: "check_timeout must be an integer greater than or equal to 1"
+    expression: "!has(this.check_timeout) || this.check_timeout >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.check_attempts.min"
+    message: "check_attempts must be an integer greater than or equal to 1"
+    expression: "!has(this.check_attempts) || this.check_attempts >= 1"
+  };
+  // https is member 2 of NodeBalancerProtocol, the one protocol that cannot
+  // terminate TLS without a certificate and key.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.ssl.https"
+    message: "ssl_cert and ssl_key are required when protocol is https"
+    expression: "(!has(this.protocol) || this.protocol != 2) || (has(this.ssl_cert) && this.ssl_cert != '' && has(this.ssl_key) && this.ssl_key != '')"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.udp_check_port.min"
+    message: "udp_check_port must be an integer greater than or equal to 1"
+    expression: "!has(this.udp_check_port) || this.udp_check_port >= 1"
+  };
+  // Last, matching the hand handlers: a caller who supplied a bad value hears
+  // about that value rather than about the empty update it also amounts to.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_update.any"
+    message: "at least one update field is required"
+    expression: "has(this.port) || has(this.protocol) || has(this.algorithm) || has(this.stickiness) || has(this.check) || has(this.check_interval) || has(this.check_timeout) || has(this.check_attempts) || has(this.check_path) || has(this.check_body) || has(this.check_passive) || has(this.cipher_suite) || has(this.ssl_cert) || has(this.ssl_key) || has(this.proxy_protocol) || has(this.udp_check_port)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -307,9 +495,15 @@ message NodeBalancerConfigUpdateInput {
   // Optional HTTPS cipher suite: recommended or legacy.
   optional NodeBalancerCipherSuite.Value cipher_suite = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS certificate PEM.
-  optional string ssl_cert = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string ssl_cert = 16 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Optional HTTPS private key PEM.
-  optional string ssl_key = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string ssl_key = 17 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Optional proxy protocol version for TCP configs: none, v1, or v2.
   optional NodeBalancerProxyProtocol.Value proxy_protocol = 18 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check port for UDP configs, from 1 through 65535.
@@ -333,8 +527,17 @@ message NodeBalancerConfigDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a config from a NodeBalancer. WARNING: This can disrupt load balancer traffic.";
+  option (linode.mcp.v1.error_message) = "Failed to delete config {config_id} from NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Config {config_id} removed from NodeBalancer {nodebalancer_id} successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The walk lists the backend nodes it takes out of rotation, which is an
+  // extra call no descriptor describes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_nodebalancer_config_get"
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -365,9 +568,77 @@ message NodeBalancerConfigRebuildInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Rebuilds a config for a specific NodeBalancer by NodeBalancer and config ID.";
+  option (linode.mcp.v1.error_message) = "Failed to rebuild config {config_id} for NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This rebuilds a NodeBalancer config. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Rebuilt config {config_id} for NodeBalancer {nodebalancer_id} successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the config the rebuild replaces, which is the backend node
+  // set the call is about to discard.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_nodebalancer_config_get"
+  };
+  // proto3 collapses an absent int32 onto 0, so one rule per id answers absent,
+  // zero, and negative alike. They are CEL rather than derived path checks
+  // because the validate hook above suppresses the derived ones.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "this.nodebalancer_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.port.range"
+    message: "port must be an integer from 1 through 65535"
+    expression: "!has(this.port) || (this.port >= 1 && this.port <= 65535)"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart. Rebuild takes four
+  // of the six config enums: it has no cipher_suite or proxy_protocol field.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.protocol.known"
+    message: "protocol must be one of: http, https, tcp, udp"
+    expression: "!has(this.protocol) || this.protocol != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.algorithm.known"
+    message: "algorithm must be one of: roundrobin, leastconn, source, ring_hash"
+    expression: "!has(this.algorithm) || this.algorithm != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.stickiness.known"
+    message: "stickiness must be one of: none, table, http_cookie, session, source_ip"
+    expression: "!has(this.stickiness) || this.stickiness != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.check.known"
+    message: "check must be one of: none, connection, http, http_body"
+    expression: "!has(this.check) || this.check != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.check_interval.min"
+    message: "check_interval must be an integer greater than or equal to 1"
+    expression: "!has(this.check_interval) || this.check_interval >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.check_timeout.min"
+    message: "check_timeout must be an integer greater than or equal to 1"
+    expression: "!has(this.check_timeout) || this.check_timeout >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.check_attempts.min"
+    message: "check_attempts must be an integer greater than or equal to 1"
+    expression: "!has(this.check_attempts) || this.check_attempts >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_rebuild.udp_check_port.min"
+    message: "udp_check_port must be an integer greater than or equal to 1"
+    expression: "!has(this.udp_check_port) || this.udp_check_port >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -406,6 +677,10 @@ message NodeBalancerConfigRebuildInput {
   optional int32 udp_check_port = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The complete backend node set the rebuilt config should have (required),
   // each an object with label, address, and optional weight, mode, and
-  // subnet_id. Nodes absent from this list are removed from the config.
-  repeated NodeBalancerConfigNodeItem nodes = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // subnet_id. Nodes absent from this list are removed from the config; the
+  // empty list is legal, so only the argument map can see an omitted one.
+  repeated NodeBalancerConfigNodeItem nodes = 17 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
 }

@@ -42,9 +42,14 @@ message NodeBalancerStatsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerStats";
+  option (linode.mcp.v1.tool_description) = "Gets traffic and connection statistics for a specific NodeBalancer by its ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve NodeBalancer {nodebalancer_id} stats: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose statistics should be retrieved.
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }

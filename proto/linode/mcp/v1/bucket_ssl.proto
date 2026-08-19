@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // BucketSSL reports whether an Object Storage bucket has a TLS certificate
@@ -28,7 +29,7 @@ message ObjectStorageSSLWriteResponse {
 message ObjectStorageSSLDeleteResponse {
   string message = 1;
   string region = 2;
-  string bucket = 3;
+  string bucket = 3 [(linode.mcp.v1.echo_argument) = "label"];
 }
 
 // BucketSSLGetInput is the input contract for linode_object_storage_ssl_get.
@@ -40,6 +41,8 @@ message BucketSSLGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.BucketSSL";
+  option (linode.mcp.v1.tool_description) = "Checks whether an Object Storage bucket has an SSL/TLS certificate installed";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve SSL status for bucket '{label}' in region '{region}': {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -60,8 +63,33 @@ message ObjectStorageSSLUploadInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageSSLWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Uploads an SSL/TLS certificate to an Object Storage bucket. Requires confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to upload SSL certificate for bucket '{label}' in region '{region}': {error}";
   option (linode.mcp.v1.confirm_message) = "This uploads an SSL certificate to the bucket. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "SSL certificate uploaded to bucket '{label}' in region '{region}'";
+
+  // region and label are declared here rather than left to the derived path
+  // checks so all four rejections keep the order both handlers answered in.
+  option (buf.validate.message).cel = {
+    id: "object_storage_ssl_upload.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_ssl_upload.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_ssl_upload.certificate.required"
+    message: "certificate is required"
+    expression: "this.certificate.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_ssl_upload.private_key.required"
+    message: "private_key is required"
+    expression: "this.private_key.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -70,9 +98,15 @@ message ObjectStorageSSLUploadInput {
   // The bucket label (name).
   string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The PEM-encoded TLS/SSL certificate to upload.
-  string certificate = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string certificate = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // The PEM-encoded private key for the certificate.
-  string private_key = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string private_key = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Must be true to proceed. This uploads a certificate to the bucket. Ignored
   // when dry_run=true.
   bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -91,8 +125,16 @@ message ObjectStorageSSLDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageSSLDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes the SSL/TLS certificate from an Object Storage bucket. Requires confirm=true to proceed. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This removes the SSL certificate from the bucket. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "SSL certificate deleted from bucket '{label}' in region '{region}'";
   option (linode.mcp.v1.resource_type) = "ObjectStorageSSL";
+  // A replay would report a certificate the first attempt already removed as one
+  // the bucket never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_ssl_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

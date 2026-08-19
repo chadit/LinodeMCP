@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -62,11 +63,16 @@ message NodeBalancerGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancer";
+  option (linode.mcp.v1.tool_description) = "Gets detailed information about a specific NodeBalancer by its ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve NodeBalancer {nodebalancer_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer to retrieve (required).
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceNodeBalancerListInput is the input contract for
@@ -79,11 +85,15 @@ message InstanceNodeBalancerListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists NodeBalancers assigned to a Linode instance.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // NodeBalancerListInput is the input contract for linode_nodebalancer_list.
@@ -95,6 +105,7 @@ message NodeBalancerListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all NodeBalancers on your account. Can filter by region or label.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -117,9 +128,41 @@ message NodeBalancerCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new NodeBalancer (load balancer). WARNING: Billing starts immediately. Use linode_region_list to find valid regions.";
+  option (linode.mcp.v1.error_message) = "Failed to create NodeBalancer: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "NodeBalancer '{label}' (ID: {id}) created successfully in {region}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The load balancer being created. The label and the reserved address are
+  // both optional, so the four wordings cover which of them the call carries.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new NodeBalancer \"{label}\" will be created in region {region}. Reserved IPv4 address {ipv4} will be assigned."
+    template: "A new NodeBalancer \"{label}\" will be created in region {region}."
+    template: "A new NodeBalancer will be created in region {region}. Reserved IPv4 address {ipv4} will be assigned."
+    template: "A new NodeBalancer will be created in region {region}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Billing for the NodeBalancer starts immediately on creation."
+    line: PREVIEW_LINE_WARNING
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  // Dotted-quad only, which is what both hand handlers accepted: Go parsed the
+  // address and held it to four octets, Python built an IPv4Address from it.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_create.ipv4.format"
+    message: "ipv4 must be a valid IPv4 address"
+    expression: "!has(this.ipv4) || this.ipv4.matches('^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_create.firewall_id.min"
+    message: "firewall_id must be an integer greater than or equal to 1"
+    expression: "!has(this.firewall_id) || this.firewall_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -161,8 +204,20 @@ message NodeBalancerUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an existing NodeBalancer. Can modify label and connection throttle.";
+  option (linode.mcp.v1.error_message) = "Failed to modify NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a NodeBalancer. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "NodeBalancer {nodebalancer_id} modified successfully";
+  // The preview reads the NodeBalancer so the label a change starts from can
+  // be named; the request carries only the new values.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
+  // zero, and negative nodebalancer_id alike.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_update.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "this.nodebalancer_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -192,8 +247,24 @@ message NodeBalancerDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
   option (linode.mcp.v1.resource_type) = "NodeBalancer";
+  option (linode.mcp.v1.success_message) = "NodeBalancer {nodebalancer_id} removed successfully";
+  // A replay would report a NodeBalancer the first attempt already removed as
+  // one that never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The walk lists the configs and nodes that cascade with it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_nodebalancer_get"
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_delete.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "this.nodebalancer_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -222,11 +293,15 @@ message NodeBalancerFirewallListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Cloud Firewalls assigned to a specific NodeBalancer by its ID.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose Cloud Firewalls should be listed.
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page number to retrieve.
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page, from 25 through 500.
@@ -245,17 +320,39 @@ message NodeBalancerFirewallUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.tool_description) = "Replaces the Cloud Firewall assignments for a specific NodeBalancer. Pass an empty firewall_ids list to remove all assignments.";
+  option (linode.mcp.v1.error_message) = "Failed to update firewall assignments for NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This replaces firewall assignments for a NodeBalancer. Set confirm=true to proceed.";
   option (linode.mcp.v1.retry_disabled) = true;
+  // Same split as the Linode instance twin: an absent firewall_ids and the
+  // empty list that removes every assignment reach a rule as one value, so the
+  // presence check reads the arguments, and the path id rides along to keep
+  // both of its sentences.
+  // The preview reads the assignments the replacement overwrites.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // Entry positivity is all a rule can see of firewall_ids: a list the caller
+  // omitted arrives here as the empty one, which passes vacuously.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_firewall_update.firewall_ids.positive"
+    message: "firewall_ids entries must be positive integers"
+    expression: "this.firewall_ids.all(f, f >= 1)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose Cloud Firewall assignments should be
   // replaced.
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Complete list of firewall IDs to assign to the NodeBalancer. Use an empty
   // list to remove all firewall assignments.
-  repeated int32 firewall_ids = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  repeated int32 firewall_ids = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).

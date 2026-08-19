@@ -33,11 +33,16 @@ message AccountAvailabilityGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountAvailability";
+  option (linode.mcp.v1.tool_description) = "Gets services available and unavailable to the account in one region.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve account availability for region {region_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The region slug to inspect (required).
-  string region_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string region_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_REGION_SLUG
+  ];
 }
 
 // AccountAvailabilityListInput is the input contract for
@@ -50,6 +55,7 @@ message AccountAvailabilityListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountAvailabilityListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists services available and unavailable to the account in each region.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

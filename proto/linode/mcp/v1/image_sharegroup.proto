@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // ImageShareGroup mirrors one image share group. description, updated, and expiry
@@ -60,11 +61,21 @@ message ImageShareGroupGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroup";
+  // The API sends these as an explicit null, and the serializer drops them, so
+  // a caller cannot tell an empty value from one the API said nothing about.
+  option (linode.mcp.v1.explicit_null_fields) = "description";
+  option (linode.mcp.v1.explicit_null_fields) = "expiry";
+  option (linode.mcp.v1.explicit_null_fields) = "updated";
+  option (linode.mcp.v1.tool_description) = "Gets a single image share group by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve image share group: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The image share group ID (required).
-  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 sharegroup_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // ImageShareGroupByTokenGetInput is the input contract for
@@ -77,6 +88,34 @@ message ImageShareGroupByTokenGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroup";
+  // The API sends these as an explicit null, and the serializer drops them, so
+  // a caller cannot tell an empty value from one the API said nothing about.
+  option (linode.mcp.v1.explicit_null_fields) = "description";
+  option (linode.mcp.v1.explicit_null_fields) = "expiry";
+  option (linode.mcp.v1.explicit_null_fields) = "updated";
+  option (linode.mcp.v1.tool_description) = "Gets a share group by membership token UUID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve image share group by token: {error}";
+
+  // The token addresses the route as a path segment, so the three ways it can
+  // be unusable are held here in the order the hand-written readers answered
+  // them.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_by_token_get.token_uuid.non_blank"
+    message: "token_uuid must be a non-empty string"
+    expression: "this.token_uuid.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_by_token_get.token_uuid.path_safe"
+    message: "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+    expression: "!this.token_uuid.contains('/') && !this.token_uuid.contains('?') && !this.token_uuid.contains('#') && !this.token_uuid.contains('..')"
+  };
+  // The canonical spelling only: the brace and urn variants a permissive parser
+  // would take address no token.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_by_token_get.token_uuid.uuid"
+    message: "token_uuid must be a UUID"
+    expression: "this.token_uuid.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -94,6 +133,7 @@ message ImageShareGroupListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists owned image share groups with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -113,11 +153,37 @@ message ImageShareGroupByImageListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists owned image share groups that currently include a private image.";
+
+  // Only a private image can belong to a share group, so the prefix is part of
+  // the check rather than something the API refuses later.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_by_image_list.image_id.non_blank"
+    message: "image_id must be a non-empty string"
+    expression: "this.image_id.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_by_image_list.image_id.url_safe"
+    message: "image_id must not contain query separators, fragments, or traversal segments"
+    expression: "!this.image_id.contains('?') && !this.image_id.contains('#') && !this.image_id.contains('..')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_by_image_list.image_id.private"
+    message: "image_id must be a private image identifier like private/12345"
+    expression: "this.image_id.matches('^private/[1-9][0-9]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Private image ID, for example private/12345.
-  string image_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string image_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FREE_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "image_id must be a non-empty string"
+      unusable: "image_id must be a non-empty string"
+    }
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -134,8 +200,53 @@ message ImageShareGroupUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an image share group's label or description.";
+  option (linode.mcp.v1.error_message) = "Failed to update image share group: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates an image share group. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image share group '{label}' ({id}) updated successfully";
+  // Go's hand path sent this PUT through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // Both values are trimmed before anything reads them, which Python has
+  // always sent trimmed and Go sent as typed.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "description"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the group whose label and description the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_sharegroup_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The image share group will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Ordered: both hand handlers read the id before the body. The bound is >= 1
+  // because a negative id would otherwise reach the path the derived check
+  // builds.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_update.sharegroup_id.positive"
+    message: "sharegroup_id must be a positive integer"
+    expression: "this.sharegroup_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_update.any"
+    message: "at least one of label or description is required"
+    expression: "has(this.label) || has(this.description)"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_update.label.non_empty"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_update.description.non_empty"
+    message: "description must be a non-empty string"
+    expression: "!has(this.description) || this.description.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -163,9 +274,16 @@ message ImageShareGroupDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes an owned image share group by ID. WARNING: members lose access to images in the group. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the image share group";
   option (linode.mcp.v1.success_message) = "Image share group {sharegroup_id} removed successfully";
   option (linode.mcp.v1.resource_type) = "ImageShareGroup";
+  // Go has never retried this route, so a replay cannot re-run the delete
+  // against a group the first attempt already removed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_sharegroup_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -195,11 +313,15 @@ message ImageShareGroupImageListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists images shared in an owned image share group.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Image share group ID.
-  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 sharegroup_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -217,8 +339,57 @@ message ImageShareGroupImageUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a shared image's label or description within an image share group.";
+  option (linode.mcp.v1.error_message) = "Failed to update shared image: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a shared image. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Shared image '{id}' in image share group {sharegroup_id} updated successfully";
+  // Go's hand path sent this PUT through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // Trimmed here, never image_id: neither language ever accepted a padded
+  // slug, and trimming it here would start.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "description"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the parent group, since the shared image is addressed
+  // through it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_sharegroup_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The shared image will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Ordered: the two id rules run in the order both hand handlers read them.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_update.sharegroup_id.positive"
+    message: "sharegroup_id must be a positive integer"
+    expression: "this.sharegroup_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_update.image_id.shape"
+    message: "image_id must match shared/<positive integer>"
+    expression: "this.image_id.matches('^shared/[1-9][0-9]*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_update.any"
+    message: "at least one of label or description is required"
+    expression: "has(this.label) || has(this.description)"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_update.label.non_empty"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_update.description.non_empty"
+    message: "description must be a non-empty string"
+    expression: "!has(this.description) || this.description.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -250,8 +421,15 @@ message ImageShareGroupImageDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupImageDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Revokes access to one shared image in an owned image share group. Pass dry_run=true to preview without removing.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to remove the shared image";
   option (linode.mcp.v1.success_message) = "Shared image {image_id} removed from image share group {sharegroup_id} successfully";
+  // Neither client has ever retried this DELETE, so a replay cannot re-run it
+  // against a share that the first attempt already revoked.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_sharegroup_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -291,8 +469,39 @@ message ImageShareGroupCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a share group for sharing images with other users.";
+  option (linode.mcp.v1.error_message) = "Failed to create image share group: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates an image share group. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image share group '{label}' ({id}) created successfully";
+  // Go's hand path sent this POST through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The two text fields are trimmed before anything reads them, so the rules
+  // below judge the trimmed value, matching the sibling update tool.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "description"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The group being created; nothing exists to read yet.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new image share group labeled \"{label}\" will be created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  // The runtime item reader owns list shape and per-item typing; this rule adds
+  // the id-presence check it cannot express.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_create.images.entries"
+    message: "images entries must carry an image id"
+    expression: "this.images.all(i, i.id.matches('[^ \\t\\r\\n]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -314,8 +523,7 @@ message ImageShareGroupCreateInput {
 // ImageShareGroupImageAddInput is the input contract for
 // linode_image_sharegroup_image_add. sharegroup_id and confirm are required.
 // images is required at runtime, but a repeated field cannot be marked required
-// in the generated schema, so the required flag is dropped (the handler still
-// enforces a non-empty images array).
+// in the generated schema, so a rule below carries the non-empty check.
 message ImageShareGroupImageAddInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_image_sharegroup_image_add"
@@ -324,8 +532,43 @@ message ImageShareGroupImageAddInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Adds one or more private images to an image share group.";
+  option (linode.mcp.v1.error_message) = "Failed to add image to share group: {error}";
   option (linode.mcp.v1.confirm_message) = "This adds images to an image share group. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Added image set to image share group {sharegroup_id}; last returned image: '{id}'";
+  // Go's hand path sent this POST through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the group the images join.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_sharegroup_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Images will be added to the image share group."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Ordered: both hand handlers read the id before the body. The bound is >= 1
+  // because a negative id would otherwise reach the path the derived check
+  // builds.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_add.sharegroup_id.positive"
+    message: "sharegroup_id must be a positive integer"
+    expression: "this.sharegroup_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_add.images.required"
+    message: "images must contain at least one image"
+    expression: "size(this.images) > 0"
+  };
+  // The runtime item reader owns list shape and per-item typing; this rule adds
+  // the id-presence check it cannot express.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_add.images.entries"
+    message: "images entries must carry an image id"
+    expression: "this.images.all(i, i.id.matches('[^ \\t\\r\\n]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

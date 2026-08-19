@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -61,11 +62,19 @@ message AccountUserGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUser";
+  option (linode.mcp.v1.tool_description) = "Gets one account user by username.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve account user {username}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The account username to retrieve (required).
-  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string username = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FRAGMENT_SAFE_TEXT,
+    // The account routes name the characters they refuse rather than the
+    // classes, which is what tells a caller which part of the name to change.
+    (linode.mcp.v1.reader_message) = {refused: "username must not contain '/', '?', '#', or '..'"}
+  ];
 }
 
 // AccountUserWriteResponse is the {message, user} envelope the account user
@@ -150,6 +159,7 @@ message AccountUserListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists users on the account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -161,9 +171,9 @@ message AccountUserListInput {
 
 // AccountUserGrantsGetInput is the input contract for
 // linode_account_user_grants_get. Linode deprecated this route in favor of
-// GET /iam/users/{username}/role-permissions; the replacement is not yet
-// implemented in this repo, so the deprecated route is what this tool still
-// calls.
+// GET /iam/users/{username}/role-permissions, which this repo now serves as
+// linode_iam_user_role_permission_get. The deprecated route keeps its tool so
+// callers on the old grants shape are not cut off.
 message AccountUserGrantsGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_user_grants_get"
@@ -172,11 +182,19 @@ message AccountUserGrantsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrants";
+  option (linode.mcp.v1.tool_description) = "Gets grants for one account user by username.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve grants for account user {username}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Account username whose grants should be retrieved (required).
-  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string username = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FRAGMENT_SAFE_TEXT,
+    // The account routes name the characters they refuse rather than the
+    // classes, which is what tells a caller which part of the name to change.
+    (linode.mcp.v1.reader_message) = {refused: "username must not contain '/', '?', '#', or '..'"}
+  ];
 }
 
 // AccountUserCreateInput is the input contract for linode_account_user_create.
@@ -189,15 +207,30 @@ message AccountUserCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a user on the account.";
+  option (linode.mcp.v1.error_message) = "Failed to create the account user: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates an account user. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account user created successfully";
+  // A replayed attempt would file a second user and a second email invite, so
+  // neither language retried this POST before it was declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The preview names the user and the restriction it is created with, which
+  // no declared string can interpolate.
+  option (linode.mcp.v1.tool_hooks) = "preview";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Username for the new account user (required).
-  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Username for the new account user (required). A name sent as a number or
+  // as spaces answers the same required sentence an omitted one does.
+  string username = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Email address for the new account user (required).
-  string email = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string email = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Whether the new account user is restricted (optional, defaults to false).
   optional bool restricted = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account user creation. Ignored when dry_run=true.
@@ -220,21 +253,54 @@ message AccountUserUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates one account user by username.";
+  option (linode.mcp.v1.error_message) = "Failed to update account user: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates an account user. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account user updated successfully";
+  // A replayed attempt could rename a user a second time, so neither language
+  // retried this PUT before it was declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the user the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_user_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The account user is updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // A PUT naming none of the four mutable fields would change nothing, and
+  // ssh_keys is repeated, so only the argument map can see it was supplied.
+  // The sentence is declared because it names the family, not the fields.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "email"
+    fields: "restricted"
+    fields: "ssh_keys"
+    fields: "new_username"
+    message: "at least one account user field is required"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Account username to update (required).
-  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string username = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PATH_SAFE_TEXT
+  ];
   // New email address for the account user (optional).
   optional string email = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the account user is restricted (optional).
-  optional bool restricted = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional bool restricted = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
+  ];
   // SSH public keys for the account user (optional).
   repeated string ssh_keys = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // New username for the account user (optional).
-  optional string new_username = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // New username for the account user (optional). The wire key is "username":
+  // the argument cannot take that name, which the path already uses.
+  optional string new_username = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_name) = "username"
+  ];
   // Must be true to confirm account user update. Ignored when dry_run=true.
   bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -252,8 +318,40 @@ message AccountUserDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one account user by username.";
+  option (linode.mcp.v1.error_message) = "Failed to delete account user: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes an account user. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account user deleted successfully";
+  // Neither language retried this DELETE, and a replay would report a user who
+  // is already gone as one who never had an account.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the user a caller sees before the delete removes them.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_user_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The selected account user is deleted."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Go's username reader answers three sentences and checks the '#' the shared
+  // path-safe reader does not, so the rules are its own rather than the ones
+  // the token and client-id routes carry.
+  option (buf.validate.message).cel = {
+    id: "account_user_delete.username.required"
+    message: "username is required"
+    expression: "this.username != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_user_delete.username.non_blank"
+    message: "username must be a non-empty string"
+    expression: "this.username.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_user_delete.username.path_safe"
+    message: "username must not contain '/', '?', '#', or '..'"
+    expression: "!this.username.contains('/') && !this.username.contains('?') && !this.username.contains('#') && !this.username.contains('..')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -268,9 +366,10 @@ message AccountUserDeleteInput {
 
 // AccountUserGrantsUpdateInput is the input contract for
 // linode_account_user_grants_update. Linode deprecated this route in favor of
-// PUT /iam/users/{username}/role-permissions; the replacement is not yet
-// implemented in this repo, so the deprecated route is what this tool still
-// calls. username and confirm are the only required
+// PUT /iam/users/{username}/role-permissions, which this repo now serves as
+// linode_iam_user_role_permission_update. The deprecated route keeps its tool
+// so callers on the old grants shape are not cut off.
+// username and confirm are the only required
 // fields. global is a free-form grants object (map -> JSON-schema type
 // "object"); the 12 resource fields are free-form grant arrays (repeated Struct
 // -> JSON-schema type "array"). Neither a map nor a repeated field can land in
@@ -284,13 +383,151 @@ message AccountUserGrantsUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrantsWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates grants for one account user by username.";
+  option (linode.mcp.v1.error_message) = "Failed to update account user grants: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates account user grants. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account user grants updated successfully";
+  // A replayed attempt would reapply a grant set the first call may already
+  // have changed, so this PUT is not retried.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the grants the change is diffed against, and the sentence names
+  // the user whose grants change.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_user_grants_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Account grants for user \"{username}\" will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // A misspelled grant section would otherwise be dropped before any rule ran
+  // and the call would report success over a grant the API never saw.
+  option (linode.mcp.v1.refuse_unknown_arguments) = {
+    message: "unknown grant update fields: {fields}"
+  };
+  // Every section is optional and a map carries no presence, so naming at
+  // least one is a count no rule can take.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: [
+      "global",
+      "linode",
+      "domain",
+      "nodebalancer",
+      "image",
+      "longview",
+      "stackscript",
+      "volume",
+      "database",
+      "firewall",
+      "vpc",
+      "lkecluster"
+    ]
+    message: "at least one grant section is required"
+  };
+
+  // The global grants object: one permission level, twelve flags, and the one
+  // flag a null clears.
+  option (linode.mcp.v1.object_walk) = {
+    field: "global"
+    unusable: "global must be an object matching the grants schema"
+    empty: "global must be an object matching the grants schema"
+    members: {
+      unknown: "{field} has unknown fields: {keys}"
+      key: [
+        "add_databases",
+        "add_domains",
+        "add_firewalls",
+        "add_images",
+        "add_linodes",
+        "add_longview",
+        "add_nodebalancers",
+        "add_stackscripts",
+        "add_volumes",
+        "add_vpcs",
+        "cancel_account",
+        "longview_subscription"
+      ]
+      value: {
+        kind: VALUE_KIND_BOOL
+        unusable: "{field}.{key} must be a boolean"
+      }
+      member: {
+        name: "account_access"
+        value: {
+          kind: VALUE_KIND_TEXT
+          nullable: true
+          values: "linode.mcp.v1.GrantPermission.Value"
+          unusable: "{field}.{key} must be one of: {values}"
+        }
+      }
+      member: {
+        name: "child_account_access"
+        value: {
+          kind: VALUE_KIND_BOOL
+          nullable: true
+          unusable: "{field}.{key} must be a boolean or null"
+        }
+      }
+    }
+  };
+
+  // The eleven per-resource sections, which differ only by name. Each entry
+  // names a resource and the permission applied to it, and a section carrying
+  // an entry that does not answers the same sentence as one that is not an
+  // array of objects at all: a grant nobody can apply is not one of the
+  // objects the section takes.
+  option (linode.mcp.v1.object_walk) = {
+    field: [
+      "linode",
+      "domain",
+      "nodebalancer",
+      "image",
+      "longview",
+      "stackscript",
+      "volume",
+      "database",
+      "firewall",
+      "vpc",
+      "lkecluster"
+    ]
+    unusable: "{field} must be an array of objects"
+    element: "{field} must be an array of objects"
+    members: {
+      unknown: "{field} must be an array of objects"
+      member: {
+        name: "id"
+        value: {
+          kind: VALUE_KIND_INT
+          minimum: 1
+          absent: "{field} must be an array of objects"
+          unusable: "{field} must be an array of objects"
+        }
+      }
+      member: {
+        name: "permissions"
+        value: {
+          kind: VALUE_KIND_TEXT
+          // A null revokes the grant, which is what the API reads one as.
+          nullable: true
+          values: "linode.mcp.v1.GrantPermission.Value"
+          absent: "{field} must be an array of objects"
+          unusable: "{field} must be an array of objects"
+          refused: "{field}[{parent}].{key} must be one of: {values}"
+        }
+      }
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Account username whose grants should be updated (required).
-  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string username = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FRAGMENT_SAFE_TEXT,
+    // The account routes name the characters they refuse rather than the
+    // classes, which is what tells a caller which part of the name to change.
+    (linode.mcp.v1.reader_message) = {refused: "username must not contain '/', '?', '#', or '..'"}
+  ];
   // Optional global grants object.
   map<string, google.protobuf.Value> global = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional Linode resource grants.

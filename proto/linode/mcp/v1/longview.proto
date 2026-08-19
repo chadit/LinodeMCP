@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // LongviewApps is the set of detected applications nested in a Longview client.
@@ -85,11 +86,16 @@ message LongviewClientGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClient";
+  option (linode.mcp.v1.tool_description) = "Gets one Longview client. Secret-bearing Longview install fields are not included in the tool response.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Longview client {client_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Longview client ID to retrieve (required).
-  int32 client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 client_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // LongviewClientListInput is the input contract for
@@ -102,6 +108,7 @@ message LongviewClientListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Longview clients configured for the account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -121,8 +128,44 @@ message LongviewClientCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientCreateWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a Longview client. WARNING: the API key and install code are returned in the response and may be needed to configure the client application. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.error_message) = "Failed to create the Longview client: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a Longview client and returns setup credentials. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Longview client created successfully";
+  option (linode.mcp.v1.warning_message) = "IMPORTANT: Save the API key and install code if they are present; they are required to configure the Longview client application.";
+  // A replayed attempt would file a second client under the same label, so Go
+  // never retried this POST and Python stops here.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The label is trimmed before anything reads it, which is the value both
+  // languages have always checked and put on the wire.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The client being created, which the request alone does not name.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A Longview client labeled \"{label}\" will be created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rules below are evaluated in the order they are written, and a call
+  // breaking more than one reports the first, which is how both languages have
+  // always answered a bad label: absent before unusable length before charset.
+  option (buf.validate.message).cel = {
+    id: "longview_client_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "longview_client_create.label.length"
+    message: "label must be 3 to 32 characters"
+    expression: "size(this.label) >= 3 && size(this.label) <= 32"
+  };
+  option (buf.validate.message).cel = {
+    id: "longview_client_create.label.charset"
+    message: "label may only contain letters, numbers, hyphens, and underscores"
+    expression: "this.label.matches('^[A-Za-z0-9_-]+$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -146,16 +189,50 @@ message LongviewClientUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the label for one Longview client. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to update Longview client {client_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Longview client. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Longview client updated successfully";
+  // Go's hand path sent this PUT through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the client whose label the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_longview_client_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The Longview client is updated with the provided label."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rule below holds its peace until the id is usable and the label is
+  // non-empty, because the sentences for those two are the ones each language
+  // words differently. Rules run before a hook, so a rule that answered for
+  // them would take the hook's turn: an unusable id arrives as the zero a
+  // missing one does, and an absent label arrives as the empty string.
+  option (buf.validate.message).cel = {
+    id: "longview_client_update.label.pattern"
+    message: "label must be 3-32 characters and contain only letters, digits, hyphen, or underscore"
+    expression: "this.client_id < 1 || this.label == '' || (size(this.label) >= 3 && size(this.label) <= 32 && this.label.matches('^[A-Za-z0-9_-]+$'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Longview client ID to update.
-  int32 client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 client_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
   // New Longview client label. Must be 3-32 letters, digits, hyphens, or
   // underscores.
-  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string label = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    // A label sent as a number or as spaces is unreadable rather than missing,
+    // and this tool has always named that difference.
+    (linode.mcp.v1.reader_message) = {unusable: "label must be a non-empty string"}
+  ];
   // Must be set to true to confirm Longview client update. Ignored when
   // dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -175,8 +252,20 @@ message LongviewClientDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientIDResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one Longview client. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.error_message) = "Failed to delete Longview client {client_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes a Longview client. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Longview client deleted successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_longview_client_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "longview_client_delete.client_id.positive"
+    message: "client_id must be a positive integer"
+    expression: "this.client_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -223,11 +312,16 @@ message LongviewSubscriptionGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscription";
+  option (linode.mcp.v1.tool_description) = "Gets one Longview subscription by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Longview subscription {subscription_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Longview subscription ID to retrieve (required).
-  string subscription_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string subscription_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FRAGMENT_SAFE_TEXT
+  ];
 }
 
 // LongviewType mirrors a Linode Longview subscription type (/longview/types). It
@@ -258,6 +352,8 @@ message LongviewPlanGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscription";
+  option (linode.mcp.v1.tool_description) = "Gets the current Longview subscription plan for the account.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve the Longview plan: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -273,13 +369,46 @@ message LongviewPlanUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscriptionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the account Longview subscription plan. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to update the Longview plan: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates the Longview subscription plan. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Longview plan updated successfully";
+  // Go's hand path sent this PUT through no retry wrapper, so declaring the
+  // retry off is what keeps the two clients answering a transport failure the
+  // same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The plan slug is trimmed before anything reads it, which Go has always
+  // checked and sent trimmed.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "longview_subscription"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the plan the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_longview_plan_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The account Longview plan would be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rule below holds its peace on an empty slug: an absent slug and one
+  // trimmed away both arrive as the empty string, and the required sentence
+  // for that case is the PRESENT_TEXT reader's, which runs after the rules.
+  option (buf.validate.message).cel = {
+    id: "longview_plan_update.subscription.pattern"
+    message: "longview_subscription must be a Longview plan ID like longview-10"
+    expression: "this.longview_subscription == '' || this.longview_subscription.matches('^longview-[1-9][0-9]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Longview subscription plan slug to apply.
-  string longview_subscription = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Longview subscription plan slug to apply. normalize trims it first, so
+  // absent, non-text, and trimmed away all answer the one required sentence.
+  string longview_subscription = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Must be set to true to confirm the Longview plan update. Ignored when
   // dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -298,6 +427,7 @@ message LongviewSubscriptionListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscriptionListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available Longview subscription plans.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -316,6 +446,7 @@ message LongviewTypeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewTypeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available Longview subscription types.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -16,11 +17,16 @@ message InstanceStatsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceStats";
+  option (linode.mcp.v1.tool_description) = "Gets daily CPU, IO, IPv4, and IPv6 statistics for a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to get stats for instance {linode_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceStatsMonthGetInput is the input contract for
@@ -33,15 +39,54 @@ message InstanceStatsMonthGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceStats";
+  option (linode.mcp.v1.tool_description) = "Retrieves CPU, IO, IPv4, and IPv6 statistics for a Linode instance for a specific month.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve statistics for instance {linode_id} in {year}-{month:02}: {error}";
+
+  // The two range rules answer the same sentence their fields' readers do, so a
+  // year outside the window and one sent as text read alike. Each holds its
+  // peace while an earlier argument is unusable, which is the order the route
+  // has always refused a call in.
+  //
+  // The window is the epoch floor and the four-digit ceiling, the same pair the
+  // transfer route carries: the two monthly reads took different years apart
+  // for no reason a caller was ever told, and one window is what the contract
+  // can state once.
+  option (buf.validate.message).cel = {
+    id: "instance_stats_month_get.year.range"
+    message: "year must be an integer between 1970 and 9999"
+    expression: "this.linode_id < 1 || (this.year >= 1970 && this.year <= 9999)"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_stats_month_get.month.range"
+    message: "month must be an integer between 1 and 12"
+    expression: "this.linode_id < 1 || this.year < 1970 || this.year > 9999 || (this.month >= 1 && this.month <= 12)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // The statistics year, from 2000 through 2037 (required).
-  int32 year = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
+  // The statistics year, from 1970 through 9999 (required).
+  int32 year = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "year must be an integer between 1970 and 9999"
+      refused: "year must be an integer between 1970 and 9999"
+    }
+  ];
   // The statistics month, from 1 through 12 (required).
-  int32 month = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 month = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "month must be an integer between 1 and 12"
+      refused: "month must be an integer between 1 and 12"
+    }
+  ];
 }
 
 // InstanceStats is the response for linode_instance_stats_get and

@@ -4,7 +4,9 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
+import "linode/mcp/v1/common.proto";
 import "linode/mcp/v1/options.proto";
 
 // LKEControlPlane is the control-plane configuration nested in an LKE cluster.
@@ -66,11 +68,16 @@ message LKEClusterGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKECluster";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a single LKE cluster by its ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve LKE cluster: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster to retrieve (required).
-  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 cluster_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // LKEClusterListInput is the input contract for linode_lke_cluster_list.
@@ -82,11 +89,15 @@ message LKEClusterListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all Linode Kubernetes Engine (LKE) clusters. Can filter by label.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter clusters by label containing this string (case-insensitive).
-  optional string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  optional string label = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY,
+    (linode.mcp.v1.list_filter) = {match: MATCH_CONTAINS}
+  ];
 }
 
 // LKENodePoolCreateItem is one node-pool definition in the node_pools array of
@@ -106,23 +117,11 @@ message LKENodePoolCreateItem {
   repeated string tags = 4;
 }
 
-// LKEClusterTier is the service tier an LKE cluster runs on. Enterprise
-// unlocks the enterprise-only cluster features (Kubernetes versions per node
-// pool, rolling update strategies); standard is the default offering. See the
-// enum wrapper convention in nodebalancer_config.proto.
-message LKEClusterTier {
-  enum Value {
-    unspecified = 0;
-    standard = 1;
-    enterprise = 2;
-  }
-}
-
 // LKEClusterCreateInput is the input contract for linode_lke_cluster_create.
 // node_pools is a required array in the hand-built schema, but a repeated
 // message field never lands in the generated required set, so node_pools drops
-// out of required (recorded in the required-flag-loss log); the handler still
-// rejects an empty node_pools at runtime.
+// out of required (recorded in the required-flag-loss log); the rule below is
+// what refuses a call that sends none.
 message LKEClusterCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_lke_cluster_create"
@@ -131,9 +130,63 @@ message LKEClusterCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new LKE Kubernetes cluster. WARNING: This creates billable resources. Use linode_lke_version_list to find valid k8s_version values, linode_region_list for regions, and linode_lke_type_list for node types. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.error_message) = "Failed to create LKE cluster: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates billable Kubernetes resources. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "LKE cluster '{label}' (ID: {id}) created in {region} with Kubernetes {k8s_version}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The cluster that would be created and the billing that starts with it.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new LKE cluster \"{label}\" will be created in region {region} running Kubernetes {k8s_version}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Billing for the cluster's node pools starts immediately on creation."
+    line: PREVIEW_LINE_WARNING
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.k8s_version.required"
+    message: "k8s_version is required"
+    expression: "this.k8s_version.matches('[^ \\t\\r\\n]')"
+  };
+  // A list carries no presence bit, so its size is what says one was sent.
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.node_pools.required"
+    message: "node_pools must contain at least one node pool"
+    expression: "size(this.node_pools) > 0"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.tier.known"
+    message: "tier must be one of: standard, enterprise"
+    expression: "!has(this.tier) || this.tier != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.vpc_id.min"
+    message: "vpc_id must be an integer greater than or equal to 1"
+    expression: "!has(this.vpc_id) || this.vpc_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.subnet_id.min"
+    message: "subnet_id must be an integer greater than or equal to 1"
+    expression: "!has(this.subnet_id) || this.subnet_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_create.stack_type.known"
+    message: "stack_type must be one of: ipv4, ipv4-ipv6"
+    expression: "!has(this.stack_type) || this.stack_type in ['ipv4','ipv4-ipv6']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -161,7 +214,7 @@ message LKEClusterCreateInput {
   // Service tier for the cluster: standard or enterprise (optional). Without it
   // the API creates a standard cluster, so an enterprise cluster cannot be
   // created at all unless this is sent.
-  optional LKEClusterTier.Value tier = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional LKETier.Value tier = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to install the Akamai App Platform on the cluster (optional).
   optional bool apl_enabled = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Networking stack for the cluster's nodes: "ipv4" or "ipv4-ipv6" (optional,
@@ -185,8 +238,20 @@ message LKEClusterUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an existing LKE cluster's label, Kubernetes version, tags, or high availability setting. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to modify LKE cluster {cluster_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the LKE cluster configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "LKE cluster {cluster_id} modified successfully";
+  // The preview reads the cluster so the label and Kubernetes version a change
+  // starts from can be named; the request carries only the new values.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
+  // zero, and negative cluster_id alike.
+  option (buf.validate.message).cel = {
+    id: "lke_cluster_update.cluster_id.positive"
+    message: "cluster_id must be a positive integer"
+    expression: "this.cluster_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -217,8 +282,19 @@ message LKEClusterDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes an LKE cluster. WARNING: This is irreversible. All node pools, nodes, and associated resources will be deleted. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. All node pools, nodes, and associated resources will be deleted. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "LKE cluster {cluster_id} removed successfully";
   option (linode.mcp.v1.resource_type) = "LKECluster";
+  // A replay would report a cluster the first attempt already removed as one
+  // that never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_cluster_get"
+  };
+  // The walk lists the cluster's node pools to count the nodes the delete
+  // destroys, which is an extra call no descriptor describes.
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -247,8 +323,19 @@ message LKEClusterRecycleInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterActionResponse";
+  option (linode.mcp.v1.tool_description) = "Recycles all nodes in an LKE cluster. WARNING: This causes temporary disruption as all nodes are replaced. Pass dry_run=true to preview without recycling.";
   option (linode.mcp.v1.confirm_message) = "Recycles all nodes in the cluster. This causes temporary disruption. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "LKE cluster {cluster_id} recycle initiated successfully";
+  // A replay starts a second rollout over nodes the first one is still
+  // replacing, doubling the disruption the caller accepted once.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // No resource_type: it feeds only the two-stage drift hash, and this recycle
+  // advertises no mode/plan_id, so it declares nothing the 20 other single-step
+  // destroys do not.
+  // The read is the cluster, never a credential the recycle might rotate.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_cluster_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -272,8 +359,17 @@ message LKEClusterRegenerateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterActionResponse";
+  option (linode.mcp.v1.tool_description) = "Regenerates the service token for an LKE cluster. Existing tokens will stop working. Pass dry_run=true to preview without regenerating.";
   option (linode.mcp.v1.confirm_message) = "This regenerates the cluster service token. Existing tokens will stop working. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Service token for LKE cluster {cluster_id} regenerated successfully";
+  // The server mints the replacement token, so a replay invalidates the one the
+  // first attempt returned, matching the service token delete this rotates with.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the cluster rather than either credential, so a preview
+  // reports cluster metadata without exposing what the call rotates.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_cluster_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -300,8 +396,18 @@ message LKEServiceTokenDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEServiceTokenDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes and regenerates the service token for an LKE cluster. Existing tokens will stop working. Pass dry_run=true to preview without regenerating. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes the service token. Existing tokens will stop working. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Service token for LKE cluster {cluster_id} deleted and regenerated successfully";
   option (linode.mcp.v1.resource_type) = "LKEServiceToken";
+  // A replayed delete would rotate the token a second time and invalidate the
+  // one the first attempt handed back, so this route is never retried.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the cluster rather than the token, so a preview and a plan
+  // report cluster metadata without exposing the credential itself.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_cluster_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -359,9 +465,7 @@ message LKEACLDeleteResponse {
   int32 cluster_id = 2;
 }
 
-// LKEACLGetInput is the input contract for linode_lke_acl_get. cluster_id is a
-// string here, matching the hand-built schema and the LKEClusterGetInput
-// read-side convention.
+// LKEACLGetInput is the input contract for linode_lke_acl_get.
 message LKEACLGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_lke_acl_get"
@@ -370,6 +474,15 @@ message LKEACLGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEControlPlaneACL";
+  option (linode.mcp.v1.tool_description) = "Retrieves the control plane ACL configuration for an LKE cluster";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve control plane ACL for cluster {cluster_id}: {error}";
+  // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
+  // zero, and negative cluster_id alike.
+  option (buf.validate.message).cel = {
+    id: "lke_acl_get.cluster_id.positive"
+    message: "cluster_id must be a positive integer"
+    expression: "this.cluster_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -390,8 +503,44 @@ message LKEACLUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEACLWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the control plane ACL for an LKE cluster. Controls which IP addresses can access the cluster's API server. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to modify control plane ACL for cluster {cluster_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Control plane ACL for cluster {cluster_id} modified successfully";
+  // The PUT replaces the whole address list rather than merging into it, so a
+  // replay reapplies a set someone else may have changed since the first call.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The preview reads the current ACL so a caller sees what they are replacing.
+  // The API wraps it under a top-level acl key, the way the delete beside this
+  // reads it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_acl_get"
+    body_key: "acl"
+  };
+  // An absent enabled leaves the gate as it stands, so it is neither an open
+  // nor a close and the third arm says only that the list changed.
+  option (linode.mcp.v1.preview_sentence) = {
+    chosen_by: {
+      argument: "acl.enabled"
+      when_true: "The control-plane ACL is enabled; only the listed addresses may reach the Kubernetes API."
+      when_false: "The control-plane ACL is disabled; the Kubernetes API becomes reachable from any address."
+      when_absent: "The cluster control-plane ACL address list is updated."
+    }
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
+  // zero, and negative cluster_id alike.
+  option (buf.validate.message).cel = {
+    id: "lke_acl_update.cluster_id.positive"
+    message: "cluster_id must be a positive integer"
+    expression: "this.cluster_id >= 1"
+  };
+  // An empty acl object sends nothing, so it is rejected alongside an absent one.
+  option (buf.validate.message).cel = {
+    id: "lke_acl_update.acl.required"
+    message: "acl is required and must be an object"
+    expression: "size(this.acl) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -417,9 +566,15 @@ message LKEACLDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEACLDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes the control plane ACL for an LKE cluster. This removes all IP restrictions from the API server. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.error_message) = "Failed to remove control plane ACL for cluster {cluster_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This removes all IP restrictions from the API server. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Control plane ACL for cluster {cluster_id} removed successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_acl_get"
+    body_key: "acl"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

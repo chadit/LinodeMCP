@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // ObjectStorageBucketAccess is the ACL and CORS configuration of an Object
@@ -18,7 +19,9 @@ message ObjectStorageBucketAccess {
 // access element is built from the request args (acl + cors_enabled).
 message ObjectStorageBucketAccessWriteResponse {
   string message = 1;
-  ObjectStorageBucketAccess access = 2;
+  // LOCAL says the MCP layer assembles this rather than the API sending it, so
+  // an empty body is never decoded over the settings the caller just applied.
+  ObjectStorageBucketAccess access = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
 }
 
 // ObjectStorageBucketAccessGetInput is the input contract for
@@ -31,6 +34,8 @@ message ObjectStorageBucketAccessGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketAccess";
+  option (linode.mcp.v1.tool_description) = "Gets the ACL and CORS settings for a specific Object Storage bucket";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve bucket access for '{label}' in region '{region}': {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -51,8 +56,59 @@ message ObjectStorageBucketAccessAllowInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketAccessWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Applies access control settings for an Object Storage bucket. Changes ACL and/or CORS configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to apply access for bucket '{label}' in {region}: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation changes bucket access controls. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Access settings for bucket '{label}' in {region} applied successfully";
+  // The read is the access settings the call replaces. It names no change:
+  // the allow route reports what it applied through its own answer.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_bucket_access_get"
+  };
+  // The allow route is not idempotent enough to replay: it applies account
+  // state, and Go's hand client called it directly for that reason.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.region.slug"
+    message: "region must contain only lowercase letters, numbers, and hyphens"
+    expression: "this.region.matches('^[a-z0-9][a-z0-9-]*[a-z0-9]$') ? '' : string(\"got '\" + this.region + \"': region must contain only lowercase letters, numbers, and hyphens\")"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.label.min"
+    message: "bucket label must be at least 3 characters"
+    expression: "size(this.label) >= 3"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.label.max"
+    message: "bucket label must not exceed 63 characters"
+    expression: "size(this.label) <= 63"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.label.xn_prefix"
+    message: "bucket label must not use the 'xn--' prefix (reserved for internationalized domain names)"
+    expression: "!this.label.startsWith('xn--')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.label.charset"
+    message: "bucket label must contain only lowercase letters, numbers, and hyphens"
+    expression: "this.label.matches('^[a-z0-9][a-z0-9-]*[a-z0-9]$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_allow.acl.known"
+    message: "acl must be one of: private, public-read, authenticated-read, public-read-write"
+    expression: "!has(this.acl) || this.acl in ['private', 'public-read', 'authenticated-read', 'public-read-write']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -83,8 +139,69 @@ message ObjectStorageBucketAccessUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketAccessWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates access control settings for an Object Storage bucket. Changes ACL and/or CORS configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to modify access for bucket '{label}' in {region}: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation changes bucket access controls. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Access settings for bucket '{label}' in {region} modified successfully";
+  // The preview reads the access settings the call would replace.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_bucket_access_get"
+  };
+  // Each half is named only when the caller asked for it, since an omitted acl
+  // or cors_enabled leaves that setting as it stands.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Bucket access control is set to \"{acl}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    chosen_by: {
+      argument: "cors_enabled"
+      when_true: "CORS is enabled for the bucket."
+      when_false: "CORS is disabled for the bucket."
+    }
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.region.slug"
+    message: "region must contain only lowercase letters, numbers, and hyphens"
+    expression: "this.region.matches('^[a-z0-9][a-z0-9-]*[a-z0-9]$') ? '' : string(\"got '\" + this.region + \"': region must contain only lowercase letters, numbers, and hyphens\")"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.label.min"
+    message: "bucket label must be at least 3 characters"
+    expression: "size(this.label) >= 3"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.label.max"
+    message: "bucket label must not exceed 63 characters"
+    expression: "size(this.label) <= 63"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.label.xn_prefix"
+    message: "bucket label must not use the 'xn--' prefix (reserved for internationalized domain names)"
+    expression: "!this.label.startsWith('xn--')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.label.charset"
+    message: "bucket label must contain only lowercase letters, numbers, and hyphens"
+    expression: "this.label.matches('^[a-z0-9][a-z0-9-]*[a-z0-9]$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_access_update.acl.known"
+    message: "acl must be one of: private, public-read, authenticated-read, public-read-write"
+    expression: "!has(this.acl) || this.acl in ['private', 'public-read', 'authenticated-read', 'public-read-write']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

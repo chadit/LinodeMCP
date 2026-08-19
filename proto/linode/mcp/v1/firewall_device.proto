@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // FirewallDeviceType is the kind of resource a firewall device assignment
@@ -54,13 +55,27 @@ message FirewallDeviceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDevice";
+  option (linode.mcp.v1.tool_description) = "Gets one device assigned to a Cloud Firewall.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve device {device_id} on firewall {firewall_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall (required).
-  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 firewall_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the firewall device to retrieve (required).
-  int32 device_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 device_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    // The device sentence is the client's own: it names the id in lower case
+    // and without the argument prefix the firewall id takes.
+    (linode.mcp.v1.reader_message) = {
+      absent: "device id must be a positive integer"
+      refused: "device id must be a positive integer"
+    }
+  ];
 }
 
 // FirewallDeviceListInput is the input contract for
@@ -73,11 +88,15 @@ message FirewallDeviceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists devices assigned to a Cloud Firewall.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose assigned devices should be listed.
-  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 firewall_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -94,9 +113,37 @@ message FirewallDeviceCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Assigns a Linode, Linode interface, or NodeBalancer device to a Cloud Firewall.";
+  option (linode.mcp.v1.error_message) = "Failed to assign firewall device: {error}";
   option (linode.mcp.v1.confirm_message) = "This assigns a device to a Cloud Firewall. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Firewall device assigned successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The entity and the firewall it joins, which the body carries as bare ids.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The {type} {id} will be attached to firewall {firewall_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rules are evaluated in the order written: the path id first, then the
+  // body. type is a required enum, so an argument naming no member arrives as
+  // the enum's zero exactly as an absent one does, and the two sentences the
+  // hand-written tools kept apart ("device type is required" and the one-of)
+  // collapse into the one-of, which is the informative half.
+  option (buf.validate.message).cel = {
+    id: "firewall_device_create.firewall_id.positive"
+    message: "firewall_id must be a positive integer"
+    expression: "this.firewall_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "firewall_device_create.id.positive"
+    message: "id must be a positive integer"
+    expression: "this.id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "firewall_device_create.type.known"
+    message: "type must be one of: linode, nodebalancer, linode_interface"
+    expression: "this.type != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -125,8 +172,18 @@ message FirewallDeviceDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Removes one device assignment from a Cloud Firewall. Pass dry_run=true to preview without removing. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This removes a device assignment from a Cloud Firewall. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Firewall device removed successfully";
   option (linode.mcp.v1.resource_type) = "FirewallDevice";
+  // A replayed removal would unassign a device the first attempt already
+  // detached, and the entity may have been reassigned in between, so this route
+  // is never retried. Go's hand client already refused to replay it; the
+  // declaration is what carries that refusal to every language.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_firewall_device_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

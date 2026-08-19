@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // NodeBalancerNodeMode is the backend node traffic mode. Values are the exact
@@ -60,15 +61,26 @@ message NodeBalancerConfigNodeGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNode";
+  option (linode.mcp.v1.tool_description) = "Gets a backend node for a specific NodeBalancer config.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve node {node_id} for NodeBalancer {nodebalancer_id} config {config_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer (required).
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the NodeBalancer config (required).
-  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 config_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the config node to retrieve (required).
-  int32 node_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 node_id = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // NodeBalancerConfigNodeDeleteResponse is the id-echo envelope
@@ -91,13 +103,21 @@ message NodeBalancerConfigNodeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists backend nodes for a specific NodeBalancer config.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve items: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose config nodes should be listed.
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the NodeBalancer config whose nodes should be listed.
-  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 config_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page number to retrieve.
   optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page, from 25 through 500.
@@ -115,9 +135,67 @@ message NodeBalancerConfigNodeCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.error_message) = "Failed to create node for NodeBalancer {nodebalancer_id} config {config_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a NodeBalancer node. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "NodeBalancer node {id} created successfully for NodeBalancer {nodebalancer_id} config {config_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The label and address are trimmed before anything reads them, so the
+  // length rule below and the wire both see the value without its padding.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "address"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // proto3 collapses an absent int32 onto 0, so one rule per id answers absent,
+  // zero, and negative alike.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "this.nodebalancer_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.label.length"
+    message: "label must be 3 to 32 characters"
+    expression: "size(this.label) >= 3 && size(this.label) <= 32"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.address.required"
+    message: "address is required"
+    expression: "this.address.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.weight.min"
+    message: "weight must be an integer greater than or equal to 1"
+    expression: "!has(this.weight) || this.weight >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.weight.max"
+    message: "weight must be at most 255"
+    expression: "!has(this.weight) || this.weight <= 255"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.mode.known"
+    message: "mode must be one of: accept, backup, drain, none, reject"
+    expression: "!has(this.mode) || this.mode != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_create.subnet_id.min"
+    message: "subnet_id must be an integer greater than or equal to 1"
+    expression: "!has(this.subnet_id) || this.subnet_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -154,9 +232,83 @@ message NodeBalancerConfigNodeUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.error_message) = "Failed to update node {node_id} for NodeBalancer {nodebalancer_id} config {config_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a NodeBalancer node. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "NodeBalancer node {id} updated successfully for NodeBalancer {nodebalancer_id} config {config_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The label and address are trimmed before anything reads them, so the
+  // length rule below and the wire both see the value without its padding.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "address"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the node the update rewrites.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_nodebalancer_config_node_get"
+  };
+  // proto3 collapses an absent int32 onto 0, so one rule per id answers absent,
+  // zero, and negative alike.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "this.nodebalancer_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.node_id.positive"
+    message: "node_id must be a positive integer"
+    expression: "this.node_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.label.non_blank"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.label.length"
+    message: "label must be 3 to 32 characters"
+    expression: "!has(this.label) || (size(this.label) >= 3 && size(this.label) <= 32)"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.address.non_blank"
+    message: "address must be a non-empty string"
+    expression: "!has(this.address) || this.address.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.weight.min"
+    message: "weight must be an integer greater than or equal to 1"
+    expression: "!has(this.weight) || this.weight >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.weight.max"
+    message: "weight must be at most 255"
+    expression: "!has(this.weight) || this.weight <= 255"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.mode.known"
+    message: "mode must be one of: accept, backup, drain, none, reject"
+    expression: "!has(this.mode) || this.mode != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.subnet_id.min"
+    message: "subnet_id must be an integer greater than or equal to 1"
+    expression: "!has(this.subnet_id) || this.subnet_id >= 1"
+  };
+  // Last, matching the hand handlers: a caller who supplied a bad value hears
+  // about that value rather than about the empty update it also amounts to.
+  option (buf.validate.message).cel = {
+    id: "nodebalancer_config_node_update.any"
+    message: "at least one update field is required"
+    expression: "has(this.label) || has(this.address) || has(this.weight) || has(this.mode) || has(this.subnet_id)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -195,8 +347,14 @@ message NodeBalancerConfigNodeDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a backend node from a specific NodeBalancer config. WARNING: This removes the node from load balancing.";
+  option (linode.mcp.v1.error_message) = "Failed to delete node {node_id} from NodeBalancer {nodebalancer_id} config {config_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes a NodeBalancer node. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "NodeBalancer node {node_id} removed successfully from NodeBalancer {nodebalancer_id} config {config_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_nodebalancer_config_node_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

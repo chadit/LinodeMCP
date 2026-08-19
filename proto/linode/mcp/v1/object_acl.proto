@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // ObjectACL is the access control list for one object in an Object Storage
@@ -31,6 +32,26 @@ message ObjectACLGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectACL";
+  option (linode.mcp.v1.tool_description) = "Gets the Access Control List (ACL) for a specific object in an Object Storage bucket";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve ACL for object '{name}' in bucket '{label}': {error}";
+
+  // The object key travels as a query argument, so it is declared here beside
+  // the two path segments rather than left to the derived path checks.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_acl_get.region.required"
+    message: "region is required"
+    expression: "this.region != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_acl_get.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_acl_get.name.required"
+    message: "name (object key) is required"
+    expression: "this.name != ''"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -53,8 +74,46 @@ message ObjectACLUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectACLWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the Access Control List (ACL) for a specific object in an Object Storage bucket. Requires confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to modify ACL for object '{name}' in bucket '{label}': {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the object's access permissions. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "ACL for object '{name}' in bucket '{label}' modified successfully";
+  // The preview reads the object's current ACL. The read is addressed by the
+  // object key in its query as well as by the bucket in its path, and the key
+  // travels in this call's body, which is why the fill is not a path slot.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_object_acl_get"
+  };
+  // Named unconditionally: the rule on the message already refused every value
+  // that is not one of the four.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Object access control is set to \"{acl}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // region and label are declared here rather than left to the derived path
+  // checks so all four rejections keep the order both handlers answered in.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_acl_update.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_acl_update.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_acl_update.name.required"
+    message: "name (object key) is required"
+    expression: "this.name.matches('[^ \\t\\r\\n]')"
+  };
+  // acl is checked unconditionally by hand, so an absent one answers this too.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_acl_update.acl.known"
+    message: "acl must be one of: private, public-read, authenticated-read, public-read-write"
+    expression: "this.acl in ['private', 'public-read', 'authenticated-read', 'public-read-write']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

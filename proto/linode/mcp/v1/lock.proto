@@ -1,0 +1,226 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "buf/validate/validate.proto";
+import "linode/mcp/v1/options.proto";
+
+// LockEntityType is the kind of resource a lock protects. See the enum-wrapper
+// convention in nodebalancer_config.proto. Members 1 and 2 are load-bearing:
+// lock_create's lock_type.lke_entity rule names them as the numeric range
+// [1, 2], so renumbering either one silently changes which entity types that
+// rule covers. Never renumber them.
+message LockEntityType {
+  enum Value {
+    unspecified = 0;
+    lkecluster = 1;
+    lkenodepool = 2;
+    linode = 3;
+    nodebalancer = 4;
+    volume = 5;
+  }
+}
+
+// LockType is the strength of a lock: whether it protects the resource alone or
+// the resource together with its sub-resources.
+message LockType {
+  enum Value {
+    unspecified = 0;
+    cannot_delete = 1;
+    cannot_delete_with_subresources = 2;
+  }
+}
+
+// LockEntity is the resource a lock protects, as the read routes describe it.
+message LockEntity {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// Lock mirrors a Linode resource lock as the read routes return it.
+message Lock {
+  LockEntity entity = 1;
+  int32 id = 2;
+  string lock_type = 3;
+}
+
+// LockCreateResult is the create route's own answer shape. The API sends
+// entity as the bare resource type there, not as the object the read routes
+// carry, so the two cannot share a message.
+message LockCreateResult {
+  string entity = 1;
+  int32 id = 2;
+  string lock_type = 3;
+}
+
+// LockListResponse is the linode_lock_list envelope: count and the full proto
+// Lock elements. The tool has no filter param, so filter is omitted.
+message LockListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Lock locks = 3;
+}
+
+// LockWriteResponse is the linode_lock_create envelope: a confirmation message
+// plus the lock the API returned.
+message LockWriteResponse {
+  string message = 1;
+  LockCreateResult lock = 2;
+}
+
+// LockDeleteResponse is the linode_lock_delete envelope: a confirmation message
+// plus the lock ID the delete acted on. The route answers with an empty body,
+// so the echo is what confirms the target.
+message LockDeleteResponse {
+  string message = 1;
+  int32 lock_id = 2;
+}
+
+// LockListInput is the input contract for linode_lock_list. The route publishes
+// no page controls in the reviewed spec snapshot, so no page/page_size travels
+// here even though the answer arrives in a paginated envelope.
+message LockListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lock_list"
+    method: "GET"
+    path: "/locks"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LockListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the resource locks on the account.";
+  option (linode.mcp.v1.error_message) = "Failed to list resource locks: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// LockGetInput is the input contract for linode_lock_get.
+message LockGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lock_get"
+    method: "GET"
+    path: "/locks/{lock_id}"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Lock";
+  option (linode.mcp.v1.tool_description) = "Gets one resource lock by lock_id.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve resource lock {lock_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "lock_get.lock_id.positive"
+    message: "lock_id must be a positive integer"
+    expression: "this.lock_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Resource lock ID to retrieve.
+  int32 lock_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// LockCreateInput is the input contract for linode_lock_create. The API models
+// the body as a union: LKE resources accept only the plain lock, while every
+// other resource type accepts both lock strengths.
+message LockCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lock_create"
+    method: "POST"
+    path: "/locks"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LockWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a resource lock that blocks deletion of one resource. Requires confirm=true. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.confirm_message) = "This creates a resource lock. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Resource lock created";
+  // A replay re-creates a lock the first call already placed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.error_message) = "Failed to create resource lock: {error}";
+
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one.
+  option (buf.validate.message).cel = {
+    id: "lock_create.entity_type.known"
+    message: "entity_type must be one of: linode, lkecluster, lkenodepool, nodebalancer, volume"
+    expression: "this.entity_type != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "lock_create.entity_id.positive"
+    message: "entity_id must be a positive integer"
+    expression: "this.entity_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "lock_create.lock_type.known"
+    message: "lock_type must be one of: cannot_delete, cannot_delete_with_subresources"
+    expression: "this.lock_type != 0"
+  };
+  // Enum fields reach CEL as numbers, so the LKE entity types (1, 2) and
+  // cannot_delete (1) appear as literals here and by name in the sentence.
+  option (buf.validate.message).cel = {
+    id: "lock_create.lock_type.lke_entity"
+    message: "lock_type must be cannot_delete when entity_type is lkecluster or lkenodepool"
+    expression: "!(this.entity_type in [1, 2]) || this.lock_type == 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // ID of the resource to lock (required).
+  int32 entity_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Type of the resource to lock (required).
+  LockEntityType.Value entity_type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Strength of the lock (required). cannot_delete_with_subresources also
+  // blocks deletion of the resource's sub-resources.
+  LockType.Value lock_type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm creating a resource lock. Ignored when
+  // dry_run=true.
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// LockDeleteInput is the input contract for linode_lock_delete.
+//
+// It declares no fetch_state hook: the get above reads the same route, so the
+// preview and the plan hash read the lock through that rather than through a
+// hand-written step per removal.
+message LockDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lock_delete"
+    method: "DELETE"
+    path: "/locks/{lock_id}"
+  };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LockDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one resource lock by lock_id, which lets the resource it protected be deleted again. Requires confirm=true. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.confirm_message) = "This deletes a resource lock and lets the resource it protected be deleted. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Resource lock {lock_id} deleted";
+  option (linode.mcp.v1.error_message) = "Failed to delete resource lock {lock_id}: {error}";
+  // A replay would report a lock the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "lock_delete.lock_id.positive"
+    message: "lock_id must be a positive integer"
+    expression: "this.lock_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Resource lock ID to delete.
+  int32 lock_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm deleting a resource lock. Ignored when
+  // dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}

@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -59,11 +60,16 @@ message SupportTicketGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicket";
+  option (linode.mcp.v1.tool_description) = "Gets one support ticket by ticket_id.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve support ticket {ticket_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the support ticket to retrieve (required).
-  int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 ticket_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // SupportTicketReply mirrors one reply from
@@ -120,6 +126,7 @@ message SupportTicketListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists support tickets for the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -140,8 +147,110 @@ message SupportTicketCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Opens a support ticket for the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to create support ticket: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a support ticket. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Support ticket opened successfully";
+  // A replayed attempt would open a second ticket nobody hears about, so Go
+  // never retried this POST and Python stops here.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The free-text values are trimmed before anything reads them, which is
+  // what Python has always sent.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "summary"
+    field: "description"
+    field: "bucket"
+    field: "region"
+    field: "vlan"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The ticket being opened, which the body otherwise leaves in a JSON blob.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new support ticket \"{summary}\" will be opened."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rules below are evaluated in the order they are written: the two
+  // required values first, then the optional references in field order.
+  // summary and description are plain proto3 strings, so absent and
+  // whitespace-only both arrive as "" and answer the same sentence.
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.summary.required"
+    message: "summary is required"
+    expression: "this.summary.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.description.required"
+    message: "description is required"
+    expression: "this.description.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.bucket.non_blank"
+    message: "bucket must be a non-empty string"
+    expression: "!has(this.bucket) || this.bucket.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.database_id.positive"
+    message: "database_id must be a positive integer"
+    expression: "!has(this.database_id) || this.database_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.domain_id.positive"
+    message: "domain_id must be a positive integer"
+    expression: "!has(this.domain_id) || this.domain_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.firewall_id.positive"
+    message: "firewall_id must be a positive integer"
+    expression: "!has(this.firewall_id) || this.firewall_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "!has(this.linode_id) || this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.lkecluster_id.positive"
+    message: "lkecluster_id must be a positive integer"
+    expression: "!has(this.lkecluster_id) || this.lkecluster_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.longviewclient_id.positive"
+    message: "longviewclient_id must be a positive integer"
+    expression: "!has(this.longviewclient_id) || this.longviewclient_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.nodebalancer_id.positive"
+    message: "nodebalancer_id must be a positive integer"
+    expression: "!has(this.nodebalancer_id) || this.nodebalancer_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.region.non_blank"
+    message: "region must be a non-empty string"
+    expression: "!has(this.region) || this.region.matches('[^ \\t\\r\\n]')"
+  };
+  // severity stays an int on the wire, so its legal set is a range rule rather
+  // than an enum: an enum would send "3" where the API expects 3.
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.severity.range"
+    message: "severity must be one of: 1, 2, 3"
+    expression: "!has(this.severity) || (this.severity >= 1 && this.severity <= 3)"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.vlan.non_blank"
+    message: "vlan must be a non-empty string"
+    expression: "!has(this.vlan) || this.vlan.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.volume_id.positive"
+    message: "volume_id must be a positive integer"
+    expression: "!has(this.volume_id) || this.volume_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_create.vpc_id.positive"
+    message: "vpc_id must be a positive integer"
+    expression: "!has(this.vpc_id) || this.vpc_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -195,8 +304,27 @@ message SupportTicketCloseInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketIDResponse";
+  option (linode.mcp.v1.tool_description) = "Closes one support ticket by ID. Pass dry_run=true to preview without closing.";
+  option (linode.mcp.v1.error_message) = "Failed to close support ticket {ticket_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This closes a support ticket. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Support ticket closed successfully";
+  // Go never retried this POST. Closing twice is arguably harmless, but the
+  // three support writes answer retry the same way rather than one each.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the ticket a caller sees before closing it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_support_ticket_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Support ticket {ticket_id} will be closed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "support_ticket_close.ticket_id.positive"
+    message: "ticket_id must be a positive integer"
+    expression: "this.ticket_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -220,11 +348,15 @@ message SupportTicketReplyListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketReplyListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists replies for one support ticket by ticket_id.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Support ticket ID whose replies should be listed.
-  int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 ticket_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -241,8 +373,41 @@ message SupportTicketReplyCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketReplyWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a reply on an existing support ticket.";
+  option (linode.mcp.v1.error_message) = "Failed to create support ticket reply: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a support ticket reply. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Support ticket reply created successfully";
+  // A replayed attempt would post the reply twice, so Go never retried this
+  // POST and Python stops here.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The description is trimmed before anything reads it, which is what
+  // Python has always sent.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "description"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the ticket the reply joins, which is the conversation the
+  // request body does not carry.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_support_ticket_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A reply will be posted to support ticket {ticket_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The path id is answered before the body value, which is the order both
+  // languages report a call breaking both.
+  option (buf.validate.message).cel = {
+    id: "support_ticket_reply_create.ticket_id.positive"
+    message: "ticket_id must be a positive integer"
+    expression: "this.ticket_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_reply_create.description.required"
+    message: "description is required"
+    expression: "this.description.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -268,14 +433,63 @@ message SupportTicketAttachmentCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketIDResponse";
+  option (linode.mcp.v1.tool_description) = "Creates an attachment on an existing support ticket.";
+  option (linode.mcp.v1.error_message) = "Failed to create support ticket attachment: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a support ticket attachment. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Support ticket attachment created successfully";
+  // Go never retried this POST, and the three support writes answer retry the
+  // same way rather than one each.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The path is trimmed before anything reads it, so a path of spaces
+  // answers "file is required" rather than reaching the absolute-path rule.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "file"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The read is the ticket the file lands on. The file itself is neither
+  // opened nor stat'd: a preview makes no call.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_support_ticket_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A file attachment will be uploaded to support ticket {ticket_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.tool_hooks) = "execute";
+
+  // Ordered: the ticket before the file, then the file's presence before its
+  // shape, so a caller hears about one thing at a time in the order they would
+  // fix them.
+  option (buf.validate.message).cel = {
+    id: "support_ticket_attachment_create.ticket_id.positive"
+    message: "ticket_id must be a positive integer"
+    expression: "this.ticket_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_attachment_create.file.required"
+    message: "file is required"
+    expression: "this.file.matches('[^ \\t\\r\\n]')"
+  };
+  // Absoluteness is decided by the path text rather than by the host the server
+  // happens to run on: both hand-written checks asked their own OS, so the same
+  // call was legal on one platform and refused on another.
+  option (buf.validate.message).cel = {
+    id: "support_ticket_attachment_create.file.absolute"
+    message: "file must be a local, absolute path"
+    expression: "this.file.startsWith('/') || this.file.matches('^[A-Za-z]:')"
+  };
+  option (buf.validate.message).cel = {
+    id: "support_ticket_attachment_create.file.extension"
+    message: "file must have an accepted extension: .gif, .jpg, .jpeg, .pjpg, .pjpeg, .tif, .tiff, .png, .pdf, or .txt"
+    expression: "this.file.matches('(?i)\\\\.(gif|jpe?g|pjpe?g|tiff?|png|pdf|txt)$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Support ticket ID to attach the file to.
   int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // Attachment file content or reference accepted by the Linode API.
+  // Absolute path to the local file to upload. Its contents become the
+  // multipart body; the path itself never reaches the API.
   string file = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm support ticket attachment creation. Ignored when
   // dry_run=true.

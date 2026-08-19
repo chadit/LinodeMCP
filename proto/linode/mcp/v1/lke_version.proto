@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // LKEVersion is one Kubernetes version available for LKE.
@@ -28,6 +29,21 @@ message LKEVersionGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEVersion";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific Kubernetes version available for LKE";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve LKE version '{version}': {error}";
+
+  // The version is spliced into the path, so anything that would escape its
+  // segment is refused before the call is made.
+  option (buf.validate.message).cel = {
+    id: "lke_version_get.version.required"
+    message: "version is required"
+    expression: "this.version != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_version_get.version.path_safe"
+    message: "version must be a Kubernetes version ID"
+    expression: "!this.version.contains('/') && !this.version.contains('?') && !this.version.contains('..')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -44,6 +60,7 @@ message LKEVersionListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEVersionListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available Kubernetes versions for LKE clusters";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/common.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -76,6 +77,8 @@ message VolumeGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeGetResponse";
+  option (linode.mcp.v1.tool_description) = "Gets details for a single block storage volume by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve volume {volume_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -93,6 +96,7 @@ message VolumeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all block storage volumes for the authenticated user with optional filtering by region or label";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -115,6 +119,7 @@ message VolumeTypeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeTypeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available Linode block storage volume types and pricing";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -131,9 +136,82 @@ message VolumeCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new block storage volume. WARNING: Billing starts immediately. Use linode_region_list to find valid regions.";
+  option (linode.mcp.v1.error_message) = "Failed to create volume: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume '{label}' (ID: {id}) created successfully in {region}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The size-free wordings answer the call that leaves sizing to the API, which
+  // takes its own default rather than the zero the older prose reported.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new {size} GB volume \"{label}\" will be created in region {region}."
+    template: "A new {size} GB volume \"{label}\" will be created."
+    template: "A new volume \"{label}\" will be created in region {region}."
+    template: "A new volume \"{label}\" will be created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // A detached volume is legal, so this whole line is dropped when the call
+  // names no instance to attach to.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The volume is attached to instance {linode_id} on creation."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Billing for the volume starts immediately on creation."
+    line: PREVIEW_LINE_WARNING
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
+
+  // The rules run in the order written, which is the order this tool has always
+  // answered in: the label, then where the volume lands, then how big it is.
+  option (buf.validate.message).cel = {
+    id: "volume_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_create.placement.required"
+    message: "either region or linode_id is required"
+    expression: "this.region != '' || this.linode_id != 0"
+  };
+  // An absent size takes the API default, so the bounds hold their peace at
+  // zero rather than reporting a volume nobody asked to size.
+  option (buf.validate.message).cel = {
+    id: "volume_create.size.minimum"
+    message: "volume size must be at least 10 GB"
+    expression: "this.size == 0 || this.size >= 10"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_create.size.maximum"
+    message: "volume size cannot exceed 10240 GB (10 TB)"
+    expression: "this.size <= 10240"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_create.label.length"
+    message: "label must not exceed 64 characters"
+    expression: "size(this.label) <= 64"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_create.label.charset"
+    message: "label contains an invalid character; use letters, digits, '_', '-', or '.'"
+    expression: "this.label.matches('^[A-Za-z0-9_.-]*$')"
+  };
+  // A config the caller supplied names a Linode config, so zero and below is a
+  // value no config carries rather than one left to the API.
+  option (buf.validate.message).cel = {
+    id: "volume_create.config_id.minimum"
+    message: "config_id must be an integer greater than or equal to 1"
+    expression: "!has(this.config_id) || this.config_id >= 1"
+  };
+  // An encryption argument naming no member arrives as the enum's zero, the
+  // same as an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "volume_create.encryption.known"
+    message: "encryption must be one of: disabled, enabled"
+    expression: "!has(this.encryption) || this.encryption != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -171,15 +249,44 @@ message VolumeCloneInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Clones an existing block storage volume. WARNING: Billing starts immediately for the cloned volume. Pass dry_run=true to preview without cloning.";
+  option (linode.mcp.v1.error_message) = "Failed to clone volume {volume_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation creates a billable cloned volume. Set confirm=true to proceed.";
-  option (linode.mcp.v1.success_message) = "Volume {volume_id} cloned successfully as {label}";
+  option (linode.mcp.v1.success_message) = "Volume {volume_id} cloned successfully as \"{label}\"";
+  // A clone POST mints a new volume with its own id, so replaying it after a
+  // transient failure leaves a second billable copy nobody asked for.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The preview reads the source volume so it can price the copy.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // Both rules hold their peace until the id is usable and the label is
+  // non-empty, because those two are the readers' to answer: an unusable id
+  // arrives as the zero a missing one does, and an absent label as the empty
+  // string. Rules run before the readers, so a rule answering for them would
+  // take their turn.
+  option (buf.validate.message).cel = {
+    id: "volume_clone.label.length"
+    message: "label must not exceed 64 characters"
+    expression: "this.volume_id < 1 || this.label == '' || size(this.label) <= 64"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_clone.label.charset"
+    message: "label contains an invalid character; use letters, digits, '_', '-', or '.'"
+    expression: "this.volume_id < 1 || this.label == '' || this.label.matches('^[A-Za-z0-9_.-]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the source volume to clone.
-  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 volume_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // A label for the cloned volume.
-  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string label = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Must be set to true to confirm volume cloning. This operation incurs
   // billing charges. Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -198,8 +305,34 @@ message VolumeAttachInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Attaches a block storage volume to a Linode instance. The volume and instance must be in the same region.";
+  option (linode.mcp.v1.error_message) = "Failed to attach volume {volume_id} to Linode {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This attaches a block storage volume to an instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume {volume_id} attached to Linode {linode_id} successfully";
+  // The read is the volume the attach moves, and it answers a wrapper around
+  // the body the API sends, so the fetch projects through that member.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_volume_get"
+    payload_member: "volume"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Volume {volume_id} attaches to instance {linode_id}; the volume must be in the same region as the instance."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
+
+  option (buf.validate.message).cel = {
+    id: "volume_attach.volume_id.required"
+    message: "volume_id is required"
+    expression: "this.volume_id != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_attach.linode_id.required"
+    message: "linode_id is required"
+    expression: "this.linode_id != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -228,8 +361,13 @@ message VolumeDetachInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeDetachResponse";
+  option (linode.mcp.v1.tool_description) = "Detaches a block storage volume from a Linode instance. The volume data is preserved. Pass dry_run=true to preview without detaching.";
+  option (linode.mcp.v1.error_message) = "Failed to detach volume {volume_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This detaches a block storage volume from an instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume {volume_id} detached successfully";
+  // The preview reads the volume and says which instance it comes off, which
+  // is prose over fetched state and nothing a descriptor carries.
+  option (linode.mcp.v1.tool_hooks) = "preview";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -252,8 +390,31 @@ message VolumeResizeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resizes a block storage volume. WARNING: Volumes can only be resized UP. This operation may incur additional billing.";
+  option (linode.mcp.v1.error_message) = "Failed to resize volume {volume_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume {volume_id} resize to {size} GB initiated successfully";
+  // The preview reads the volume so it can say what the resize costs over the
+  // size it already has.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "volume_resize.volume_id.required"
+    message: "volume_id is required"
+    expression: "this.volume_id != 0"
+  };
+  // A resize names the new size, so an absent one is a size below the floor
+  // rather than a value left to the API.
+  option (buf.validate.message).cel = {
+    id: "volume_resize.size.minimum"
+    message: "volume size must be at least 10 GB"
+    expression: "this.size >= 10"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_resize.size.maximum"
+    message: "volume size cannot exceed 10240 GB (10 TB)"
+    expression: "this.size <= 10240"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -280,8 +441,43 @@ message VolumeUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a block storage volume's label or tags.";
+  // Go and Python worded this failure differently before the contract carried
+  // it. The Python wording wins the verb because every other declared failure
+  // on the surface opens with it, and the Go id is kept because naming the
+  // volume is what tells one failed update from another.
+  option (linode.mcp.v1.error_message) = "Failed to update volume {volume_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a block storage volume. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume {volume_id} updated successfully";
+  // The preview reads the volume so it can say which label and tags are being
+  // replaced.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  // An update naming neither field would change nothing, and only the
+  // argument map can see that tags was supplied: an empty array clears the
+  // volume's tags, which is a change worth making, and presence on a repeated
+  // field is not something a rule can see.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "label"
+    fields: "tags"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "volume_update.volume_id.positive"
+    message: "volume_id must be a positive integer"
+    expression: "this.volume_id >= 1"
+  };
+  // The label shape sentences the update has always answered. A wrong-type
+  // label never builds the message, so the body builder answers that case.
+  option (buf.validate.message).cel = {
+    id: "volume_update.label.length"
+    message: "label must not exceed 64 characters"
+    expression: "!has(this.label) || size(this.label) <= 64"
+  };
+  option (buf.validate.message).cel = {
+    id: "volume_update.label.charset"
+    message: "label contains an invalid character; use letters, digits, '_', '-', or '.'"
+    expression: "!has(this.label) || this.label.matches('^[A-Za-z0-9_.-]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -309,8 +505,22 @@ message VolumeDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Volume {volume_id} removed successfully";
   option (linode.mcp.v1.resource_type) = "Volume";
+  // A replay would report a volume the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read answers a wrapper around the volume the API's own body is, so the
+  // fetch projects through the member rather than the envelope.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_volume_get"
+    payload_member: "volume"
+  };
+  // The walk names the instance the data comes off, which is what makes an
+  // irreversible delete worth previewing.
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -340,11 +550,15 @@ message InstanceVolumeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists volumes attached to a Linode instance with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).

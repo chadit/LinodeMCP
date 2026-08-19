@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // Kernel mirrors a Linode kernel.
@@ -35,11 +36,30 @@ message KernelGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Kernel";
+  option (linode.mcp.v1.tool_description) = "Gets one Linode kernel by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve kernel: {error}";
+
+  // One sentence covers every way the id can fail, which is what the hand
+  // readers answered. Surrounding space is tolerated because they trimmed
+  // before judging, and the percent sign is refused because a percent-encoded
+  // separator addresses a route the caller did not spell.
+  option (buf.validate.message).cel = {
+    id: "kernel_get.kernel_id.identifier"
+    message: "kernel_id must be a kernel identifier like linode/latest-64bit"
+    expression: "this.kernel_id.matches('(?s)^\\\\s*linode/[^/]*[^/\\\\s]\\\\s*$') && !this.kernel_id.contains('?') && !this.kernel_id.contains('#') && !this.kernel_id.contains('..') && !this.kernel_id.contains('%')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the kernel to retrieve, such as linode/latest-64bit (required).
-  string kernel_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string kernel_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FREE_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "kernel_id must be a kernel identifier like linode/latest-64bit"
+      unusable: "kernel_id must be a kernel identifier like linode/latest-64bit"
+    }
+  ];
 }
 
 // KernelListInput is the input contract for linode_kernel_list.
@@ -51,6 +71,7 @@ message KernelListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.KernelListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available Linode kernels with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

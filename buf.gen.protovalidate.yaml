@@ -1,0 +1,22 @@
+# Generates the Python messages for buf/validate/validate.proto into this
+# repo's generated tree.
+#
+# protovalidate's own runtime does `from buf.validate import validate_pb2`, and
+# its published wheel does not ship that module: `pip install protovalidate`
+# followed by `import protovalidate` raises ModuleNotFoundError on 1.2.0, and on
+# every earlier release whose wheel was checked. Its own build generates the
+# module the same way this does, so generating it here is the supported path
+# rather than a workaround for one bad release.
+#
+# Deliberately not merged into buf.gen.yaml: that template runs `clean: true`
+# and generates from this repo's modules, while this one generates from the
+# dependency. Running it separately, and after, is what keeps the wipe from
+# taking this output with it. Only the Python plugins run because Go reads the
+# same messages from the module proxy, and a JSON Schema for a validation option
+# would be a schema no tool advertises.
+version: v2
+plugins:
+  - remote: buf.build/protocolbuffers/python:v35.1
+    out: python/src/linodemcp/genpb
+  - remote: buf.build/protocolbuffers/pyi:v35.1
+    out: python/src/linodemcp/genpb

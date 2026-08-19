@@ -4,10 +4,26 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
+// ProfileReferrals is the referral standing the profile reports: the caller's
+// own referral code and link plus the counts credited against it.
+message ProfileReferrals {
+  string code = 1;
+  int32 completed = 2;
+  int32 credit = 3;
+  int32 pending = 4;
+  int32 total = 5;
+  string url = 6;
+}
+
 // Profile mirrors the authenticated user's Linode profile.
+//
+// scopes is not in the reviewed spec snapshot but the API sends it for a
+// personal access token, so it stays. authorized_keys and verified_phone_number
+// arrive as JSON null when unset.
 message Profile {
   string username = 1;
   string email = 2;
@@ -17,6 +33,12 @@ message Profile {
   bool restricted = 6;
   bool two_factor_auth = 7;
   string scopes = 8;
+  string authentication_type = 9;
+  repeated string authorized_keys = 10;
+  bool ip_whitelist_enabled = 11;
+  string lish_auth_method = 12;
+  ProfileReferrals referrals = 13;
+  string verified_phone_number = 14;
 }
 
 // ProfileGetInput is the input contract for linode_profile_get (the singular
@@ -29,9 +51,107 @@ message ProfileGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Profile";
+  option (linode.mcp.v1.tool_description) = "Retrieves Linode user account profile information";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve the profile: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// ProfileLishAuthMethod is how the caller may authenticate to the Linode Shell.
+// See the enum-wrapper convention in nodebalancer_config.proto.
+message ProfileLishAuthMethod {
+  enum Value {
+    unspecified = 0;
+    password_keys = 1;
+    keys_only = 2;
+    disabled = 3;
+  }
+}
+
+// ProfileWriteResponse is the linode_profile_update envelope: a confirmation
+// message plus the profile the API returned.
+message ProfileWriteResponse {
+  string message = 1;
+  Profile profile = 2;
+}
+
+// ProfileUpdateInput is the input contract for linode_profile_update. The route
+// changes the members it is given and leaves the rest, so every body field is
+// optional and a call naming none is refused rather than sent.
+//
+// ip_whitelist_enabled is deliberately absent. The spec marks it deprecated and
+// one-way: it can no longer be enabled, so a caller who disables it through this
+// tool could never undo it.
+message ProfileUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_update"
+    method: "PUT"
+    path: "/profile"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the authenticated user's own profile: email, timezone, notification and Lish settings, and the account restriction and two-factor flags. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This changes your own Linode profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile updated";
+  option (linode.mcp.v1.error_message) = "Failed to update profile: {error}";
+
+  // An empty authorized_keys counts as absent here: CEL cannot tell one from a
+  // list the caller never sent, and clearing the keys is what lish_auth_method
+  // disabled is for.
+  option (buf.validate.message).cel = {
+    id: "profile_update.any"
+    message: "at least one update field is required: email, timezone, email_notifications, authorized_keys, lish_auth_method, restricted, or two_factor_auth"
+    expression: "has(this.email) || has(this.timezone) || has(this.email_notifications) || size(this.authorized_keys) > 0 || has(this.lish_auth_method) || has(this.restricted) || has(this.two_factor_auth)"
+  };
+  // A string naming no member of the enum is set to its zero and marked
+  // present, which is what separates a wrong value from an absent one.
+  option (buf.validate.message).cel = {
+    id: "profile_update.lish_auth_method.known"
+    message: "lish_auth_method must be one of: password_keys, keys_only, disabled"
+    expression: "!has(this.lish_auth_method) || this.lish_auth_method != 0"
+  };
+  // Only blankness is checked: the API is the authority on what address it
+  // accepts, and a blank one is the mistake worth catching before the call.
+  option (buf.validate.message).cel = {
+    id: "profile_update.email.present"
+    message: "email must not be blank"
+    expression: "!has(this.email) || this.email.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "profile_update.authorized_keys.entries"
+    message: "authorized_keys entries must not be blank"
+    expression: "this.authorized_keys.all(k, k.matches('[^ \\t\\r\\n]'))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // New contact address for Akamai Cloud Computing communication (optional).
+  optional string email = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Time zone clients such as Cloud Manager display assets in (optional). The
+  // API itself still answers in UTC.
+  optional string timezone = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Receive email about account activity (optional). Business-critical mail
+  // still arrives when this is false.
+  optional bool email_notifications = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Complete replacement set of SSH keys for Lish access (optional). Ignored
+  // when lish_auth_method is disabled.
+  repeated string authorized_keys = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // How Lish authenticates (optional). keys_only is the most secure if Lish is
+  // in use; disabled turns Lish off.
+  optional ProfileLishAuthMethod.Value lish_auth_method = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Restrict what this user can reach on the account (optional). Their access
+  // is then whatever their grants allow.
+  optional bool restricted = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Require two-factor authentication from an untrusted computer (optional).
+  // Turning this on also needs the two-factor secret to be created.
+  optional bool two_factor_auth = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm changing your own profile. Ignored when
+  // dry_run=true.
+  bool confirm = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileGrantsGetInput is the input contract for linode_profile_grants_get
@@ -79,11 +199,16 @@ message ProfileAppGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileApp";
+  option (linode.mcp.v1.tool_description) = "Gets one OAuth app authorization from the profile.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve authorized app {app_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the authorized app to retrieve (required).
-  int32 app_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 app_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // TrustedDevice mirrors one trusted device on the authenticated profile
@@ -238,6 +363,8 @@ message ProfilePreferencesGetInput {
     path: "/profile/preferences"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_description) = "Retrieves Linode user preference settings";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve profile preferences: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -247,7 +374,7 @@ message ProfilePreferencesGetInput {
 // linode_profile_preferences_update. preferences is a free-form key/value object
 // the API round-trips, so it maps to a google.protobuf.Value map. It is required
 // at runtime but a map field cannot be marked required in the generated schema,
-// so the required flag is dropped (the handler still enforces presence).
+// so the required flag is dropped (body_root enforces presence).
 message ProfilePreferencesUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_profile_preferences_update"
@@ -256,14 +383,23 @@ message ProfilePreferencesUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfilePreferencesUpdateResponse";
+  option (linode.mcp.v1.tool_description) = "Updates dashboard preferences for the authenticated profile. The call replaces the stored preferences with the ones supplied rather than merging them.";
   option (linode.mcp.v1.confirm_message) = "This updates profile preferences. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Profile preferences updated successfully";
+  option (linode.mcp.v1.error_message) = "Failed to update profile preferences: {error}";
+  // The route replaces the stored preferences rather than merging them, so a
+  // replay reapplies a blob someone else may have changed since the first call.
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Free-form user preferences to store. Required at runtime, though the
-  // generated schema cannot mark a map field required.
-  map<string, google.protobuf.Value> preferences = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Free-form user preferences to store. The route reads them at the root of
+  // the request body rather than under a member of it, unlike the firewall
+  // settings PUT whose map does nest.
+  map<string, google.protobuf.Value> preferences = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_root) = true
+  ];
   // Must be true to confirm updating profile preferences. Ignored when
   // dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -281,6 +417,7 @@ message ProfileAppListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileAppListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists OAuth app authorizations for the authenticated profile.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -299,7 +436,24 @@ message ProfileAppDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileAppIDResponse";
+  option (linode.mcp.v1.tool_description) = "Revokes OAuth app access from the authenticated profile.";
+  option (linode.mcp.v1.error_message) = "Failed to revoke profile app: {error}";
   option (linode.mcp.v1.confirm_message) = "This revokes OAuth app access. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile app {app_id} revoked successfully";
+  // Neither language retried this DELETE, and a replay would report a revoke
+  // that already happened as a missing app.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the authorization the revoke ends, which is the whole answer
+  // either language gave.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_profile_app_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "profile_app_delete.app_id.positive"
+    message: "app_id must be a positive integer"
+    expression: "this.app_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -321,6 +475,8 @@ message ProfileDeviceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TrustedDeviceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists trusted devices for the authenticated profile.";
+  option (linode.mcp.v1.list_envelope) = {shape: SHAPE_REQUIRED_DATA};
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -339,11 +495,16 @@ message ProfileDeviceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TrustedDevice";
+  option (linode.mcp.v1.tool_description) = "Gets one trusted device from the profile.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve trusted device {device_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Profile trusted device ID.
-  int32 device_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 device_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // ProfileDeviceRevokeInput is the input contract for
@@ -356,7 +517,23 @@ message ProfileDeviceRevokeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDeviceIDResponse";
+  option (linode.mcp.v1.tool_description) = "Revokes a trusted device from the authenticated profile.";
+  option (linode.mcp.v1.error_message) = "Failed to revoke profile trusted device: {error}";
   option (linode.mcp.v1.confirm_message) = "This revokes a trusted device. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile trusted device {device_id} revoked successfully";
+  // Neither language retried this DELETE, and a replay would report a revoke
+  // that already happened as a missing device.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the session the revoke ends.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_profile_device_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "profile_device_revoke.device_id.positive"
+    message: "device_id must be a positive integer"
+    expression: "this.device_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -378,6 +555,7 @@ message ProfileTokenListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessTokenListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists personal access tokens for the authenticated profile.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -396,11 +574,16 @@ message ProfileTokenGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessToken";
+  option (linode.mcp.v1.tool_description) = "Gets one personal access token by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve personal access token {token_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Personal access token ID to retrieve.
-  int32 token_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 token_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // ProfileTokenCreateInput is the input contract for linode_profile_token_create.
@@ -412,7 +595,31 @@ message ProfileTokenCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTokenCreateResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a personal access token for the authenticated profile. Pass dry_run=true to preview without creating a token.";
+  option (linode.mcp.v1.error_message) = "Failed to create profile token: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a personal access token. Set confirm=true to proceed.";
+  option (linode.mcp.v1.warning_message) = "IMPORTANT: The token below is shown ONLY ONCE. Save it now - it cannot be retrieved later.";
+  // Neither language retried this POST; a replay mints a second credential the
+  // caller never sees the secret for.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The two values are trimmed before anything reads them, which Python has
+  // always sent trimmed.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "scopes"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The token is named when the caller labelled it, and the secret is shown
+  // once either way.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new personal access token \"{label}\" will be created."
+    template: "A new personal access token will be created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The token secret is returned only once, at creation time."
+    line: PREVIEW_LINE_WARNING
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -439,8 +646,41 @@ message ProfileTokenUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessTokenWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a personal access token for the authenticated profile.";
+  option (linode.mcp.v1.error_message) = "Failed to update profile token: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a personal access token. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Profile token updated successfully";
+  // Go's hand path sent this PUT through no retry wrapper, so declaring the
+  // retry off keeps the two clients answering a transport failure the same way.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the token whose label the update replaces. A call naming no
+  // label reads the second wording, which names none either.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_profile_token_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The personal access token's label is set to \"{label}\"."
+    template: "The personal access token is updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rules run in the order written, so a call breaking more than one hears
+  // the id first: an unusable id makes the label question moot.
+  option (buf.validate.message).cel = {
+    id: "profile_token_update.token_id.positive"
+    message: "token_id must be a positive integer"
+    expression: "this.token_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "profile_token_update.label.required"
+    message: "label is required"
+    expression: "has(this.label)"
+  };
+  option (buf.validate.message).cel = {
+    id: "profile_token_update.label.non_blank"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -466,8 +706,23 @@ message ProfileTokenDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTokenIDResponse";
+  option (linode.mcp.v1.tool_description) = "Revokes a personal access token for the authenticated profile. Pass dry_run=true to preview without revoking the token.";
+  option (linode.mcp.v1.error_message) = "Failed to revoke profile token: {error}";
   option (linode.mcp.v1.confirm_message) = "This revokes a personal access token. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Profile token {token_id} revoked successfully";
+  // Neither language retried this DELETE, and a replay would report a revoke
+  // that already happened as a missing token.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the token, so a caller sees the label behind the id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_profile_token_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "profile_token_delete.token_id.positive"
+    message: "token_id must be a positive integer"
+    expression: "this.token_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -490,7 +745,18 @@ message ProfileTfaEnableInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTfaEnableResponse";
+  option (linode.mcp.v1.tool_description) = "Generates a two-factor authentication secret for the authenticated profile. The secret must be confirmed with the API before two-factor authentication is enabled.";
+  option (linode.mcp.v1.error_message) = "Failed to generate profile two-factor authentication secret: {error}";
   option (linode.mcp.v1.confirm_message) = "This generates a two-factor authentication secret. Set confirm=true to proceed.";
+  option (linode.mcp.v1.warning_message) = "IMPORTANT: Save this two-factor authentication secret now. It must be confirmed before two-factor authentication is enabled.";
+  // Neither language retried this POST; a replay would mint a second secret and
+  // strand the one the caller was told to save.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // A generated secret is not yet in force, which the call alone does not say.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new two-factor authentication secret is generated; it must be confirmed before two-factor authentication becomes active."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -511,8 +777,23 @@ message ProfileTfaDisableInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Disables two-factor authentication for the authenticated profile.";
+  option (linode.mcp.v1.error_message) = "Failed to disable two-factor authentication: {error}";
   option (linode.mcp.v1.confirm_message) = "This disables two-factor authentication for the profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Profile two-factor authentication disabled successfully";
+  // Neither language retried this POST; a replay would report the caller's own
+  // completed disable as a profile that already had two-factor off.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // Turning two-factor off is a downgrade, and the preview is the last place
+  // to say so before it happens.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Two-factor authentication is disabled for this profile."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Disabling two-factor authentication reduces account security."
+    line: PREVIEW_LINE_WARNING
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -534,13 +815,43 @@ message ProfileTfaEnableConfirmInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTfaEnableConfirmResponse";
+  option (linode.mcp.v1.tool_description) = "Confirms two-factor authentication enablement for the authenticated profile with a TFA code.";
+  option (linode.mcp.v1.error_message) = "Failed to confirm profile two-factor authentication: {error}";
   option (linode.mcp.v1.confirm_message) = "This enables two-factor authentication for the profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Profile two-factor authentication enabled successfully";
+  // The account-recovery code and its expiry come back in the answer and no
+  // argument carries either, so the envelope is what the body decodes into.
+  option (linode.mcp.v1.response_body_fields) = "scratch";
+  option (linode.mcp.v1.response_body_fields) = "expiry";
+  // Neither language retried this POST; the code is single-use, so a replay
+  // reports the caller's own first attempt back to them as a bad code.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The code is trimmed before anything reads it, which Python has always
+  // sent trimmed.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "tfa_code"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // What confirming the secret turns on, which the request body does not say.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Two-factor authentication is enabled for this profile."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "profile_tfa_enable_confirm.tfa_code.non_blank"
+    message: "tfa_code must be a non-empty string"
+    expression: "this.tfa_code.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Two-factor authentication code to confirm enablement.
-  string tfa_code = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Two-factor authentication code to confirm enablement. The preview redacts
+  // it: it authenticates the caller, so it does not belong in an echoed request.
+  string tfa_code = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Must be true to confirm enabling profile two-factor authentication.
   // Ignored when dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -559,7 +870,35 @@ message ProfilePhoneNumberSendInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Sends a verification code to a profile phone number.";
+  option (linode.mcp.v1.error_message) = "Failed to send profile phone number verification code: {error}";
   option (linode.mcp.v1.confirm_message) = "This sends a phone number verification code. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile phone number verification code sent successfully";
+  // Neither language retried this POST; a replay sends the caller a second SMS.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The two values are trimmed before anything reads them, which Python has
+  // always sent trimmed.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "iso_code"
+    field: "phone_number"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The SMS leaving is the consequence; the request only carries the number.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A verification code is sent to the supplied phone number."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "profile_phone_number_send.iso_code.non_blank"
+    message: "iso_code must be a non-empty string"
+    expression: "this.iso_code.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "profile_phone_number_send.phone_number.non_blank"
+    message: "phone_number must be a non-empty string"
+    expression: "this.phone_number.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -586,8 +925,13 @@ message ProfilePhoneNumberDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes the authenticated profile phone number.";
+  option (linode.mcp.v1.error_message) = "Failed to delete profile phone number: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes the profile phone number. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Profile phone number deleted successfully";
+  // Neither language retried this DELETE; a replay would report a number the
+  // caller had just removed as one the profile never had.
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -609,12 +953,39 @@ message ProfilePhoneNumberVerifyInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Verifies a profile phone number with a one-time SMS code.";
+  option (linode.mcp.v1.error_message) = "Failed to verify profile phone number: {error}";
   option (linode.mcp.v1.confirm_message) = "This verifies a profile phone number. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile phone number verified successfully";
+  // Neither language retried this POST; the code is single-use, so a replay
+  // reports the caller's own first attempt back to them as a bad code.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The code is trimmed before anything reads it, which Python has always
+  // sent trimmed.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "otp_code"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // Where the verified number lands, which the code alone does not say.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The phone number is verified and added to the profile."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "profile_phone_number_verify.otp_code.non_blank"
+    message: "otp_code must be a non-empty string"
+    expression: "this.otp_code.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // One-time SMS code sent to the profile phone number.
-  string otp_code = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // One-time SMS code sent to the profile phone number. The preview redacts it:
+  // it authenticates the number, so it does not belong in an echoed request.
+  string otp_code = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Must be true to confirm verifying the phone number. Ignored when
   // dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -634,17 +1005,32 @@ message SecurityQuestionListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SecurityQuestionListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available profile security questions for the authenticated profile";
+  option (linode.mcp.v1.list_envelope) = {
+    shape: SHAPE_KEYED
+    member: "security_questions"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
+// SecurityQuestionAnswerItem is one {question_id, response} answer in the
+// security_questions array of linode_profile_security_question_answer. Both
+// members are required: an answer naming no question, or a question with no
+// answer, is not something the API can store.
+message SecurityQuestionAnswerItem {
+  // The security question being answered.
+  int32 question_id = 1;
+  // The answer text, between 3 and 17 characters.
+  string response = 2;
+}
+
 // SecurityQuestionAnswerInput is the input contract for
 // linode_profile_security_question_answer. security_questions is a required
-// array of {question_id, response} objects the handler validates; a repeated
-// field cannot be marked required in the generated schema, so the required flag
-// is dropped (the handler still enforces presence). The item detail (per-object
-// question_id/response) is not carried in the generated schema either.
+// array of {question_id, response} objects; a repeated field cannot be marked
+// required in the generated schema, so the required flag is dropped and the
+// count rule below is what refuses a call that sends none.
 message SecurityQuestionAnswerInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_profile_security_question_answer"
@@ -653,15 +1039,48 @@ message SecurityQuestionAnswerInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Answers security questions for the authenticated profile. Pass dry_run=true to preview without submitting.";
+  option (linode.mcp.v1.error_message) = "Failed to answer profile security questions: {error}";
   option (linode.mcp.v1.confirm_message) = "This submits profile security question answers. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Profile security questions answered successfully";
+  // Neither language retried this POST; a replay would answer the questions a
+  // second time with material the caller only meant to send once.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // preview reports the answers redacted, one item at a time, so the question
+  // ids stay readable while the answers themselves never leave.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // Ordered: the count is checked before the items, because a caller who sent
+  // the wrong number of answers has not yet been asked about any one of them.
+  option (buf.validate.message).cel = {
+    id: "profile_security_question_answer.security_questions.count"
+    message: "security_questions must contain exactly 3 answers"
+    expression: "size(this.security_questions) == 3"
+  };
+  option (buf.validate.message).cel = {
+    id: "profile_security_question_answer.question_id.positive"
+    message: "question_id must be a positive integer"
+    expression: "this.security_questions.all(answer, answer.question_id >= 1)"
+  };
+  // Counted rather than compared through unique(): the two runtimes evaluate
+  // the same rule text through different CEL engines, and all/filter/size are
+  // what both are already proven on.
+  option (buf.validate.message).cel = {
+    id: "profile_security_question_answer.question_id.unique"
+    message: "question_id values must be unique"
+    expression: "this.security_questions.all(answer, size(this.security_questions.filter(other, other.question_id == answer.question_id)) == 1)"
+  };
+  option (buf.validate.message).cel = {
+    id: "profile_security_question_answer.response.length"
+    message: "response length must be between 3 and 17 characters"
+    expression: "this.security_questions.all(answer, size(answer.response) >= 3 && size(answer.response) <= 17)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // The security question answers to submit. Each entry is an object with a
-  // question_id and a response. Required at runtime, though the generated schema
-  // cannot mark a repeated field required.
-  repeated google.protobuf.Struct security_questions = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The security question answers to submit. Required at runtime, though the
+  // generated schema cannot mark a repeated field required.
+  repeated SecurityQuestionAnswerItem security_questions = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm answering security questions. Ignored when
   // dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

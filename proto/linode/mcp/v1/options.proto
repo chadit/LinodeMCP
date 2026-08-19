@@ -46,6 +46,79 @@ message ToolMeta {
   string tool = 1;
 }
 
+// ListEnvelope says which JSON shape a list route answers with, so a client
+// decodes the body the API actually sends rather than the one most routes send.
+//
+// Nearly every Linode collection arrives as the page envelope {data, page,
+// pages, results}, which is why absence means that one. A handful answer
+// otherwise, and the difference is invisible from the response message: a
+// response carrying a count beside one repeated field looks identical whether
+// the wire put those elements under "data", under a name of their own, or in a
+// bare array. Without this declaration a generated reader assumes "data" and
+// answers a real collection as an empty page, reporting success.
+message ListEnvelope {
+  // Shape is the member arrangement the route's body uses.
+  enum Shape {
+    // No declaration, read as the standard page envelope.
+    SHAPE_UNSPECIFIED = 0;
+    // {data: [...]} where an absent or null data member reads as an empty
+    // page, which is the standard Linode collection.
+    SHAPE_DATA = 1;
+    // {data: [...]} where an absent or null data member is a malformed body
+    // rather than an empty page. Routes whose emptiness would be read as a
+    // meaningful "none" (remembered browser sessions) decode through this so a
+    // truncated body cannot pass as a safe answer.
+    SHAPE_REQUIRED_DATA = 2;
+    // The elements sit under a member of their own, named by `member`:
+    // /profile/security-questions answers {security_questions: [...]}.
+    SHAPE_KEYED = 3;
+    // The body is a top-level JSON array with no envelope around it.
+    SHAPE_BARE = 4;
+    // The body is one object, which is the collection's only element:
+    // /networking/firewalls/{id}/history answers the current rule version
+    // rather than a page of them. Decoding it as any of the shapes above
+    // answers a real snapshot as an empty collection.
+    SHAPE_SINGLETON = 5;
+    // {data: [...], is_truncated: bool, next_marker: string}, the S3-backed
+    // object list. It pages by a cursor rather than by number, so `marker`,
+    // `page` and `page_size` are the cursor controls the request forwards
+    // verbatim rather than the numeric pair the shared page reader owns, and
+    // page_size may be declared as text. Every other query argument narrows
+    // which objects come back, so those are what the answer echoes as its
+    // filter. is_truncated and next_marker fill the response members of the
+    // same name; read as any shape above they would be dropped, and a caller
+    // holding a truncated page would have no cursor to resume from.
+    SHAPE_MARKER = 6;
+  }
+
+  Shape shape = 1;
+  // The member holding the elements, set only for SHAPE_KEYED.
+  string member = 2;
+  // Element members the route nests one level down, hoisted onto the element
+  // after the decode. The firewall history's version sits inside its rules
+  // object, and the shared FirewallRules message declares no version, so
+  // without this the element answers with the zero the decode left there.
+  repeated ElementLift lift = 3;
+}
+
+// ElementLift is one element member filled from a value the route nests
+// somewhere else in the same element body.
+//
+// It is declared rather than derived because both spellings are the same
+// element message: nothing in the descriptors says which of an element's
+// members the API sends at the top and which it nests. Emitting the plain
+// decode there is not a failure a caller can see, which is what makes the
+// declaration load-bearing: the member reads back as its zero, and a version 0
+// looks like a real snapshot.
+message ElementLift {
+  // The element member to fill.
+  string member = 1;
+  // Where the value comes from in the element body, as a dotted path from its
+  // root: "rules.version". Named source rather than from because from is a
+  // Python keyword, which the generated attribute cannot be.
+  string source = 2;
+}
+
 // ToolCapability is the permission tier a tool is registered under, which is
 // what a profile filters on. Declaring it here makes the descriptors answer
 // which tools exist and what each one is allowed to do, so a startup check and
@@ -65,6 +138,21 @@ enum ToolCapability {
   // Reaches no Linode route at all, working on local config or session state.
   // Exactly the tools that carry tool_meta rather than tool_route.
   TOOL_CAPABILITY_META = 5;
+}
+
+// ApiSurface is where a route answers. Both clients build every URL from one
+// configured base, so a route living only under /v4beta is unreachable unless
+// the contract says so and the client picks the base per call.
+//
+// The zero value means v4 because that is what nearly every route answers on,
+// which is what keeps the surface already there carrying no annotation.
+enum ApiSurface {
+  API_SURFACE_UNSPECIFIED = 0;
+  API_SURFACE_V4 = 1;
+  // Linode's beta-only paths. Answering one of these on /v4 is a 404, and
+  // answering a v4 route here reaches a different resource surface, so the
+  // choice is per route rather than per deployment.
+  API_SURFACE_V4BETA = 2;
 }
 
 extend google.protobuf.MessageOptions {
@@ -143,6 +231,11 @@ extend google.protobuf.MessageOptions {
   // bill for it: allocating an address, cloning a disk, opening a ticket. The
   // client libraries each carry their own copy of this judgment today and the
   // two copies disagree, which is the drift this option exists to end.
+  //
+  // Every DELETE declares it for a second reason: a replay reports a resource
+  // the first attempt already removed as one that never existed, and
+  // auto-replaying a destructive call is the surprise the two-stage destroy
+  // flow exists to prevent.
   bool retry_disabled = 50009;
 
   // The sentence a tool advertises to a client as its description, exactly as
@@ -167,6 +260,573 @@ extend google.protobuf.MessageOptions {
   // served it. Left unset by tools whose failure text is not per-tool, such as
   // the list surface, where one shared sentence covers every collection.
   string error_message = 50011;
+
+  // The steps of this tool's handler that are hand-written rather than derived
+  // from the rest of the contract, named by kind. A generator can produce the
+  // whole mechanical skeleton of a tool, but some tools need a step nothing in
+  // the descriptors can express, and this is where the tool says so.
+  //
+  // Kinds:
+  //   normalize   Rewrites the tool's arguments in place before anything
+  //               reads them and answers nothing: the handler goes on to read
+  //               the same map it was given. It runs first, so every check
+  //               below sees the value the request will actually carry. Prefer
+  //               a normalize_fields declaration: a named transform is one word
+  //               both languages render, a hook is two copies of it. What is
+  //               left here is the rewrites no transform spells, such as
+  //               folding one argument spelling into another.
+  //
+  //   validate    Checks the arguments, answering with the message the tool
+  //               reports, or nothing to continue. It replaces the
+  //               required-field checks the generator would derive, so a tool
+  //               declaring it owns its whole argument check. Prefer a
+  //               buf.validate rule: a rule is one sentence both languages read,
+  //               a hook is two copies of it.
+  //
+  //   preview     Answers a mutating tool's dry run. It receives the call the
+  //               tool would have made and the body the generated builder
+  //               assembled, so it never re-spells a route or rebuilds a body:
+  //               what it owns is the side-effect prose, and for an update the
+  //               fetch that prose is diffed against. A mutating tool without it
+  //               previews the request alone.
+  //
+  //   fetch_state Reads the state a plan hashes for drift, which is also what a
+  //               destroy's preview reports as current_state, so the shape it
+  //               returns is part of the tool's contract. Every destroy declares
+  //               one, and so does a mutation advertising mode and plan_id: a
+  //               plan's state is not always the preview's, since a resize plans
+  //               against the instance and its disks and previews the instance.
+  //
+  //   dependency_walk
+  //               Says what else the change touches, over the state fetch_state
+  //               already read. A destroy without one previews the call and the
+  //               state alone; a staged mutation without one plans without
+  //               side-effect prose.
+  //
+  //   execute     Makes the live call itself, for a route whose request is not
+  //               the JSON body every generated mutation sends: the
+  //               support-ticket attachment posts multipart/form-data built
+  //               from a local file. It is the one kind that replaces the call
+  //               rather than something around it, so it is accepted only on
+  //               the tier that assembles its answer from the call instead of
+  //               decoding one. The dry-run branch never reaches it.
+  //
+  //   answer      Produces a meta tool's whole result from local state: the
+  //               audit stores, the profile builder's registry. It reaches no
+  //               Linode route, so it takes no client and returns the result
+  //               itself rather than a body to serialize. Accepted only on a
+  //               meta tool, and only where the contract declares no
+  //               success_message: those are two sources for one answer. A
+  //               meta tool without one answers the declared sentence.
+  //
+  // Declaring a kind is a fact about the TOOL, so every language implements it.
+  // The function name is derived from the tool and the kind rather than written
+  // out (linode_domain_record_get + validate is Go's
+  // LinodeDomainRecordGetValidate and Python's
+  // linode_domain_record_get_validate), which is what lets a missing
+  // implementation fail the build naming the tool. One language's hook may well
+  // answer exactly what derivation would have: that is still a hand-written
+  // answer, because nothing holds it to the derived one afterwards.
+  repeated string tool_hooks = 50012;
+
+  // Declares the JSON shape the annotated tool's list route answers with, for
+  // the few collections that do not arrive as the standard page envelope. See
+  // ListEnvelope: absence means the standard one, so only the exceptions carry
+  // this, and a generated reader can decode the body the route actually sends.
+  ListEnvelope list_envelope = 50013;
+
+  // The prose a successful mutation reports beside its success_message, filled
+  // and placed the same way: {field_name} placeholders name a field of this
+  // input message, of the tool_response message, or of one of that message's
+  // direct sub-messages, and {field_name:len} counts a repeated argument.
+  //
+  // It is the sentence a response carries in its `warning` field, which is a
+  // second piece of prose rather than a longer first one because a client
+  // surfaces the two differently: the warning on an OAuth client create says
+  // the secret it sits beside will never be shown again, and a caller who
+  // misses it loses the credential.
+  //
+  // Required by a response that declares a warning field and refused by one
+  // that does not, which is the same discipline success_message carries: a
+  // declared sentence with nowhere to go would be dropped by the serializer,
+  // and an undeclared one would leave the field the response promises empty.
+  string warning_message = 50015;
+
+  // Fields of the message the raw API body decodes into that the API sends as
+  // an explicit null, named because the serializer drops them: protojson
+  // writes no member for an unset optional scalar or an absent sub-message
+  // even with default values emitted, so a documented "gateway": null comes
+  // back missing and a caller cannot tell "no gateway" from "the API said
+  // nothing about one".
+  //
+  // Restoration reads the raw body, so only a key the API actually sent as
+  // null is written back. A field the response does not declare, or a tool
+  // whose tier decodes no body, is refused rather than generated: both would
+  // mean the declaration names something no answer can carry.
+  repeated string explicit_null_fields = 50016;
+
+  // Members of a mutation's declared response that the API's answer fills
+  // rather than the call: the one-time upload URL beside a created image, the
+  // scratch code beside a confirmed TFA enable. Every other member beside the
+  // message echoes an argument, so one naming none is refused, and a value the
+  // API sent has no argument to name.
+  //
+  // Declaring any of them makes the envelope itself the message the body
+  // decodes into, which is the only shape that reads them: POST /images/upload
+  // answers {image, upload_to}, and decoding that into Image alone reads
+  // neither member. The resource lands in its own member from the same decode
+  // and the prose is written on afterwards.
+  //
+  // Naming the message field, the warning, or an argument the call was given is
+  // refused: each of those has a filler already, and a member with two would
+  // answer with whichever the handler wrote last.
+  //
+  // An entry spelled "api:name" is the exception: it says the API's value wins
+  // over an argument spelled the same way. The interface upgrade takes an
+  // optional config_id and answers with the profile it actually upgraded, which
+  // is the one the caller has to be told about, so echoing the argument back
+  // would report a profile the API may never have touched. The prefix on a
+  // member no argument is spelled after is refused too, since it would claim a
+  // collision the tool does not have.
+  //
+  // A repeated member needs no entry: the same decode places every message the
+  // answer carries, so the interface upgrade's `interfaces` arrives filled
+  // rather than rebuilt from a call that never named one.
+  repeated string response_body_fields = 50020;
+
+  // Body members the tool always sends with a fixed value and takes no
+  // argument for, at the top of the body rather than inside a folded member.
+  //
+  // The instance create is the case: every instance it makes is on the current
+  // Linode Interfaces generation, so `interface_generation` travels on every
+  // call and no caller chooses it. Declaring it as an input field instead
+  // would advertise it in the schema as something a caller can set.
+  //
+  // A key naming a declared BODY field is refused: two writers for one member
+  // leaves it unclear which one the wire carries.
+  repeated BodyConstant body_constant = 50023;
+
+  // The surface the annotated *Input message's route answers on.
+  //
+  // Declared only when it is not v4: an explicit API_SURFACE_V4 is refused so
+  // the default has one spelling, which is what lets an unannotated tool's
+  // generated code stay byte-identical. A message with no tool_route carries no
+  // surface either, since a meta tool reaches no route to have one.
+  ApiSurface tool_api_surface = 50025;
+
+  // Declares that the caller must have sent at least one of the named BODY
+  // arguments. See RequireAnyOf: the check reads the argument map after the
+  // per-field checks and before the body is built, which is the order the
+  // hooks it replaces answered in. Refused beside a validate hook, which
+  // already owns the whole argument check.
+  RequireAnyOf require_any_of = 50028;
+
+  // Declares the arguments the annotated tool refuses outright. See
+  // RefuseArguments. Refused beside a validate hook, which already owns the
+  // whole argument check.
+  RefuseArguments refuse_arguments = 50029;
+
+  // Declares that the annotated tool refuses any argument its input message
+  // does not name. See RefuseUnknownArguments. Refused beside a validate hook,
+  // which already owns the whole argument check.
+  RefuseUnknownArguments refuse_unknown_arguments = 50030;
+
+  // Declares the check each of the tool's open-object arguments gets. See
+  // ObjectWalk. Refused beside a validate hook, which already owns the whole
+  // argument check.
+  repeated ObjectWalk object_walk = 50031;
+
+  // Declares the rewrites the tool's arguments get before anything reads them.
+  // See NormalizeField: the rewrites run first, so every check below sees the
+  // value the request will actually carry.
+  //
+  // Refused beside a normalize hook, which already owns the whole rewrite, and
+  // on a tier whose driver reads the arguments ahead of any rewrite point.
+  repeated NormalizeField normalize_fields = 50032;
+
+  // Declares the read a removal reports and hashes its resource through. See
+  // StateRoute: the contract says which route a delete calls, not which one
+  // reads the thing it is about to delete.
+  //
+  // Refused beside a fetch_state hook, which already owns the whole read, and
+  // on a tool that removes nothing, which has no state to fetch.
+  StateRoute state_route = 50033;
+
+  // Declares the prose a dry run reports about what the call would do. See
+  // PreviewSentence: the request body says what is sent, and these say what
+  // happens because of it.
+  //
+  // Refused beside a preview hook, which already owns the whole dry run.
+  repeated PreviewSentence preview_sentence = 50034;
+
+  // Declares that the tool's dry run reports no request body, which a handful
+  // of families answered with before the echo existed and their fixtures still
+  // pin. Only true is meaningful: false is what every other tool means by
+  // saying nothing, so an explicit false is refused rather than read as a
+  // second spelling of the default.
+  bool preview_omits_body = 50035;
+}
+
+// PreviewSentence is one line a dry run reports about what the call does, and
+// the wordings that line can take.
+//
+// The wire shape a preview reports is derived already: the route, the body, the
+// state. What no descriptor says is the consequence, which is the half of the
+// preview a caller decides on. Declaring it here is what lets both languages
+// report one sentence rather than keep two copies of it in step by hand.
+message PreviewSentence {
+  // The wordings this line can take, most specific first. A wording holds
+  // `{argument}` placeholders, and the first one whose placeholders all carry a
+  // value is the one reported: that is how a family says "name the label when
+  // there is one" without declaring a second sentence and a rule for choosing
+  // between them.
+  //
+  // The wordings are ordered least demanding last, so a declaration whose
+  // wordings ask for more as the list goes on is refused: the later one could
+  // never be reached. A single wording over required arguments is the ordinary
+  // case, since the checks have already run by the time a preview reads them.
+  //
+  // A line none of whose wordings can be filled is dropped rather than reported
+  // with a gap in it, which is what lets a whole sentence be conditional: the
+  // volume create names the instance it attaches to only when the call names
+  // one.
+  repeated string template = 1;
+
+  // Where the line lands in the preview. Unspecified is refused rather than
+  // read as a side effect: a warning reported as an effect reads as something
+  // the call does rather than something the caller should weigh.
+  PreviewLine line = 2;
+
+  // The flag this line's wording is chosen by, for the lines a bool decides
+  // between rather than fills in. See PreviewChoice. Refused beside template,
+  // which is the other way of saying what a line reports and nothing here says
+  // which of the two would win.
+  PreviewChoice chosen_by = 3;
+}
+
+// PreviewChoice is the wordings one line takes, selected by a bool the line
+// never reports.
+//
+// A bool has no spelling the two languages share, which is why a bool
+// placeholder is refused; selecting with one prints nothing, so the objection
+// does not reach it. Each arm is a whole wording and carries placeholders like
+// any other, and an arm left empty drops the line, which is how a flag nobody
+// set says nothing at all.
+message PreviewChoice {
+  // The flag that chooses. Either a bool argument the tool declares, or one
+  // member of an open-object argument spelled `object.member`, which is the
+  // shape the cluster ACL takes: the flag rides inside the object the call
+  // sends rather than beside it.
+  //
+  // The dotted form goes exactly one level deep. The head must be an
+  // open-object argument the tool declares, since a scalar carries no member,
+  // and a deeper path is refused: past the first member every level is another
+  // guess about a shape the contract does not model.
+  string argument = 1;
+
+  // The wording reported when the flag is true.
+  string when_true = 2;
+
+  // The wording reported when the flag is false.
+  string when_false = 3;
+
+  // The wording reported when the flag is absent, or carries something that is
+  // not a bool. It is spelled out rather than defaulted onto when_false because
+  // the two are not the same question and the families answer them apart: a
+  // restore reads an absent overwrite as false, while a bucket whose call names
+  // no CORS setting reports nothing about CORS at all.
+  string when_absent = 4;
+}
+
+// PreviewLine is the half of a dry run one declared sentence belongs to.
+enum PreviewLine {
+  // The declaration names no half, which is refused.
+  PREVIEW_LINE_UNSPECIFIED = 0;
+
+  // What the call does: the resource it creates, the service it starts, the
+  // authorization it ends.
+  PREVIEW_LINE_SIDE_EFFECT = 1;
+
+  // What the caller should weigh before proceeding: billing that begins, a
+  // secret shown once, a security setting going the wrong way.
+  PREVIEW_LINE_WARNING = 2;
+}
+
+// StateRoute is the read a removal fetches its current state through.
+//
+// A removal declared beside a GET on its own route needs none of this: the
+// emitter finds that sibling itself. This is for the reads it cannot find,
+// which is most of them. The route named here is often not the tool's own: a
+// backup cancel reads the parent instance, a kubeconfig delete reads the
+// cluster rather than the credential it is about to destroy.
+message StateRoute {
+  // The read tool whose route the fetch calls. It must be a declared tool, and
+  // its path slots are filled from the removal's own validated path arguments
+  // by name, so a route naming a slot the removal does not carry is refused
+  // rather than addressed with a zero.
+  //
+  // Naming a subset is allowed and is the point for the share-group family: the
+  // token delete reads the parent group, so a preview never carries the token
+  // secret to the model.
+  string tool = 1;
+
+  // The member of the read's response the resource itself is, empty when the
+  // response is the resource. The volume read answers a wrapper holding one
+  // volume while the API body is the volume, so the fetch decodes and projects
+  // through the member's own message rather than the wrapper's.
+  //
+  // A name the response does not carry, a name that is not a singular message,
+  // and a declaration beside body_key are all refused: the first two would
+  // project through nothing, and no read wraps its resource both ways.
+  string payload_member = 2;
+
+  // The key of the raw API body the resource sits under, empty when the body is
+  // the resource. The control-plane ACL route wraps its resource this way, and
+  // decoding the whole body would answer an empty message, since the wrapper's
+  // own members are not the resource's.
+  string body_key = 3;
+
+  // The read slots this removal spells differently, one entry per slot. Filling
+  // by name is the rule; this is the exception the instance family forces, where
+  // the action routes are addressed by linode_id and the read they need is
+  // addressed by instance_id.
+  repeated StateRouteSlot slot_arguments = 4;
+}
+
+// StateRouteSlot is one read slot filled from a removal argument spelled
+// differently, which is the whole of what it can say: an argument name, never a
+// literal, an expression or a value derived from anything else.
+//
+// The pair exists because two routes name one id two ways. Unifying the
+// spellings would retire it, and the identical-names refusal below is what would
+// report the leftovers if that ever happens.
+message StateRouteSlot {
+  // The slot as the read route's own template spells it. A slot that route does
+  // not carry is refused: the fetch would fill nothing and address the
+  // collection instead of the resource.
+  string read_slot = 1;
+
+  // The removal's own validated path argument that fills it. An argument the
+  // removal does not carry is refused for the same reason, and a pair whose two
+  // names are identical is refused as well: name-matching already covers it, so
+  // the entry is wiring with no effect.
+  string argument = 2;
+}
+
+// NormalizeField is one named transform and the arguments it rewrites.
+//
+// Naming several arguments is what lets one declaration serve the fields that
+// get the same rewrite, the way ObjectWalk's field list serves the sections
+// that get the same walk.
+message NormalizeField {
+  // The arguments this transform rewrites, each an argument the input message
+  // declares. An undeclared name is refused: the rewrite would never reach a
+  // value. So is a name a second declaration also rewrites, which would leave
+  // the result decided by declaration order.
+  //
+  // An argument whose name marks it as the credential itself (password, secret,
+  // token) is refused whatever the transform: a rewritten secret is not the
+  // value the caller meant to store, and the hooks this replaces stepped around
+  // those by hand.
+  repeated string field = 1;
+
+  // The rewrite each of them gets.
+  NormalizeTransform transform = 2;
+}
+
+// NormalizeTransform is one rewrite an argument gets, named rather than spelled
+// out so both languages read one word for it.
+//
+// A member is added when a second tool wants it, the cap ArgumentReader carries:
+// without it the enum grows one member per tool, which is the per-tool hook
+// again in a worse place to read it. A tool whose rewrite no member spells keeps
+// its normalize hook.
+enum NormalizeTransform {
+  // The declaration names no rewrite, which is refused rather than read as any
+  // member below: a transform the emitter cannot render would otherwise reach
+  // the tree as arguments nothing touches.
+  NORMALIZE_TRANSFORM_UNSPECIFIED = 0;
+
+  // Surrounding whitespace is dropped from a text argument, in place. A value
+  // that arrived as anything else is left alone, so the body builder still
+  // refuses it by type rather than reading one this rewrote.
+  NORMALIZE_TRANSFORM_TRIM = 1;
+
+  // Every entry of a list argument is trimmed and the ones left blank are
+  // dropped, so an entry that was only padding does not reach the rules as a
+  // value nothing can match. A list holding anything but text is left whole,
+  // since the body builder words that refusal for the whole surface alike.
+  NORMALIZE_TRANSFORM_TRIM_LIST_DROP_BLANK = 2;
+}
+
+// ObjectWalk is the check one open-object argument gets: a map or a repeated
+// Struct, whose members the descriptors see only the size of.
+//
+// A rule cannot carry this. The member is a google.protobuf.Value, so every
+// value it can hold is legal to the message, and CEL sees a map of Values as a
+// size rather than as the device slots, boot helpers, phone numbers, SSH
+// settings or grant sections the API reads. A refusal here also names the
+// member it is about, and a rule's message is fixed.
+//
+// Every sentence below is a template. The placeholders, each rendered from the
+// walk that answers:
+//   {field}      the walked argument's name
+//   {key}        the key the refusal is about; the member name one level in
+//   {keys}       every undeclared key, sorted and joined with ", "
+//   {parent}     the key of the object being walked, or the index of the list
+//                entry being walked; empty at the top level of a map walk,
+//                which is why a sentence there naming it is refused
+//   {values}     the declared vocabulary, joined with ", "
+//   {minimum} {maximum} {max_length}
+//                the bounds the value declares, so a sentence stating one does
+//                not carry a second copy of the number
+message ObjectWalk {
+  // The arguments this walk reads, each a BODY map or repeated Struct field of
+  // the annotated input. Naming several is what lets one declaration serve a
+  // family that differs only by name, such as the eleven grant sections, whose
+  // sentences say {field}.
+  repeated string field = 1;
+
+  // The caller sent nothing. Empty accepts an absent argument.
+  string absent = 2;
+  // The caller sent a value that is neither an object nor a list, whichever
+  // the field declares. Empty leaves it to the body builder, which words a
+  // mistyped free-form member for the whole surface alike.
+  string unusable = 3;
+  // The caller sent an object or a list with nothing in it. Empty accepts one.
+  string empty = 4;
+  // One entry of a list is not an object. Empty accepts it, and a map walk
+  // declaring it is refused: a map has no entries to be objects.
+  string element = 5;
+
+  // The members the object takes. On a list walk these are the members ITS
+  // ENTRIES take, since the list itself is addressed by index.
+  ObjectMembers members = 6;
+}
+
+// ObjectMembers is one object's member vocabulary and what each member carries.
+message ObjectMembers {
+  // A key outside the vocabulary. Empty accepts any key, which is what a walk
+  // that reads one member of an otherwise free-form entry declares.
+  string unknown = 1;
+
+  // The keys that carry the same value, checked in this order. It is the
+  // vocabulary itself where the keys are a set rather than a list of names:
+  // the eight config device slots each hold one device.
+  repeated string key = 2;
+  // The value every key above carries. Refused without a key to apply to,
+  // which would be a spec nothing reads.
+  ObjectValue value = 3;
+
+  // The keys that carry a value of their own, checked after the keys above. A
+  // name declared in both places is refused: two specs for one key.
+  repeated ObjectMember member = 4;
+
+  // The arms about the members together rather than about one of them.
+  ObjectRequire require = 5;
+}
+
+// ObjectMember is one key of an object and the value it carries.
+message ObjectMember {
+  string name = 1;
+  ObjectValue value = 2;
+}
+
+// ObjectValue is what one member of an object is held to.
+//
+// The three sentence arms are ReaderMessage's, for the same reason: a member is
+// what it accepts and which refusals it tells apart, and the words are the
+// declaration's.
+message ObjectValue {
+  // The shape the value must have. Unspecified accepts any, which is what a
+  // vocabulary-only walk declares.
+  ValueKind kind = 1;
+  // An explicit null is accepted. It is how the API is told to clear a member,
+  // so the routes that read one that way say so here.
+  bool nullable = 2;
+
+  // The bounds the value is held to, each read only under the kind that has
+  // one and each left at zero when the value carries no such bound.
+  int64 minimum = 3;
+  int64 maximum = 4;
+  int64 max_length = 5;
+  // A text value may not be blank.
+  bool non_blank = 6;
+  // Full name of the enum whose member names a text value must name, such as
+  // "linode.mcp.v1.GrantPermission.Value". The names are read from the
+  // descriptor rather than written out again, which is what keeps one
+  // vocabulary when the enum grows.
+  string values = 7;
+
+  // The object's members, for a value the walk reads one level further in.
+  // Refused on any kind but VALUE_KIND_OBJECT, where it would be read and
+  // dropped.
+  ObjectMembers members = 8;
+
+  // The object does not carry this member. Empty means the member is optional,
+  // which is what most of them are.
+  string absent = 9;
+  // The value is not the declared kind, or is null where a null is not
+  // accepted. Empty accepts it, leaving the shape to the body builder.
+  string unusable = 10;
+  // The value is the declared kind and outside its bounds or its vocabulary.
+  // Empty answers `unusable`, which is what a member whose one sentence covers
+  // every way it can be wrong declares.
+  string refused = 11;
+}
+
+// ObjectRequire is the arms about an object's members together.
+message ObjectRequire {
+  // The members the arms below are about. Each must be in the vocabulary.
+  repeated string name = 1;
+  // The object names none of them.
+  string any_of = 2;
+  // The object names more than one of them.
+  string at_most_one = 3;
+}
+
+// ValueKind is the shape one member of an open object must have. The four are
+// what the surface's walks actually read; a JSON array inside one of these
+// objects is not among them, because no route reads one.
+enum ValueKind {
+  VALUE_KIND_UNSPECIFIED = 0;
+  VALUE_KIND_INT = 1;
+  VALUE_KIND_BOOL = 2;
+  VALUE_KIND_TEXT = 3;
+  VALUE_KIND_OBJECT = 4;
+}
+
+// RefuseArguments names the arguments a tool answers for rather than sends: the
+// members its API assigns, which no caller may set.
+//
+// A rule cannot carry this. The input message does not declare these names at
+// all, so an argument spelling one is dropped before any rule runs and the call
+// reports success over a value the API never saw. Reading the argument map is
+// the only place the caller's typo is still visible.
+message RefuseArguments {
+  // The refused argument names. Order here does not matter: the sentence names
+  // what the caller actually sent, sorted, so one payload reads the same way
+  // every time.
+  repeated string fields = 1;
+  // The refusal sentence. "{fields}" stands for the refused arguments the
+  // caller sent, sorted and joined with ", "; a sentence naming neither
+  // placeholder stands as written, which is what the create routes answer when
+  // they name the members in prose instead.
+  string message = 2;
+}
+
+// RefuseUnknownArguments holds a tool to the arguments its input message
+// declares, so a caller who misspells one is told rather than having it
+// dropped.
+//
+// The allowlist is the descriptor's own field names, every location included,
+// which is what keeps it from drifting away from the schema the client reads. A
+// second list written here would be that drift.
+message RefuseUnknownArguments {
+  // The refusal sentence. "{field}" stands for the first undeclared argument in
+  // sorted order, "{fields}" for all of them joined with ", ". A sentence
+  // naming neither placeholder stands as written.
+  string message = 1;
 }
 
 // FieldLocation is where an input field travels in the HTTP request its tool
@@ -188,6 +848,47 @@ enum FieldLocation {
   // comment so stripping a comment cannot silently put a local field on the
   // wire.
   FIELD_LOCATION_LOCAL = 4;
+  // The tool's own domain argument: it reaches no Linode route and is not MCP
+  // plumbing. Only a meta tool declares one, since every other tool's
+  // arguments address or fill a request.
+  //
+  // Separate from LOCAL because LOCAL is locked in both directions to the
+  // `// system param` marker: reusing it here would either put a marker on a
+  // draft name, which is not a system param, or break the lock that keeps
+  // dry_run off the wire.
+  FIELD_LOCATION_TOOL = 5;
+}
+
+// ListFilterSpec says how a QUERY argument narrows the page its tool already
+// fetched, for the arguments a reader cannot work that out for.
+//
+// A QUERY argument is one of two unrelated things and field_location cannot
+// tell them apart: linode_region_list's `country` never reaches Linode and
+// narrows the page here, while linode_object_storage_bucket_object_list's
+// `prefix` is a real S3 parameter the route filters on. Both are QUERY because
+// both are arguments a caller filters with. What separates them is the
+// collection's element: an argument the element can answer is applied here,
+// and one it cannot is sent. That derivation covers every filter on the surface
+// but two shapes, which is all this exists for: an argument matching its
+// element field under another name, and one matching a whole field where the
+// tool matches a substring.
+message ListFilterSpec {
+  // How the argument's value is compared to the element field.
+  enum Match {
+    // Whole-value equality, which is what an unannotated filter derives.
+    MATCH_UNSPECIFIED = 0;
+    // The element field contains the argument's value.
+    MATCH_CONTAINS = 1;
+    // The element field is a repeated string and one of its entries equals
+    // the argument's value: linode_region_list's `capability` against
+    // Region.capabilities.
+    MATCH_MEMBER = 2;
+  }
+
+  Match match = 1;
+  // The element field the filter reads, when it is not the argument's own
+  // name. Empty means the argument names it.
+  string field = 2;
 }
 
 extend google.protobuf.FieldOptions {
@@ -195,4 +896,434 @@ extend google.protobuf.FieldOptions {
   // field of a message that carries a tool_route; `make field-location`
   // fails a routed message with an unannotated field.
   FieldLocation field_location = 50002;
+
+  // Declares that the annotated QUERY argument is a client-side filter, and
+  // how it matches. See ListFilterSpec: absence means the emitter derives the
+  // answer from the collection's element, so only the two shapes derivation
+  // cannot reach carry this.
+  ListFilterSpec list_filter = 50014;
+
+  // Declares that the annotated BODY field is never echoed back by a preview:
+  // the dry run reports {"redacted": true} in its place. A payment method's
+  // details are the case, where repeating what the caller sent would put card
+  // data into a transcript the live request never needed to widen.
+  //
+  // Only the report is redacted; the live request body is untouched. Refused
+  // on a field that is not BODY, since there is nothing in the reported
+  // request to stand in for.
+  bool preview_redact = 50017;
+
+  // The JSON member the annotated BODY field is written under, for the fields
+  // whose wire name the tool cannot take as its argument name.
+  // linode_account_user_update is the case: the route is
+  // PUT /account/users/{username} and the body renames the user through a
+  // second "username" member, so the argument is new_username and only the
+  // body key is "username".
+  //
+  // The argument name stays the proto field name, which is what keeps the
+  // input schema, the CEL constraints, and the preview reading one name.
+  // Refused on a field that is not BODY, which has no member to name, and on
+  // a value equal to the field's own name, which declares a rename that
+  // renames nothing.
+  string body_name = 50018;
+
+  // Declares that the annotated BODY object field also accepts an explicit
+  // JSON null, which the API reads as a command rather than as an absent
+  // value: the database update routes take `"private_network": null` to mean
+  // "detach from the VPC".
+  //
+  // It is declared rather than derived because a nullable object and an
+  // ordinary one are the same proto shape, a map from string to
+  // google.protobuf.Value. Routing a nullable field through the ordinary
+  // object setter drops the null, so the detach becomes a call that changes
+  // nothing and reports success.
+  //
+  // Refused on any field that is not a BODY object map, which has no null to
+  // send: a scalar's absence is already its own answer.
+  bool body_nullable = 50019;
+
+  // Declares that the annotated BODY string argument reaches the wire as an
+  // array of its comma-separated segments, each trimmed, with the blank ones
+  // dropped. A disk create takes authorized_keys as one line of text because
+  // that is what a caller pastes, and the API reads an array.
+  //
+  // The argument stays a string, so the input schema, the CEL constraints and
+  // the preview all read one shape; only the body member is the array. An
+  // empty argument is a value the same way an empty list is, and travels as
+  // [], which is what the API reads as "clear these".
+  //
+  // Refused on a field that is not BODY, which has no member to compose, and
+  // on anything but an `optional` singular string: a repeated field already
+  // has an array to send, and a field with no presence would post [] over a
+  // caller who named nothing.
+  bool body_comma_list = 50020;
+
+  // The tool argument that fills the annotated RESPONSE member, for the
+  // members whose name the tool cannot take as its argument name.
+  // InstanceDiskResizeWriteResponse.new_size_mb is the case: the argument is
+  // `size` and the member carries the unit in its own name, so without this
+  // the answer names an argument it was never given and the run fails.
+  //
+  // Only a response assembled from the call reads it, which is where a member
+  // is filled by name at all. Refused on a repeated or message member, which
+  // no scalar echo can fill, and on a value equal to the member's own name,
+  // which declares an alias that aliases nothing.
+  string echo_argument = 50021;
+
+  // Declares that the annotated BODY member is assembled rather than taken
+  // whole: the tool always sends it, and its inner members come from flat tool
+  // arguments the caller sends beside it.
+  //
+  // Two tools take arguments the API reads one level down. A firewall create
+  // takes inbound_policy and outbound_policy and the API reads them inside
+  // `rules`; an instance create takes firewall_id and the route flags and the
+  // API reads them inside the one interface it is being given. Both were
+  // hand-built for that reason, and generating them without this posts the
+  // flat arguments at the top level, where the API does not read them at all.
+  //
+  // A caller who supplies the member wins: a key they wrote is left alone and
+  // the rest fold in beside it, and a caller who supplies a whole list gets it
+  // sent verbatim with nothing synthesized. That is what the hand builders do,
+  // and it is the only rule under which the flat arguments stay optional.
+  BodyFold body_fold = 50022;
+
+  // Declares that the annotated BODY object field IS the request body rather
+  // than a member of it: the profile preferences PUT reads {"theme":"dark"},
+  // not {"preferences":{"theme":"dark"}}.
+  //
+  // It is declared rather than derived because both shapes are the same proto
+  // field, a map from string to google.protobuf.Value, and the sibling
+  // firewall-settings PUT genuinely does nest its map under the member name.
+  // Sending the nested form to a route that reads the root posts a body the
+  // API ignores, which reports success over a call that changed nothing.
+  //
+  // Refused on a field that is not a BODY object map, which has no members to
+  // hoist, and on a tool declaring any other BODY field, whose member would
+  // have nowhere left to travel.
+  bool body_root = 50024;
+
+  // The shared reader the annotated argument is checked through, and with it
+  // the exact sentences a caller gets when the check refuses.
+  //
+  // This exists because a buf.validate rule cannot carry these checks. A path
+  // field is declared without presence, so has() reads absent and zero alike,
+  // and giving it presence would move the field's requiredness in the generated
+  // JSON schema. The readers answer two sentences off a distinction no rule can
+  // make, and the check the emitter derives without this answers only the first
+  // one, so dropping a hook silently rewords the second.
+  //
+  // A member names a reader both languages already have. Its own sentences
+  // apply unless `reader_message` words an arm differently.
+  ArgumentReader argument_reader = 50026;
+
+  // The value vocabulary an ENUM_MEMBER check on a STRING field is held to.
+  //
+  // An enum-typed field carries its vocabulary in the enum descriptor, so
+  // declaring values beside one is refused: two vocabularies for one field.
+  // A string field has no descriptor to read, and this option is the honest
+  // home short of graduating the field to a real enum, which would change the
+  // client-visible schema (D-1, full-generation-cleanup).
+  //
+  // Refused without ARGUMENT_READER_ENUM_MEMBER on the same field, which is
+  // the only reader that acts on it.
+  repeated string reader_values = 50027;
+
+  // The wording this declaration gives its reader's refusals, arm by arm.
+  //
+  // Without it a member is its sentences, so two tools checking one thing in
+  // two sets of words need two members and the enum grows one member per tool
+  // (D-2, full-generation-cleanup). With it a member is what it ACCEPTS and
+  // which refusals it tells apart, and the words are the declaration's.
+  //
+  // Refused without an argument_reader to word, and refused on an arm the
+  // declared member never answers, which would be wording read and dropped.
+  ReaderMessage reader_message = 50028;
+}
+
+// ReaderMessage is one declaration's wording for its reader's refusals. Every
+// arm is optional and an empty one answers the member's own sentence, so a
+// declaration states only what it words differently.
+//
+// The three arms are the most any member tells apart, and each member's own
+// comment says which of them it answers.
+message ReaderMessage {
+  // The caller sent nothing the reader can work with.
+  string absent = 1;
+  // The caller sent a value of a shape the reader cannot read, where the
+  // member tells that apart from having been sent nothing.
+  string unusable = 2;
+  // The reader read a usable value and will not accept it.
+  string refused = 3;
+}
+
+// ArgumentReader is a shared argument check, identified by what it ACCEPTS and
+// by which refusals it tells apart, not by the words it answers them in. Three
+// readers in the tree check "a positive id"; naming the difference between them
+// as meaning would reword the tools that declared it, and naming it as wording
+// would mint a member per tool. The words are `reader_message` on each
+// declaration (D-2, full-generation-cleanup), so a member holds the tools that
+// accept the same values and draw the same distinctions, whatever they call
+// them.
+//
+// Each member below lists its arms in order, and the sentence beside an arm is
+// the one a declaration that words nothing gets.
+//
+// Adding a member: at least two tools must want it AND both languages must
+// already accept exactly what it accepts (TestEveryArgumentReaderHasTwoDeclarers).
+// A tool whose ACCEPTED SET would need a member of its own either converges onto
+// an existing member, named and fixtured, or keeps its validate hook. Without
+// that cap this enum grows one member per tool, which is the per-tool hook again
+// in a worse place to read it.
+enum ArgumentReader {
+  // The argument declares no shared reader. Every field that says nothing.
+  ARGUMENT_READER_UNSPECIFIED = 0;
+
+  // A required id addressing a resource. Arms: absent, refused.
+  //   absent                            -> "<name> is required"
+  //   not a whole number of at least 1  -> "<name> must be a positive integer"
+  // The tools that answer one sentence to both say so by wording `absent` the
+  // way the refusal already reads.
+  // go tools.RequiredIDArgument, python required_int_id.
+  ARGUMENT_READER_POSITIVE_ID = 1;
+
+  // The pair above, plus the largest id JSON carries exactly as an upper bound.
+  // An id past it is refused rather than sent, because the number reaching the
+  // route is not the one the caller wrote.
+  //
+  // Arms: absent, refused, the same two POSITIVE_ID answers. The bound reuses
+  // "must be a positive integer" rather than wording itself, so these two
+  // members are told apart by what they accept, which is what a member is.
+  // go tools.RequiredBoundedIDArgument with MaxJSONSafeID,
+  // python required_bounded_int_id.
+  ARGUMENT_READER_BOUNDED_ID = 2;
+
+  // A required text segment that has to survive being spliced into a URL.
+  // Arms: absent, unusable, refused.
+  //   absent                        -> "<name> is required"
+  //   not a non-blank string        -> "<name> must be a non-empty string"
+  //   untrimmed, or carrying / ? .. -> "<name> must not contain path
+  //                                     separators, query separators, or
+  //                                     traversal segments"
+  // go tools.RequiredPathSafeArgument, python required_pathsafe_segment.
+  ARGUMENT_READER_PATH_SAFE_TEXT = 3;
+
+  // The caller has to have SENT the argument. One arm, absent ->
+  // "<name> is required", and any value they sent is accepted, including an
+  // empty list.
+  //
+  // This is the one member that reads the argument map rather than the decoded
+  // field, and the only one declared on a BODY field. A repeated field cannot
+  // answer it from the message: proto3 reads an absent list and an empty one as
+  // the same empty list, and an empty firewall_ids is a legal value meaning
+  // "remove every assignment", so a rule on the field would refuse the call
+  // that clears them. That is also why CEL cannot carry it.
+  // go tools.RequiredPresentArgument, python required_present.
+  ARGUMENT_READER_PRESENT = 4;
+
+  // Membership in the field's declared vocabulary, checked on the RAW argument
+  // string. A rule cannot carry this: an enum argument naming no member decodes
+  // to the enum's zero, which is what an absent one decodes to, so only a read
+  // of the argument map can tell "left out" from "named wrong".
+  //
+  // The vocabulary is the enum descriptor's member names (zero sentinel
+  // excluded, enum-number order) on an enum field, or `reader_values` on a
+  // string field. The renderer arms pass the names; the shared helper composes the
+  // sentences from them. Arms: absent, refused.
+  //   absent, non-string, or "" on a field without presence
+  //                       -> "<name> is required"
+  //   absent, non-string, or "" on an `optional` field -> accepted
+  //   any other string outside the vocabulary
+  //                       -> "<name> must be one of: <a>, <b>" (two or more)
+  //                       -> "<name> must be <a>"              (exactly one)
+  // A declaration that words `refused` gets that sentence instead of the one
+  // built from the names, which is how a one-member vocabulary keeps a
+  // "must be one of:" wording a caller has always read.
+  // go tools.MemberChoiceArgument, python member_choice.
+  ARGUMENT_READER_ENUM_MEMBER = 5;
+
+  // A BODY text argument. It reads the argument map because a rule sees a
+  // required string's absence and its zero as one value. Arms: absent,
+  // unusable, which answer the same default sentence because the hooks this
+  // replaces never told a missing label from one sent as a number or as
+  // spaces; a tool that does word them apart.
+  //   without presence: absent, non-string, or blank -> "<name> is required"
+  //   `optional`: absent -> accepted; present but non-string or blank
+  //                       -> "<name> is required"
+  // go tools.PresentTextArgument, python present_text.
+  ARGUMENT_READER_PRESENT_TEXT = 6;
+
+  // A BODY boolean the caller must have sent as a boolean. An implicit-presence
+  // bool reads absent and false alike, so only the argument map can refuse the
+  // caller who never said which; on an `optional` bool the message could carry
+  // the question, but the shape refused is the same, so the map read keeps one
+  // reader for both. Arms: absent, unusable.
+  //   without presence: absent or non-boolean -> "<name> must be a boolean"
+  //   `optional`: absent -> accepted; present non-boolean
+  //                       -> "<name> must be a boolean"
+  // go tools.PresentBoolArgument, python present_bool.
+  ARGUMENT_READER_PRESENT_BOOL = 7;
+
+  // PATH_SAFE_TEXT's arms and sentences over the narrower set that also refuses
+  // the fragment marker. Arms: absent, unusable, refused.
+  //
+  // Two members rather than one because an OAuth client id may carry a '#' and
+  // is spliced in percent-encoded, while the ids these routes address may not,
+  // so the two accept different values. Under D-2 that is the only thing left
+  // that separates members: every one of these tools words its refusal
+  // differently and every one of those wordings is declaration data.
+  // go tools.DeclaredFragmentSafeArgument,
+  // python declared_fragment_safe_segment.
+  ARGUMENT_READER_FRAGMENT_SAFE_TEXT = 8;
+
+  // A monitoring service type, which the routes carry as a bare path segment.
+  // Arms: absent, unusable, refused.
+  //   absent                          -> "<name> is required"
+  //   not a string                    -> "<name> must be a string"
+  //   blank, padded, or outside
+  //   lowercase letters, digits and
+  //   interior hyphens                -> "<name> must be a single non-empty
+  //                                       service type slug"
+  // Surrounding space is refused rather than trimmed because a trimmed value
+  // addresses a different route than the caller spelled.
+  // go tools.ServiceTypeSlugArgument, python service_type_slug.
+  ARGUMENT_READER_SERVICE_TYPE_SLUG = 9;
+
+  // A region id, which Linode spells as a lowercase slug. Arms: absent,
+  // unusable, refused.
+  //   absent                        -> "<name> is required"
+  //   not a non-blank string        -> "<name> must be a non-empty string"
+  //   outside lowercase letters,
+  //   digits and hyphens            -> "<name> must be a lowercase region slug
+  //                                     containing only letters, numbers, and
+  //                                     hyphens"
+  // The accepted set is exactly what that refusal names, which is why the two
+  // stricter spellings these routes grew apart into (no leading or trailing
+  // hyphen, two characters at least) are not part of it: no sentence ever told
+  // a caller about them.
+  // go tools.RegionSlugArgument, python region_slug.
+  ARGUMENT_READER_REGION_SLUG = 10;
+
+  // A beta program id, which the API spells as a slug rather than a number.
+  // Arms: absent, unusable, refused.
+  //   absent                       -> "<name> is required"
+  //   not a non-blank string       -> "<name> must be a non-empty string"
+  //   padded, or outside letters,
+  //   digits, underscores and
+  //   hyphens                      -> "<name> must contain only letters,
+  //                                    numbers, underscores, and hyphens"
+  // Wider than REGION_SLUG by case and the underscore, which is why the two are
+  // separate members rather than one wording the other.
+  // go tools.BetaSlugArgument, python beta_slug.
+  ARGUMENT_READER_BETA_SLUG = 11;
+
+  // A required path segment whose SHAPE the message's own rules judge. It
+  // accepts any non-blank string, so it refuses nothing a rule can see.
+  // Arms: absent, unusable.
+  //   absent                 -> "<name> is required"
+  //   not a non-blank string -> "<name> must be a non-empty string"
+  //
+  // What it adds is the tool's own wording where a rule leaves off. Without it
+  // the emitter derives "<name> is required", which is not the sentence these
+  // tools answer, and the derived check's blank test is a bare equality where
+  // this one reads Unicode spacing the CEL character class does not. The tools
+  // declaring it spell their format as CEL beside it, which is why there is no
+  // refused arm to word.
+  // go tools.FreeTextArgument, python free_text.
+  ARGUMENT_READER_FREE_TEXT = 12;
+
+  // A BODY argument the caller must have sent as a string, blank included.
+  // Arms: absent, unusable.
+  //   without presence: absent or non-string -> "<name> must be a string"
+  //   `optional`: absent -> accepted; present non-string
+  //                       -> "<name> must be a string"
+  //
+  // PRESENT_TEXT's sibling over the wider set: a blank string is a value on the
+  // routes that declare this, where an empty longview_subscription cancels the
+  // subscription, so refusing it would refuse the call that turns one off. Only
+  // the argument map can ask the question, because a body field that is not a
+  // string stops the message being built and no rule runs.
+  // go tools.PresentStringArgument, python present_string.
+  ARGUMENT_READER_PRESENT_STRING = 13;
+
+  // A BODY list of ids the caller must have sent, every entry a distinct whole
+  // number of at least 1. Arms: absent, unusable, refused.
+  //   absent               -> "<name> is required"
+  //   not a list           -> "<name> must be a JSON array of positive integers"
+  //   empty, or holding a non-positive or repeated entry
+  //                        -> "<name> must be a non-empty array of distinct
+  //                            positive integers"
+  //
+  // It reads the argument map for the reason PRESENT does: proto3 reads an
+  // absent list and an empty one as the same empty list, so no rule can tell
+  // "sent nothing" from "sent []", and these routes answer those differently.
+  //
+  // The three arms are a convergence. Go answered five sentences here and
+  // Python one; a member is what it accepts and which refusals it tells apart,
+  // so the empty, non-positive and repeated cases fold into the one arm that
+  // names what the list must be.
+  // go tools.IDListArgument, python id_list.
+  ARGUMENT_READER_ID_LIST = 14;
+}
+
+// RequireAnyOf is a cross-field presence check: the caller must have SENT at
+// least one of the named BODY arguments, read from the argument map the way
+// ARGUMENT_READER_PRESENT reads one field. A rule cannot carry it because the
+// updates that need it accept a field's zero as a real change (an empty tags
+// list clears the tags), so absent and empty conflate before any rule runs.
+message RequireAnyOf {
+  // The BODY arguments at least one of which must be present, in the order the
+  // derived sentence reads them. Fewer than two is refused: one field asking
+  // this question is ARGUMENT_READER_PRESENT.
+  repeated string fields = 1;
+  // The refusal sentence. Left empty, the emitter derives it from the field
+  // names: "at least one of label or tags is required" for two,
+  // "at least one of a, b, or c is required" for more. Declared when the
+  // sentence a tool has always answered names a family instead of the fields
+  // ("at least one account field is required").
+  string message = 2;
+}
+
+// BodyFoldSource is one flat tool argument that travels inside another body
+// member rather than beside it.
+message BodyFoldSource {
+  // The tool's own argument. It must be a BODY field of the same input, and it
+  // stops traveling at the top level once it folds.
+  string argument = 1;
+  // Dotted path of the key the value lands at inside the member:
+  // "inbound_policy" for a member of the object itself, "default_route.ipv4"
+  // for one inside an object it holds.
+  string key = 2;
+  // The value folded in when the caller omits the argument, written as text
+  // and read under the argument's own kind. Empty leaves the key out
+  // altogether, which is what an argument with no default means.
+  string absent = 3;
+}
+
+// BodyConstant is one body member the tool always sends with a fixed value and
+// takes no argument for.
+message BodyConstant {
+  // Dotted path of the key inside the member it belongs to, or the member's
+  // own name when it is declared at the message level and sits at the top of
+  // the body.
+  string key = 1;
+  // The text the member travels as. Left empty for a member the contract
+  // declares as a message, which travels as the empty object: the instance
+  // create's interface carries `public: {}` to say which arm it is, and there
+  // is no other object a constant spells.
+  string text = 2;
+}
+
+// BodyFold is how one assembled body member is built.
+message BodyFold {
+  // The flat arguments that fold into it, in the order they are written, which
+  // is the order they are read in.
+  repeated BodyFoldSource source = 1;
+  // The members the contract fixes, which no argument fills.
+  repeated BodyConstant constant = 2;
+  // Leaves the member off the wire when nothing filled it. A firewall create
+  // always sends `rules` because the API needs the default policies on a
+  // create, but the update reads `rules` as a replacement, so sending the
+  // empty object on a label-only change would clear the ruleset the caller
+  // never mentioned.
+  bool omit_when_empty = 3;
 }

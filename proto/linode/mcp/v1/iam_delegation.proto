@@ -1,0 +1,362 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "buf/validate/validate.proto";
+import "linode/mcp/v1/iam.proto";
+import "linode/mcp/v1/options.proto";
+
+// IamDelegationChildAccount is one child account a delegation names. Every
+// delegation route addresses a child account by euuid and reports its company
+// beside it, and none of them carries the billing and address members the
+// deprecated /account/child-accounts routes return.
+message IamDelegationChildAccount {
+  string company = 1;
+  string euuid = 2;
+}
+
+// IamDelegationChildAccountListResponse is the envelope the three child-account
+// collections answer with: count and the accounts themselves. None of the three
+// takes a filter param, so filter stays unset.
+message IamDelegationChildAccountListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated IamDelegationChildAccount child_accounts = 3;
+}
+
+// IamDelegationChildAccountUsers is the delegate list for one child account, as
+// both the read and the replace route answer it.
+//
+// The API pages the usernames, and a page whose elements are bare strings has
+// no element message for the collection tiers to decode into, so the member is
+// read under the name the wire gives it rather than through a count envelope.
+message IamDelegationChildAccountUsers {
+  repeated string data = 1;
+}
+
+// IamDelegationDefaultRolePermissions is the role assignment a delegate user
+// receives on a child account when nothing else assigns them one.
+//
+// It carries the same two halves a single user's own assignment does, which is
+// why the entity half is the IamUserEntityAccess that assignment declares:
+// same members, same meaning, one message.
+message IamDelegationDefaultRolePermissions {
+  repeated string account_access = 1;
+  repeated IamUserEntityAccess entity_access = 2;
+}
+
+// IamDelegationDefaultRolePermissionsWriteResponse is the
+// linode_iam_delegation_default_role_permission_update envelope: a confirmation
+// message plus the default assignment the API returned.
+message IamDelegationDefaultRolePermissionsWriteResponse {
+  string message = 1;
+  IamDelegationDefaultRolePermissions default_role_permissions = 2;
+}
+
+// IamDelegationChildAccountToken is the short-lived token a delegate user calls
+// a child account with. It carries the secret token value, which the API
+// returns once and never again; it is returned to the user by design and is not
+// output-redacted.
+message IamDelegationChildAccountToken {
+  string created = 1;
+  string expiry = 2;
+  int32 id = 3;
+  string label = 4;
+  string scopes = 5;
+  string token = 6;
+}
+
+// IamDelegationChildAccountTokenWriteResponse is the
+// linode_iam_delegation_profile_child_account_token_create envelope: a
+// confirmation message, the shown-once notice, and the token itself.
+message IamDelegationChildAccountTokenWriteResponse {
+  string message = 1;
+  string warning = 2;
+  IamDelegationChildAccountToken token = 3;
+}
+
+// IamDelegationChildAccountListInput is the input contract for
+// linode_iam_delegation_child_account_list. This route replaces the deprecated
+// GET /account/child-accounts.
+//
+// The route also publishes a `users` switch that adds each account's delegate
+// usernames to its element. It is not offered here: the element member it fills
+// is spelled the same way the switch is, which the collection reader takes as a
+// request to filter the page it already fetched.
+// linode_iam_delegation_child_account_user_list answers the same question one
+// account at a time.
+//
+// The route publishes no page controls in the reviewed spec snapshot, so no
+// page/page_size travels here.
+message IamDelegationChildAccountListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_child_account_list"
+    method: "GET"
+    path: "/iam/delegation/child-accounts"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the child accounts the authenticated account delegates users into.";
+  option (linode.mcp.v1.error_message) = "Failed to list delegated child accounts: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Ask the route to report the delegated users beside each child account
+  // (optional, default: false). The element carries no users member, so the
+  // argument travels to the route rather than narrowing the page here.
+  optional bool users = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+}
+
+// IamDelegationChildAccountUserListInput is the input contract for
+// linode_iam_delegation_child_account_user_list. The route publishes no page
+// controls in the reviewed spec snapshot, so no page/page_size travels here.
+message IamDelegationChildAccountUserListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_child_account_user_list"
+    method: "GET"
+    path: "/iam/delegation/child-accounts/{euuid}/users"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountUsers";
+  option (linode.mcp.v1.tool_description) = "Lists the parent-account users delegated into one child account, by euuid.";
+  option (linode.mcp.v1.error_message) = "Failed to list delegate users for child account '{euuid}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_delegation_child_account_user_list.euuid.required"
+    message: "euuid is required"
+    expression: "this.euuid.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // External unique identifier of the child account.
+  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// IamDelegationChildAccountUserUpdateInput is the input contract for
+// linode_iam_delegation_child_account_user_update.
+//
+// The call replaces the delegate list rather than merging into it, so the
+// usernames sent are the ones that remain delegated and an empty list withdraws
+// every delegation into that child account.
+message IamDelegationChildAccountUserUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_child_account_user_update"
+    method: "PUT"
+    path: "/iam/delegation/child-accounts/{euuid}/users"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountUsers";
+  option (linode.mcp.v1.tool_description) = "Replaces the set of parent-account users delegated into one child account. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This replaces the delegate users on a child account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to update delegate users for child account '{euuid}': {error}";
+  // Converged with the sibling IAM assignment update: the PUT replaces the set
+  // it carries, so a replay would reapply a delegation the first call may
+  // already have changed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  // Ordered: the account is read before the delegates named on it, matching the
+  // sibling read.
+  option (buf.validate.message).cel = {
+    id: "iam_delegation_child_account_user_update.euuid.required"
+    message: "euuid is required"
+    expression: "this.euuid.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "iam_delegation_child_account_user_update.users.entries"
+    message: "users entries must be non-empty usernames"
+    expression: "this.users.all(u, u.matches('[^ \\t\\r\\n]'))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // External unique identifier of the child account.
+  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Parent-account usernames to delegate into the child account. An empty list
+  // withdraws every delegation into it.
+  repeated string users = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm replacing the delegate users. Ignored when
+  // dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamDelegationDefaultRolePermissionGetInput is the input contract for
+// linode_iam_delegation_default_role_permission_get.
+message IamDelegationDefaultRolePermissionGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_default_role_permission_get"
+    method: "GET"
+    path: "/iam/delegation/default-role-permissions"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationDefaultRolePermissions";
+  option (linode.mcp.v1.tool_description) = "Gets the role assignment a delegate user receives by default: the account access roles and the entity access roles.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve the default delegate role permissions: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamDelegationDefaultRolePermissionUpdateInput is the input contract for
+// linode_iam_delegation_default_role_permission_update.
+//
+// The call replaces the whole default assignment rather than merging into it,
+// so an omitted list is an empty one: passing account_access [] is how the
+// default stops granting account-wide access.
+message IamDelegationDefaultRolePermissionUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_default_role_permission_update"
+    method: "PUT"
+    path: "/iam/delegation/default-role-permissions"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationDefaultRolePermissionsWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Replaces the role assignment delegate users receive by default. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This replaces the default role assignment for every delegate user. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Default delegate role permissions updated";
+  option (linode.mcp.v1.error_message) = "Failed to update the default delegate role permissions: {error}";
+  // Converged with the sibling IAM assignment update: the PUT replaces the role
+  // set it carries, so a replay would reapply an assignment the first call may
+  // already have changed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  // The runtime item reader owns list shape and per-item typing; this rule adds
+  // the entity checks it cannot express.
+  option (buf.validate.message).cel = {
+    id: "iam_delegation_default_role_permission_update.entity_access.entries"
+    message: "entity_access entries must carry an entity id, a type, and at least one role"
+    expression: "this.entity_access.all(e, e.id >= 1 && e.type.matches('[^ \\t\\r\\n]') && size(e.roles) > 0)"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Account access roles the default grants, such as account_admin or
+  // account_linode_creator. An empty array grants no account-wide access.
+  repeated string account_access = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Entity access roles the default grants, each an entity id and type with the
+  // roles held over it.
+  repeated IamUserEntityAccess entity_access = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm replacing the default assignment. Ignored when
+  // dry_run=true.
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamDelegationProfileChildAccountListInput is the input contract for
+// linode_iam_delegation_profile_child_account_list. The route publishes no page
+// controls in the reviewed spec snapshot, so no page/page_size travels here.
+message IamDelegationProfileChildAccountListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_profile_child_account_list"
+    method: "GET"
+    path: "/iam/delegation/profile/child-accounts"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the child accounts the authenticated user is delegated into.";
+  option (linode.mcp.v1.error_message) = "Failed to list your delegated child accounts: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamDelegationProfileChildAccountGetInput is the input contract for
+// linode_iam_delegation_profile_child_account_get. This route replaces the
+// deprecated GET /account/child-accounts/{euuid}.
+message IamDelegationProfileChildAccountGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_profile_child_account_get"
+    method: "GET"
+    path: "/iam/delegation/profile/child-accounts/{euuid}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccount";
+  option (linode.mcp.v1.tool_description) = "Gets one child account the authenticated user is delegated into, by euuid.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve delegated child account '{euuid}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_delegation_profile_child_account_get.euuid.required"
+    message: "euuid is required"
+    expression: "this.euuid.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // External unique identifier of the child account.
+  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// IamDelegationProfileChildAccountTokenCreateInput is the input contract for
+// linode_iam_delegation_profile_child_account_token_create. This route replaces
+// the deprecated POST /account/child-accounts/{euuid}/token.
+//
+// The route takes no body: the child account named in the path is the whole
+// request.
+message IamDelegationProfileChildAccountTokenCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_profile_child_account_token_create"
+    method: "POST"
+    path: "/iam/delegation/profile/child-accounts/{euuid}/token"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountTokenWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a short-lived token for calling one child account the authenticated user is delegated into. Requires confirm=true. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.confirm_message) = "This creates a delegate user token for a child account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Delegate user token created for child account '{euuid}'";
+  option (linode.mcp.v1.warning_message) = "IMPORTANT: The token below is shown ONLY ONCE. Save it now - it cannot be retrieved later.";
+  option (linode.mcp.v1.error_message) = "Failed to create a delegate user token for child account '{euuid}': {error}";
+  // Converged with the deprecated child-account token create this route
+  // replaces: a replayed POST mints a second live token the caller never sees
+  // the secret for.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "iam_delegation_profile_child_account_token_create.euuid.required"
+    message: "euuid is required"
+    expression: "this.euuid.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // External unique identifier of the child account.
+  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm creating a delegate user token. Ignored when
+  // dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// IamDelegationUserChildAccountListInput is the input contract for
+// linode_iam_delegation_user_child_account_list. The route publishes no page
+// controls in the reviewed spec snapshot, so no page/page_size travels here.
+message IamDelegationUserChildAccountListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_iam_delegation_user_child_account_list"
+    method: "GET"
+    path: "/iam/delegation/users/{username}/child-accounts"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the child accounts one parent-account user is delegated into, by username.";
+  option (linode.mcp.v1.error_message) = "Failed to list delegated child accounts for user '{username}': {error}";
+
+  option (buf.validate.message).cel = {
+    id: "iam_delegation_user_child_account_list.username.required"
+    message: "username is required"
+    expression: "this.username.matches('[^ \\t\\r\\n]')"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Account username whose delegations should be listed.
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}

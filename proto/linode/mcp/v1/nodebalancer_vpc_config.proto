@@ -40,13 +40,21 @@ message NodeBalancerVPCConfigGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerVPCConfig";
+  option (linode.mcp.v1.tool_description) = "Gets a VPC configuration for a specific NodeBalancer by IDs.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve VPC configuration {vpc_config_id} for NodeBalancer {nodebalancer_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer (required).
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the VPC configuration to retrieve (required).
-  int32 vpc_config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 vpc_config_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // NodeBalancerVPCConfigListInput is the input contract for
@@ -59,11 +67,15 @@ message NodeBalancerVPCConfigListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerVPCConfigListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists VPC configurations for a specific NodeBalancer by its ID.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose VPC configurations should be listed.
-  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 nodebalancer_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page number to retrieve.
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page, from 25 through 500.

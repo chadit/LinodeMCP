@@ -36,11 +36,16 @@ message BetaGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.BetaProgram";
+  option (linode.mcp.v1.tool_description) = "Gets one available beta program.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve beta program {beta_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Beta program ID to retrieve (required).
-  string beta_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string beta_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BETA_SLUG
+  ];
 }
 
 // BetaListInput is the input contract for linode_beta_list.
@@ -52,6 +57,7 @@ message BetaListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.BetaProgramListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available beta programs.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

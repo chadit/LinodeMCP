@@ -4,7 +4,23 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
+
+// InstanceFilesystem is the filesystem a disk is created with. Values are the
+// exact lowercase Linode API strings (POST /linode/instances/{linodeId}/disks).
+// See the enum-wrapper convention in nodebalancer_config.proto.
+message InstanceFilesystem {
+  enum Value {
+    unspecified = 0;
+    raw = 1;
+    swap = 2;
+    ext2 = 3;
+    ext3 = 4;
+    ext4 = 5;
+    initrd = 6;
+  }
+}
 
 // InstanceDiskGetInput is the input contract for linode_instance_disk_get. The
 // InstanceDisk response message is defined in instance.proto.
@@ -16,6 +32,19 @@ message InstanceDiskGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDisk";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific disk on a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve disk {disk_id} for instance {linode_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "instance_disk_get.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_get.disk_id.positive"
+    message: "disk_id must be a positive integer"
+    expression: "this.disk_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -34,6 +63,7 @@ message InstanceDiskListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all disks attached to a Linode instance.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -49,7 +79,7 @@ message InstanceDiskListInput {
 // linode_instance_disk_create. linode_id, label, size, and confirm are
 // required. authorized_keys/authorized_users are comma-separated strings here
 // (unlike the array form on instance create/rebuild), matching the hand-built
-// schema.
+// schema; body_comma_list is what turns each one into the array the API reads.
 message InstanceDiskCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_disk_create"
@@ -58,9 +88,72 @@ message InstanceDiskCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new disk on a Linode instance. WARNING: This modifies the instance's storage allocation.";
+  option (linode.mcp.v1.error_message) = "Failed to create disk for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a new disk on the instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Disk '{label}' (ID: {id}) created on instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the disk is created on. Its route spells the id
+  // linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new {size} MB disk \"{label}\" will be created on instance {linode_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.size.positive"
+    message: "size is required and must be greater than 0"
+    expression: "this.size >= 1"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.filesystem.known"
+    message: "filesystem must be one of: raw, swap, ext2, ext3, ext4, initrd"
+    expression: "!has(this.filesystem) || this.filesystem != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.stackscript_id.positive"
+    message: "stackscript_id must be a positive integer"
+    expression: "!has(this.stackscript_id) || this.stackscript_id >= 1"
+  };
+  // The next three sentences are the wording the password reset answers, which
+  // names root_pass because one validator serves every root password the
+  // surface takes; here the field is root_pass, so the wording is native.
+  // ASCII classes because protovalidate-python evaluates matches() through
+  // Python's re, which has no \p{Lu}; Go's own check is unicode-aware.
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.root_pass.min_length"
+    message: "root_pass must be at least 12 characters"
+    expression: "!has(this.root_pass) || size(this.root_pass) >= 12"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.root_pass.max_length"
+    message: "root_pass must not exceed 128 characters"
+    expression: "!has(this.root_pass) || size(this.root_pass) <= 128"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_create.root_pass.complexity"
+    message: "root_pass must contain uppercase, lowercase, and digits"
+    expression: "!has(this.root_pass) || (this.root_pass.matches('[A-Z]') && this.root_pass.matches('[a-z]') && this.root_pass.matches('[0-9]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -70,19 +163,28 @@ message InstanceDiskCreateInput {
   string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Size of the disk in MB (required).
   int32 size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Filesystem type: raw, swap, ext3, ext4, initrd (defaults to ext4)
+  // Filesystem type: raw, swap, ext2, ext3, ext4, initrd (defaults to ext4)
   // (optional).
-  optional string filesystem = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional InstanceFilesystem.Value filesystem = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Image ID to deploy to the disk, e.g. linode/ubuntu22.04 (optional).
   optional string image = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Root password for the disk. Required when deploying an image (min 12 chars
   // with upper/lower/digits) (optional).
-  optional string root_pass = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string root_pass = 7 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Comma-separated list of SSH public keys to install (optional).
-  optional string authorized_keys = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string authorized_keys = 8 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_comma_list) = true
+  ];
   // Comma-separated list of Linode usernames whose SSH keys to install
   // (optional).
-  optional string authorized_users = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string authorized_users = 9 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_comma_list) = true
+  ];
   // Must be true to confirm disk creation. Ignored when dry_run=true.
   bool confirm = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -106,8 +208,24 @@ message InstanceDiskUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the label of a disk on a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to modify disk {disk_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the disk configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Disk {disk_id} on instance {linode_id} modified successfully";
+  // The read is the disk the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_disk_get"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_update.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_update.disk_id.positive"
+    message: "disk_id must be a positive integer"
+    expression: "this.disk_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -135,8 +253,19 @@ message InstanceDiskDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a disk from a Linode instance. WARNING: This is irreversible and all data on the disk will be lost. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. All data on the disk will be permanently deleted. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Disk {disk_id} deleted from instance {linode_id} successfully";
   option (linode.mcp.v1.resource_type) = "Disk";
+  // A replay would report a disk the first attempt already erased as one the
+  // instance never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The walk lists the configuration profiles whose device slots point at it,
+  // which is an extra call no descriptor describes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_disk_get"
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -168,9 +297,25 @@ message InstanceDiskCloneInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Clones a disk on a Linode instance. The instance must have enough unallocated storage for the clone.";
+  option (linode.mcp.v1.error_message) = "Failed to clone disk {disk_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This clones a disk, consuming additional storage on the instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Disk {disk_id} cloned to new disk {id} on instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The preview reads the disk so its label and size name the storage the
+  // clone consumes.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "instance_disk_clone.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_clone.disk_id.positive"
+    message: "disk_id must be a positive integer"
+    expression: "this.disk_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -196,8 +341,29 @@ message InstanceDiskResizeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskResizeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resizes a disk on a Linode instance. The instance must be powered off to resize. Growing a disk requires sufficient unallocated storage. Shrinking requires the data to fit in the new size.";
+  option (linode.mcp.v1.error_message) = "Failed to resize disk {disk_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This resizes the disk. The instance must be powered off. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Disk {disk_id} on instance {linode_id} resize initiated to {size} MB";
+  // The preview reads the disk so the size it grows or shrinks from is
+  // reported beside the size it is headed for.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "instance_disk_resize.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_resize.disk_id.positive"
+    message: "disk_id must be a positive integer"
+    expression: "this.disk_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_resize.size.positive"
+    message: "size is required and must be greater than 0"
+    expression: "this.size >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -217,6 +383,10 @@ message InstanceDiskResizeInput {
 // InstanceDiskPasswordResetInput is the input contract for
 // linode_instance_disk_password_reset. linode_id, disk_id, password, and
 // confirm are required.
+//
+// Nothing turns retry off here. The caller supplies the password, so a replay
+// writes the same value the first attempt did; the credential routes that do
+// refuse a replay are the ones where the server mints the new secret.
 message InstanceDiskPasswordResetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_disk_password_reset"
@@ -225,9 +395,58 @@ message InstanceDiskPasswordResetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskActionResponse";
+  option (linode.mcp.v1.tool_description) = "Resets the root password for a disk on a Linode instance. The instance must be powered off.";
+  option (linode.mcp.v1.error_message) = "Failed to reset password for disk {disk_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This resets the root password for a disk. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Password reset for disk {disk_id} on instance {linode_id}";
-  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the disk whose root password is replaced.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_disk_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The root password for disk {disk_id} on instance {linode_id} will be reset."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Existing disk root password access will be replaced."
+    line: PREVIEW_LINE_WARNING
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_disk_password_reset.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_password_reset.disk_id.positive"
+    message: "disk_id must be a positive integer"
+    expression: "this.disk_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_password_reset.password.required"
+    message: "password is required"
+    expression: "this.password.matches('[^ \\t\\r\\n]')"
+  };
+  // The next three sentences are Go's live wording, which names root_pass
+  // because one validator serves every root password the surface takes. Kept
+  // verbatim so the migration changes no sentence a caller reads today.
+  option (buf.validate.message).cel = {
+    id: "instance_disk_password_reset.password.min_length"
+    message: "root_pass must be at least 12 characters"
+    expression: "size(this.password) >= 12"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_disk_password_reset.password.max_length"
+    message: "root_pass must not exceed 128 characters"
+    expression: "size(this.password) <= 128"
+  };
+  // ASCII classes because protovalidate-python evaluates matches() through
+  // Python's re, which has no \p{Lu}; Go's own check is unicode-aware.
+  option (buf.validate.message).cel = {
+    id: "instance_disk_password_reset.password.complexity"
+    message: "root_pass must contain uppercase, lowercase, and digits"
+    expression: "this.password.matches('[A-Z]') && this.password.matches('[a-z]') && this.password.matches('[0-9]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -237,7 +456,10 @@ message InstanceDiskPasswordResetInput {
   int32 disk_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New disk root password (min 12 chars, must include upper, lower, and
   // digits).
-  string password = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string password = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Must be true to confirm disk password reset. Ignored when dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and

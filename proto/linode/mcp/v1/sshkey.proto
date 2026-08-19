@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // SSHKey mirrors a Linode profile SSH key.
@@ -48,11 +49,19 @@ message SSHKeyGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKey";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a single SSH key by its ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve SSH key: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the SSH key to retrieve (required).
-  int32 ssh_key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 ssh_key_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    // One sentence covers missing, wrong type, and non-positive, which is what
+    // this tool has always answered all three.
+    (linode.mcp.v1.reader_message) = {absent: "ssh_key_id must be a positive integer"}
+  ];
 }
 
 // SSHKeyListInput is the input contract for linode_sshkey_list. page and
@@ -66,6 +75,7 @@ message SSHKeyListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all SSH keys associated with your Linode profile. Can filter by label.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -86,9 +96,46 @@ message SSHKeyCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new SSH key in your Linode profile. The key can then be used when deploying new Linode instances. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.error_message) = "Failed to create SSH key: {error}";
   option (linode.mcp.v1.confirm_message) = "This adds an SSH key to your Linode profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "SSH key '{label}' (ID: {id}) created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The key a create would add. The public half stays out of the prose: the
+  // label is what identifies the key to its owner.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new SSH key \"{label}\" will be added to your profile."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
+
+  option (buf.validate.message).cel = {
+    id: "sshkey_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "sshkey_create.ssh_key.required"
+    message: "ssh_key is required"
+    expression: "this.ssh_key != ''"
+  };
+  // The prefix is matched past any leading blanks because the key has always
+  // been read trimmed while the body sends it exactly as it arrived, and a rule
+  // that rewrote the argument would change the bytes on the wire.
+  option (buf.validate.message).cel = {
+    id: "sshkey_create.ssh_key.algorithm"
+    message: "invalid SSH key format: must start with ssh-rsa, ssh-ed25519, or ecdsa-sha2-*"
+    expression: "this.ssh_key.matches('^[ \\t\\r\\n]*(ssh-rsa|ssh-ed25519|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|ssh-dss) ')"
+  };
+  // An RSA 2048 key runs around 400 characters and a 4096 around 800, so the
+  // window admits every real key and refuses a truncated one.
+  option (buf.validate.message).cel = {
+    id: "sshkey_create.ssh_key.length"
+    message: "SSH key length is invalid (must be between 80 and 16000 characters)"
+    expression: "size(this.ssh_key) >= 80 && size(this.ssh_key) <= 16000"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -113,15 +160,33 @@ message SSHKeyUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the label for an SSH key in your Linode profile. Pass dry_run=true to preview without updating.";
+  // Go and Python worded this failure differently before the contract carried
+  // it. The Python wording wins the verb because every other declared failure
+  // on the surface opens with it, and the Go id is kept because naming the key
+  // is what tells one failed update from another.
+  option (linode.mcp.v1.error_message) = "Failed to update SSH key {ssh_key_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates an SSH key in your Linode profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "SSH key '{label}' (ID: {id}) updated successfully";
+  // The preview reads the key so it can say which label is being replaced.
+  option (linode.mcp.v1.tool_hooks) = "preview";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the SSH key to update.
-  int32 ssh_key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 ssh_key_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    // This tool tells a caller who sent "5/x" that the id is not positive
+    // rather than that it is missing, and says the same to a caller who sent
+    // nothing at all.
+    (linode.mcp.v1.reader_message) = {absent: "ssh_key_id must be a positive integer"}
+  ];
   // The new label for the SSH key.
-  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string label = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Must be set to true to confirm SSH key update. Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -139,8 +204,18 @@ message SSHKeyDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes an SSH key from your Linode profile. This will not affect any instances already using this key. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This removes an SSH key from your Linode profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "SSH key {ssh_key_id} removed successfully";
   option (linode.mcp.v1.resource_type) = "SSHKey";
+  // A replay would report a key the first attempt already removed as one the
+  // profile never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // No walk: nothing depends on an SSH key, and removing one leaves the
+  // instances already using it alone.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_sshkey_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

@@ -4,14 +4,20 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // ObjectStorageKeyPermission is the per-bucket grant level for an Object Storage
 // access key. Values are the exact lowercase Linode API strings, authored from
 // the live OpenAPI spec. See the enum-wrapper convention in
-// nodebalancer_config.proto. The key create/update tools carry bucket_access as
-// a JSON-array string, so no input field is this enum's type; the handlers
-// validate each parsed entry's permissions against this generated value set.
+// nodebalancer_config.proto.
+//
+// No field is this enum's type. A bucket_access entry's permissions member is a
+// plain string held to the same two names by the key create and update CEL
+// rules, because an enum member nested inside a repeated message is not
+// coerced by toolvalidate: an unrecognized name there fails the decode and
+// silently disables every rule on the call. The rules name the members
+// verbatim, so a member renamed here must be renamed in both of them.
 message ObjectStorageKeyPermission {
   enum Value {
     unspecified = 0;
@@ -47,9 +53,15 @@ message PresignedURLMethod {
   }
 }
 
-// ObjectStorageKeyBucketAccess is a per-bucket grant nested in an Object Storage
-// key. permissions stays a string on this response message (the read side never
-// rejects an unknown API value); the write-side validation is enum-backed.
+// ObjectStorageKeyBucketAccess is a per-bucket grant on an Object Storage key:
+// the item the key create and update tools send, and the item the API answers
+// with. One declaration serves both because the API reads and writes the same
+// three members under the same names.
+//
+// The spec documents two mutually exclusive item shapes, one keyed on region
+// and a legacy one keyed on cluster, and both tools have always sent the region
+// form. permissions stays a string: an unknown value the API adds later reaches
+// a reader unchanged, and the write side holds it to the value set through CEL.
 message ObjectStorageKeyBucketAccess {
   string bucket_name = 1;
   string region = 2;
@@ -84,9 +96,21 @@ message ObjectStorageKeyListResponse {
   repeated ObjectStorageKey keys = 3;
 }
 
-// ObjectStorageKeyWriteResponse is the {message, key} envelope the Object Storage
-// key create tool returns. warning carries the secret-shown-once notice on create.
+// ObjectStorageKeyWriteResponse is the {message, key} envelope
+// linode_object_storage_key_update returns. An update re-reads no secret, so
+// there is nothing to warn about and the envelope carries no warning member.
 message ObjectStorageKeyWriteResponse {
+  string message = 1;
+  ObjectStorageKey key = 2;
+}
+
+// ObjectStorageKeyCreateResponse is the {message, key, warning} envelope
+// linode_object_storage_key_create returns. The create is the only call that
+// answers with secret_key, so the shown-once notice lives on an envelope of its
+// own rather than on the shared one, where the update would have to promise a
+// warning it never had. The member numbers match the shared envelope's so the
+// serialized order is what create has always answered with.
+message ObjectStorageKeyCreateResponse {
   string message = 1;
   ObjectStorageKey key = 2;
   string warning = 3;
@@ -110,11 +134,16 @@ message ObjectStorageKeyGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKey";
+  option (linode.mcp.v1.tool_description) = "Gets details about a specific Object Storage access key by ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve access key {key_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Object Storage key to retrieve (required).
-  int32 key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 key_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // ObjectStorageKeyListInput is the input contract for
@@ -127,6 +156,7 @@ message ObjectStorageKeyListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all Object Storage access keys for the authenticated user";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -134,8 +164,6 @@ message ObjectStorageKeyListInput {
 
 // ObjectStorageKeyCreateInput is the input contract for
 // linode_object_storage_key_create. label and confirm are required.
-// bucket_access is a JSON array passed as a string; the handler parses and
-// validates it, so the schema type stays string.
 message ObjectStorageKeyCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_key_create"
@@ -143,19 +171,48 @@ message ObjectStorageKeyCreateInput {
     path: "/object-storage/keys"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
-  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyWriteResponse";
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyCreateResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new Object Storage access key. WARNING: The secret_key is only shown ONCE in the response and cannot be retrieved later.";
+  option (linode.mcp.v1.error_message) = "Failed to create access key: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Access key '{label}' created successfully (ID: {id})";
+  option (linode.mcp.v1.warning_message) = "IMPORTANT: The secret_key below is shown ONLY ONCE. Save it now - it cannot be retrieved later.";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The key being created, and the secret shown once with it.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new Object Storage access key \"{label}\" will be created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The secret key is returned only once, at creation time."
+    line: PREVIEW_LINE_WARNING
+  };
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_key_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_key_create.label.length"
+    message: "access key label must not exceed 50 characters"
+    expression: "size(this.label) <= 50"
+  };
+  // The runtime item reader owns list shape, member typing, and unknown keys;
+  // this rule adds the per-entry checks it cannot express.
+  option (buf.validate.message).cel = {
+    id: "object_storage_key_create.bucket_access.entries"
+    message: "bucket_access entries must carry a bucket_name and a region, with permissions of read_only or read_write"
+    expression: "this.bucket_access.all(entry, entry.bucket_name != '' && entry.region != '' && entry.permissions in ['read_only', 'read_write'])"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the access key (max 50 characters).
   string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // JSON array of bucket permissions: [{"bucket_name": "name", "region":
-  // "region", "permissions": "read_only|read_write"}]. Omit for unrestricted
-  // access.
-  optional string bucket_access = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Bucket permissions to limit the key to, each naming a bucket, the region it
+  // resides in, and read_only or read_write. Omit for unrestricted access.
+  repeated ObjectStorageKeyBucketAccess bucket_access = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true. The secret_key is only shown ONCE in the response.
   // Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -174,8 +231,34 @@ message ObjectStorageKeyUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an Object Storage access key's label or bucket permissions.";
+  option (linode.mcp.v1.error_message) = "Failed to modify access key {key_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies access key permissions. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Access key {key_id} modified successfully";
+  // bucket_access and regions are complete replacement sets, so a replay
+  // reapplies permissions someone else may have changed since the first call.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // preview reads the key so a caller sees the label the update replaces.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // The id is read before the body it addresses, matching the sibling read.
+  option (buf.validate.message).cel = {
+    id: "object_storage_key_update.key_id.positive"
+    message: "key_id must be a positive integer"
+    expression: "this.key_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_key_update.label.length"
+    message: "access key label must not exceed 50 characters"
+    expression: "!has(this.label) || size(this.label) <= 50"
+  };
+  // The runtime item reader owns list shape, member typing, and unknown keys;
+  // this rule adds the per-entry checks it cannot express.
+  option (buf.validate.message).cel = {
+    id: "object_storage_key_update.bucket_access.entries"
+    message: "bucket_access entries must carry a bucket_name and a region, with permissions of read_only or read_write"
+    expression: "this.bucket_access.all(entry, entry.bucket_name != '' && entry.region != '' && entry.permissions in ['read_only', 'read_write'])"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -183,9 +266,9 @@ message ObjectStorageKeyUpdateInput {
   int32 key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the access key (max 50 characters).
   optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // JSON array of bucket permissions: [{"bucket_name": "name", "region":
-  // "region", "permissions": "read_only|read_write"}].
-  optional string bucket_access = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Replacement bucket permissions, each naming a bucket, the region it resides
+  // in, and read_only or read_write.
+  repeated ObjectStorageKeyBucketAccess bucket_access = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm key update. Ignored when dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -205,8 +288,24 @@ message ObjectStorageKeyDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Revokes an Object Storage access key permanently. Pass dry_run=true to preview without revoking. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This revokes the access key permanently. Set confirm=true to proceed.";
   option (linode.mcp.v1.resource_type) = "ObjectStorageKey";
+  option (linode.mcp.v1.success_message) = "Access key {key_id} revoked successfully";
+  // A replay would report a key the first attempt already revoked as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the key a revoke removes, so the preview names the label
+  // rather than only the id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_key_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_key_delete.key_id.positive"
+    message: "key_id must be a positive integer"
+    expression: "this.key_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -273,6 +372,33 @@ message ObjectStorageBucketGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucket";
+  option (linode.mcp.v1.tool_description) = "Gets details about a specific Object Storage bucket by region and label";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve bucket '{label}' in region '{region}': {error}";
+
+  // Both halves address the bucket as path segments, and the four sentences
+  // keep the order the hand-written readers answered them in. Checking the
+  // documented label shape here keeps one that cannot address a bucket off the
+  // wire.
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_get.region.required"
+    message: "region is required"
+    expression: "this.region != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_get.region.slug"
+    message: "region must be a valid region or cluster ID"
+    expression: "this.region.matches('^[a-z0-9]+(-[a-z0-9]+)*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_get.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_get.label.shape"
+    message: "label must be a valid bucket label"
+    expression: "size(this.label) <= 63 && this.label.matches('^([a-z0-9][a-z0-9-]*[a-z0-9]|[a-z0-9]{1,2})$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -292,6 +418,7 @@ message ObjectStorageBucketListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all Object Storage buckets across all regions for the authenticated user";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -307,6 +434,21 @@ message ObjectStorageBucketByRegionListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Object Storage buckets in a specific region for the authenticated user";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage buckets in region '{region}': {error}";
+
+  // The region half of the bucket-get check, which is why the two answer the
+  // same two sentences.
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_by_region_list.region.required"
+    message: "region is required"
+    expression: "this.region != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_by_region_list.region.slug"
+    message: "region must be a valid region or cluster ID"
+    expression: "this.region.matches('^[a-z0-9]+(-[a-z0-9]+)*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -326,6 +468,30 @@ message ObjectStorageBucketObjectListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists objects in an Object Storage bucket with optional prefix/delimiter filtering and pagination";
+  option (linode.mcp.v1.error_message) = "Failed to list contents of bucket '{label}' in region '{region}': {error}";
+  option (linode.mcp.v1.list_envelope) = {shape: SHAPE_MARKER};
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_object_list.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_object_list.region.slug"
+    message: "region must be a valid region or cluster ID"
+    expression: "this.region.matches('^[a-z0-9]+(-[a-z0-9]+)*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_object_list.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_object_list.label.shape"
+    message: "label must be a valid bucket label"
+    expression: "size(this.label) <= 63 && this.label.matches('^([a-z0-9][a-z0-9-]*[a-z0-9]|[a-z0-9]{1,2})$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -354,8 +520,65 @@ message ObjectStorageBucketCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new Object Storage bucket. WARNING: Billing starts immediately.";
+  option (linode.mcp.v1.error_message) = "Failed to create bucket: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Bucket '{label}' created successfully in {region}";
+  // The bucket a create would add, and the billing that starts with it.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new Object Storage bucket \"{label}\" will be created in {region}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Billing for Object Storage starts immediately on creation."
+    line: PREVIEW_LINE_WARNING
+  };
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.label.min"
+    message: "bucket label must be at least 3 characters"
+    expression: "size(this.label) >= 3"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.label.max"
+    message: "bucket label must not exceed 63 characters"
+    expression: "size(this.label) <= 63"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.label.xn_prefix"
+    message: "bucket label must not use the 'xn--' prefix (reserved for internationalized domain names)"
+    expression: "!this.label.startsWith('xn--')"
+  };
+  // The charset also answers the two rules that used to follow it: an
+  // IP-formatted label needs dots or colons, and a label passing this one
+  // already starts and ends alphanumeric.
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.label.charset"
+    message: "bucket label must contain only lowercase letters, numbers, and hyphens"
+    expression: "this.label.matches('^[a-z0-9][a-z0-9-]*[a-z0-9]$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.acl.known"
+    message: "acl must be one of: private, public-read, authenticated-read, public-read-write"
+    expression: "!has(this.acl) || this.acl in ['private', 'public-read', 'authenticated-read', 'public-read-write']"
+  };
+  // An endpoint_type naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "object_storage_bucket_create.endpoint_type.known"
+    message: "endpoint_type must be one of: E0, E1, E2, E3"
+    expression: "!has(this.endpoint_type) || this.endpoint_type != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -392,9 +615,16 @@ message ObjectStorageBucketDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Bucket '{label}' in {region} removed successfully";
   option (linode.mcp.v1.resource_type) = "ObjectStorageBucket";
+  // A replay would report a bucket the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_bucket_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -426,8 +656,12 @@ message ObjectStorageCancelInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Cancels Object Storage service for the account. WARNING: This changes account service state.";
+  option (linode.mcp.v1.error_message) = "Failed to cancel Object Storage: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation cancels Object Storage service for the account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Object Storage cancellation requested successfully";
+  // Never replayed: a retried cancel would act twice on account service state.
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -467,6 +701,7 @@ message ObjectStorageEndpointListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageEndpointListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Object Storage endpoints across regions";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -507,6 +742,7 @@ message ObjectStorageQuotaListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Object Storage quotas on the account";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -523,11 +759,22 @@ message ObjectStorageQuotaGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuota";
+  option (linode.mcp.v1.tool_description) = "Gets details about a single Object Storage quota by ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage quota {obj_quota_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Object Storage quota ID to retrieve.
-  string obj_quota_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string obj_quota_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FRAGMENT_SAFE_TEXT,
+    // A quota id sent as anything but text reads as one nobody sent, and the
+    // refusal names the fragment marker among the classes.
+    (linode.mcp.v1.reader_message) = {
+      unusable: "obj_quota_id is required"
+      refused: "obj_quota_id must not contain path separators, query separators, fragments, or traversal segments"
+    }
+  ];
 }
 
 // ObjectStorageQuotaUsage is the linode_object_storage_quota_usage_get response.
@@ -551,11 +798,33 @@ message ObjectStorageQuotaUsageGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaUsage";
+  option (linode.mcp.v1.tool_description) = "Gets usage data for a specific Object Storage quota";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage quota usage for {obj_quota_id}: {error}";
+
+  // The usage route takes a narrower character set than its sibling and words
+  // its refusal differently, so the set is stated here rather than shared.
+  option (buf.validate.message).cel = {
+    id: "object_storage_quota_usage_get.obj_quota_id.required"
+    message: "obj_quota_id is required"
+    expression: "this.obj_quota_id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_quota_usage_get.obj_quota_id.charset"
+    message: "obj_quota_id must not contain path separators, query separators, traversal segments, or unsupported characters"
+    expression: "this.obj_quota_id.matches('^[a-z0-9.-]+$') && !this.obj_quota_id.contains('..')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Object Storage quota ID to retrieve usage for.
-  string obj_quota_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string obj_quota_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FREE_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "obj_quota_id is required"
+      unusable: "obj_quota_id is required"
+    }
+  ];
 }
 
 // ObjectStorageGlobalQuotaListResponse is the
@@ -644,6 +913,8 @@ message ObjectStorageTransferGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageTransfer";
+  option (linode.mcp.v1.tool_description) = "Gets Object Storage outbound data transfer usage for the current month";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage transfer usage: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -667,6 +938,40 @@ message PresignedURLCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PresignedURLResponse";
+  option (linode.mcp.v1.tool_description) = "Generates a presigned URL for accessing an object in Object Storage. Use method=GET to create a download URL, method=PUT to create an upload URL.";
+  option (linode.mcp.v1.error_message) = "Failed to generate presigned URL for '{name}' in bucket '{label}': {error}";
+  // The method arrives in whatever case the caller typed it, so it is folded to
+  // the canonical S3 verb before the enum rule below reads it.
+  option (linode.mcp.v1.tool_hooks) = "normalize";
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_presigned_url_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_presigned_url_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_presigned_url_create.name.required"
+    message: "name (object key) is required"
+    expression: "this.name.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_presigned_url_create.method.known"
+    message: "method must be one of: GET, PUT"
+    expression: "this.method != 0"
+  };
+  // The rejection names the value it read, which is the one sentence in the
+  // contract a static message cannot carry: a CEL rule answering a string
+  // reports that string instead of its declared one.
+  option (buf.validate.message).cel = {
+    id: "object_storage_presigned_url_create.expires_in.range"
+    message: "expires_in must be between 1 and 604800 seconds (7 days)"
+    expression: "(!has(this.expires_in) || (this.expires_in >= 1 && this.expires_in <= 604800)) ? '' : string('expires_in must be between 1 and 604800 seconds (7 days), got ' + string(this.expires_in))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -711,4 +1016,250 @@ message ObjectStorageObjectListResponse {
   bool is_truncated = 3;
   optional string next_marker = 4;
   repeated ObjectStorageObject objects = 5;
+}
+
+// ObjectStorageObjectUploadResponse is the linode_object_storage_object_upload
+// answer. label and name echo the call; the rest are LOCAL because the transfer
+// produced them and no Linode body carries them.
+//
+// There is no content hash member beside etag. For a single PUT the endpoint's
+// ETag IS the stored object's MD5, so a caller verifies by hashing their own
+// file and comparing it against etag, which checks the round trip end to end
+// rather than repeating the server's own arithmetic back at it. Above the
+// single-part ceiling that stops being true, which is what upload_mode is for:
+// it answers "single" for every Tier A upload, and a later multipart mode is
+// the signal that a composite ETag is not a content hash.
+message ObjectStorageObjectUploadResponse {
+  string message = 1;
+  string label = 2;
+  string name = 3;
+  // Bytes the transfer sent, counted off the stream rather than from a stat, so
+  // a file that changed size mid-read reports what actually reached the bucket.
+  int64 size_bytes = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
+  // The entity tag the bucket stored the object under, quotes stripped. Empty
+  // when the endpoint sent none, which leaves the object stored but unverifiable
+  // rather than failed.
+  string etag = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
+  // "single" for every Tier A upload. Multipart is not implemented yet, so a
+  // file over the ceiling is refused rather than answered with another mode.
+  string upload_mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
+}
+
+// ObjectStorageObjectDownloadResponse is the linode_object_storage_object_download
+// answer. label and name echo the call; the rest are LOCAL because the transfer
+// produced them and no Linode body carries them.
+//
+// dest_path is deliberately not echoed. The tool writes the file at exactly the
+// path it was given, so reporting it back would restate the caller's own
+// argument rather than tell them anything the call decided.
+//
+// The same reasoning as the upload's answer: etag is whatever the endpoint sent
+// back, reported as it arrived rather than checked here, so a caller who wants
+// verification hashes the file that landed and compares it themselves.
+message ObjectStorageObjectDownloadResponse {
+  string message = 1;
+  string label = 2;
+  string name = 3;
+  // Bytes written to the destination, counted off the stream rather than from
+  // the Content-Length header, so a truncated transfer reports what landed.
+  int64 size_bytes = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
+  // The entity tag the object was stored under, quotes stripped. Empty when the
+  // endpoint sent none.
+  string etag = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
+}
+
+// ObjectStorageObjectDownloadInput is the input contract for
+// linode_object_storage_object_download. region, label, name, and dest_path are
+// required.
+//
+// The declared route is the presigned-URL create, for the reason the upload
+// gives: asking for a URL is the one Linode operation this tool performs, and
+// following that URL is not a route the client builds. Capability is Read
+// because nothing on Linode changes; the local file it writes is guarded by
+// overwrite defaulting to false rather than by a confirm gate, since a confirm
+// prompt would announce a Linode mutation that never happens.
+message ObjectStorageObjectDownloadInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_object_download"
+    method: "POST"
+    path: "/object-storage/buckets/{region}/{label}/object-url"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectDownloadResponse";
+  option (linode.mcp.v1.tool_description) = "Downloads an object from an Object Storage bucket to a local file. Takes a filesystem path on the machine running the server, streams the object to it, and reports the byte count and stored ETag.";
+  option (linode.mcp.v1.error_message) = "Failed to download '{name}' from bucket '{label}': {error}";
+  option (linode.mcp.v1.success_message) = "Object '{name}' downloaded from bucket '{label}'";
+  // The transfer consumes the response body as it writes it, so a replay after
+  // a timeout would resume against a stream the first attempt already drained.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The caller does not choose the verb: this tool only ever signs a GET.
+  option (linode.mcp.v1.body_constant) = {
+    key: "method"
+    text: "GET"
+  };
+  // The destination path is trimmed before anything reads it, so a path of
+  // spaces answers "dest_path is required" rather than reaching the
+  // absolute-path rule.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "dest_path"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // execute owns the whole transfer: the presign call, the GET, and the
+  // write.
+  option (linode.mcp.v1.tool_hooks) = "execute";
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download.name.required"
+    message: "name (object key) is required"
+    expression: "this.name.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download.dest_path.required"
+    message: "dest_path is required"
+    expression: "this.dest_path.matches('[^ \\t\\r\\n]')"
+  };
+  // Absoluteness is decided by the path text rather than by the host the server
+  // runs on, the same reason the upload's source path gives.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download.dest_path.absolute"
+    message: "dest_path must be a local, absolute path"
+    expression: "this.dest_path.startsWith('/') || this.dest_path.matches('^[A-Za-z]:')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download.expires_in.range"
+    message: "expires_in must be between 1 and 604800 seconds (7 days)"
+    expression: "!has(this.expires_in) || (this.expires_in >= 1 && this.expires_in <= 604800)"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Region where the bucket is located (e.g. 'us-east-1', 'us-southeast-1').
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The bucket label (name).
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The object key to fetch.
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Absolute path to write the object to. The bytes are streamed to it; the
+  // path itself reaches no request, which is why it declares no request
+  // location.
+  string dest_path = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
+  // Replace a file already at dest_path. Default false, which is what stands in
+  // for a confirm gate on a tool that changes nothing on Linode.
+  optional bool overwrite = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
+  // Lifetime of the presigned URL in seconds (1-604800). Defaults to the
+  // configured budget, which has to outlast the transfer it authorizes.
+  optional int32 expires_in = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+}
+
+// ObjectStorageObjectUploadInput is the input contract for
+// linode_object_storage_object_upload. region, label, name, and source_path are
+// required.
+//
+// The declared route is the presigned-URL create, because that is the one
+// Linode operation this tool calls: it asks for a URL and then PUTs the file to
+// the URL the API handed back. Following a URL is not a route the client builds,
+// which is why nothing here declares an S3 path and why no Object Storage key is
+// ever minted. The transfer itself is the execute hook's.
+message ObjectStorageObjectUploadInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_object_upload"
+    method: "POST"
+    path: "/object-storage/buckets/{region}/{label}/object-url"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectUploadResponse";
+  option (linode.mcp.v1.tool_description) = "Uploads a local file to an Object Storage bucket. Takes a filesystem path on the machine running the server, streams it to a presigned URL, and reports the byte count and stored ETag.";
+  option (linode.mcp.v1.error_message) = "Failed to upload '{name}' to bucket '{label}': {error}";
+  option (linode.mcp.v1.confirm_message) = "This uploads a local file to Object Storage, replacing any object already stored under that key. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Object '{name}' uploaded to bucket '{label}'";
+  // The transfer consumes the file as it sends it, so a replay after a timeout
+  // would re-read a stream the first attempt already drained.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The caller does not choose the verb: this tool only ever signs a PUT.
+  // Declaring it as an argument would advertise a choice it does not have.
+  option (linode.mcp.v1.body_constant) = {
+    key: "method"
+    text: "PUT"
+  };
+  // The source path is trimmed before anything reads it, so a path of spaces
+  // answers "source_path is required" rather than reaching the absolute-path
+  // rule.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "source_path"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // preview stats the file and reports what would be sent. execute owns the
+  // whole transfer: the presign call, the PUT, and the byte count.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  option (linode.mcp.v1.tool_hooks) = "execute";
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload.name.required"
+    message: "name (object key) is required"
+    expression: "this.name.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload.source_path.required"
+    message: "source_path is required"
+    expression: "this.source_path.matches('[^ \\t\\r\\n]')"
+  };
+  // Absoluteness is decided by the path text rather than by the host the server
+  // runs on, the reason the support-ticket attachment gives: asking the OS made
+  // the same call legal on one platform and refused on another.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload.source_path.absolute"
+    message: "source_path must be a local, absolute path"
+    expression: "this.source_path.startsWith('/') || this.source_path.matches('^[A-Za-z]:')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload.expires_in.range"
+    message: "expires_in must be between 1 and 604800 seconds (7 days)"
+    expression: "!has(this.expires_in) || (this.expires_in >= 1 && this.expires_in <= 604800)"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Region where the bucket is located (e.g. 'us-east-1', 'us-southeast-1').
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The bucket label (name).
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The object key the file is stored under.
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Absolute path to the local file to upload. Its contents are streamed to the
+  // presigned URL; the path itself reaches no request, which is why it declares
+  // no request location.
+  string source_path = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
+  // Content-Type the stored object carries (optional, defaults to
+  // application/octet-stream). The default is filled in before the URL is
+  // signed, not at PUT time: the signature covers this header, so a PUT sending
+  // a type the presign request never named is refused by the endpoint.
+  optional string content_type = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Lifetime of the presigned URL in seconds (1-604800). Defaults to the
+  // configured budget, which has to outlast the transfer it authorizes.
+  optional int32 expires_in = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm the upload. Ignored when dry_run=true.
+  bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and the
+  // local file it would send. Default false.
+  optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

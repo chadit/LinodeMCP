@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -229,8 +230,34 @@ message ReservedIPCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
+  option (linode.mcp.v1.tool_description) = "Reserves a public IPv4 address in a region. Pass dry_run=true to preview without reserving or starting billing.";
   option (linode.mcp.v1.confirm_message) = "This reserves a public IPv4 address and starts billing. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to reserve public IPv4 address: {error}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The API sends these as an explicit null on a freshly reserved address, and
+  // a caller cannot tell "no gateway" from "the API said nothing" without them.
+  option (linode.mcp.v1.explicit_null_fields) = "assigned_entity";
+  option (linode.mcp.v1.explicit_null_fields) = "gateway";
+  option (linode.mcp.v1.explicit_null_fields) = "interface_id";
+  option (linode.mcp.v1.explicit_null_fields) = "linode_id";
+  option (linode.mcp.v1.explicit_null_fields) = "rdns";
+  option (linode.mcp.v1.explicit_null_fields) = "vpc_nat_1_1";
+  // The preview carries the billing delta a reservation starts, which no
+  // declared sentence can express.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // An absent region and one the body builder stood an empty string in for
+  // answer the same sentence, which is what lets both be one rule.
+  option (buf.validate.message).cel = {
+    id: "networking_reserved_ip_create.region.required"
+    message: "region is required"
+    expression: "this.region != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_reserved_ip_create.region.slug"
+    message: "region must be a lowercase region slug"
+    expression: "this.region.matches('^[a-z0-9][a-z0-9-]*[a-z0-9]$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -253,7 +280,19 @@ message ReservedIPListInput {
     path: "/networking/reserved/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
-  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists reserved public IPv4 addresses on the account.";
+  option (linode.mcp.v1.error_message) = "Failed to list reserved IPv4 addresses: {error}";
+  // The same six the create, the get and the update restore, here on every
+  // address in the page: an unassigned reservation carries all six as an
+  // explicit null, and a caller cannot tell "no gateway" from "the API said
+  // nothing" without them.
+  option (linode.mcp.v1.explicit_null_fields) = "assigned_entity";
+  option (linode.mcp.v1.explicit_null_fields) = "gateway";
+  option (linode.mcp.v1.explicit_null_fields) = "interface_id";
+  option (linode.mcp.v1.explicit_null_fields) = "linode_id";
+  option (linode.mcp.v1.explicit_null_fields) = "rdns";
+  option (linode.mcp.v1.explicit_null_fields) = "vpc_nat_1_1";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -273,6 +312,30 @@ message ReservedIPGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
+  option (linode.mcp.v1.tool_description) = "Gets a reserved public IPv4 address";
+  option (linode.mcp.v1.error_message) = "Failed to get reserved IPv4 address: {error}";
+  // The same six the create and the update restore. The API sends them as an
+  // explicit null on an address with nothing attached, and a caller cannot tell
+  // "no gateway" from "the API said nothing" without them.
+  option (linode.mcp.v1.explicit_null_fields) = "assigned_entity";
+  option (linode.mcp.v1.explicit_null_fields) = "gateway";
+  option (linode.mcp.v1.explicit_null_fields) = "interface_id";
+  option (linode.mcp.v1.explicit_null_fields) = "linode_id";
+  option (linode.mcp.v1.explicit_null_fields) = "rdns";
+  option (linode.mcp.v1.explicit_null_fields) = "vpc_nat_1_1";
+  // The route carries the address as a path segment, so it must be a bare IPv4
+  // literal. A present but malformed one answers the second sentence, which is
+  // what separates it from the absent case above it.
+  option (buf.validate.message).cel = {
+    id: "networking_reserved_ip_get.address.required"
+    message: "address is required"
+    expression: "this.address != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_reserved_ip_get.address.ipv4"
+    message: "address must be a valid IPv4 address"
+    expression: "this.address.isIp(4)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -291,14 +354,48 @@ message ReservedIPUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
+  option (linode.mcp.v1.tool_description) = "Replaces all tags on a reserved public IPv4 address. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This replaces all tags on the reserved IP. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to replace reserved IPv4 tags: {error}";
+  // The API sends these as an explicit null on an address with nothing attached,
+  // and a caller cannot tell "no gateway" from "the API said nothing" without
+  // them.
+  option (linode.mcp.v1.explicit_null_fields) = "assigned_entity";
+  option (linode.mcp.v1.explicit_null_fields) = "gateway";
+  option (linode.mcp.v1.explicit_null_fields) = "interface_id";
+  option (linode.mcp.v1.explicit_null_fields) = "linode_id";
+  option (linode.mcp.v1.explicit_null_fields) = "rdns";
+  option (linode.mcp.v1.explicit_null_fields) = "vpc_nat_1_1";
+  // The read is the address, so the tags being replaced are reported as
+  // current state.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_networking_reserved_ip_get"
+  };
+
+  // Fail-fast runs these in order, so the presence sentence comes first: the
+  // address rule below would otherwise answer for an absent address.
+  option (buf.validate.message).cel = {
+    id: "reserved_ip_update.address.present"
+    message: "address is required"
+    expression: "this.address.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "reserved_ip_update.address.ipv4"
+    message: "address must be a valid IPv4 address"
+    expression: "this.address.isIp(4)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Reserved public IPv4 address whose tags will be replaced.
   string address = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Complete replacement set of existing tags. An empty list removes all tags.
-  repeated string tags = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  repeated string tags = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    // An absent list is a refusal no rule can tell from the empty one that
+    // clears every tag.
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Must be true to confirm replacing tags. Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it. Default false.
@@ -315,6 +412,7 @@ message ReservedIPTypeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPTypeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists reserved public IPv4 pricing information";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -330,9 +428,29 @@ message ReservedIPDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Permanently unreserves a public IPv4 address and stops billing. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This permanently unreserves the IP and it cannot be recovered. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Reserved IP {address} unreserved successfully";
   option (linode.mcp.v1.resource_type) = "ReservedIP";
+  // Neither client has ever retried this DELETE, so a replay cannot unreserve
+  // an address the first attempt already released.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_networking_reserved_ip_get"
+  };
+
+  // Fail-fast runs these in order, so the presence sentence has to come first:
+  // the address rule below would otherwise answer for an absent address.
+  option (buf.validate.message).cel = {
+    id: "reserved_ip_delete.address.present"
+    message: "address is required"
+    expression: "this.address.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "reserved_ip_delete.address.ipv4"
+    message: "address must be a valid IPv4 address"
+    expression: "this.address.isIp(4)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -358,6 +476,7 @@ message IPv6PoolListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6PoolListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists IPv6 pools on the account with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -376,6 +495,7 @@ message IPv6RangeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists IPv6 ranges on the account with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -394,6 +514,29 @@ message IPv6RangeGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6Range";
+  option (linode.mcp.v1.tool_description) = "Gets one IPv6 range by CIDR prefix.";
+  // Trimmed before the prefix is parsed, which both languages have always
+  // done: the parser would refuse a padded range the caller spelled right.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "range"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  option (linode.mcp.v1.error_message) = "Failed to retrieve IPv6 range: {error}";
+
+  // Normalize has trimmed the prefix already, so a value failing these is one
+  // the caller spelled wrong rather than one that arrived padded.
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_get.range.non_blank"
+    message: "range must be a non-empty string"
+    expression: "this.range.matches('[^ \\t\\r\\n]')"
+  };
+  // isIpPrefix(6, true) is the masked check both hand clients made: an explicit
+  // /bits suffix, an IPv6 network, and no host bits set below the length.
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_get.range.prefix"
+    message: "range must be a valid IPv6 prefix"
+    expression: "this.range.isIpPrefix(6, true)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -410,13 +553,59 @@ message IPv6RangeCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates an IPv6 range. WARNING: This changes networking configuration and may affect routing.";
+  option (linode.mcp.v1.error_message) = "Failed to create IPv6 range: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates an IPv6 range and changes networking configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "IPv6 range created";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The prefix length and where the range would be routed. The two targets are
+  // mutually exclusive, which the argument checks have already held.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new IPv6 range with prefix length /{prefix_length} will be allocated and routed to {route_target}."
+    template: "A new IPv6 range with prefix length /{prefix_length} will be allocated and routed to instance {linode_id}."
+    template: "A new IPv6 range with prefix length /{prefix_length} will be allocated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Fail-fast runs these in the order they are written, which is the order the
+  // hand builders checked in: each argument on its own first, then the pair.
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_create.prefix_length.choice"
+    message: "prefix_length must be 56 or 64"
+    expression: "this.prefix_length == 56 || this.prefix_length == 64"
+  };
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_create.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "!has(this.linode_id) || this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_create.route_target.non_blank"
+    message: "route_target must be a non-empty string"
+    expression: "!has(this.route_target) || this.route_target.matches('[^ \\t\\r\\n]')"
+  };
+  // isIp(6) permits an RFC 6874 zone id and the API routes to no interface of
+  // this server's, so the zone is refused here rather than sent: '%' appears in
+  // an IPv6 literal for nothing else.
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_create.route_target.address"
+    message: "route_target must be a valid IPv6 address"
+    expression: "!has(this.route_target) || (this.route_target.isIp(6) && !this.route_target.contains('%'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_create.target.present"
+    message: "linode_id or route_target is required"
+    expression: "has(this.linode_id) || has(this.route_target)"
+  };
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_create.target.exclusive"
+    message: "linode_id and route_target are mutually exclusive"
+    expression: "!has(this.linode_id) || !has(this.route_target)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // The IPv6 prefix length for the created range.
+  // The IPv6 prefix length for the created range: 56 or 64.
   int32 prefix_length = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional Linode ID to assign the new range to.
   optional int32 linode_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
@@ -438,9 +627,34 @@ message IPv6RangeDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes an IPv6 range. WARNING: This changes networking configuration and may affect routing. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes an IPv6 range and changes networking configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "IPv6 range deleted";
   option (linode.mcp.v1.resource_type) = "IPv6Range";
+  // Go's client has never replayed this DELETE while Python's did. Declaring it
+  // here is what makes the two answer a transport failure the same way, and a
+  // delete is the direction where not replaying is the safe half.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the range itself, which the preview reports and a two-stage
+  // plan hashes for drift.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_ipv6_range_get"
+  };
+
+  // Fail-fast runs these in order, so the presence sentence has to come first:
+  // the prefix rule below would otherwise answer for an absent range.
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_delete.range.present"
+    message: "range is required"
+    expression: "this.range.matches('[^ \\t\\r\\n]')"
+  };
+  // isIpPrefix(6, true) is the masked check both hand clients made: an IPv6
+  // network whose bits below the prefix length are all zero.
+  option (buf.validate.message).cel = {
+    id: "ipv6_range_delete.range.prefix"
+    message: "range must be a valid IPv6 prefix"
+    expression: "this.range.isIpPrefix(6, true)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -519,6 +733,23 @@ message IPAddressGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddress";
+  option (linode.mcp.v1.tool_description) = "Gets details for one account-level IP address.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve networking IP {address}: {error}";
+
+  // The account route names a non-string and a blank address together, where
+  // its instance sibling reads both as absent.
+  option (buf.validate.message).cel = {
+    id: "networking_ip_get.address.non_blank"
+    message: "address must be a non-empty string"
+    expression: "this.address.matches('(?s)^.*\\\\S.*$')"
+  };
+  // isIp permits an RFC 6874 zone id, which names an interface on the caller's
+  // host and addresses nothing on the account, so it is refused alongside.
+  option (buf.validate.message).cel = {
+    id: "networking_ip_get.address.ip"
+    message: "address must be a valid IP address"
+    expression: "this.address.isIp() && !this.address.contains('%')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -536,6 +767,28 @@ message InstanceIPGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddress";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific IP address for a Linode instance";
+  option (linode.mcp.v1.error_message) = "Failed to get IP {address} for instance {linode_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "instance_ip_get.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  // A non-string address is read as absent, which is the reading the path
+  // accessor these sentences came from gives one.
+  option (buf.validate.message).cel = {
+    id: "instance_ip_get.address.required"
+    message: "address is required"
+    expression: "this.address != ''"
+  };
+  // isIp permits an RFC 6874 zone id, which names an interface on the caller's
+  // host and addresses nothing on the Linode, so it is refused alongside.
+  option (buf.validate.message).cel = {
+    id: "instance_ip_get.address.ip"
+    message: "address must be a valid IP address"
+    expression: "this.address.isIp() && !this.address.contains('%')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -554,6 +807,14 @@ message InstanceIPListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceIPsResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all IP addresses (IPv4 and IPv6) for a Linode instance";
+  option (linode.mcp.v1.error_message) = "Failed to list IPs for instance {linode_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "instance_ip_list.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -563,8 +824,10 @@ message InstanceIPListInput {
 
 // InstanceIPAllocateInput is the input contract for
 // linode_instance_ip_allocate. linode_id, type, public, and confirm are all
-// required (public is a required boolean in the hand-built schema, so it stays
-// non-optional here).
+// required. public carries proto3 `optional` so a rule can tell a caller who
+// omitted it from one who sent false, which drops its required flag from the
+// advertised schema (recorded in the required-flag-loss log); the rule below
+// still requires it.
 message InstanceIPAllocateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_ip_allocate"
@@ -573,9 +836,29 @@ message InstanceIPAllocateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Allocates a new IP address for a Linode instance. WARNING: Additional IPs may incur charges.";
+  option (linode.mcp.v1.error_message) = "Failed to allocate IP for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This allocates a new IP address which may incur charges. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "IP {address} allocated for instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "instance_ip_allocate.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_ip_allocate.type.required"
+    message: "type must be one of: ipv4"
+    expression: "this.type != 0"
+  };
+  // The API publishes no default, so a body written without public would pick
+  // one on the caller's behalf.
+  option (buf.validate.message).cel = {
+    id: "instance_ip_allocate.public.required"
+    message: "public is required"
+    expression: "has(this.public)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -584,7 +867,7 @@ message InstanceIPAllocateInput {
   // The type of IP address to allocate: ipv4 or ipv6.
   InstanceIPType.Value type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the IP address should be public (true) or private (false).
-  bool public = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional bool public = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm IP allocation. Additional IPs may incur charges.
   // Ignored when dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -597,7 +880,10 @@ message InstanceIPAllocateInput {
 }
 
 // InstanceIPUpdateInput is the input contract for linode_instance_ip_update.
-// linode_id, address, rdns, and confirm are required.
+// linode_id, address, rdns, and confirm are required. rdns carries proto3
+// `optional` so an explicit null can travel, which drops it out of the
+// advertised required set (recorded in the required-flag-loss log); the
+// validate hook still requires it at runtime.
 message InstanceIPUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_ip_update"
@@ -606,8 +892,32 @@ message InstanceIPUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the reverse DNS for a specific IP address on a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to assign RDNS for IP {address} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates reverse DNS for the IP address. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "RDNS for IP {address} updated on instance {linode_id}";
+  // The read is the address, so the reverse DNS being replaced is reported
+  // beside the value replacing it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_ip_get"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_ip_update.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_ip_update.address.required"
+    message: "address is required"
+    expression: "this.address.matches('[^ \\t\\r\\n]')"
+  };
+  // isIp permits an RFC 6874 zone id, which names an interface on the caller's
+  // host and addresses nothing on the Linode, so it is refused alongside.
+  option (buf.validate.message).cel = {
+    id: "instance_ip_update.address.ip"
+    message: "address must be a valid IP address"
+    expression: "this.address.isIp() && !this.address.contains('%')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -615,8 +925,15 @@ message InstanceIPUpdateInput {
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The IP address to update (e.g. 203.0.113.1).
   string address = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // The reverse DNS hostname to assign to the IP address.
-  string rdns = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The reverse DNS hostname to assign to the IP address. An explicit null
+  // clears it, which is the API's own spelling for "back to the default".
+  optional string rdns = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true,
+    // An omitted rdns reaches a rule as the null that clears it, so only the
+    // argument map can tell the caller who named no replacement.
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Must be true to confirm the RDNS update. Ignored when dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -635,9 +952,27 @@ message InstanceIPDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceIPDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This permanently removes the IP address and is irreversible. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "IP {address} removed from instance {linode_id}";
   option (linode.mcp.v1.resource_type) = "InstanceIP";
+  // A replay would report an address the first attempt already released as one
+  // the instance never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_ip_get"
+  };
+
+  // A malformed address would be spliced into the path and ask the API to
+  // release something nobody named. Empty is left to the path reader, which
+  // answers that the address is required.
+  // isIp permits an RFC 6874 zone id, which names an interface on the caller's
+  // host and addresses nothing on the Linode, so it is refused alongside.
+  option (buf.validate.message).cel = {
+    id: "instance_ip_delete.address.ip"
+    message: "address must be a valid IP address"
+    expression: "this.address == '' || (this.address.isIp() && !this.address.contains('%'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -668,11 +1003,17 @@ message NetworkingIPListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists IP addresses on the account. Set skip_ipv6_rdns to true to skip IPv6 reverse DNS lookups.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve items: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Skip IPv6 reverse DNS lookups (optional).
-  optional bool skip_ipv6_rdns = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Skip IPv6 reverse DNS lookups (optional). The route forwards it as a query
+  // argument, so no path check reaches it and the flag reads the argument map.
+  optional bool skip_ipv6_rdns = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
+  ];
 }
 
 // IPAddressUpdateInput is the input contract for linode_networking_ip_update.
@@ -684,16 +1025,60 @@ message IPAddressUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates reverse DNS for one account-level IP address.";
+  option (linode.mcp.v1.error_message) = "Failed to update networking IP {address} RDNS: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates reverse DNS for an IP address. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Networking IP {address} RDNS updated";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the address whose reverse DNS the update replaces.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_networking_ip_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Reverse DNS (rDNS) is set to \"{rdns}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The address answers first when both it and the replacement are missing,
+  // which is why the rdns rule holds its peace until the address reads.
+  option (buf.validate.message).cel = {
+    id: "networking_ip_update.address.non_blank"
+    message: "address must be a non-empty string"
+    expression: "this.address.matches('(?s)^.*\\\\S.*$')"
+  };
+  // isIp permits an RFC 6874 zone id, which names an interface on the caller's
+  // host and addresses nothing on the account, so it is refused alongside.
+  option (buf.validate.message).cel = {
+    id: "networking_ip_update.address.ip"
+    message: "address must be a valid IP address"
+    expression: "this.address.isIp() && !this.address.contains('%')"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ip_update.rdns.non_blank"
+    message: "rdns is required"
+    expression: "!this.address.isIp() || this.rdns.matches('(?s)^.*\\\\S.*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The IPv4 or IPv6 address to update.
-  string address = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string address = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FREE_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "address must be a non-empty string"
+      unusable: "address must be a non-empty string"
+    }
+  ];
   // The reverse DNS value to set.
-  string rdns = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string rdns = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "rdns is required"
+      unusable: "rdns must be a string"
+    }
+  ];
   // Must be true to confirm changing reverse DNS. Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -715,17 +1100,40 @@ message IPAddressAllocateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Allocates an account-level IP address. WARNING: Additional IPs may incur charges.";
+  option (linode.mcp.v1.error_message) = "Failed to allocate networking IP: {error}";
   option (linode.mcp.v1.confirm_message) = "This allocates a new IP address which may incur charges. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IP {address} allocated for Linode {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (buf.validate.message).cel = {
+    id: "networking_ip_allocate.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode that receives the new IP address.
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The type of IP address to allocate: ipv4 or ipv6.
-  InstanceIPType.Value type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  InstanceIPType.Value type = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER,
+    // A vocabulary of one still reads as a list here, because that is the
+    // sentence this tool has always answered a family it cannot allocate.
+    (linode.mcp.v1.reader_message) = {
+      absent: "type must be a non-empty string"
+      refused: "type must be one of: ipv4"
+    }
+  ];
   // Whether the IP address should be public.
-  bool public = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  bool public = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL,
+    // A caller who sent no flag is told the flag is missing, where one who sent
+    // something that is not a flag is told what a flag is.
+    (linode.mcp.v1.reader_message) = {absent: "public is required"}
+  ];
   // Must be true to confirm IP allocation. Additional IPs may incur charges.
   // Ignored when dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -758,8 +1166,31 @@ message NetworkingIPAssignInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPAssignWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Assigns IP addresses to Linodes in a region. WARNING: This changes IP ownership assignments.";
   option (linode.mcp.v1.confirm_message) = "This assigns IP addresses to Linodes. Set confirm=true to proceed.";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.error_message) = "Failed to assign networking IPs: {error}";
+  option (linode.mcp.v1.success_message) = "Networking IP assignments updated";
+  option (buf.validate.message).cel = {
+    id: "networking_ip_assign.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ip_assign.assignments.required"
+    message: "assignments must contain at least one assignment"
+    expression: "size(this.assignments) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ip_assign.assignments.address"
+    message: "assignments entries must carry an address"
+    expression: "this.assignments.all(a, a.address.matches('[^ \\t\\r\\n]'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ip_assign.assignments.linode_id"
+    message: "assignments entries must carry a positive linode_id"
+    expression: "this.assignments.all(a, a.linode_id >= 1)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -786,8 +1217,38 @@ message NetworkingIPv4AssignInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPAssignWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Assigns IPv4 addresses to Linodes in a region. WARNING: This changes IP ownership assignments.";
   option (linode.mcp.v1.confirm_message) = "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed.";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.error_message) = "Failed to assign networking IPv4s: {error}";
+  option (linode.mcp.v1.success_message) = "Networking IPv4 assignments updated";
+  option (buf.validate.message).cel = {
+    id: "networking_ipv4_assign.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ipv4_assign.assignments.required"
+    message: "assignments must contain at least one assignment"
+    expression: "size(this.assignments) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ipv4_assign.assignments.address"
+    message: "assignments entries must carry an address"
+    expression: "this.assignments.all(a, a.address.matches('[^ \\t\\r\\n]'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ipv4_assign.assignments.linode_id"
+    message: "assignments entries must carry a positive linode_id"
+    expression: "this.assignments.all(a, a.linode_id >= 1)"
+  };
+  // The IPv4-only route refuses an IPv6 address, so the contract says so rather
+  // than leaving it to the API round trip.
+  option (buf.validate.message).cel = {
+    id: "networking_ipv4_assign.assignments.ipv4"
+    message: "assignments entries must carry a valid IPv4 address"
+    expression: "this.assignments.all(a, a.address.isIp(4))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -814,16 +1275,33 @@ message NetworkingIPShareInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPShareWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.";
   option (linode.mcp.v1.confirm_message) = "This changes shared IP assignments. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to share networking IPs: {error}";
+  option (linode.mcp.v1.success_message) = "Networking IP sharing updated";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (buf.validate.message).cel = {
+    id: "networking_ip_share.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ip_share.ips.entries"
+    message: "ips must not include blank IP addresses"
+    expression: "this.ips.all(i, i.matches('[^ \\t\\r\\n]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the primary Linode that receives the shared IP addresses.
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
-  // addresses.
-  repeated string ips = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // addresses. An omitted list is a refusal no rule can tell from the empty
+  // list that removes every share.
+  repeated string ips = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Must be true to confirm changing shared IP assignments. Ignored when
   // dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -844,16 +1322,33 @@ message NetworkingIPv4ShareInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPShareWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.";
   option (linode.mcp.v1.confirm_message) = "This changes shared IP assignments. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to share networking IPv4s: {error}";
+  option (linode.mcp.v1.success_message) = "Networking IP sharing updated";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (buf.validate.message).cel = {
+    id: "networking_ipv4_share.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "networking_ipv4_share.ips.entries"
+    message: "ips must not include blank IP addresses"
+    expression: "this.ips.all(i, i.matches('[^ \\t\\r\\n]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the primary Linode that receives the shared IP addresses.
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
-  // addresses.
-  repeated string ips = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // addresses. An omitted list is a refusal no rule can tell from the empty
+  // list that removes every share.
+  repeated string ips = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT
+  ];
   // Must be true to confirm changing shared IP assignments. Ignored when
   // dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

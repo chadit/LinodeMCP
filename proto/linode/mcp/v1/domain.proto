@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // DomainType is the primary/secondary role a domain is created with. Values are
@@ -138,16 +139,79 @@ message DomainCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new DNS domain. Use type 'master' for domains you control, 'slave' for secondary DNS.";
+  option (linode.mcp.v1.error_message) = "Failed to create domain: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a DNS domain. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Domain '{domain}' (ID: {id}) created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The zone a create would add, named from the two arguments that fix it.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new {type} DNS domain \"{domain}\" will be created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The rules below are evaluated in the order they are written, and each one
+  // answers the sentence this tool has always answered. The order is the
+  // contract: a call breaking more than one rule reports the first, and the two
+  // that check the zone type are ordered after the name checks for that reason.
+  //
+  // Nothing here checks the type itself. An enum argument naming no member
+  // arrives as the enum's zero, which is what an absent argument arrives as
+  // too, so "type is required" and "type must be one of: master, slave" cannot
+  // be told apart from the message: the type field's ENUM_MEMBER reader answers
+  // both from the raw argument after these rules run, and the rules that read
+  // the type below are written to hold their peace until it names a zone type.
+  option (buf.validate.message).cel = {
+    id: "domain_create.domain.required"
+    message: "domain is required"
+    expression: "this.domain != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_create.domain.length"
+    message: "domain must be between 1 and 253 characters"
+    expression: "size(this.domain) <= 253"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_create.domain.pattern"
+    message: "domain must match the documented domain-name pattern"
+    expression: "this.domain.matches('^(\\\\*\\\\.)?([a-zA-Z0-9-_]{1,63}\\\\.)+([a-zA-Z]{2,3}\\\\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$')"
+  };
+  // The three rules below read an enum field as the number it holds, because
+  // that is the only spelling both CEL runtimes accept: cel-go resolves an enum
+  // member by its qualified name and the Python runtime does not, so a name
+  // would leave the rule evaluating in one language and failing in the other.
+  // DomainType.Value is unspecified 0, master 1, slave 2, and
+  // DomainCreateStatus.Value is unspecified 0, active 1, disabled 2, all
+  // declared at the top of this file. Renumbering either enum without changing
+  // these fails the behavior fixtures, which send the names.
+  //
+  // A status the caller supplied that names no member arrives as the zero,
+  // which is why presence is what separates it from an absent status.
+  option (buf.validate.message).cel = {
+    id: "domain_create.status.known"
+    message: "status must be one of: active, disabled"
+    expression: "this.type == 0 || !has(this.status) || this.status != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_create.soa_email.master"
+    message: "soa_email is required for master domains"
+    expression: "this.type != 1 || (has(this.soa_email) && this.soa_email != '')"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_create.master_ips.slave"
+    message: "master_ips must include at least one value for slave domains"
+    expression: "this.type != 2 || size(this.master_ips) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The domain name, 1 to 253 characters (e.g., 'example.com').
   string domain = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Domain type: 'master' (primary) or 'slave' (secondary).
-  DomainType.Value type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  DomainType.Value type = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
   // Start of Authority email address (required for master domains).
   optional string soa_email = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // A description for the domain (optional).
@@ -165,7 +229,10 @@ message DomainCreateInput {
   optional int32 expire_sec = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Display group (optional). Linode deprecated group in favor of tags; new
   // callers should send tags instead.
-  optional string group = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string group = 11 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    deprecated = true
+  ];
   // Primary DNS server IPs; at least one is required for slave domains.
   repeated string master_ips = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // SOA refresh time in seconds (optional).
@@ -187,8 +254,20 @@ message DomainUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an existing DNS domain. Can modify SOA email, description, TTL, and status. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.error_message) = "Failed to modify domain {domain_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a DNS domain. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Domain {domain_id} modified successfully";
+  // The preview fetches the zone and diffs against it. The optional type is
+  // checked by its field's membership reader, which reads the raw argument
+  // because a name that is no zone type decodes to the enum's zero.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "domain_update.domain_id.positive"
+    message: "domain_id must be a positive integer"
+    expression: "this.domain_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -227,7 +306,16 @@ message DomainUpdateInput {
   // New SOA retry time in seconds (optional).
   optional int32 retry_sec = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New domain type: 'master' (primary) or 'slave' (secondary) (optional).
-  optional DomainType.Value type = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional DomainType.Value type = 16 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
+  // New display group (optional). Linode deprecated group in favor of tags;
+  // new callers should send tags instead.
+  optional string group = 17 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    deprecated = true
+  ];
 }
 
 // DomainCloneInput is the input contract for linode_domain_clone.
@@ -239,8 +327,42 @@ message DomainCloneInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Clones a DNS domain and all associated records to a new domain name.";
+  option (linode.mcp.v1.error_message) = "Failed to clone domain {domain_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This clones a DNS domain. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Domain {domain_id} cloned as '{domain}' (ID: {id})";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the zone being cloned.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_domain_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "DNS domain ID {domain_id} will be cloned to \"{domain}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "domain_clone.domain_id.positive"
+    message: "domain_id must be a positive integer"
+    expression: "this.domain_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_clone.domain.required"
+    message: "domain is required"
+    expression: "this.domain != ''"
+  };
+  // The new zone name is held to the same label rules the import path holds
+  // its own to.
+  option (buf.validate.message).cel = {
+    id: "domain_clone.domain.length"
+    message: "label must not exceed 64 characters"
+    expression: "size(this.domain) <= 64"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_clone.domain.charset"
+    message: "label contains an invalid character; use letters, digits, '_', '-', or '.'"
+    expression: "this.domain.matches('^[A-Za-z0-9_.-]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -264,8 +386,42 @@ message DomainImportInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Imports a DNS domain zone from a remote nameserver that allows zone transfers. Pass dry_run=true to preview without importing.";
+  option (linode.mcp.v1.error_message) = "Failed to import domain: {error}";
   option (linode.mcp.v1.confirm_message) = "This imports a DNS domain zone. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Domain '{domain}' (ID: {id}) imported successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "domain_import.domain.required"
+    message: "domain is required"
+    expression: "this.domain != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_import.remote_nameserver.required"
+    message: "remote_nameserver is required"
+    expression: "this.remote_nameserver != ''"
+  };
+  // A nameserver is a hostname or an address, so the charset also refuses the
+  // padded value that used to be refused as a missing one.
+  option (buf.validate.message).cel = {
+    id: "domain_import.remote_nameserver.charset"
+    message: "remote_nameserver must be a hostname or IP address"
+    expression: "this.remote_nameserver.matches('^[A-Za-z0-9_.:-]*$')"
+  };
+  // The zone name has been held to the shared label rules since the tool was
+  // written. The charset is also what refuses a padded name, which used to be
+  // refused as a missing one.
+  option (buf.validate.message).cel = {
+    id: "domain_import.domain.length"
+    message: "label must not exceed 64 characters"
+    expression: "size(this.domain) <= 64"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_import.domain.charset"
+    message: "label contains an invalid character; use letters, digits, '_', '-', or '.'"
+    expression: "this.domain.matches('^[A-Za-z0-9_.-]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -289,8 +445,19 @@ message DomainDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a DNS domain and all its records. WARNING: This action is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and deletes all DNS records. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Domain {domain_id} and all its records removed successfully";
   option (linode.mcp.v1.resource_type) = "Domain";
+  // A replay would report a zone the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The walk lists the zone's records to name the NS delegations the delete
+  // destroys, which is an extra call no descriptor describes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_domain_get"
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -371,6 +538,17 @@ message DomainRecordListInput {
 }
 
 // DomainRecordGetInput is the input contract for linode_domain_record_get.
+//
+// The argument check is hand-written (tool_hooks below) because this tool
+// rejects a non-positive id with different words than the rest of the read
+// surface: the siblings answer "domain_id is required", which is what a
+// required path field derives, and Go's handler for this one answers "domain_id
+// must be a positive integer". Both sentences reach clients today, so making
+// them agree is a deliberate change to the tool's answers rather than something
+// codegen may decide while migrating it. Python's hook keeps the sentence
+// Python has always answered, which is the derived one; the divergence is
+// recorded by testdata/behavior/linode_domain_record_get.json pinning only the
+// success path.
 message DomainRecordGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_domain_record_get"
@@ -385,9 +563,19 @@ message DomainRecordGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the domain (required).
-  int32 domain_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 domain_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    // One sentence for an id left out and one no id can hold, which is what
+    // this tool has answered both since before the contract carried it.
+    (linode.mcp.v1.reader_message) = {absent: "domain_id must be a positive integer"}
+  ];
   // The ID of the domain record to retrieve (required).
-  int32 record_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 record_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {absent: "record_id must be a positive integer"}
+  ];
 }
 
 // DomainRecordCreateInput is the input contract for linode_domain_record_create.
@@ -399,9 +587,78 @@ message DomainRecordCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecordWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new DNS record within a domain. Supports A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, and PTR record types.";
+  option (linode.mcp.v1.error_message) = "Failed to create domain record: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a DNS record. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "{type} record (ID: {id}) created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The preview says which record is about to appear in the zone.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.domain_id.positive"
+    message: "domain_id must be a positive integer"
+    expression: "this.domain_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.type.required"
+    message: "type is required"
+    expression: "this.type != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.name.length"
+    message: "DNS record name exceeds maximum length of 253 characters"
+    expression: "size(this.name) <= 253"
+  };
+  // An empty name is the zone root and "@" spells the same thing, so both are
+  // left alone by the hostname form.
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.name.form"
+    message: "invalid DNS record name: must contain only alphanumeric characters, hyphens, and dots"
+    expression: "this.name == '' || this.name == '@' || this.name.matches('^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?([.][a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.target.required"
+    message: "target is required"
+    expression: "this.target != ''"
+  };
+  // The record types are matched case-insensitively because the hand reader
+  // upper-cased before it chose an arm.
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.target.a_ipv4"
+    message: "a record target must be a valid IPv4 address"
+    expression: "!this.type.matches('^[aA]$') || this.target.isIp(4)"
+  };
+  // The blocks a public zone must not point at: RFC 1918 private space,
+  // loopback and link-local, the IETF protocol, documentation and benchmarking
+  // ranges, and class E with the broadcast address.
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.target.a_public"
+    message: "a record target cannot be a private IP address"
+    expression: "!this.type.matches('^[aA]$') || !this.target.matches('^(0[.]|10[.]|127[.]|169[.]254[.]|172[.](1[6-9]|2[0-9]|3[01])[.]|192[.]0[.]0[.]|192[.]0[.]2[.]|192[.]168[.]|198[.]1[89][.]|198[.]51[.]100[.]|203[.]0[.]113[.]|24[0-9][.]|25[0-5][.])')"
+  };
+  // A 4-in-6 address carries a dotted quad and reads back as IPv4, which is
+  // what the hand reader refused it for.
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.target.aaaa"
+    message: "aaaa record target must be a valid IPv6 address"
+    expression: "!this.type.matches('^[aA]{4}$') || (this.target.isIp(6) && !this.target.contains('.'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.target.cname"
+    message: "CNAME record target must be a valid hostname: invalid DNS record name: must contain only alphanumeric characters, hyphens, and dots"
+    expression: "!this.type.matches('^[cC][nN][aA][mM][eE]$') || this.target == '@' || this.target.matches('^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?([.][a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.target.ns"
+    message: "NS record target must be a valid hostname: invalid DNS record name: must contain only alphanumeric characters, hyphens, and dots"
+    expression: "!this.type.matches('^[nN][sS]$') || this.target == '@' || this.target.matches('^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?([.][a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_create.target.mx"
+    message: "MX record target must be a valid hostname: invalid DNS record name: must contain only alphanumeric characters, hyphens, and dots"
+    expression: "!this.type.matches('^[mM][xX]$') || this.target == '@' || this.target.matches('^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?([.][a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -410,7 +667,18 @@ message DomainRecordCreateInput {
   // Record type: A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, or PTR.
   string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The target value (e.g., IP address for A records, hostname for CNAME).
-  string target = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional because the route's own requiredness depends on the record type,
+  // so an omitted one is left out rather than sent as an empty string. The
+  // reader answers a caller who sent something that is not text, which no rule
+  // reaches: a message that cannot be built evaluates none.
+  optional string target = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "target is required"
+      unusable: "target is required"
+    }
+  ];
   // The hostname or subdomain (e.g., 'www', 'mail'). Leave empty for root domain.
   optional string name = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Priority for MX and SRV records (optional).
@@ -424,7 +692,10 @@ message DomainRecordCreateInput {
   // Protocol for SRV records (e.g., '_tcp', '_udp').
   optional string protocol = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tag for CAA records: 'issue', 'issuewild', or 'iodef' (optional).
-  optional DomainRecordCAATag.Value tag = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional DomainRecordCAATag.Value tag = 11 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
   // TTL in seconds (optional, uses domain default if not specified).
   optional int32 ttl_sec = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm DNS record creation. Ignored when
@@ -444,8 +715,36 @@ message DomainRecordUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecordWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an existing DNS record. Note: Record type cannot be changed.";
+  option (linode.mcp.v1.error_message) = "Failed to modify record {record_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a DNS record. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Record {record_id} modified successfully";
+  // The preview reads the record as it stands so it can say what changes rather
+  // than what was asked for. The CAA tag is checked by its field's membership
+  // reader, because naming no member reaches a rule as the enum's zero, the
+  // same as leaving it out.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "domain_record_update.domain_id.positive"
+    message: "domain_id must be a positive integer"
+    expression: "this.domain_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_update.record_id.positive"
+    message: "record_id must be a positive integer"
+    expression: "this.record_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_update.name.length"
+    message: "DNS record name exceeds maximum length of 253 characters"
+    expression: "size(this.name) <= 253"
+  };
+  option (buf.validate.message).cel = {
+    id: "domain_record_update.name.form"
+    message: "invalid DNS record name: must contain only alphanumeric characters, hyphens, and dots"
+    expression: "this.name == '' || this.name == '@' || this.name.matches('^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?([.][a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -475,7 +774,10 @@ message DomainRecordUpdateInput {
   // New protocol for SRV records, for example '_tcp' or '_udp' (optional).
   optional string protocol = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New tag for CAA records: 'issue', 'issuewild', or 'iodef' (optional).
-  optional DomainRecordCAATag.Value tag = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional DomainRecordCAATag.Value tag = 14 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
 }
 
 // DomainRecordDeleteInput is the input contract for linode_domain_record_delete.
@@ -487,8 +789,16 @@ message DomainRecordDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecordDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a DNS record from a domain. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a DNS record and is irreversible. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Record {record_id} removed successfully from domain {domain_id}";
   option (linode.mcp.v1.resource_type) = "DomainRecord";
+  // A replay would report a record the first attempt already removed as one the
+  // zone never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_domain_record_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

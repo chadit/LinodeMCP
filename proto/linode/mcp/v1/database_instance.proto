@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -102,6 +103,7 @@ message DatabaseInstanceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Managed Database instances across all engines with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -121,6 +123,7 @@ message DatabaseMySQLInstanceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseMySQLInstanceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Managed Database instances with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -140,6 +143,7 @@ message DatabasePostgreSQLInstanceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabasePostgreSQLInstanceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists PostgreSQL Managed Database instances with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -159,11 +163,16 @@ message DatabaseMySQLInstanceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstance";
+  option (linode.mcp.v1.tool_description) = "Retrieves a single MySQL Managed Database instance by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve MySQL Managed Database instance: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID to retrieve.
-  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // DatabasePostgreSQLInstanceGetInput is the input contract for
@@ -176,11 +185,16 @@ message DatabasePostgreSQLInstanceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstance";
+  option (linode.mcp.v1.tool_description) = "Retrieves a single PostgreSQL Managed Database instance by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve PostgreSQL Managed Database instance: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to retrieve.
-  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // DatabaseMySQLInstanceCredentialsGetInput is the input contract for
@@ -193,7 +207,29 @@ message DatabaseMySQLInstanceCredentialsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseCredentials";
+  option (linode.mcp.v1.tool_description) = "Retrieves credentials for a MySQL Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve MySQL Managed Database credentials: {error}";
   option (linode.mcp.v1.confirm_message) = "This retrieves Managed Database credentials. Set confirm=true to proceed.";
+  // The read is the instance the disclosure lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_mysql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "MySQL Managed Database credentials will be retrieved and exposed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The response contains sensitive password material."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_credentials_get.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -217,7 +253,29 @@ message DatabasePostgreSQLInstanceCredentialsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseCredentials";
+  option (linode.mcp.v1.tool_description) = "Retrieves credentials for a PostgreSQL Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve PostgreSQL Managed Database credentials: {error}";
   option (linode.mcp.v1.confirm_message) = "This retrieves Managed Database credentials. Set confirm=true to proceed.";
+  // The read is the instance the disclosure lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_postgresql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "PostgreSQL Managed Database credentials will be retrieved and exposed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The response contains sensitive password material."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_credentials_get.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -241,8 +299,33 @@ message DatabaseMySQLInstanceCredentialsResetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resets credentials for a MySQL Managed Database instance by ID. Pass dry_run=true to preview without resetting.";
+  option (linode.mcp.v1.error_message) = "Failed to reset MySQL Managed Database credentials: {error}";
   option (linode.mcp.v1.confirm_message) = "This resets Managed Database credentials. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "MySQL Managed Database credentials reset";
+  // A replay rotates the password a second time, so the credentials the first
+  // reset handed out stop working.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the rotation lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_mysql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "MySQL Managed Database instance {instance_id} credentials will be reset."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Resetting credentials can disrupt clients using the old credentials."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_credentials_reset.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -266,8 +349,33 @@ message DatabasePostgreSQLInstanceCredentialsResetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resets credentials for a PostgreSQL Managed Database instance by ID. Pass dry_run=true to preview without resetting.";
+  option (linode.mcp.v1.error_message) = "Failed to reset PostgreSQL Managed Database credentials: {error}";
   option (linode.mcp.v1.confirm_message) = "This resets PostgreSQL Managed Database credentials. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database credentials reset";
+  // A replay rotates the password a second time, so the credentials the first
+  // reset handed out stop working.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the rotation lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_postgresql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "PostgreSQL Managed Database instance {instance_id} credentials will be reset."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Resetting credentials can disrupt clients using the old credentials."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_credentials_reset.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -291,8 +399,21 @@ message DatabaseMySQLInstanceDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a MySQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a Managed Database instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.resource_type) = "DatabaseInstance";
+  option (linode.mcp.v1.success_message) = "Managed Database instance {instance_id} deleted";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance a delete removes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_mysql_instance_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_delete.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -322,8 +443,21 @@ message DatabasePostgreSQLInstanceDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a PostgreSQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.resource_type) = "DatabaseInstance";
+  option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance {instance_id} deleted";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance a delete removes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_postgresql_instance_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_delete.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -353,7 +487,29 @@ message DatabaseMySQLInstancePatchInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Applies security patches and updates to a MySQL Managed Database instance. Pass dry_run=true to preview without patching.";
+  option (linode.mcp.v1.error_message) = "Failed to patch Managed Database instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This patches a Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed Database instance {instance_id} patch started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the patch lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_mysql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Pending patches will be applied to MySQL Managed Database instance {instance_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_patch.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -377,7 +533,29 @@ message DatabasePostgreSQLInstancePatchInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Applies security patches and updates to a PostgreSQL Managed Database instance. Pass dry_run=true to preview without patching.";
+  option (linode.mcp.v1.error_message) = "Failed to patch PostgreSQL Managed Database instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This patches a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance {instance_id} patch started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the patch lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_postgresql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Pending patches will be applied to PostgreSQL Managed Database instance {instance_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_patch.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -401,7 +579,33 @@ message DatabaseMySQLInstanceSuspendInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Suspends an active MySQL Managed Database instance. Pass dry_run=true to preview without suspending.";
+  option (linode.mcp.v1.error_message) = "Failed to suspend Managed Database instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This suspends a Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed Database instance {instance_id} suspend started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the suspend lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_mysql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "MySQL Managed Database instance {instance_id} will be suspended."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Suspending a Managed Database can interrupt service."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_suspend.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -425,7 +629,33 @@ message DatabasePostgreSQLInstanceSuspendInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Suspends an active PostgreSQL Managed Database instance. Pass dry_run=true to preview without suspending.";
+  option (linode.mcp.v1.error_message) = "Failed to suspend PostgreSQL Managed Database instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This suspends a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance {instance_id} suspend started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the suspend lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_postgresql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "PostgreSQL Managed Database instance {instance_id} will be suspended."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Suspending a Managed Database can interrupt service."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_suspend.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -449,7 +679,33 @@ message DatabaseMySQLInstanceResumeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resumes a suspended MySQL Managed Database instance. Pass dry_run=true to preview without resuming.";
+  option (linode.mcp.v1.error_message) = "Failed to resume Managed Database instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This resumes a Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed Database instance {instance_id} resume started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the resume lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_mysql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "MySQL Managed Database instance {instance_id} will be resumed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Resuming a Managed Database changes service state."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_resume.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -473,7 +729,33 @@ message DatabasePostgreSQLInstanceResumeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resumes a suspended PostgreSQL Managed Database instance. Pass dry_run=true to preview without resuming.";
+  option (linode.mcp.v1.error_message) = "Failed to resume PostgreSQL Managed Database instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This resumes a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance {instance_id} resume started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the resume lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_postgresql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "PostgreSQL Managed Database instance {instance_id} will be resumed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Resuming a Managed Database changes service state."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_resume.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -498,20 +780,73 @@ message DatabaseMySQLInstanceCreateInput {
     method: "POST"
     path: "/databases/mysql/instances"
   };
+
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_create.cluster_size.known"
+    message: "cluster_size must be one of: 1, 2, 3"
+    expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
+  };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates or restores a MySQL Managed Database instance. This creates a billable resource. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a billable Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to create Managed Database instance: {error}";
+  // {label} and {id} read the response, so the sentence names what the API
+  // settled on rather than what was asked for.
+  option (linode.mcp.v1.success_message) = "Managed Database instance '{label}' (ID: {id}) created";
+  // A replay would create a second billable instance.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // A name the message does not declare is dropped before the rules run, so
+  // the argument map is the only place a caller's typo is still visible.
+  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
+  // The database a create would make, and what making one costs.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A MySQL Managed Database '{label}' will be created or restored."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Creating a Managed Database can incur billing."
+    line: PREVIEW_LINE_WARNING
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the database instance.
-  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string label = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "label must be a non-empty string"
+      unusable: "label must be a non-empty string"
+    }
+  ];
   // Linode type for the database instance.
-  string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string type = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "type must be a non-empty string"
+      unusable: "type must be a non-empty string"
+    }
+  ];
   // Database engine ID, for example mysql/8.0.26.
-  string engine = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string engine = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "engine must be a non-empty string"
+      unusable: "engine must be a non-empty string"
+    }
+  ];
   // Region for the database instance.
-  string region = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string region = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "region must be a non-empty string"
+      unusable: "region must be a non-empty string"
+    }
+  ];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
   repeated string allow_list = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Number of nodes in the cluster (optional).
@@ -544,20 +879,81 @@ message DatabasePostgreSQLInstanceCreateInput {
     method: "POST"
     path: "/databases/postgresql/instances"
   };
+
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_create.cluster_size.known"
+    message: "cluster_size must be one of: 1, 2, 3"
+    expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
+  };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates or restores a PostgreSQL Managed Database instance. This creates a billable resource. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to create PostgreSQL Managed Database instance: {error}";
+  // {label} and {id} read the response, so the sentence names what the API
+  // settled on rather than what was asked for.
+  option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance '{label}' (ID: {id}) created";
+  // A replay would create a second billable instance.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // A name the message does not declare is dropped before the rules run, so
+  // the argument map is the only place a caller's typo is still visible.
+  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
+  // The route only makes PostgreSQL instances, so an engine naming another
+  // family is refused here rather than by the API. It holds its peace on a
+  // blank engine, which the argument's own reader answers.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_create.engine.family"
+    message: "engine must be a PostgreSQL engine ID"
+    expression: "this.engine == '' || this.engine.matches('^postgresql/.+$')"
+  };
+  // The database a create would make, and what making one costs.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A PostgreSQL Managed Database '{label}' will be created or restored."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Creating a Managed Database can incur billing."
+    line: PREVIEW_LINE_WARNING
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the database instance.
-  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string label = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "label must be a non-empty string"
+      unusable: "label must be a non-empty string"
+    }
+  ];
   // Linode type for the database instance.
-  string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string type = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "type must be a non-empty string"
+      unusable: "type must be a non-empty string"
+    }
+  ];
   // PostgreSQL database engine ID, for example postgresql/16.
-  string engine = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string engine = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "engine must be a non-empty string"
+      unusable: "engine must be a non-empty string"
+    }
+  ];
   // Region for the database instance.
-  string region = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string region = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "region must be a non-empty string"
+      unusable: "region must be a non-empty string"
+    }
+  ];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
   repeated string allow_list = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Number of nodes in the cluster (optional).
@@ -593,12 +989,61 @@ message DatabaseMySQLInstanceUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a MySQL Managed Database instance. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to update Managed Database instance: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Managed Database instance. Set confirm=true to proceed.";
+  // {label} and {id} read the response, so the sentence names the label the
+  // instance ended up with even when the caller sent none.
+  option (linode.mcp.v1.success_message) = "Managed Database instance '{label}' (ID: {id}) updated";
+  // A replay re-sends a body the first call already applied.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // A name the message does not declare is dropped before the rules run, so
+  // the argument map is the only place a caller's typo is still visible.
+  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "allow_list"
+    fields: "engine_config"
+    fields: "label"
+    fields: "private_network"
+    fields: "type"
+    fields: "updates"
+    fields: "version"
+    message: "at least one update field must be provided"
+  };
+  // The read is the instance the update lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_mysql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "MySQL Managed Database {instance_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Updating a Managed Database can change service behavior."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_update.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // The MySQL Managed Database instance ID to update.
-  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The MySQL Managed Database instance ID to update. The reader answers a
+  // caller who sent something no id can be, which the rule above cannot: a
+  // message that will not build evaluates none.
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "instance_id must be a positive integer"
+      refused: "instance_id must be a positive integer"
+    }
+  ];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
   repeated string allow_list = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON object of MySQL engine configuration values (optional).
@@ -607,7 +1052,10 @@ message DatabaseMySQLInstanceUpdateInput {
   optional string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
   // Pass null to detach (optional).
-  map<string, google.protobuf.Value> private_network = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  map<string, google.protobuf.Value> private_network = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // New Linode type for the database instance (optional).
   optional string type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object of maintenance update settings (optional).
@@ -635,12 +1083,61 @@ message DatabasePostgreSQLInstanceUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a PostgreSQL Managed Database instance. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to update PostgreSQL Managed Database instance: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
+  // {label} and {id} read the response, so the sentence names the label the
+  // instance ended up with even when the caller sent none.
+  option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance '{label}' (ID: {id}) updated";
+  // A replay re-sends a body the first call already applied.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // A name the message does not declare is dropped before the rules run, so
+  // the argument map is the only place a caller's typo is still visible.
+  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "allow_list"
+    fields: "engine_config"
+    fields: "label"
+    fields: "private_network"
+    fields: "type"
+    fields: "updates"
+    fields: "version"
+    message: "at least one update field must be provided"
+  };
+  // The read is the instance the update lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_postgresql_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "PostgreSQL Managed Database {instance_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Updating a Managed Database can change service behavior."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_update.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // The PostgreSQL Managed Database instance ID to update.
-  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The PostgreSQL Managed Database instance ID to update. The reader answers a
+  // caller who sent something no id can be, which the rule above cannot: a
+  // message that will not build evaluates none.
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "instance_id must be a positive integer"
+      refused: "instance_id must be a positive integer"
+    }
+  ];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
   repeated string allow_list = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON object of PostgreSQL engine configuration values (optional).
@@ -649,7 +1146,10 @@ message DatabasePostgreSQLInstanceUpdateInput {
   optional string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
   // Pass null to detach (optional).
-  map<string, google.protobuf.Value> private_network = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  map<string, google.protobuf.Value> private_network = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // New Linode type for the database instance (optional).
   optional string type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object of maintenance update settings (optional).

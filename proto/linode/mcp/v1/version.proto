@@ -30,6 +30,8 @@ message VersionInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VersionResponse";
+  option (linode.mcp.v1.tool_description) = "Returns LinodeMCP server version and build information";
+  option (linode.mcp.v1.tool_hooks) = "answer";
 }
 
 // HelloInput is the input contract for the hello smoke-test meta tool. The
@@ -41,10 +43,11 @@ message HelloInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.HelloResponse";
-  option (linode.mcp.v1.success_message) = "Hello, {name}! LinodeMCP server is running and ready.";
+  option (linode.mcp.v1.tool_description) = "Responds with a friendly greeting from LinodeMCP";
+  option (linode.mcp.v1.success_message) = "Hello, {name|World}! LinodeMCP server is running and ready.";
 
   // Name to include in the greeting (optional).
-  optional string name = 1;
+  optional string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 
 // HelloResponse is the hello smoke-test body: the greeting as a

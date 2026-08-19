@@ -20,9 +20,17 @@ message DomainZoneFileGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainZoneFile";
+  option (linode.mcp.v1.tool_description) = "Gets the rendered zone file for a specific domain by its ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve zone file for domain {domain_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the domain whose zone file to retrieve (required).
-  int32 domain_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 domain_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    // A derived check reports only that the id is missing and loses the reason
+    // a value that was sent could not be read as one.
+    (linode.mcp.v1.reader_message) = {absent: "domain_id must be a positive integer"}
+  ];
 }

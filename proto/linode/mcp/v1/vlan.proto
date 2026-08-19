@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // VLAN mirrors a Linode VLAN. linodes is the list of attached Linode instance
@@ -41,6 +42,7 @@ message VLANListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VLANListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists VLANs on the account with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -59,8 +61,44 @@ message VLANDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VLANDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one VLAN by region and label. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a VLAN. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "VLAN {label} deleted successfully from region {region_id}";
   option (linode.mcp.v1.resource_type) = "VLAN";
+  // Go's client has never replayed this DELETE while Python's did. Declaring it
+  // here is what makes the two answer a transport failure the same way, and a
+  // delete is the direction where not replaying is the safe half.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // A VLAN has no single-resource GET, so fetch_state lists and filters to the
+  // matching region and label, which is the read both hand clients made.
+  option (linode.mcp.v1.tool_hooks) = "fetch_state";
+
+  // Fail-fast runs these in order, so each presence sentence comes ahead of the
+  // shape rule that would otherwise answer for an absent value.
+  option (buf.validate.message).cel = {
+    id: "vlan_delete.region_id.present"
+    message: "region_id is required"
+    expression: "this.region_id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "vlan_delete.region_id.slug"
+    message: "region_id must be a lowercase region slug"
+    expression: "this.region_id.matches('^[a-z0-9][a-z0-9-]*[a-z0-9]$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "vlan_delete.label.present"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  // The label fills a path segment, so a value carrying these would address a
+  // route the caller never named. The leading rule is the padded-value refusal
+  // the hand clients made: (?s) lets the middle span a newline so only the
+  // first and last bytes are held to being non-whitespace.
+  option (buf.validate.message).cel = {
+    id: "vlan_delete.label.path_safe"
+    message: "label must not contain path separators, query separators, or traversal segments"
+    expression: "this.label.matches('^(?s)[^ \\t\\n\\v\\f\\r](.*[^ \\t\\n\\v\\f\\r])?$') && !this.label.contains('/') && !this.label.contains('?') && !this.label.contains('#') && !this.label.contains('..')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

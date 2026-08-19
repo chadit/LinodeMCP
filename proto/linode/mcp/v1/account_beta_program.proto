@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // AccountBetaProgram is one beta program the account is enrolled in. description
@@ -34,11 +35,16 @@ message AccountBetaGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountBetaProgram";
+  option (linode.mcp.v1.tool_description) = "Gets one beta program that the account is enrolled in.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve account beta program {beta_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Beta program ID to retrieve (required).
-  string beta_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string beta_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BETA_SLUG
+  ];
 }
 
 // AccountBetaListInput is the input contract for linode_account_beta_list.
@@ -50,6 +56,7 @@ message AccountBetaListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountBetaProgramListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists beta programs that the account is enrolled in.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -70,8 +77,22 @@ message AccountBetaEnrollInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountBetaEnrollResponse";
+  option (linode.mcp.v1.tool_description) = "Enrolls the account in a beta program.";
+  option (linode.mcp.v1.error_message) = "Failed to enroll the account in a beta program: {error}";
   option (linode.mcp.v1.confirm_message) = "This enrolls the account in a beta program. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account beta enrollment requested successfully";
+  // The id travels in the path of every later beta call, so the charset is
+  // held here rather than left to the API to reject.
+  option (buf.validate.message).cel = {
+    id: "account_beta_enroll.id.required"
+    message: "id is required"
+    expression: "this.id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_beta_enroll.id.charset"
+    message: "id must contain only letters, numbers, underscores, and hyphens"
+    expression: "this.id.matches('^[a-zA-Z0-9_-]+$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

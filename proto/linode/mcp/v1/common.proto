@@ -25,3 +25,18 @@ message DiskEncryption {
     enabled = 2;
   }
 }
+
+// LKETier is the service tier an LKE cluster runs on: enterprise unlocks the
+// enterprise-only cluster features (Kubernetes versions per node pool, rolling
+// update strategies), standard is the default offering. Values are the exact
+// lowercase Linode API strings, authored from the live OpenAPI spec
+// (POST /lke/clusters). It lives here for the reason DiskEncryption does: the
+// cluster create input and the tier-version routes both need it, and two
+// byte-identical copies of one set is what lets them drift.
+message LKETier {
+  enum Value {
+    unspecified = 0;
+    standard = 1;
+    enterprise = 2;
+  }
+}

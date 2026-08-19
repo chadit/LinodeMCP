@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // ImageShareGroupToken is one share group token. updated and expiry are nullable
@@ -53,6 +54,28 @@ message ImageShareGroupTokenGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupToken";
+  option (linode.mcp.v1.tool_description) = "Gets a single image share group token by token UUID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve image share group token: {error}";
+
+  // The same three sentences every token-addressed route declares, in the
+  // order the hand-written readers answered them.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_get.token_uuid.non_blank"
+    message: "token_uuid must be a non-empty string"
+    expression: "this.token_uuid.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_get.token_uuid.path_safe"
+    message: "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+    expression: "!this.token_uuid.contains('/') && !this.token_uuid.contains('?') && !this.token_uuid.contains('#') && !this.token_uuid.contains('..')"
+  };
+  // The canonical spelling only: the brace and urn variants a permissive parser
+  // would take address no token.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_get.token_uuid.uuid"
+    message: "token_uuid must be a UUID"
+    expression: "this.token_uuid.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -70,6 +93,7 @@ message ImageShareGroupTokenListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists image share group tokens for the authenticated user with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -90,15 +114,55 @@ message ImageShareGroupTokenCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a single-use image share group membership token. The response includes token material that is only useful if handled carefully.";
+  option (linode.mcp.v1.error_message) = "Failed to create image share group token: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates single-use image share group token material. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image share group token '{token_uuid}' created successfully";
+  // The hand-written Go client called the http method directly rather than
+  // through the retrying wrapper, so a failed token create is reported rather
+  // than sent again, and a single-use credential is the direction where not
+  // replaying is the safe half.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // Both arguments are trimmed before anything reads them, so every rule
+  // below sees the value the request will carry.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "valid_for_sharegroup_uuid"
+    field: "label"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_create.valid_for_sharegroup_uuid.non_blank"
+    message: "valid_for_sharegroup_uuid must be a non-empty string"
+    expression: "this.valid_for_sharegroup_uuid.matches('(?s)^.*\\\\S.*$')"
+  };
+  // The lenient stdlib form both hand clients took: CPython's uuid.UUID drops
+  // the urn and uuid prefixes, the braces, and every hyphen, then asks for 32
+  // hex digits. isUuid() is the canonical spelling alone, so it would refuse
+  // calls that work today.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_create.valid_for_sharegroup_uuid.uuid"
+    message: "valid_for_sharegroup_uuid must be a valid UUID"
+    expression: "this.valid_for_sharegroup_uuid.matches('^(urn:)?(uuid:)?[{]*-*([0-9a-fA-F]-*){32}[}]*$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The UUID of the share group this token is valid for.
-  string valid_for_sharegroup_uuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string valid_for_sharegroup_uuid = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "valid_for_sharegroup_uuid must be a non-empty string"
+      unusable: "valid_for_sharegroup_uuid must be a non-empty string"
+    }
+  ];
   // Optional descriptive label for the token.
-  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string label = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {unusable: "label must be a non-empty string when provided"}
+  ];
   // Must be set to true to confirm token creation. Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -117,8 +181,45 @@ message ImageShareGroupTokenUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an image share group membership token label.";
+  option (linode.mcp.v1.error_message) = "Failed to update image share group token: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates an image share group token. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Image share group token '{token_uuid}' updated successfully";
+  // The hand-written handler called the http method directly rather than
+  // through the retrying wrapper, so a failed label write is reported rather
+  // than sent again.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read answers with the group the token grants membership to, so
+  // addressing it by token reads no secret back.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_sharegroup_by_token_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The image share group token label will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // Ordered: emptiness, then the path-unsafe set, then the canonical spelling,
+  // so a caller hears the closest reason rather than the last one.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_update.token_uuid.non_blank"
+    message: "token_uuid must be a non-empty string"
+    expression: "this.token_uuid.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_update.token_uuid.path_safe"
+    message: "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+    expression: "!this.token_uuid.matches('[/?#]') && !this.token_uuid.contains('..')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_update.token_uuid.canonical"
+    message: "token_uuid must be a UUID"
+    expression: "this.token_uuid.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_update.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -143,9 +244,35 @@ message ImageShareGroupTokenDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Removes a single image share group membership token by token UUID. Pass dry_run=true to preview without removing. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to remove the share group token";
   option (linode.mcp.v1.success_message) = "Image share group token removed successfully";
   option (linode.mcp.v1.resource_type) = "ImageShareGroupToken";
+  // Neither client has ever retried this DELETE, so a replay cannot re-run it
+  // against a token the first attempt already removed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_sharegroup_by_token_get"
+  };
+
+  // Fail-fast runs these in order, so the presence sentence comes first and the
+  // path-safety sentence ahead of the UUID shape, which is the order both hand
+  // clients answered in.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_delete.token_uuid.present"
+    message: "token_uuid must be a non-empty string"
+    expression: "this.token_uuid.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_delete.token_uuid.path_safe"
+    message: "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+    expression: "!this.token_uuid.contains('/') && !this.token_uuid.contains('?') && !this.token_uuid.contains('#') && !this.token_uuid.contains('..')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_delete.token_uuid.shape"
+    message: "token_uuid must be a UUID"
+    expression: "this.token_uuid.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -175,6 +302,27 @@ message ImageShareGroupTokenImageListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists images available through an image share group token.";
+
+  // The same three sentences every token-addressed route declares, in the
+  // order the hand-written readers answered them.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_image_list.token_uuid.non_blank"
+    message: "token_uuid must be a non-empty string"
+    expression: "this.token_uuid.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_image_list.token_uuid.path_safe"
+    message: "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+    expression: "!this.token_uuid.contains('/') && !this.token_uuid.contains('?') && !this.token_uuid.contains('#') && !this.token_uuid.contains('..')"
+  };
+  // The canonical spelling only: the brace and urn variants a permissive parser
+  // would take address no token.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_token_image_list.token_uuid.uuid"
+    message: "token_uuid must be a UUID"
+    expression: "this.token_uuid.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

@@ -41,11 +41,16 @@ message LKENodeGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENode";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific node within an LKE cluster";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve node '{node_id}' for cluster {cluster_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster (required).
-  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 cluster_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the node to retrieve (required).
   string node_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
@@ -59,9 +64,19 @@ message LKENodeDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodeDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a specific node from an LKE cluster. The node will be removed and may be replaced depending on pool settings. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes the specified node. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Node {node_id} deleted from cluster {cluster_id} successfully";
   option (linode.mcp.v1.resource_type) = "LKENode";
+  // A replay would report a node the first attempt already removed as one the
+  // cluster never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_node_get"
+  };
+  // The walk names the backing Linode the delete destroys, which the fetched
+  // node carries.
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -91,8 +106,15 @@ message LKENodeRecycleInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodeRecycleResponse";
+  option (linode.mcp.v1.tool_description) = "Recycles a specific node in an LKE cluster. The node will be drained and replaced with a new one. Pass dry_run=true to preview without recycling.";
   option (linode.mcp.v1.confirm_message) = "This recycles the specified node, replacing it with a new one. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Node {node_id} in cluster {cluster_id} recycle initiated successfully";
+  // A replay drains and replaces the node a second time, so the replacement the
+  // first attempt brought up is torn down again.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_node_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

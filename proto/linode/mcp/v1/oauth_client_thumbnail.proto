@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // OAuthClientThumbnail is the linode_account_oauth_client_thumbnail_get response.
@@ -13,7 +14,11 @@ import "linode/mcp/v1/options.proto";
 // passes through verbatim without either language's bytes codec re-encoding it.
 message OAuthClientThumbnail {
   string client_id = 1;
-  string thumbnail_png_base64 = 2;
+  // LOCAL because nothing decodes it: the API sends the image itself, and the
+  // read's execute hook is what turns those bytes into this text. Not redacted,
+  // unlike the update's argument of the same name: an avatar is what the caller
+  // asked this tool for, so standing in for it would leave nothing to report.
+  string thumbnail_png_base64 = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
 }
 
 // AccountOAuthClientThumbnailGetInput is the input contract for
@@ -26,6 +31,29 @@ message AccountOAuthClientThumbnailGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientThumbnail";
+  option (linode.mcp.v1.tool_description) = "Gets one account OAuth client's thumbnail by ID. Returns base64-encoded PNG image data.";
+  option (linode.mcp.v1.error_message) = "Failed to get account OAuth client thumbnail '{client_id}': {error}";
+  // execute owns the live call alone: this route answers with raw PNG bytes
+  // under image/png, not the JSON body every other read decodes.
+  option (linode.mcp.v1.tool_hooks) = "execute";
+
+  // The client id fills a route segment here as it does on the update and the
+  // delete, so it is checked the same way.
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_thumbnail_get.client_id.required"
+    message: "client_id is required"
+    expression: "this.client_id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_thumbnail_get.client_id.non_blank"
+    message: "client_id must be a non-empty string"
+    expression: "this.client_id.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_thumbnail_get.client_id.path_safe"
+    message: "client_id must not contain path separators, query separators, or traversal segments"
+    expression: "!this.client_id.contains('/') && !this.client_id.contains('?') && !this.client_id.contains('..') && this.client_id.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -43,15 +71,66 @@ message AccountOAuthClientThumbnailUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientIDResponse";
+  option (linode.mcp.v1.tool_description) = "Updates one account OAuth client's thumbnail by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to update account OAuth client thumbnail: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates an OAuth client thumbnail. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "OAuth client thumbnail updated successfully";
+  // Neither language retried this PUT: the route replaces the image rather
+  // than appending to it, and a replay would resend the whole upload.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the client the image lands on. The image itself is never
+  // fetched and never echoed: the contract redacts it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_oauth_client_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The account OAuth client's thumbnail is updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.tool_hooks) = "execute";
+
+  // The client id is a route segment here as it is on the delete, so it is
+  // checked the same way.
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_thumbnail_update.client_id.required"
+    message: "client_id is required"
+    expression: "this.client_id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_thumbnail_update.client_id.non_blank"
+    message: "client_id must be a non-empty string"
+    expression: "this.client_id.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_thumbnail_update.client_id.path_safe"
+    message: "client_id must not contain path separators, query separators, or traversal segments"
+    expression: "!this.client_id.contains('/') && !this.client_id.contains('?') && !this.client_id.contains('..') && this.client_id.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
+  // Standard base64 with its padding, which is the encoding the execute hook
+  // decodes. It holds its peace on a blank image so the argument's own reader
+  // answers that, in the words a caller has always read.
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_thumbnail_update.thumbnail_png_base64.base64"
+    message: "thumbnail_png_base64 must be valid standard base64"
+    expression: "!this.thumbnail_png_base64.matches('(?s)^.*\\\\S.*$') || this.thumbnail_png_base64.matches('^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
   string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Base64-encoded PNG image for the OAuth client thumbnail (required).
-  string thumbnail_png_base64 = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Redacted in the preview: the image is the caller's file, and a preview that
+  // echoed it would put the whole payload in a transcript.
+  string thumbnail_png_base64 = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "thumbnail_png_base64 is required"
+      unusable: "thumbnail_png_base64 must be a non-empty string"
+    }
+  ];
   // Must be true to confirm OAuth client thumbnail update. Ignored when
   // dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

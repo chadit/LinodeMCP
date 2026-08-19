@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -59,6 +60,8 @@ message AccountGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Account";
+  option (linode.mcp.v1.tool_description) = "Retrieves the authenticated user's Linode account information including billing details and capabilities";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve the account: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -85,6 +88,8 @@ message AccountAgreementsListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountAgreements";
+  option (linode.mcp.v1.tool_description) = "Lists account agreements and whether each has been acknowledged";
+  option (linode.mcp.v1.error_message) = "Failed to list account agreements: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -111,6 +116,8 @@ message AccountSettingsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountSettings";
+  option (linode.mcp.v1.tool_description) = "Retrieves account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve account settings: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -150,6 +157,8 @@ message AccountTransferGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountTransfer";
+  option (linode.mcp.v1.tool_description) = "Retrieves the authenticated account's network transfer usage and quota by region.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve the account transfer pool: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -172,11 +181,16 @@ message AccountInvoiceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoice";
+  option (linode.mcp.v1.tool_description) = "Gets one account invoice by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve invoice {invoice_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the invoice to retrieve (required).
-  int32 invoice_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 invoice_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // AccountInvoiceListResponse is the envelope linode_account_invoice_list
@@ -207,11 +221,16 @@ message AccountLoginGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLogin";
+  option (linode.mcp.v1.tool_description) = "Gets one account login by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve account login {login_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the login to retrieve (required).
-  int32 login_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 login_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // AccountLoginListResponse is the envelope linode_account_login_list returns: a
@@ -232,11 +251,16 @@ message ProfileLoginGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLogin";
+  option (linode.mcp.v1.tool_description) = "Gets one login for the authenticated profile by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve profile login {login_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the login to retrieve (required).
-  int32 login_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 login_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // ProfileLoginListResponse is the envelope linode_profile_login_list returns: a
@@ -257,6 +281,7 @@ message ProfileLoginListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileLoginListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists login history for the authenticated profile.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -282,11 +307,16 @@ message AccountPaymentGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPayment";
+  option (linode.mcp.v1.tool_description) = "Gets one payment made on the authenticated account by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve payment {payment_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the payment to retrieve (required).
-  int32 payment_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 payment_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // AccountPaymentListResponse is the envelope linode_account_payment_list
@@ -360,11 +390,16 @@ message AccountOAuthClientGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClient";
+  option (linode.mcp.v1.tool_description) = "Gets one OAuth client registered on the account. OAuth client secrets are not returned by this tool.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve OAuth client {client_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the OAuth client to retrieve (required).
-  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string client_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PATH_SAFE_TEXT
+  ];
 }
 
 // OAuthClientWriteResponse is the {message, client} envelope the OAuth client
@@ -506,8 +541,10 @@ message MaintenancePolicyListInput {
     method: "GET"
     path: "/maintenance/policies"
   };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MaintenancePolicyListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available Linode maintenance policies.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -675,8 +712,39 @@ message AccountAgreementsAcknowledgeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Acknowledges one or more account agreements.";
+  option (linode.mcp.v1.error_message) = "Failed to acknowledge account agreements: {error}";
   option (linode.mcp.v1.confirm_message) = "This acknowledges account agreements. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account agreements acknowledged successfully";
+  // An acknowledgement is the only thing this endpoint accepts, so a flag set
+  // to false is a caller asking to un-acknowledge, which the API has no way to
+  // do. A wrongly typed flag is answered by the body builder instead, which is
+  // why these rules only speak once the value is a boolean.
+  option (buf.validate.message).cel = {
+    id: "account_agreements_acknowledge.billing_agreement.true"
+    message: "billing_agreement must be true when provided"
+    expression: "!has(this.billing_agreement) || this.billing_agreement"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_agreements_acknowledge.eu_model.true"
+    message: "eu_model must be true when provided"
+    expression: "!has(this.eu_model) || this.eu_model"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_agreements_acknowledge.master_service_agreement.true"
+    message: "master_service_agreement must be true when provided"
+    expression: "!has(this.master_service_agreement) || this.master_service_agreement"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_agreements_acknowledge.privacy_policy.true"
+    message: "privacy_policy must be true when provided"
+    expression: "!has(this.privacy_policy) || this.privacy_policy"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_agreements_acknowledge.any"
+    message: "at least one account agreement field is required"
+    expression: "has(this.billing_agreement) || has(this.eu_model) || has(this.master_service_agreement) || has(this.privacy_policy)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -706,8 +774,19 @@ message AccountCancelInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountCancelWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Cancels the active account and returns the exit survey link.";
+  option (linode.mcp.v1.error_message) = "Failed to cancel account: {error}";
   option (linode.mcp.v1.confirm_message) = "This cancels the active account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account canceled successfully";
+  // The irreversibility is the one thing a caller cannot read off the request.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The Linode account is closed and all of its resources are removed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Account cancellation is permanent and irreversible; every resource on the account is destroyed and access is lost."
+    line: PREVIEW_LINE_WARNING
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -722,9 +801,10 @@ message AccountCancelInput {
 
 // AccountChildAccountGetInput is the input contract for
 // linode_account_child_account_get. Linode deprecated this route in favor of
-// GET /iam/delegation/profile/child-accounts/{euuid}; the replacement is not
-// yet implemented in this repo, so the deprecated route is what this tool
-// still calls.
+// GET /iam/delegation/profile/child-accounts/{euuid}, which this repo now
+// serves as linode_iam_delegation_profile_child_account_get. This tool stays on
+// the deprecated route until the API withdraws it, since the replacement
+// answers with the company and euuid alone rather than the whole account.
 message AccountChildAccountGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_child_account_get"
@@ -733,17 +813,24 @@ message AccountChildAccountGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ChildAccount";
+  option (linode.mcp.v1.tool_description) = "Gets one child-level account the authenticated account can access.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve child account {euuid}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // External unique identifier for the child account (required).
-  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string euuid = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PATH_SAFE_TEXT
+  ];
 }
 
 // AccountChildAccountListInput is the input contract for
 // linode_account_child_account_list. Linode deprecated this route in favor of
-// GET /iam/delegation/child-accounts; the replacement is not yet implemented
-// in this repo, so the deprecated route is what this tool still calls.
+// GET /iam/delegation/child-accounts, which this repo now serves as
+// linode_iam_delegation_child_account_list. This tool stays on the deprecated
+// route until the API withdraws it, since the replacement answers with the
+// company and euuid alone rather than the whole account.
 message AccountChildAccountListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_child_account_list"
@@ -752,6 +839,7 @@ message AccountChildAccountListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ChildAccountListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists child-level accounts the authenticated account can access.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -764,9 +852,10 @@ message AccountChildAccountListInput {
 // AccountChildAccountTokenCreateInput is the input contract for
 // linode_account_child_account_token_create. euuid and confirm are required.
 // Linode deprecated this route in favor of
-// POST /iam/delegation/profile/child-accounts/{euuid}/token; the replacement
-// is not yet implemented in this repo, so the deprecated route is what this
-// tool still calls.
+// POST /iam/delegation/profile/child-accounts/{euuid}/token, which this repo
+// now serves as linode_iam_delegation_profile_child_account_token_create. This
+// tool stays on the deprecated route until the API withdraws it, since the two
+// mint tokens through different account models.
 message AccountChildAccountTokenCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_child_account_token_create"
@@ -775,13 +864,29 @@ message AccountChildAccountTokenCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountChildAccountTokenWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a short-lived proxy user token for one child-level account.";
+  option (linode.mcp.v1.error_message) = "Failed to create child account token: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a proxy user token for a child account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Child account proxy token created successfully";
+  // A replayed POST would mint a second live proxy token, so neither language
+  // retried it before it was declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the child account the proxy token is minted for.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_child_account_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A proxy user token is created for the selected child account."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // External unique identifier for the child account (required).
-  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string euuid = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PATH_SAFE_TEXT
+  ];
   // Must be true to confirm proxy user token creation. Ignored when
   // dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -800,11 +905,15 @@ message AccountInvoiceItemListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoiceItemListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists line items for one account invoice by ID.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Invoice ID whose items should be listed (required).
-  int32 invoice_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 invoice_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -821,6 +930,7 @@ message AccountInvoiceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoiceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists invoices for the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -839,6 +949,7 @@ message AccountLoginListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLoginListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists user logins for the account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -858,6 +969,7 @@ message AccountMaintenanceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountMaintenanceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists maintenance records visible to the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -877,6 +989,7 @@ message AccountNotificationListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountNotificationListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists active notifications for the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -897,15 +1010,33 @@ message AccountOAuthClientCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientCreateWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates an account OAuth client. WARNING: The secret is only shown once in the response and cannot be retrieved later.";
+  option (linode.mcp.v1.error_message) = "Failed to create OAuth client: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "OAuth client created successfully";
+  option (linode.mcp.v1.warning_message) = "IMPORTANT: The secret below is shown ONLY ONCE. Save it now - it cannot be retrieved later.";
+  // The server assigns the client id, so a replay after a timeout leaves a
+  // second OAuth client behind whose secret no caller ever saw.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // What a created client leaves behind; the client does not exist yet.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new account OAuth client is created. The returned client secret is shown once and cannot be retrieved later."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Label for the OAuth client (required).
-  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Label for the OAuth client (required). Every unusable shape answers the
+  // one required sentence, which a rule on a presence-free string cannot say.
+  string label = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Redirect URI for the OAuth client (required).
-  string redirect_uri = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string redirect_uri = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Must be true to confirm OAuth client creation. The secret is only shown
   // once. Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -930,8 +1061,40 @@ message AccountOAuthClientDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientIDResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one account OAuth client by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to delete account OAuth client: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes an OAuth client. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "OAuth client deleted successfully";
+  // Neither language retried this DELETE, and a replay would report a client
+  // that is already gone as one that was never there.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the client a caller sees before the delete ends its
+  // registration.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_oauth_client_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The account OAuth client is deleted."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The three sentences Go's shared path-safe reader answers, in its order, so
+  // the id rules read the same here as on the sibling accept route.
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_delete.client_id.required"
+    message: "client_id is required"
+    expression: "this.client_id != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_delete.client_id.non_blank"
+    message: "client_id must be a non-empty string"
+    expression: "this.client_id.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_oauth_client_delete.client_id.path_safe"
+    message: "client_id must not contain path separators, query separators, or traversal segments"
+    expression: "!this.client_id.contains('/') && !this.client_id.contains('?') && !this.client_id.contains('..') && this.client_id.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -954,6 +1117,7 @@ message AccountOAuthClientListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists OAuth clients registered on the account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -973,13 +1137,31 @@ message AccountOAuthClientSecretResetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientSecretResetWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resets one account OAuth client secret by ID. WARNING: The new secret is only shown once in the response and cannot be retrieved later.";
+  option (linode.mcp.v1.error_message) = "Failed to reset the secret for OAuth client {client_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This resets an OAuth client secret. The new secret is only shown once. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "OAuth client secret reset successfully";
+  option (linode.mcp.v1.warning_message) = "IMPORTANT: The new secret below is shown ONLY ONCE. Save it now - it cannot be retrieved later.";
+  // The server generates the replacement secret, so a replay invalidates the
+  // one the first attempt returned and the caller is left holding a dead value.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the client whose secret is replaced. It is credential-safe:
+  // the client's metadata, never a secret.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_oauth_client_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The OAuth client secret is reset. The replacement secret is shown once and cannot be retrieved later."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
-  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string client_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PATH_SAFE_TEXT
+  ];
   // Must be true to confirm OAuth client secret reset. The new secret is only
   // shown once. Ignored when dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -999,19 +1181,49 @@ message AccountOAuthClientUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates label, redirect URI, or public setting for one account OAuth client.";
+  option (linode.mcp.v1.error_message) = "Failed to update OAuth client {client_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates an OAuth client. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "OAuth client updated successfully";
+  // The read is the client the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_oauth_client_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The selected OAuth client configuration is updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // An update naming none of the three mutable fields would change nothing,
+  // and only the argument map can see that a supplied field was supplied.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "label"
+    fields: "redirect_uri"
+    fields: "public"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
-  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // New label for the OAuth client (optional).
-  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string client_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PATH_SAFE_TEXT
+  ];
+  // New label for the OAuth client (optional). A supplied value that is not
+  // usable text answers the required sentence, as this tool has always said.
+  optional string label = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // New redirect URI for the OAuth client (optional).
-  optional string redirect_uri = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string redirect_uri = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Whether this OAuth client is public (optional).
-  optional bool public = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional bool public = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
+  ];
   // Must be true to confirm OAuth client update. Ignored when dry_run=true.
   bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -1030,15 +1242,48 @@ message AccountPaymentCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Makes a payment on the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to create the payment: {error}";
   option (linode.mcp.v1.confirm_message) = "This makes an account payment. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account payment created successfully";
+  // A replayed attempt would charge the account twice, so neither language
+  // retried this POST before it was declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // normalize trims usd, which is the value both languages have always put on
+  // the wire. preview carries the sentence Python had and Go did not: the money
+  // leaves the account.
+  option (linode.mcp.v1.tool_hooks) = "normalize";
+  // The money leaving is the consequence; the request carries only an amount.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A payment is created on the Linode account."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // An amount the caller left out reads as the empty string here, so the rule
+  // stands aside for it and the reader on the field answers "usd is required".
+  // The accepted set is the amount the API bills: a positive number of dollars
+  // and at most two cents digits, which is the narrower of the two the hand
+  // handlers took.
+  option (buf.validate.message).cel = {
+    id: "account_payment_create.usd.amount"
+    message: "usd must be a positive dollar amount with up to two decimals"
+    expression: "this.usd == '' || (this.usd.matches('^[0-9]+([.][0-9]{1,2})?$') && !this.usd.matches('^0+([.]0{1,2})?$'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_payment_create.payment_method_id.positive"
+    message: "payment_method_id must be a positive integer"
+    expression: "!has(this.payment_method_id) || this.payment_method_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method ID to charge (optional).
   optional int32 payment_method_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Payment amount in USD, as a decimal string (e.g. "25.50") (required).
-  string usd = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string usd = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT
+  ];
   // Must be true to confirm making an account payment. Ignored when
   // dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1057,6 +1302,7 @@ message AccountPaymentListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists payments made on the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1077,8 +1323,27 @@ message AccountPaymentMethodDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodIDResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a payment method from the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to delete account payment method: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes a payment method. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Payment method deleted successfully";
+  // Neither language retried this DELETE, and a replay would report a method
+  // that is already gone as one that was never on the account.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the payment method a caller sees before it is removed.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_payment_method_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The selected account payment method is deleted."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "account_payment_method_delete.payment_method_id.positive"
+    message: "payment_method_id must be a positive integer"
+    expression: "this.payment_method_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1097,7 +1362,7 @@ message AccountPaymentMethodDeleteInput {
 // varies by payment method type: credit card, Google Pay, PayPal), so it maps to
 // a google.protobuf.Value map. It is required at runtime but a map field cannot
 // be marked required in the generated schema, so the required flag is dropped
-// (the handler still enforces presence).
+// (the rules below still enforce presence).
 message AccountPaymentMethodCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_payment_method_create"
@@ -1106,16 +1371,62 @@ message AccountPaymentMethodCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Adds a payment method to the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to create the payment method: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a payment method. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Payment method created successfully";
+  // A replayed attempt would file the card twice, so neither language retried
+  // this POST before it was declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // What filing a method does to the account, which the request does not say.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new account payment method is created and may become the default payment method."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // A blank type is the caller who named no method at all, which is why it is
+  // answered apart from a type this endpoint does not take.
+  option (buf.validate.message).cel = {
+    id: "account_payment_method_create.type.required"
+    message: "type is required"
+    expression: "this.type.matches('(?s)^.*\\\\S.*$')"
+  };
+  // The API accepts only credit_card here; Google Pay and PayPal are added
+  // through the Cloud Manager, not this endpoint.
+  option (buf.validate.message).cel = {
+    id: "account_payment_method_create.type.credit_card"
+    message: "type must be credit_card"
+    expression: "this.type == 'credit_card'"
+  };
+  // An empty object is the same call as no object: there is no method to file
+  // without the details, so both are refused with the one sentence.
+  option (buf.validate.message).cel = {
+    id: "account_payment_method_create.data.required"
+    message: "data is required"
+    expression: "size(this.data) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_payment_method_create.type.known"
+    message: "type must be credit_card"
+    expression: "this.type == 'credit_card'"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method details. The shape varies by payment method type. Required at
   // runtime, though the generated schema cannot mark a map field required.
-  map<string, google.protobuf.Value> data = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Whether to set this as the default payment method (required).
-  bool is_default = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  map<string, google.protobuf.Value> data = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    // Card details are the one argument a preview must not echo: a dry run is
+    // read and pasted far more widely than the request it stands for.
+    (linode.mcp.v1.preview_redact) = true
+  ];
+  // Whether to set this as the default payment method (required). An
+  // implicit-presence bool reads absent and false alike, so the reader asks
+  // the argument map which the caller meant.
+  bool is_default = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
+  ];
   // Payment method type (e.g. "credit_card", "google_pay", "paypal") (required).
   string type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm adding a payment method. Ignored when dry_run=true.
@@ -1135,11 +1446,16 @@ message AccountPaymentMethodGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethod";
+  option (linode.mcp.v1.tool_description) = "Gets one payment method for the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve payment method {payment_method_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method ID (required).
-  int32 payment_method_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 payment_method_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // AccountPaymentMethodListInput is the input contract for
@@ -1152,6 +1468,7 @@ message AccountPaymentMethodListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists payment methods for the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1171,8 +1488,23 @@ message AccountPaymentMethodMakeDefaultInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodIDResponse";
+  option (linode.mcp.v1.tool_description) = "Sets a payment method as the authenticated account default.";
+  option (linode.mcp.v1.error_message) = "Failed to make payment method {payment_method_id} the default: {error}";
   option (linode.mcp.v1.confirm_message) = "This changes the default payment method. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Payment method set as default successfully";
+  // The read is the payment method that becomes the default.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_payment_method_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The selected account payment method becomes the default."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (buf.validate.message).cel = {
+    id: "account_payment_method_make_default.payment_method_id.positive"
+    message: "payment_method_id must be a positive integer"
+    expression: "this.payment_method_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1196,8 +1528,32 @@ message AccountPromoCreditAddInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPromoResponse";
+  option (linode.mcp.v1.tool_description) = "Applies a promo credit to the authenticated account.";
+  option (linode.mcp.v1.error_message) = "Failed to apply the promo code: {error}";
   option (linode.mcp.v1.confirm_message) = "This applies a promo credit to the account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account promo credit applied successfully";
+  // What a code does once applied; the credit it carries is not readable first.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The promo code is applied to the account and may add account credit."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // A code travels in the body untouched, so the whitespace a caller pasted
+  // around it is refused here rather than sent.
+  option (buf.validate.message).cel = {
+    id: "account_promo_credit_add.promo_code.required"
+    message: "promo_code is required"
+    expression: "this.promo_code != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_promo_credit_add.promo_code.non_blank"
+    message: "promo_code must be a non-empty string"
+    expression: "this.promo_code.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_promo_credit_add.promo_code.trimmed"
+    message: "promo_code must not include leading or trailing whitespace"
+    expression: "this.promo_code.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1221,8 +1577,19 @@ message AccountSettingsManagedEnableInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Enables Linode Managed for the account. Pass dry_run=true to preview without enabling.";
+  option (linode.mcp.v1.error_message) = "Failed to enable Linode Managed: {error}";
   option (linode.mcp.v1.confirm_message) = "This enables Linode Managed for the account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Linode Managed enabled successfully";
+  // The read is the settings, so a caller sees Managed is off before turning
+  // it on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_settings_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Linode Managed is enabled for this account."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1243,27 +1610,89 @@ message AccountSettingsUpdateInput {
     method: "PUT"
     path: "/account/settings"
   };
+
+  option (buf.validate.message).cel = {
+    id: "account_settings_update.maintenance_policy.known"
+    message: "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    expression: "!has(this.maintenance_policy) || this.maintenance_policy in ['linode/migrate','linode/power_off_on']"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_settings_update.interfaces_for_new_linodes.known"
+    message: "interfaces_for_new_linodes must be one of: legacy_config_only, legacy_config_default_but_linode_allowed, linode_default_but_legacy_config_allowed, linode_only"
+    expression: "!has(this.interfaces_for_new_linodes) || this.interfaces_for_new_linodes in ['legacy_config_only','legacy_config_default_but_linode_allowed','linode_default_but_legacy_config_allowed','linode_only']"
+  };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountSettingsWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy.";
+  option (linode.mcp.v1.error_message) = "Failed to update account settings: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates account-wide settings. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account settings updated successfully";
+  // A replayed PUT would reapply settings the first attempt may already have
+  // changed, so neither language retried it before it was declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the settings the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_settings_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Linode account settings are updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // A setting the message does not declare is dropped before the rules run, so
+  // the argument map is the only place a caller's typo is still visible.
+  option (linode.mcp.v1.refuse_unknown_arguments) = {
+    message: "Unsupported account settings field(s): {fields}"
+  };
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "backups_enabled"
+    fields: "managed"
+    fields: "network_helper"
+    fields: "interfaces_for_new_linodes"
+    fields: "longview_subscription"
+    fields: "maintenance_policy"
+    fields: "object_storage"
+    message: "at least one account settings field is required"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Whether backups are enabled by default for new Linodes (optional).
-  optional bool backups_enabled = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional bool backups_enabled = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
+  ];
   // Default interface generation mode for new Linodes (optional).
-  optional string interfaces_for_new_linodes = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string interfaces_for_new_linodes = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
+  ];
   // Longview subscription tier, or an empty string to disable it (optional).
-  optional string longview_subscription = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The blank is why these four read through the string member rather than the
+  // text one: it is the value that cancels the subscription.
+  optional string longview_subscription = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
+  ];
   // Default maintenance policy for the account (optional).
-  optional string maintenance_policy = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string maintenance_policy = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
+  ];
   // Whether managed services are enabled for the account (optional).
-  optional bool managed = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional bool managed = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
+  ];
   // Whether Network Helper is enabled by default (optional).
-  optional bool network_helper = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional bool network_helper = 7 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
+  ];
   // Object Storage subscription status or tier (optional).
-  optional string object_storage = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string object_storage = 8 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
+  ];
   // Must be true to confirm account settings update. Ignored when
   // dry_run=true.
   bool confirm = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1282,8 +1711,37 @@ message AccountUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates account billing and contact information. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.error_message) = "Failed to update account: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates account billing/contact information. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account updated successfully";
+  // A replayed PUT would reapply billing and contact values the first attempt
+  // may already have changed, so neither language retried it before it was
+  // declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the account the change is diffed against. No prose: both
+  // languages reported the fetch alone.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_get"
+  };
+  // A PUT naming no billing or contact field would change nothing. The
+  // sentence is declared because it names the family rather than listing
+  // twelve fields.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "address_1"
+    fields: "address_2"
+    fields: "city"
+    fields: "company"
+    fields: "country"
+    fields: "email"
+    fields: "first_name"
+    fields: "last_name"
+    fields: "phone"
+    fields: "state"
+    fields: "tax_id"
+    fields: "zip"
+    message: "at least one account field is required"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

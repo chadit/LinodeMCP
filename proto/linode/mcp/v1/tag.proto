@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -60,6 +61,7 @@ message TagListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TagListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists tags visible to the authenticated account.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -79,8 +81,49 @@ message TagCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TagWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a Linode tag and optionally applies it to existing resources. Pass dry_run=true to preview without creating the tag.";
+  option (linode.mcp.v1.error_message) = "Failed to create tag: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a Linode tag. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Tag '{label}' created successfully";
+  // Both languages have trimmed the label before sending it since the tool
+  // was written, so the rule below judges the value that reaches the API.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  // The tag the call would create; a create has no resource to read.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new tag \"{label}\" will be created."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "tag_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  // Every id names a resource the tag is applied to, so zero and below is a
+  // value no resource carries.
+  option (buf.validate.message).cel = {
+    id: "tag_create.domains.positive"
+    message: "domains must be an array of positive integers"
+    expression: "this.domains.all(id, id >= 1)"
+  };
+  option (buf.validate.message).cel = {
+    id: "tag_create.linodes.positive"
+    message: "linodes must be an array of positive integers"
+    expression: "this.linodes.all(id, id >= 1)"
+  };
+  option (buf.validate.message).cel = {
+    id: "tag_create.nodebalancers.positive"
+    message: "nodebalancers must be an array of positive integers"
+    expression: "this.nodebalancers.all(id, id >= 1)"
+  };
+  option (buf.validate.message).cel = {
+    id: "tag_create.volumes.positive"
+    message: "volumes must be an array of positive integers"
+    expression: "this.volumes.all(id, id >= 1)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -113,9 +156,25 @@ message TagDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a tag from all objects on the account. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm must be true to delete a tag";
   option (linode.mcp.v1.success_message) = "Tag '{tag_label}' deleted successfully";
   option (linode.mcp.v1.resource_type) = "Tag";
+  // Go has never retried this route, so a replay cannot re-run the delete
+  // against a tag the first attempt already removed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // fetch_state lists the objects carrying the tag, which is what the preview
+  // reports and what the walk names one by one.
+  option (linode.mcp.v1.tool_hooks) = "fetch_state";
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+
+  // A label carrying these would address a route the caller never named: '?'
+  // opens a query, '#' a fragment, and '..' climbs a segment.
+  option (buf.validate.message).cel = {
+    id: "tag_delete.tag_label.path_safe"
+    message: "tag_label must not contain '?', '#', or '..'"
+    expression: "!this.tag_label.contains('?') && !this.tag_label.contains('#') && !this.tag_label.contains('..')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -144,11 +203,35 @@ message TaggedObjectListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TaggedObjectListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Linode objects that have the supplied tag label.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve items: {error}";
+
+  // A tag label is the one path segment that may carry a slash, so it joins no
+  // segment reader: "prod/web" is a label callers use and the client
+  // percent-encodes it into one segment. The rules say what it must not carry
+  // rather than what it must be, because free text has no shape to name.
+  option (buf.validate.message).cel = {
+    id: "tag_object_list.tag_label.non_blank"
+    message: "tag_label must be a non-empty string"
+    expression: "this.tag_label.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "tag_object_list.tag_label.url_safe"
+    message: "tag_label must not contain '?', '#', or '..'"
+    expression: "!this.tag_label.contains('?') && !this.tag_label.contains('#') && !this.tag_label.contains('..')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Tag label to list objects for.
-  string tag_label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string tag_label = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FREE_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "tag_label must be a non-empty string"
+      unusable: "tag_label must be a non-empty string"
+    }
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).

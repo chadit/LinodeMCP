@@ -43,11 +43,22 @@ message InstanceTypeGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceType";
+  option (linode.mcp.v1.tool_description) = "Gets one Linode instance type (plan) by type_id.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Linode type: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the instance type to retrieve (required).
-  string type_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string type_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FRAGMENT_SAFE_TEXT,
+    // A type id nobody sent reads the same as one sent as a number here, and
+    // the refusal names the characters rather than the classes.
+    (linode.mcp.v1.reader_message) = {
+      absent: "type_id must be a non-empty string"
+      refused: "type_id must not contain '/', '?', '#', or '..'"
+    }
+  ];
 }
 
 // InstanceTypeListInput is the input contract for linode_type_list. class is a
@@ -60,6 +71,7 @@ message InstanceTypeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTypeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all available Linode instance types (plans) with pricing information. Can filter by class (standard, dedicated, gpu, highmem, premium).";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -114,6 +126,7 @@ message LKETypeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKETypeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available node types for LKE clusters with pricing information";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -138,6 +151,7 @@ message NodeBalancerTypeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerTypeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available NodeBalancer types.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -172,6 +186,7 @@ message ObjectStorageTypeListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageTypeListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Object Storage types and pricing information";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -199,6 +214,7 @@ message NetworkTransferPriceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkTransferPriceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Linode network transfer prices, including default and region-specific rates.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

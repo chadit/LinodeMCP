@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -34,11 +35,16 @@ message AccountServiceTransferGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEntityTransfer";
+  option (linode.mcp.v1.tool_description) = "Gets one account service transfer request by token.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve service transfer {token}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The service transfer token to retrieve (required).
-  string token = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string token = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PATH_SAFE_TEXT
+  ];
 }
 
 // AccountServiceTransferListResponse is the envelope
@@ -69,6 +75,7 @@ message AccountServiceTransferListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists account service transfer requests.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -89,7 +96,42 @@ message AccountServiceTransferDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferActionResponse";
+  option (linode.mcp.v1.tool_description) = "Cancels one account service transfer request by token.";
+  // Neither sentence was declared before: Go named the tool in its failure and
+  // built its success in the handler, so both are stated here in the resource
+  // prose the rest of the file uses.
+  option (linode.mcp.v1.error_message) = "Failed to cancel account service transfer: {error}";
   option (linode.mcp.v1.confirm_message) = "This cancels an account service transfer. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account service transfer canceled successfully";
+  // Neither language retried this DELETE, and a replay would report a transfer
+  // that is already canceled as one that never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the transfer a caller sees before canceling it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_service_transfer_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The selected account service transfer is canceled."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The same three sentences the sibling accept route declares for the same
+  // token, in the same order.
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_delete.token.required"
+    message: "token is required"
+    expression: "this.token != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_delete.token.non_blank"
+    message: "token must be a non-empty string"
+    expression: "this.token.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_delete.token.path_safe"
+    message: "token must not contain path separators, query separators, or traversal segments"
+    expression: "!this.token.contains('/') && !this.token.contains('?') && !this.token.contains('..') && this.token.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -113,7 +155,35 @@ message AccountServiceTransferAcceptInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferActionResponse";
+  option (linode.mcp.v1.tool_description) = "Accepts one account service transfer request by token.";
   option (linode.mcp.v1.confirm_message) = "This accepts an account service transfer. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account service transfer accepted successfully";
+  option (linode.mcp.v1.error_message) = "Failed to accept service transfer {token}: {error}";
+  // The read is the transfer a caller sees before accepting it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_service_transfer_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The service transfer is accepted for the Linode account."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The token addresses the transfer in the path, so the three ways it can be
+  // unusable are held here in the order the hand-written readers answered them.
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_accept.token.required"
+    message: "token is required"
+    expression: "this.token != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_accept.token.non_blank"
+    message: "token must be a non-empty string"
+    expression: "this.token.matches('(?s)^.*\\\\S.*$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_accept.token.path_safe"
+    message: "token must not contain path separators, query separators, or traversal segments"
+    expression: "!this.token.contains('/') && !this.token.contains('?') && !this.token.contains('..') && this.token.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -139,8 +209,40 @@ message AccountServiceTransferCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates an account service transfer for the provided Linode IDs.";
+  option (linode.mcp.v1.error_message) = "Failed to create service transfer: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates an account service transfer. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account service transfer created successfully";
+  // A replayed POST would open a second pending transfer for the same Linodes,
+  // so neither language retried it before it was declared.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // normalize folds the linode_ids convenience form into entities, which is the
+  // only shape either language ever put on the wire. preview carries the
+  // sentence Python had and Go did not: the transfer request is opened for the
+  // listed Linodes.
+  option (linode.mcp.v1.tool_hooks) = "normalize";
+  // The request being opened for the listed Linodes, which the body implies
+  // rather than says.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A service transfer request is created for the listed Linodes."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The rules run on the post-normalize arguments, so a foldable linode_ids
+  // has already become entities by here and only the unusable shapes remain.
+  // Absent and empty answer one sentence for both members because an empty
+  // entities object and an empty id list each name nothing to transfer. A
+  // non-object entities never builds the message, so the body builder answers
+  // its sentence instead of these.
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_create.target.required"
+    message: "linode_ids is required"
+    expression: "size(this.entities) > 0 || size(this.linode_ids) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "account_service_transfer_create.linode_ids.positive"
+    message: "linode_ids must be an array of positive integers"
+    expression: "this.linode_ids.all(i, i >= 1)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

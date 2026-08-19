@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // UDF is one user-defined field declared by a StackScript.
@@ -17,6 +18,9 @@ message UDF {
 
 // StackScript mirrors a Linode StackScript. images and user_defined_fields are
 // repeated (emitted as []).
+//
+// rev_note was added after the read tools shipped: the API sends it and the
+// delete preview always reported it, so a read that hid it was the odd one out.
 message StackScript {
   string username = 1;
   string user_gravatar_id = 2;
@@ -32,6 +36,7 @@ message StackScript {
   int32 deployments_active = 12;
   bool is_public = 13;
   bool mine = 14;
+  string rev_note = 15;
 }
 
 // StackScriptListResponse is the linode_stackscript_list envelope: count, an
@@ -52,11 +57,16 @@ message StackScriptGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScript";
+  option (linode.mcp.v1.tool_description) = "Gets one StackScript by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve StackScript: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the StackScript to retrieve (required).
-  int32 stackscript_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 stackscript_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // StackScriptWriteResponse is the {message, stackscript} envelope the
@@ -86,6 +96,7 @@ message StackScriptListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists StackScripts. By default returns your own StackScripts. Can filter by public status, ownership, or label.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -114,9 +125,48 @@ message StackScriptCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new StackScript for automated deployments. The script can be used when creating Linode instances.";
+  option (linode.mcp.v1.error_message) = "Failed to create StackScript: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a new StackScript in your account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "StackScript '{label}' (ID: {id}) created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The label is trimmed and blank image ids are dropped before anything
+  // reads them, so the rules below judge the values the call actually sends.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "images"
+    transform: NORMALIZE_TRANSFORM_TRIM_LIST_DROP_BLANK
+  };
+
+  option (buf.validate.message).cel = {
+    id: "stackscript_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  // The script travels exactly as it arrived, since leading blanks are part of
+  // a shell body, so the rule looks for one non-blank character rather than
+  // reading a trimmed copy.
+  option (buf.validate.message).cel = {
+    id: "stackscript_create.script.required"
+    message: "script is required"
+    expression: "this.script.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "stackscript_create.images.required"
+    message: "images is required and must contain at least one image ID"
+    expression: "size(this.images) > 0"
+  };
+  // An image id is one vendor and one image separated by a single slash, and
+  // the characters refused here are the ones that would steer the path the id
+  // is spliced into.
+  option (buf.validate.message).cel = {
+    id: "stackscript_create.images.form"
+    message: "images entries must be valid image IDs"
+    expression: "this.images.all(image, image.matches('^[^/?#]*/[^/?#]*$') && !image.matches('[.][.]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -153,9 +203,62 @@ message StackScriptUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates editable fields on an existing StackScript.";
+  option (linode.mcp.v1.error_message) = "Failed to update StackScript: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a StackScript in your account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "StackScript '{label}' (ID: {id}) updated successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // Blank image ids are dropped before anything reads them, the same way the
+  // create path drops them.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "images"
+    transform: NORMALIZE_TRANSFORM_TRIM_LIST_DROP_BLANK
+  };
+  // The preview reads the StackScript as it stands so it can say what the
+  // update changes rather than what it was asked for.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "stackscript_update.stackscript_id.positive"
+    message: "stackscript_id must be a positive integer"
+    expression: "this.stackscript_id >= 1"
+  };
+  // An editable field the caller supplied blank is refused rather than sent,
+  // because the API would store the blank and the caller meant to change
+  // something.
+  option (buf.validate.message).cel = {
+    id: "stackscript_update.label.non_empty"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "stackscript_update.script.non_empty"
+    message: "script must be a non-empty string"
+    expression: "!has(this.script) || this.script.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "stackscript_update.description.non_empty"
+    message: "description must be a non-empty string"
+    expression: "!has(this.description) || this.description.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "stackscript_update.rev_note.non_empty"
+    message: "rev_note must be a non-empty string"
+    expression: "!has(this.rev_note) || this.rev_note.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "stackscript_update.images.form"
+    message: "images entries must be valid image IDs"
+    expression: "this.images.all(image, image.matches('^[^/?#]*/[^/?#]*$') && !image.matches('[.][.]'))"
+  };
+  // A repeated field carries no presence, so an images list that arrived empty
+  // reads here the same as one that never arrived, and both leave the update
+  // with nothing to apply.
+  option (buf.validate.message).cel = {
+    id: "stackscript_update.editable.required"
+    message: "at least one editable field is required"
+    expression: "has(this.label) || has(this.script) || has(this.description) || has(this.rev_note) || has(this.is_public) || size(this.images) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -192,8 +295,26 @@ message StackScriptDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a StackScript. WARNING: This permanently removes the StackScript from your account. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "StackScript {stackscript_id} deleted successfully";
   option (linode.mcp.v1.resource_type) = "StackScript";
+  // A replay would report a StackScript the first attempt already removed as one
+  // that never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the StackScript a delete removes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_stackscript_get"
+  };
+
+  // Zero is the value an omitted id reads as, and the destroy driver reports
+  // that one as a missing argument; this rule only has to refuse an id the
+  // caller supplied that names no StackScript.
+  option (buf.validate.message).cel = {
+    id: "stackscript_delete.stackscript_id.not_negative"
+    message: "stackscript_id must be a positive integer"
+    expression: "this.stackscript_id >= 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

@@ -39,11 +39,16 @@ message ManagedIssueGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedIssue";
+  option (linode.mcp.v1.tool_description) = "Gets one issue detected by Linode Managed service monitors.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve managed issue {issue_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the managed issue to retrieve (required).
-  int32 issue_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 issue_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_BOUNDED_ID
+  ];
 }
 
 // ManagedIssueListInput is the input contract for linode_managed_issue_list.
@@ -55,6 +60,7 @@ message ManagedIssueListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedIssueListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists recent and ongoing issues detected by Linode Managed service monitors.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

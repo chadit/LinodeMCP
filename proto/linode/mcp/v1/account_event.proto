@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -52,11 +53,16 @@ message AccountEventGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEvent";
+  option (linode.mcp.v1.tool_description) = "Gets one account event by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve account event {event_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the account event to retrieve (required).
-  int32 event_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 event_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // AccountEventListInput is the input contract for linode_account_event_list.
@@ -68,6 +74,7 @@ message AccountEventListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEventListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists events that represent actions taken on the account over the last 90 days.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -86,8 +93,23 @@ message AccountEventSeenInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEventSeenResponse";
+  option (linode.mcp.v1.tool_description) = "Marks one account event as seen by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to mark account event {event_id} seen: {error}";
   option (linode.mcp.v1.confirm_message) = "This marks an account event as seen. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account event marked as seen successfully";
+  // The read is the event a caller marks seen, with the ones before it.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_account_event_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The specified account event and all earlier events are marked as seen."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (buf.validate.message).cel = {
+    id: "account_event_seen.event_id.positive"
+    message: "event_id must be a positive integer"
+    expression: "this.event_id > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

@@ -4,7 +4,9 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
+import "linode/mcp/v1/common.proto";
 import "linode/mcp/v1/options.proto";
 
 // ConfigInterfacePurpose is the legacy config-profile network interface purpose.
@@ -40,6 +42,30 @@ message ConfigVirtMode {
     unspecified = 0;
     paravirt = 1;
     fullvirt = 2;
+  }
+}
+
+// InstanceMigrationType is how a resize moves the instance: cold powers it off
+// for the move, warm keeps it running. Values are the exact lowercase Linode
+// API strings (POST /linode/instances/{linodeId}/resize). See the enum-wrapper
+// convention in nodebalancer_config.proto.
+message InstanceMigrationType {
+  enum Value {
+    unspecified = 0;
+    cold = 1;
+    warm = 2;
+  }
+}
+
+// InterfaceGeneration is which network interface model an instance is created
+// under: legacy_config puts interfaces on the config profile, linode puts them
+// on the instance. Values are the exact lowercase Linode API strings
+// (POST /linode/instances).
+message InterfaceGeneration {
+  enum Value {
+    unspecified = 0;
+    legacy_config = 1;
+    linode = 2;
   }
 }
 
@@ -173,12 +199,27 @@ message InterfaceVpcConfig {
 }
 
 message InterfaceVpcIpv4 {
-  repeated InterfaceIpv4Address addresses = 1;
+  repeated InterfaceVpcIpv4Address addresses = 1;
+  repeated InterfaceVpcIpv4Range ranges = 2;
+}
+
+// A VPC address carries the 1:1 NAT member the public arm has no place for, so
+// the two families declare their own address messages.
+message InterfaceVpcIpv4Address {
+  string address = 1;
+  optional bool primary = 2;
+  optional string nat_1_1_address = 3;
+}
+
+message InterfaceVpcIpv4Range {
+  string range = 1;
 }
 
 message InterfaceVlanConfig {
   string vlan_label = 1;
-  string ipam_address = 2;
+  // Presence-tracked because the write routes omit it rather than sending an
+  // empty address, so a typed body must not demand one.
+  optional string ipam_address = 2;
 }
 
 message InterfaceDefaultRoute {
@@ -186,10 +227,18 @@ message InterfaceDefaultRoute {
   optional bool ipv6 = 2;
 }
 
+// InterfaceSettingsDefaultRoute names the interface each family routes through.
+// The settings route addresses them by interface id, where an interface's own
+// default_route carries booleans, so the two shapes cannot share a message.
+message InterfaceSettingsDefaultRoute {
+  optional int32 ipv4_interface_id = 1;
+  optional int32 ipv6_interface_id = 2;
+}
+
 // InstanceInterfaceSettings is the network interface settings for a Linode
 // instance. default_route is omitted when unset; network_helper is nullable.
 message InstanceInterfaceSettings {
-  InterfaceDefaultRoute default_route = 1;
+  InterfaceSettingsDefaultRoute default_route = 1;
   optional bool network_helper = 2;
 }
 
@@ -203,11 +252,16 @@ message InstanceInterfaceSettingsGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceSettings";
+  option (linode.mcp.v1.tool_description) = "Retrieves interface settings for a specific Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve interface settings for instance {linode_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceInterfaceGetInput is the input contract for
@@ -220,13 +274,21 @@ message InstanceInterfaceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterface";
+  option (linode.mcp.v1.tool_description) = "Retrieves a specific interface assigned to a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve interface {interface_id} for instance {linode_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the Linode interface (required).
-  int32 interface_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 interface_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // ===== Instance config profiles (GET /linode/instances/{id}/configs) =====
@@ -354,6 +416,19 @@ message InstanceBackupGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackup";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific backup for a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve backup {backup_id} for instance {linode_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "instance_backup_get.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_backup_get.backup_id.positive"
+    message: "backup_id must be a positive integer"
+    expression: "this.backup_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -373,15 +448,26 @@ message InstanceConfigInterfaceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceResponse";
+  option (linode.mcp.v1.tool_description) = "Retrieves a network interface from a Linode configuration profile.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve configuration profile interface {interface_id} from config {config_id} for instance {linode_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the configuration profile (required).
-  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 config_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the configuration profile interface (required).
-  int32 interface_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 interface_id = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 message InstanceBackupsResponse {
@@ -499,7 +585,9 @@ message InstanceDiskResizeWriteResponse {
   string message = 1;
   int32 linode_id = 2;
   int32 disk_id = 3;
-  int32 new_size_mb = 4;
+  // Named for the unit it reports rather than for the argument that fills it,
+  // which is the tool's `size`, so the alias is what binds the two.
+  int32 new_size_mb = 4 [(linode.mcp.v1.echo_argument) = "size"];
 }
 
 // InstanceBackupRestoreWriteResponse is the {message, ids} echo
@@ -531,15 +619,15 @@ message InstancePowerActionResponse {
   int32 instance_id = 2;
 }
 
-// InstanceMigrateWriteResponse is the {message, linode_id, region?} echo
+// InstanceMigrateWriteResponse is the {message, linode_id, region} echo
 // linode_instance_migrate returns. The migrate endpoint returns no resource
-// body, so these echo the request: the affected Linode and, when the caller
-// picked a destination, the target region. region is explicit-presence so it is
-// omitted from the output when the caller let Linode pick the region.
+// body, so these echo the request: the affected Linode and the target region.
+// region carries no presence because it echoes an argument, and an echo reports
+// what the caller sent: an empty region is Linode picking the destination.
 message InstanceMigrateWriteResponse {
   string message = 1;
   int32 linode_id = 2;
-  optional string region = 3;
+  string region = 3;
 }
 
 // InstanceResizeWriteResponse is the {message, instance_id, new_type} echo
@@ -549,7 +637,9 @@ message InstanceMigrateWriteResponse {
 message InstanceResizeWriteResponse {
   string message = 1;
   int32 instance_id = 2;
-  string new_type = 3;
+  // Named for what it becomes rather than for the argument that fills it, which
+  // is the tool's `type`, so the alias is what binds the two.
+  string new_type = 3 [(linode.mcp.v1.echo_argument) = "type"];
 }
 
 // InstanceDiskActionResponse is the {message, linode_id, disk_id} echo the
@@ -573,11 +663,16 @@ message InstanceGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Instance";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a single Linode instance by its ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Linode instance: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to retrieve (required).
-  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceListInput is the input contract for linode_instance_list. Both fields
@@ -590,6 +685,8 @@ message InstanceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Linode instances with optional filtering by status";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Linode instances: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -611,7 +708,26 @@ message InstanceBootInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
+  option (linode.mcp.v1.tool_description) = "Boots a Linode instance that is currently offline. If the instance is already running, this has no effect.";
+  option (linode.mcp.v1.error_message) = "Failed to boot instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This boots a Linode instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {instance_id} boot initiated successfully";
+  // The read is the instance, so a caller sees the power state the action
+  // changes from.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_boot.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_boot.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "!has(this.config_id) || this.config_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -637,7 +753,26 @@ message InstanceRebootInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
+  option (linode.mcp.v1.tool_description) = "Reboots a running Linode instance. This is equivalent to pressing the reset button on a physical computer.";
+  option (linode.mcp.v1.error_message) = "Failed to reboot instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This reboots a Linode instance and causes a brief outage. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {instance_id} reboot initiated successfully";
+  // The read is the instance, so a caller sees the power state the action
+  // changes from.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_reboot.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_reboot.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "!has(this.config_id) || this.config_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -663,7 +798,21 @@ message InstanceShutdownInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
+  option (linode.mcp.v1.tool_description) = "Gracefully shuts down a running Linode instance. The instance will attempt to shut down cleanly.";
+  option (linode.mcp.v1.error_message) = "Failed to shutdown instance {instance_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This shuts down a Linode instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {instance_id} shutdown initiated successfully";
+  // The read is the instance, so a caller sees the power state the action
+  // changes from.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_shutdown.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -677,6 +826,42 @@ message InstanceShutdownInput {
   optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
+// InstanceMetadataOptions is the metadata object an instance create carries.
+// Its own message rather than a free-form struct so the one member the API
+// accepts stays advertised.
+message InstanceMetadataOptions {
+  // Base64-encoded cloud-init user data to run on first boot.
+  optional string user_data = 1;
+}
+
+// InstancePlacementGroupAssignment is the placement_group object an instance
+// create carries. Distinct from the PlacementGroup read message, which carries
+// members and migrations a write can never send.
+message InstancePlacementGroupAssignment {
+  // The ID of the placement group to assign the new instance to.
+  int32 id = 1;
+  // Fail the create rather than assign the instance non-compliantly.
+  optional bool compliant_only = 2;
+}
+
+// InstanceCreateInterface is one element of the interfaces array an instance
+// create posts. It carries what InstanceInterfaceAddInput carries flat, since
+// the create reads the same five members inside each element it is given. The
+// add tool's own input message is not reused: it declares a route of its own,
+// so sharing it would tie two tools' contracts together.
+message InstanceCreateInterface {
+  // Public interface settings. Set exactly one of public, vpc, or vlan.
+  InterfacePublicConfig public = 1;
+  // VPC interface settings. Set exactly one of public, vpc, or vlan.
+  InterfaceVpcConfig vpc = 2;
+  // VLAN interface settings. Set exactly one of public, vpc, or vlan.
+  InterfaceVlanConfig vlan = 3;
+  // Whether this interface carries the default route for each address family.
+  InterfaceDefaultRoute default_route = 4;
+  // Firewall to attach to this interface.
+  optional int32 firewall_id = 5;
+}
+
 // InstanceCreateInput is the input contract for linode_instance_create.
 // region, type, firewall_id, and confirm are required.
 message InstanceCreateInput {
@@ -687,9 +872,79 @@ message InstanceCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewall_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create.";
+  option (linode.mcp.v1.error_message) = "Failed to create instance: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Instance '{label}' (ID: {id}) created successfully in {region}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The preview describes the instance the call would create and warns about
+  // billing; the instance does not exist yet, so there is no state to read.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  // Every instance this tool makes runs on the current Interfaces generation,
+  // which is what the synthesized interfaces element below describes.
+  option (linode.mcp.v1.body_constant) = {
+    key: "interface_generation"
+    text: "linode"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_create.type.required"
+    message: "type is required"
+    expression: "this.type.matches('[^ \\t\\r\\n]')"
+  };
+  // The firewall is this tool's own guardrail rather than the API's, so the
+  // sentence names the two tools a caller gets an id from. The field carries no
+  // presence, which is what lets one rule answer both the missing id and the
+  // unusable one.
+  option (buf.validate.message).cel = {
+    id: "instance_create.firewall_id.required"
+    message: "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
+    expression: "has(this.firewall_id) && this.firewall_id >= 1"
+  };
+  // The three root-password sentences the whole surface answers, in the
+  // wording the disk routes already use. ASCII classes because
+  // protovalidate-python evaluates matches() through Python's re, which has no
+  // \p{Lu}.
+  option (buf.validate.message).cel = {
+    id: "instance_create.root_pass.min_length"
+    message: "root_pass must be at least 12 characters"
+    expression: "!has(this.root_pass) || size(this.root_pass) >= 12"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_create.root_pass.max_length"
+    message: "root_pass must not exceed 128 characters"
+    expression: "!has(this.root_pass) || size(this.root_pass) <= 128"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_create.root_pass.complexity"
+    message: "root_pass must contain uppercase, lowercase, and digits"
+    expression: "!has(this.root_pass) || (this.root_pass.matches('[A-Z]') && this.root_pass.matches('[a-z]') && this.root_pass.matches('[0-9]'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_create.stackscript_id.positive"
+    message: "stackscript_id must be a positive integer"
+    expression: "!has(this.stackscript_id) || this.stackscript_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_create.backup_id.positive"
+    message: "backup_id must be a positive integer"
+    expression: "!has(this.backup_id) || this.backup_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_create.disk_encryption.known"
+    message: "disk_encryption must be one of: disabled, enabled"
+    expression: "!has(this.disk_encryption) || this.disk_encryption != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_create.maintenance_policy.known"
+    message: "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    expression: "!has(this.maintenance_policy) || this.maintenance_policy in ['linode/migrate','linode/power_off_on']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -703,15 +958,20 @@ message InstanceCreateInput {
   // instances.
   optional string image = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The root password for the instance. Required if image is provided.
-  optional string root_pass = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string root_pass = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Cloud Firewall ID to attach to the public interface. Required under the
-  // current Linode Interfaces generation.
+  // current Linode Interfaces generation. It travels inside the interfaces
+  // element the tool synthesizes, and a caller who spells interfaces out
+  // themselves places the firewall inside their own element instead.
   int32 firewall_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the public interface owns the IPv4 default route (optional,
-  // default: true).
+  // default: true). Travels inside the synthesized interfaces element.
   optional bool route_ipv4 = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the public interface owns the IPv6 default route (optional,
-  // default: true).
+  // default: true). Travels inside the synthesized interfaces element.
   optional bool route_ipv6 = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Enable backups for this instance (optional, default: false).
   optional bool backups_enabled = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
@@ -729,6 +989,94 @@ message InstanceCreateInput {
   optional bool dry_run = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Tags to apply to the new instance (optional).
   repeated string tags = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // StackScript to deploy with the image (optional).
+  optional int32 stackscript_id = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Answers to the StackScript's user-defined fields (optional).
+  map<string, string> stackscript_data = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Metadata the instance runs on first boot (optional).
+  InstanceMetadataOptions metadata = 18 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Placement group to assign the new instance to (optional).
+  InstancePlacementGroupAssignment placement_group = 19 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the instance's disks are encrypted at rest (optional).
+  optional DiskEncryption.Value disk_encryption = 20 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Maintenance policy for the instance, such as linode/migrate (optional).
+  optional string maintenance_policy = 21 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Linode usernames whose SSH keys to install for the root user (optional).
+  // Requires an image.
+  repeated string authorized_users = 22 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Existing IPv4 addresses to assign to the new instance (optional).
+  repeated string ipv4 = 23 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Backup to restore onto the new instance (optional). Requires the backup's
+  // own image rather than the image field.
+  optional int32 backup_id = 24 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Size in MB of the boot disk the image is written to (optional). Defaults
+  // to the rest of the plan's storage once swap is taken.
+  optional int32 boot_size = 25 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Size in MB of the swap disk (optional, default: 512).
+  optional int32 swap_size = 26 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Kernel the instance boots, such as linode/latest-64bit (optional).
+  optional string kernel = 27 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the Network Helper rewrites the instance's network configuration
+  // on boot (optional).
+  optional bool network_helper = 28 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the instance gets a private IPv4 address (optional).
+  optional bool private_ip = 29 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Display group (optional). Linode deprecated group in favor of tags; new
+  // callers should send tags instead.
+  optional string group = 31 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    deprecated = true
+  ];
+  // The interfaces the new instance is created with. Omit it and the tool
+  // sends one public interface built from firewall_id, route_ipv4 and
+  // route_ipv6, which is the only interface the flat arguments can describe.
+  // Supply it and it travels verbatim: an element beside the caller's own
+  // would attach networking they never asked for, so the flat arguments are
+  // not read into it.
+  repeated InstanceCreateInterface interfaces = 30 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_fold) = {
+      source: [
+        {
+          argument: "firewall_id"
+          key: "firewall_id"
+        },
+        {
+          argument: "route_ipv4"
+          key: "default_route.ipv4"
+          absent: "true"
+        },
+        {
+          argument: "route_ipv6"
+          key: "default_route.ipv6"
+          absent: "true"
+        }
+      ]
+      constant: [
+        {
+          key: "public"
+        }
+      ]
+    }
+  ];
+}
+
+// InstanceBackupSchedule is the backups.schedule object an instance update
+// carries. Separate from the Schedule read message above because a partial
+// update needs the field presence a read shape has no reason to carry.
+message InstanceBackupSchedule {
+  // Day of the week the weekly backup window starts, e.g. Saturday.
+  optional string day = 1;
+  // Two-hour window the daily backup runs in, e.g. W22.
+  optional string window = 2;
+}
+
+// InstanceBackupsUpdate is the backups object an instance update carries.
+message InstanceBackupsUpdate {
+  // Whether automatic backups are enabled for the instance.
+  optional bool enabled = 1;
+  // When the automatic backups run.
+  optional InstanceBackupSchedule schedule = 2;
 }
 
 // InstanceUpdateInput is the input contract for linode_instance_update.
@@ -742,8 +1090,33 @@ message InstanceUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates editable fields on a Linode instance. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.error_message) = "instance {instance_id} update failed: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Linode instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Instance {id} updated successfully";
+  // The read is the instance the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_update.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_update.maintenance_policy.known"
+    message: "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    expression: "!has(this.maintenance_policy) || this.maintenance_policy in ['linode/migrate','linode/power_off_on']"
+  };
+  // An empty tags, alerts or ipv4 value counts as absent here, where the hand
+  // handlers counted either as a field: CEL cannot tell an empty repeated
+  // field from a missing one.
+  option (buf.validate.message).cel = {
+    id: "instance_update.any"
+    message: "at least one update field is required: label, group, tags, alerts, maintenance_policy, watchdog_enabled, backups, or ipv4"
+    expression: "has(this.label) || has(this.group) || size(this.tags) > 0 || size(this.alerts) > 0 || has(this.maintenance_policy) || has(this.watchdog_enabled) || has(this.backups) || size(this.ipv4) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -753,7 +1126,10 @@ message InstanceUpdateInput {
   optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Group label (optional). Linode deprecated group in favor of tags; new
   // callers should send tags instead.
-  optional string group = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional string group = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    deprecated = true
+  ];
   // Tags to assign to the Linode (optional).
   repeated string tags = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Alert threshold settings (optional).
@@ -767,6 +1143,10 @@ message InstanceUpdateInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Automatic backup settings for the Linode (optional).
+  InstanceBackupsUpdate backups = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // IPv4 addresses assigned to the Linode (optional).
+  repeated string ipv4 = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // InstanceDeleteInput is the input contract for linode_instance_delete, a
@@ -780,8 +1160,20 @@ message InstanceDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {instance_id} removed successfully";
   option (linode.mcp.v1.resource_type) = "Instance";
+  // A replay would report a Linode the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+  };
+  // The walk reaches past the instance record for what the delete takes with
+  // it: attached volumes, released IPs, firewall attachments, and the billing
+  // change, none of which a descriptor describes.
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -811,9 +1203,36 @@ message InstanceCloneInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Clones a Linode instance. WARNING: This creates a billable resource.";
+  option (linode.mcp.v1.error_message) = "Failed to clone instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This clones a Linode instance and creates a billable resource. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Instance {linode_id} cloned as '{label}' (ID: {id}) in {region}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the source instance the clone copies. Its route spells the id
+  // linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_clone.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_clone.target_linode_id.positive"
+    message: "target_linode_id must be a positive integer"
+    expression: "!has(this.target_linode_id) || this.target_linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_clone.maintenance_policy.known"
+    message: "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    expression: "!has(this.maintenance_policy) || this.maintenance_policy in ['linode/migrate','linode/power_off_on']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -838,6 +1257,27 @@ message InstanceCloneInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Existing Linode to clone onto (optional). Omit to clone into a new
+  // Linode. The route spells it linode_id in the body, where the path already
+  // carries the Linode being copied.
+  optional int32 target_linode_id = 11 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_name) = "linode_id"
+  ];
+  // Maintenance policy for the clone, such as linode/migrate (optional).
+  optional string maintenance_policy = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Metadata the clone runs on first boot (optional).
+  InstanceMetadataOptions metadata = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Placement group to assign the clone to (optional).
+  InstancePlacementGroupAssignment placement_group = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the clone gets a private IPv4 address (optional).
+  optional bool private_ip = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Display group for the clone (optional). Linode deprecated group in favor
+  // of tags; new callers should send tags instead.
+  optional string group = 16 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    deprecated = true
+  ];
 }
 
 // InstanceMigrateInput is the input contract for linode_instance_migrate.
@@ -850,7 +1290,27 @@ message InstanceMigrateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceMigrateWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Migrates a Linode instance to a new region. If no region is specified, Linode picks the destination.";
+  option (linode.mcp.v1.error_message) = "Failed to migrate instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This migrates the instance and causes downtime during migration. Set confirm=true to proceed.";
+  // The destination is reported by the region member beside this sentence
+  // rather than inside it, since one template cannot say it two ways.
+  option (linode.mcp.v1.success_message) = "Migration initiated for instance {linode_id}";
+  // The preview reads the Linode whose region the migration would change.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "instance_migrate.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "instance_migrate.type.known"
+    message: "type must be one of: cold, warm"
+    expression: "!has(this.type) || this.type != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -864,6 +1324,14 @@ message InstanceMigrateInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Placement group to move the instance into (optional).
+  InstancePlacementGroupAssignment placement_group = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // How the move runs: 'cold' (default) powers the instance off, 'warm' keeps
+  // it running. The resize route spells the same choice migration_type.
+  optional InstanceMigrationType.Value type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the move also upgrades the instance to the newest hardware
+  // (optional, default: false).
+  optional bool upgrade = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // InstanceMutateInput is the input contract for linode_instance_mutate.
@@ -876,9 +1344,19 @@ message InstanceMutateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Upgrades a Linode instance to the latest generation type. WARNING: This changes instance state and may cause downtime.";
+  option (linode.mcp.v1.error_message) = "Failed to upgrade instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This upgrades the instance and may cause downtime. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Upgrade initiated for instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The preview reads the Linode whose type the upgrade would replace.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "instance_mutate.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -905,9 +1383,78 @@ message InstanceRebuildInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Rebuilds a Linode instance with a new image. WARNING: This destroys all existing data on the instance. Pass dry_run=true to preview without rebuilding. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This DESTROYS ALL DATA on the instance and rebuilds it. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Instance {linode_id} rebuilt with image {image}";
+  // A replay rebuilds a second time and wipes whatever the first rebuild wrote,
+  // including anything the caller restored onto it in between.
+  option (linode.mcp.v1.retry_disabled) = true;
   option (linode.mcp.v1.resource_type) = "Instance";
+  // The read is the instance a rebuild erases. The walk lists the disks it
+  // recreates, which is an extra call no descriptor describes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+
+  // Declared ahead of the body rules so an unaddressed call still hears which
+  // instance it failed to name, the order the hand-written handler checked in.
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.image.required"
+    message: "image is required"
+    expression: "this.image != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.root_pass.required"
+    message: "root_pass is required"
+    expression: "this.root_pass != ''"
+  };
+  // The next three sentences are Go's live wording, which names root_pass
+  // because one validator serves every root password the surface takes. ASCII
+  // classes because protovalidate-python evaluates matches() through Python's
+  // re, which has no \p{Lu}; Go's own check is unicode-aware.
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.root_pass.min_length"
+    message: "root_pass must be at least 12 characters"
+    expression: "this.root_pass == '' || size(this.root_pass) >= 12"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.root_pass.max_length"
+    message: "root_pass must not exceed 128 characters"
+    expression: "this.root_pass == '' || size(this.root_pass) <= 128"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.root_pass.complexity"
+    message: "root_pass must contain uppercase, lowercase, and digits"
+    expression: "this.root_pass == '' || (this.root_pass.matches('[A-Z]') && this.root_pass.matches('[a-z]') && this.root_pass.matches('[0-9]'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.stackscript_id.positive"
+    message: "stackscript_id must be a positive integer"
+    expression: "!has(this.stackscript_id) || this.stackscript_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.disk_encryption.known"
+    message: "disk_encryption must be one of: disabled, enabled"
+    expression: "!has(this.disk_encryption) || this.disk_encryption != 0"
+  };
+  // A string rather than an enum because the values carry slashes, which no
+  // proto identifier can spell. The create and clone routes rule the same set
+  // the same way.
+  option (buf.validate.message).cel = {
+    id: "instance_rebuild.maintenance_policy.known"
+    message: "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    expression: "!has(this.maintenance_policy) || this.maintenance_policy in ['linode/migrate','linode/power_off_on']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -918,7 +1465,10 @@ message InstanceRebuildInput {
   string image = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Root password for the rebuilt instance (min 12 chars, must include upper,
   // lower, and digits).
-  string root_pass = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string root_pass = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // SSH public keys to add to root's authorized_keys (optional).
   repeated string authorized_keys = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Linode usernames whose SSH keys to add (optional).
@@ -937,6 +1487,20 @@ message InstanceRebuildInput {
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
   optional string plan_id = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // StackScript to deploy onto the rebuilt instance (optional).
+  optional int32 stackscript_id = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Answers to the StackScript's user-defined fields (optional).
+  map<string, string> stackscript_data = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Metadata the rebuilt instance runs on first boot (optional).
+  InstanceMetadataOptions metadata = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the rebuilt instance's disks are encrypted at rest (optional).
+  optional DiskEncryption.Value disk_encryption = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Maintenance policy for the rebuilt instance, such as linode/migrate
+  // (optional).
+  optional string maintenance_policy = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Plan type the instance is rebuilt onto, such as 'g6-standard-1'
+  // (optional). Omit it to keep the current plan.
+  optional string type = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // InstancePasswordResetInput is the input contract for
@@ -950,16 +1514,60 @@ message InstancePasswordResetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resets the root password on a Linode instance. The instance must be powered off. Pass dry_run=true to preview without resetting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This resets the root password on the instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Root password reset for instance {linode_id}";
   option (linode.mcp.v1.resource_type) = "Instance";
+  // The read is the instance whose root credential the call replaces. The
+  // walk names the downtime, which no descriptor describes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+
+  option (buf.validate.message).cel = {
+    id: "instance_password_reset.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_password_reset.root_pass.required"
+    message: "root_pass is required"
+    expression: "this.root_pass != ''"
+  };
+  // The next three sentences are the surface's one root-password wording, the
+  // same trio instance_rebuild and instance_disk_create declare. ASCII classes
+  // because protovalidate-python evaluates matches() through Python's re, which
+  // has no \p{Lu}.
+  option (buf.validate.message).cel = {
+    id: "instance_password_reset.root_pass.min_length"
+    message: "root_pass must be at least 12 characters"
+    expression: "this.root_pass == '' || size(this.root_pass) >= 12"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_password_reset.root_pass.max_length"
+    message: "root_pass must not exceed 128 characters"
+    expression: "this.root_pass == '' || size(this.root_pass) <= 128"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_password_reset.root_pass.complexity"
+    message: "root_pass must contain uppercase, lowercase, and digits"
+    expression: "this.root_pass == '' || (this.root_pass.matches('[A-Z]') && this.root_pass.matches('[a-z]') && this.root_pass.matches('[0-9]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New root password (min 12 chars, must include upper, lower, and digits).
-  string root_pass = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string root_pass = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
   // Must be true to confirm password reset. Ignored when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -984,7 +1592,35 @@ message InstanceResizeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceResizeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing. Pass dry_run=true to preview without resizing. Supports two-stage writes when enabled in the two_stage config: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation causes downtime and may affect billing. Set confirm=true to proceed.";
+  // Go's hand handler named the instance in its failure and Python's did not;
+  // naming it is the reference, so Python widens to match.
+  option (linode.mcp.v1.error_message) = "Failed to resize instance {instance_id}: {error}";
+  option (linode.mcp.v1.success_message) = "Instance {instance_id} resize to {type} initiated successfully";
+  // The preview reads the Linode whose plan the resize replaces; the plan reads
+  // the instance and its disks together, since the resize moves both.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  option (linode.mcp.v1.tool_hooks) = "fetch_state";
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+
+  option (buf.validate.message).cel = {
+    id: "instance_resize.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_resize.type.required"
+    message: "type is required"
+    expression: "this.type != ''"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "instance_resize.migration_type.known"
+    message: "migration_type must be one of: cold, warm"
+    expression: "!has(this.migration_type) || this.migration_type != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -996,7 +1632,7 @@ message InstanceResizeInput {
   // default: false).
   optional bool allow_auto_disk_resize = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Migration type: 'cold' (default) or 'warm' (optional).
-  optional string migration_type = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  optional InstanceMigrationType.Value migration_type = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm resize. This operation causes downtime.
   // Ignored when dry_run=true.
   bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1022,8 +1658,19 @@ message InstanceRescueInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Boots a Linode instance into rescue mode for recovery operations.";
+  option (linode.mcp.v1.error_message) = "Failed to rescue instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This reboots the instance into rescue mode. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Instance {linode_id} is booting into rescue mode";
+  // The preview reads the instance the reboot would interrupt, so a running one
+  // can be warned about before it goes down.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  option (buf.validate.message).cel = {
+    id: "instance_rescue.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1050,9 +1697,30 @@ message InstanceFirewallApplyInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Reapplies assigned firewalls to a Linode instance. Use this if firewall assignment was not applied successfully.";
+  option (linode.mcp.v1.error_message) = "Failed to apply firewalls for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This reapplies assigned firewalls to the Linode. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Firewall apply initiated for instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the assignments land on. Its route spells the id
+  // linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Cloud Firewall assignments will be applied to Linode {linode_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_firewall_apply.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1076,11 +1744,16 @@ message InstanceTransferGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTransfer";
+  option (linode.mcp.v1.tool_description) = "Retrieves this month's network transfer statistics for a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Linode instance transfer statistics: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceTransferMonthGetInput is the input contract for
@@ -1093,15 +1766,48 @@ message InstanceTransferMonthGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTransferMonth";
+  option (linode.mcp.v1.tool_description) = "Retrieves network transfer statistics for a Linode instance for a specific month.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve transfer stats for instance {linode_id} in {year:04}-{month:02}: {error}";
+
+  // The same window the stats route carries: the epoch floor and the four-digit
+  // ceiling. Each rule holds its peace while an earlier argument is unusable,
+  // which is the order the route has always refused a call in.
+  option (buf.validate.message).cel = {
+    id: "instance_transfer_month_get.year.range"
+    message: "year must be an integer between 1970 and 9999"
+    expression: "this.linode_id < 1 || (this.year >= 1970 && this.year <= 9999)"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_transfer_month_get.month.range"
+    message: "month must be an integer between 1 and 12"
+    expression: "this.linode_id < 1 || this.year < 1970 || this.year > 9999 || (this.month >= 1 && this.month <= 12)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // The year for the transfer stats, for example 2024 (required).
-  int32 year = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
+  // The year for the transfer stats, from 1970 through 9999 (required).
+  int32 year = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "year must be an integer between 1970 and 9999"
+      refused: "year must be an integer between 1970 and 9999"
+    }
+  ];
   // The month for the transfer stats, 1 through 12 (required).
-  int32 month = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 month = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "month must be an integer between 1 and 12"
+      refused: "month must be an integer between 1 and 12"
+    }
+  ];
 }
 
 // InstanceConfigGetInput is the input contract for linode_instance_config_get.
@@ -1113,13 +1819,21 @@ message InstanceConfigGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfig";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific configuration profile on a Linode instance.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve config {config_id} for instance {linode_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the configuration profile to retrieve (required).
-  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 config_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceConfigListInput is the input contract for
@@ -1132,11 +1846,15 @@ message InstanceConfigListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists configuration profiles for a Linode instance with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -1148,7 +1866,7 @@ message InstanceConfigListInput {
 // required at the handler level, but devices is an open device-slot map so it
 // becomes a map<string, Value> whose required flag the generator drops from the
 // advertised schema (runtime still enforces presence). helpers and interfaces
-// are JSON-encoded strings on this tool.
+// are the object and object array its update sibling takes.
 message InstanceConfigCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_config_create"
@@ -1157,9 +1875,118 @@ message InstanceConfigCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to create configuration profile for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a configuration profile on the instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Configuration profile '{label}' (ID: {id}) created on instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the profile is created on. Its route spells the
+  // id linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new configuration profile will be created on instance {linode_id} labeled \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // The device slots the API publishes, each holding one disk or one volume.
+  option (linode.mcp.v1.object_walk) = {
+    field: "devices"
+    absent: "devices is required"
+    unusable: "devices must be a JSON object"
+    empty: "devices must include at least one device slot"
+    members: {
+      unknown: "device slot {key} must be one of sda through sdh"
+      key: ["sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh"]
+      value: {
+        kind: VALUE_KIND_OBJECT
+        unusable: "device {key} must be an object"
+        members: {
+          unknown: "invalid devices JSON: unknown field \"{key}\""
+          key: ["disk_id", "volume_id"]
+          value: {
+            kind: VALUE_KIND_INT
+            minimum: 1
+            unusable: "invalid devices JSON: {parent}.{key} must be an integer"
+            refused: "device {parent} {key} must be greater than 0"
+          }
+          require: {
+            name: ["disk_id", "volume_id"]
+            any_of: "device {parent} requires disk_id or volume_id"
+            at_most_one: "device {parent} can use disk_id or volume_id, not both"
+          }
+        }
+      }
+    }
+  };
+  // The boot helpers. Only the vocabulary is checked: the route reads any of
+  // them as a flag and neither language ever judged the value.
+  option (linode.mcp.v1.object_walk) = {
+    field: "helpers"
+    unusable: "helpers must be a JSON object"
+    members: {
+      unknown: "invalid helpers JSON: unknown field \"{key}\""
+      key: ["devtmpfs_automount", "distro", "modules_dep", "network", "updatedb_disabled"]
+    }
+  };
+  // Each legacy interface names a purpose. An entry naming none reads the same
+  // as one naming a purpose the API does not publish, which is what both hooks
+  // answered.
+  option (linode.mcp.v1.object_walk) = {
+    field: "interfaces"
+    element: "interfaces must be an array of objects"
+    members: {
+      member: {
+        name: "purpose"
+        value: {
+          kind: VALUE_KIND_TEXT
+          values: "linode.mcp.v1.ConfigInterfacePurpose.Value"
+          absent: "{field}[{parent}].{key} must be one of: {values}"
+          unusable: "{field}[{parent}].{key} must be one of: {values}"
+        }
+      }
+    }
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_config_create.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  // The label travels in the body untouched, so the whitespace a caller padded
+  // it with is refused here rather than trimmed away behind their back.
+  option (buf.validate.message).cel = {
+    id: "instance_config_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_create.label.trimmed"
+    message: "label must not include leading or trailing whitespace"
+    expression: "this.label.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_create.memory_limit.positive"
+    message: "memory_limit must be a positive integer"
+    expression: "!has(this.memory_limit) || this.memory_limit >= 1"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "instance_config_create.run_level.known"
+    message: "run_level must be one of: default, single, binbash"
+    expression: "!has(this.run_level) || this.run_level != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_create.virt_mode.known"
+    message: "virt_mode must be one of: paravirt, fullvirt"
+    expression: "!has(this.virt_mode) || this.virt_mode != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1182,10 +2009,12 @@ message InstanceConfigCreateInput {
   optional ConfigRunLevel.Value run_level = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Virtualization mode: paravirt or fullvirt (optional).
   optional ConfigVirtMode.Value virt_mode = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Optional helpers as a JSON object string.
-  optional string helpers = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Optional interfaces as a JSON array string.
-  optional string interfaces = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional helpers object. Spelled the way its update sibling spells it: the
+  // route reads an object, and a string argument has no body member to become
+  // one.
+  map<string, google.protobuf.Value> helpers = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional array of interface objects.
+  repeated google.protobuf.Struct interfaces = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm configuration profile creation. Ignored when
   // dry_run=true.
   bool confirm = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1207,8 +2036,126 @@ message InstanceConfigUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to update configuration profile {config_id} for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a configuration profile on the instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Configuration profile '{label}' (ID: {id}) updated on instance {linode_id}";
+  // The read is the profile the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_config_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Configuration profile {config_id} on Linode {linode_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Every updatable field is optional, so "name at least one" is a count
+  // across a map, a repeated field and seven scalars, which no rule can take.
+  option (linode.mcp.v1.require_any_of) = {
+    fields: [
+      "label",
+      "devices",
+      "kernel",
+      "comments",
+      "memory_limit",
+      "root_device",
+      "run_level",
+      "virt_mode",
+      "helpers",
+      "interfaces"
+    ]
+    message: "at least one configuration field must be provided"
+  };
+
+  // The same three open shapes the create walks, with an absent devices map
+  // accepted: an update names the fields it changes.
+  option (linode.mcp.v1.object_walk) = {
+    field: "devices"
+    unusable: "devices must be a JSON object"
+    empty: "devices must include at least one device slot"
+    members: {
+      unknown: "device slot {key} must be one of sda through sdh"
+      key: ["sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh"]
+      value: {
+        kind: VALUE_KIND_OBJECT
+        unusable: "device {key} must be an object"
+        members: {
+          unknown: "invalid devices JSON: unknown field \"{key}\""
+          key: ["disk_id", "volume_id"]
+          value: {
+            kind: VALUE_KIND_INT
+            minimum: 1
+            unusable: "invalid devices JSON: {parent}.{key} must be an integer"
+            refused: "device {parent} {key} must be greater than 0"
+          }
+          require: {
+            name: ["disk_id", "volume_id"]
+            any_of: "device {parent} requires disk_id or volume_id"
+            at_most_one: "device {parent} can use disk_id or volume_id, not both"
+          }
+        }
+      }
+    }
+  };
+  option (linode.mcp.v1.object_walk) = {
+    field: "helpers"
+    unusable: "helpers must be a JSON object"
+    members: {
+      unknown: "invalid helpers JSON: unknown field \"{key}\""
+      key: ["devtmpfs_automount", "distro", "modules_dep", "network", "updatedb_disabled"]
+    }
+  };
+  option (linode.mcp.v1.object_walk) = {
+    field: "interfaces"
+    element: "interfaces must be an array of objects"
+    members: {
+      member: {
+        name: "purpose"
+        value: {
+          kind: VALUE_KIND_TEXT
+          values: "linode.mcp.v1.ConfigInterfacePurpose.Value"
+          absent: "{field}[{parent}].{key} must be one of: {values}"
+          unusable: "{field}[{parent}].{key} must be one of: {values}"
+        }
+      }
+    }
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_config_update.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_update.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_update.label.required"
+    message: "label is required"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_update.label.trimmed"
+    message: "label must not include leading or trailing whitespace"
+    expression: "!has(this.label) || this.label.matches('(?s)^\\\\S(.*\\\\S)?$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_update.memory_limit.positive"
+    message: "memory_limit must be a positive integer"
+    expression: "!has(this.memory_limit) || this.memory_limit >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_update.run_level.known"
+    message: "run_level must be one of: default, single, binbash"
+    expression: "!has(this.run_level) || this.run_level != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_update.virt_mode.known"
+    message: "virt_mode must be one of: paravirt, fullvirt"
+    expression: "!has(this.virt_mode) || this.virt_mode != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1256,9 +2203,14 @@ message InstanceConfigDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a configuration profile from a Linode instance. WARNING: This is irreversible.";
+  option (linode.mcp.v1.error_message) = "Failed to remove configuration profile {config_id} from instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. The configuration profile will be permanently deleted. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Configuration profile {config_id} deleted from instance {linode_id} successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_config_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1284,13 +2236,21 @@ message InstanceConfigInterfaceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists interfaces assigned to a specific configuration profile on a Linode instance.";
+  option (linode.mcp.v1.list_envelope) = {shape: SHAPE_BARE};
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the configuration profile (required).
-  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 config_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceConfigInterfaceAddInput is the input contract for
@@ -1306,9 +2266,53 @@ message InstanceConfigInterfaceAddInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Adds a network interface to a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.";
+  option (linode.mcp.v1.error_message) = "Failed to add configuration profile interface to config {config_id} for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This adds a network interface to the configuration profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Configuration profile interface added to config {config_id} on instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the profile the interface is added to.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_config_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "An interface will be added to configuration profile {config_id} on Linode {linode_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Ordered the way the hand handlers asked: the ids the route is addressed by,
+  // then the purpose every other check reads, then the fields one purpose makes
+  // required.
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_add.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_add.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_add.purpose.known"
+    message: "purpose must be one of: public, vlan, vpc"
+    expression: "this.purpose != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_add.label.vlan"
+    message: "label is required for vlan interfaces"
+    expression: "this.purpose != 2 || (has(this.label) && this.label != '')"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_add.subnet_id.positive"
+    message: "subnet_id must be a positive integer"
+    expression: "!has(this.subnet_id) || this.subnet_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_add.subnet_id.vpc"
+    message: "subnet_id is required for vpc interfaces"
+    expression: "this.purpose != 3 || has(this.subnet_id)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1352,8 +2356,42 @@ message InstanceConfigInterfaceUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a network interface on a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.";
+  option (linode.mcp.v1.error_message) = "Failed to update configuration profile interface {interface_id} in config {config_id} for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a network interface on the configuration profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Configuration profile interface {interface_id} updated on config {config_id} for instance {linode_id}";
+  // The read is the interface the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_config_interface_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Interface {interface_id} on configuration profile {config_id} for Linode {linode_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_update.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_update.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_update.interface_id.positive"
+    message: "interface_id must be a positive integer"
+    expression: "this.interface_id >= 1"
+  };
+  // An empty ipv4 object or ip_ranges array counts as absent here, where the
+  // hand handlers counted either as a field: CEL cannot tell an empty repeated
+  // field from a missing one.
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_update.any"
+    message: "at least one interface update field must be provided"
+    expression: "has(this.primary) || size(this.ipv4) > 0 || size(this.ip_ranges) > 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1388,9 +2426,27 @@ message InstanceConfigInterfaceDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigInterfaceDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a network interface from a Linode configuration profile. WARNING: This changes instance network configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to remove configuration profile interface {interface_id} from config {config_id} for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This removes a network interface from the configuration profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Configuration profile interface {interface_id} removed from config {config_id} on instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_config_interface_get"
+  };
+
+  // Declared in the order the hand handler checked them, which is what keeps a
+  // call naming a zero id hearing about that id rather than the next one.
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_delete.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_delete.interface_id.positive"
+    message: "interface_id must be a positive integer"
+    expression: "this.interface_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1421,9 +2477,48 @@ message InstanceConfigInterfaceReorderInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigInterfaceReorderResponse";
+  option (linode.mcp.v1.tool_description) = "Reorders interfaces on a Linode configuration profile. WARNING: This changes network interface ordering.";
+  option (linode.mcp.v1.error_message) = "Failed to reorder interfaces for configuration profile {config_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This reorders network interfaces on the configuration profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Configuration profile {config_id} interfaces reordered on instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the profile whose interface order changes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_config_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Interfaces on configuration profile {config_id} for Linode {linode_id} will be reordered."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_reorder.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_reorder.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "this.config_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_reorder.ids.present"
+    message: "ids must include at least one ID"
+    expression: "size(this.ids) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_reorder.ids.positive"
+    message: "ids must be an array of positive integers"
+    expression: "this.ids.all(id, id >= 1)"
+  };
+  // Counted rather than compared through unique(), the way the security-question
+  // answers are: the two runtimes evaluate the same rule text through different
+  // CEL engines, and all/filter/size are what both are already proven on.
+  option (buf.validate.message).cel = {
+    id: "instance_config_interface_reorder.ids.unique"
+    message: "ids must not contain duplicate interface IDs"
+    expression: "this.ids.all(id, size(this.ids.filter(other, other == id)) == 1)"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1452,18 +2547,25 @@ message InstanceInterfaceListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists interfaces assigned to a specific Linode instance.";
+  option (linode.mcp.v1.list_envelope) = {
+    shape: SHAPE_KEYED
+    member: "interfaces"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // InstanceInterfaceAddInput is the input contract for
-// linode_instance_interface_add. linode_id, interface, and confirm are required
-// at the handler level, but interface is an open object (exactly one of
-// public/vpc/vlan) so its required flag is dropped from the generated schema
-// (runtime still enforces presence).
+// linode_instance_interface_add. The arms are the API's own top-level keys, so
+// the tool takes no wrapper object: exactly one of public, vpc, or vlan, with
+// default_route and firewall_id as siblings.
 message InstanceInterfaceAddInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_interface_add"
@@ -1472,22 +2574,83 @@ message InstanceInterfaceAddInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Adds a network interface to a Linode instance. WARNING: This changes instance network configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to add interface to instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This adds a network interface to the Linode instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Interface added to instance {linode_id} successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the interface is added to. Its route spells the
+  // id linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "An interface will be added to Linode {linode_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Declared in the order the hand handler checked them: an arm's own members
+  // answer before the count of arms does.
+  option (buf.validate.message).cel = {
+    id: "instance_interface_add.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_add.vpc.subnet_id.positive"
+    message: "vpc.subnet_id must be a positive integer"
+    expression: "!has(this.vpc) || this.vpc.subnet_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_add.vlan.vlan_label.required"
+    message: "vlan.vlan_label is required"
+    expression: "!has(this.vlan) || this.vlan.vlan_label.matches('[^ \\t\\r\\n]')"
+  };
+  // An arm sent as an explicit null names no arm, which is the API's own
+  // spelling for "not this one".
+  option (buf.validate.message).cel = {
+    id: "instance_interface_add.arm.exactly_one"
+    message: "exactly one of public, vpc, or vlan is required"
+    expression: "(has(this.public) ? 1 : 0) + (has(this.vpc) ? 1 : 0) + (has(this.vlan) ? 1 : 0) == 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // Object defining exactly one interface type: public, vpc, or vlan (required
-  // at the handler level).
-  map<string, google.protobuf.Value> interface = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Public interface settings. Set exactly one of public, vpc, or vlan.
+  InterfacePublicConfig public = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // VPC interface settings. Set exactly one of public, vpc, or vlan.
+  InterfaceVpcConfig vpc = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // VLAN interface settings. Set exactly one of public, vpc, or vlan.
+  InterfaceVlanConfig vlan = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // Whether the new interface carries the default route for each address
+  // family (optional).
+  InterfaceDefaultRoute default_route = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // Firewall to attach to the new interface (optional). The API's own minimum
+  // is -1, so no positive-integer rule applies.
+  optional int32 firewall_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm interface creation. Ignored when dry_run=true.
-  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceInterfaceDeleteInput is the input contract for
@@ -1501,9 +2664,14 @@ message InstanceInterfaceDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes an interface from a Linode instance. WARNING: This changes instance network configuration and is irreversible.";
+  option (linode.mcp.v1.error_message) = "Failed to delete interface {interface_id} from instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This deletes a Linode interface and changes instance networking. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Interface {interface_id} deleted from instance {linode_id} successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_interface_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1521,8 +2689,8 @@ message InstanceInterfaceDeleteInput {
 
 // InstanceInterfaceUpdateInput is the input contract for
 // linode_instance_interface_update. linode_id, interface_id, and confirm are
-// required. default_route/public/vlan/vpc are open objects (map<string,
-// Value>) with exactly-one-of union validation in the handler.
+// required. default_route is an independent sibling of the three arms, so a
+// call may change it alone.
 message InstanceInterfaceUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_interface_update"
@@ -1531,9 +2699,56 @@ message InstanceInterfaceUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a network interface on a Linode instance. WARNING: This changes instance network configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to update interface {interface_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a network interface on the Linode instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Interface {interface_id} updated on instance {linode_id} successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the interface the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_interface_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Interface {interface_id} on Linode {linode_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // Declared in the order the hand handler checked them: the ids, then whether
+  // anything was sent, then each arm's own members, then the count of arms.
+  option (buf.validate.message).cel = {
+    id: "instance_interface_update.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_update.interface_id.positive"
+    message: "interface_id must be a positive integer"
+    expression: "this.interface_id >= 1"
+  };
+  // A field sent as an explicit null reaches this rule as an absent one, so a
+  // body of nothing but nulls names no update.
+  option (buf.validate.message).cel = {
+    id: "instance_interface_update.fields.required"
+    message: "at least one of default_route, public, vpc, or vlan is required"
+    expression: "has(this.default_route) || has(this.public) || has(this.vlan) || has(this.vpc)"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_update.vpc.subnet_id.positive"
+    message: "vpc.subnet_id must be a positive integer"
+    expression: "!has(this.vpc) || this.vpc.subnet_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_update.vlan.vlan_label.required"
+    message: "vlan.vlan_label is required"
+    expression: "!has(this.vlan) || this.vlan.vlan_label.matches('[^ \\t\\r\\n]')"
+  };
+  // An interface keeps the arm it was created with, so a call naming two of
+  // them names no single interface. default_route travels on its own.
+  option (buf.validate.message).cel = {
+    id: "instance_interface_update.arm.at_most_one"
+    message: "exactly one of public, vpc, or vlan is required"
+    expression: "(has(this.public) ? 1 : 0) + (has(this.vpc) ? 1 : 0) + (has(this.vlan) ? 1 : 0) <= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1542,15 +2757,27 @@ message InstanceInterfaceUpdateInput {
   // The ID of the Linode interface (required).
   int32 interface_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Default route settings for the interface (optional).
-  map<string, google.protobuf.Value> default_route = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  InterfaceDefaultRoute default_route = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // Public interface settings. Set exactly one of public, vpc, or vlan
   // (optional).
-  map<string, google.protobuf.Value> public = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  InterfacePublicConfig public = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // VLAN interface settings. Set exactly one of public, vpc, or vlan
   // (optional).
-  map<string, google.protobuf.Value> vlan = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  InterfaceVlanConfig vlan = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // VPC interface settings. Set exactly one of public, vpc, or vlan (optional).
-  map<string, google.protobuf.Value> vpc = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  InterfaceVpcConfig vpc = 7 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
   // Must be true to confirm interface update. Ignored when dry_run=true.
   bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -1560,7 +2787,8 @@ message InstanceInterfaceUpdateInput {
 
 // InstanceInterfaceSettingsUpdateInput is the input contract for
 // linode_instance_interface_settings_update. linode_id and confirm are
-// required. default_route is an open object (map<string, Value>).
+// required, and a call naming neither network_helper nor default_route asks
+// for nothing.
 message InstanceInterfaceSettingsUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_interface_settings_update"
@@ -1569,9 +2797,46 @@ message InstanceInterfaceSettingsUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceSettingsWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates interface settings for a specific Linode instance. Power off the Linode before enabling or disabling Network Helper. WARNING: This changes instance network configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to update interface settings for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates interface settings for the Linode instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Interface settings for instance {linode_id} updated successfully";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the settings the change is diffed against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_interface_settings_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Interface settings for Linode {linode_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_interface_settings_update.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  // The route takes one or the other; a call naming neither asks for nothing.
+  option (buf.validate.message).cel = {
+    id: "instance_interface_settings_update.field.at_least_one"
+    message: "network_helper or default_route is required"
+    expression: "has(this.network_helper) || has(this.default_route)"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_settings_update.default_route.at_least_one"
+    message: "default_route must include ipv4_interface_id or ipv6_interface_id"
+    expression: "!has(this.default_route) || has(this.default_route.ipv4_interface_id) || has(this.default_route.ipv6_interface_id)"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_settings_update.default_route.ipv4_interface_id.positive"
+    message: "default_route.ipv4_interface_id must be a positive integer"
+    expression: "!has(this.default_route) || !has(this.default_route.ipv4_interface_id) || this.default_route.ipv4_interface_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_settings_update.default_route.ipv6_interface_id.positive"
+    message: "default_route.ipv6_interface_id must be a positive integer"
+    expression: "!has(this.default_route) || !has(this.default_route.ipv6_interface_id) || this.default_route.ipv6_interface_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1579,9 +2844,8 @@ message InstanceInterfaceSettingsUpdateInput {
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Enable or disable Network Helper (optional).
   optional bool network_helper = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Default route interface IDs (ipv4_interface_id and/or ipv6_interface_id)
-  // (optional).
-  map<string, google.protobuf.Value> default_route = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The interface each family routes through (optional).
+  InterfaceSettingsDefaultRoute default_route = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm interface settings update. Ignored when
   // dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1602,8 +2866,42 @@ message InstanceInterfaceUpgradeInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceUpgradeWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Upgrades a Linode's legacy config interfaces to Linode interfaces. WARNING: This irreversibly changes instance network configuration.";
+  option (linode.mcp.v1.error_message) = "Failed to upgrade interfaces for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This irreversibly upgrades Linode network interfaces. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Linode {linode_id} interface upgrade initiated";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the upgrade converts. Its route spells the id
+  // linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Linode {linode_id} will be upgraded to Linode Interfaces."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // config_id and dry_run come back from the API rather than the call: the
+  // route picks the profile when none is named, and its dry_run says whether it
+  // validated or applied. interfaces is the upgraded set, which the same decode
+  // places. config_id carries the marker because the argument is spelled the
+  // same way and the caller has to hear the profile the API actually upgraded.
+  option (linode.mcp.v1.response_body_fields) = "api:config_id";
+  option (linode.mcp.v1.response_body_fields) = "dry_run";
+
+  option (buf.validate.message).cel = {
+    id: "instance_interface_upgrade.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_interface_upgrade.config_id.positive"
+    message: "config_id must be a positive integer"
+    expression: "!has(this.config_id) || this.config_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1612,8 +2910,12 @@ message InstanceInterfaceUpgradeInput {
   // Optional configuration profile ID to upgrade.
   optional int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Pass dry_run to the Linode API to validate the upgrade without applying it
-  // (optional).
-  optional bool api_dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // (optional). The wire key is "dry_run": the argument cannot take that name,
+  // which the MCP preview flag already uses.
+  optional bool api_dry_run = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_name) = "dry_run"
+  ];
   // Must be true to confirm the interface upgrade request. Ignored when
   // dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1632,11 +2934,15 @@ message InstanceInterfaceHistoryListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceHistoryListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists historical network interface versions for a specific Linode instance with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 linode_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -1653,6 +2959,14 @@ message InstanceBackupListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupsResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all backups for a Linode instance, including automatic backups and manual snapshots.";
+  option (linode.mcp.v1.error_message) = "Failed to list backups for instance {linode_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "instance_backup_list.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1670,9 +2984,30 @@ message InstanceBackupCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a manual snapshot of a Linode instance. WARNING: This overwrites any existing manual snapshot for the instance.";
+  option (linode.mcp.v1.error_message) = "Failed to create snapshot for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a manual snapshot and overwrites any existing one. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Snapshot created for instance {linode_id} (backup ID: {id})";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the snapshot is taken of. Its route spells the id
+  // linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_backup_create.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_backup_create.label.required"
+    message: "label is required"
+    expression: "has(this.label) && this.label != ''"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1699,7 +3034,61 @@ message InstanceBackupRestoreInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupRestoreWriteResponse";
-  option (linode.mcp.v1.success_message) = "Backup {backup_id} restore initiated to instance {target_linode_id} (overwrite={overwrite})";
+  option (linode.mcp.v1.tool_description) = "Restores a backup to a Linode instance. WARNING: When overwrite is true, this destroys all disks and configs on the target instance.";
+  option (linode.mcp.v1.error_message) = "Failed to restore backup {backup_id} to instance {target_linode_id}: {error}";
+  // overwrite is reported by the member of that name rather than inside the
+  // sentence: a flag renders true in Go and True in python, so no template
+  // carrying one reads the same in both.
+  option (linode.mcp.v1.success_message) = "Backup {backup_id} restore initiated to instance {target_linode_id}";
+  // A replay starts a second restore over the disks the first one is still
+  // writing, and with overwrite it destroys them again mid-flight.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // One sentence carries both halves of what the hand handler said in two: the
+  // gate cannot re-word itself once overwrite is read, so the destructive half
+  // is stated to every caller rather than only the one who asked for it.
+  option (linode.mcp.v1.confirm_message) = "This restores a backup to the target instance, and with overwrite=true it DESTROYS all existing disks and configs there. Set confirm=true to proceed.";
+  // The preview reads the backup the restore would write onto the target, which
+  // is the resource the call is about: the target's own state is what the
+  // restore replaces rather than what it copies.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_backup_get"
+  };
+  // An absent overwrite reads as false, which is what both hand walks did with
+  // it, so the two arms carry the same wording.
+  option (linode.mcp.v1.preview_sentence) = {
+    chosen_by: {
+      argument: "overwrite"
+      when_true: "All existing disks and configs on target instance {target_linode_id} are destroyed and replaced by the backup."
+      when_false: "The backup is restored onto target instance {target_linode_id}; the restore fails if its disks or configs collide."
+      when_absent: "The backup is restored onto target instance {target_linode_id}; the restore fails if its disks or configs collide."
+    }
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // Only the destructive answer earns a warning, so the other two arms are
+  // empty and the line is dropped for them.
+  option (linode.mcp.v1.preview_sentence) = {
+    chosen_by: {
+      argument: "overwrite"
+      when_true: "overwrite=true: existing data on target instance {target_linode_id} is permanently lost."
+    }
+    line: PREVIEW_LINE_WARNING
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_backup_restore.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_backup_restore.backup_id.positive"
+    message: "backup_id must be a positive integer"
+    expression: "this.backup_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "instance_backup_restore.target_linode_id.positive"
+    message: "target_linode_id must be a positive integer"
+    expression: "this.target_linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1707,8 +3096,13 @@ message InstanceBackupRestoreInput {
   int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the backup to restore (required).
   int32 backup_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // The ID of the Linode instance to restore the backup to (required).
-  int32 target_linode_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The ID of the Linode instance to restore the backup to (required). The
+  // route spells it linode_id in the body, where the path already carries the
+  // Linode that owns the backup.
+  int32 target_linode_id = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_name) = "linode_id"
+  ];
   // If true, deletes all disks and configs on the target before restoring.
   // Defaults to false (optional).
   optional bool overwrite = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
@@ -1730,8 +3124,25 @@ message InstanceBackupsEnableInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Enables the backup service for a Linode instance. WARNING: This adds a recurring charge to your account based on the instance plan.";
+  option (linode.mcp.v1.error_message) = "Failed to enable backups for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "Enabling backups adds a recurring charge to your account. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Backup service enabled for instance {linode_id}";
+  // The read is the instance backups are turned on for. Its route spells the
+  // id linode_id where the read spells it instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+
+  option (buf.validate.message).cel = {
+    id: "instance_backups_enable.linode_id.positive"
+    message: "linode_id must be a positive integer"
+    expression: "this.linode_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1756,9 +3167,20 @@ message InstanceBackupsCancelInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Cancels the backup service for a Linode instance. WARNING: This permanently deletes all existing backups for the instance. Pass dry_run=true to preview without canceling. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This permanently deletes all backups for the instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Backup service canceled for instance {linode_id}. All backups have been deleted.";
   option (linode.mcp.v1.resource_type) = "Instance";
+  // The read is the Linode whose backup service the cancel ends. No walk:
+  // the backups the cancel deletes are not a resource any route lists off
+  // the instance.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

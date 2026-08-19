@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/common.proto";
 import "linode/mcp/v1/lke_node.proto";
@@ -71,17 +72,24 @@ message LKENodePoolGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePool";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific node pool within an LKE cluster";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve node pool {pool_id} for cluster {cluster_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster (required).
-  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 cluster_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the node pool to retrieve (required).
-  int32 pool_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 pool_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // LKENodePoolListInput is the input contract for linode_lke_pool_list.
-// cluster_id is a string, matching the read-side convention.
 message LKENodePoolListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_lke_pool_list"
@@ -90,11 +98,15 @@ message LKENodePoolListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all node pools for a specific LKE cluster";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster (required).
-  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 cluster_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // LKENodePoolCreateInput is the input contract for linode_lke_pool_create.
@@ -110,9 +122,48 @@ message LKENodePoolCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new node pool in an LKE cluster. WARNING: This creates billable compute resources. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.error_message) = "Failed to create node pool in cluster {cluster_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates billable compute resources. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Node pool (ID: {id}) created in cluster {cluster_id} with {count} {type} node(s)";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the parent cluster the new pool joins; a create has no prior
+  // pool to diff against.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_cluster_get"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_pool_create.cluster_id.positive"
+    message: "cluster_id must be a positive integer"
+    expression: "this.cluster_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_pool_create.type.required"
+    message: "type is required"
+    expression: "this.type.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_pool_create.count.positive"
+    message: "count is required and must be at least 1"
+    expression: "this.count >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_pool_create.firewall_id.min"
+    message: "firewall_id must be an integer greater than or equal to 1"
+    expression: "!has(this.firewall_id) || this.firewall_id >= 1"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one, so presence is what tells the two apart.
+  option (buf.validate.message).cel = {
+    id: "lke_pool_create.disk_encryption.known"
+    message: "disk_encryption must be one of: disabled, enabled"
+    expression: "!has(this.disk_encryption) || this.disk_encryption != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_pool_create.update_strategy.known"
+    message: "update_strategy must be one of: on_recycle, rolling_update"
+    expression: "!has(this.update_strategy) || this.update_strategy != 0"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -170,8 +221,26 @@ message LKENodePoolUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a node pool in an LKE cluster. Can change node count, autoscaler settings, or tags. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to modify node pool {pool_id} in cluster {cluster_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the node pool configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Node pool {pool_id} in cluster {cluster_id} modified successfully";
+  option (linode.mcp.v1.tool_hooks) = "preview";
+  option (buf.validate.message).cel = {
+    id: "lke_pool_update.cluster_id.positive"
+    message: "cluster_id must be a positive integer"
+    expression: "this.cluster_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_pool_update.pool_id.positive"
+    message: "pool_id must be a positive integer"
+    expression: "this.pool_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "lke_pool_update.firewall_id.min"
+    message: "firewall_id must be an integer greater than or equal to 1"
+    expression: "!has(this.firewall_id) || this.firewall_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -221,8 +290,19 @@ message LKENodePoolDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a node pool from an LKE cluster. All nodes in the pool will be removed. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes the node pool and all its nodes. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Node pool {pool_id} deleted from cluster {cluster_id} successfully";
   option (linode.mcp.v1.resource_type) = "LKENodePool";
+  // A replay would report a pool the first attempt already removed as one the
+  // cluster never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_pool_get"
+  };
+  // The walk names the backing Linodes the delete destroys, which the fetched
+  // pool carries.
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -263,8 +343,17 @@ message LKEPoolRecycleInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEPoolRecycleResponse";
+  option (linode.mcp.v1.tool_description) = "Recycles all nodes in a specific LKE node pool. Nodes will be replaced with new ones. Pass dry_run=true to preview without recycling.";
   option (linode.mcp.v1.confirm_message) = "This recycles all nodes in the pool, causing temporary disruption. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Node pool {pool_id} in cluster {cluster_id} recycle initiated successfully";
+  // A replay starts a second rollout over nodes the first one is still
+  // replacing, doubling the disruption the caller accepted once.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the pool whose nodes the recycle replaces, which the route
+  // says nothing about.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_pool_get"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

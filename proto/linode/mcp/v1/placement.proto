@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // PlacementGroupPolicy is the placement group affinity-enforcement policy.
@@ -57,11 +58,16 @@ message PlacementGroupGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroup";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a single placement group by its ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve placement group {group_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the placement group to retrieve (required).
-  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 group_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // PlacementGroupWriteResponse is the {message, placement_group} envelope the
@@ -97,6 +103,7 @@ message PlacementGroupListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists placement groups for the authenticated account with optional pagination.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -117,8 +124,43 @@ message PlacementGroupCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a Linode placement group.";
+  option (linode.mcp.v1.error_message) = "Failed to create placement group: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a placement group. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Placement group '{label}' created successfully";
+  // A replayed create bills for a second group, which is why Go has never
+  // retried this route.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // Each language trims a different set of these arguments before sending them,
+  // so the value that reaches the wire is a per-language reading.
+  option (linode.mcp.v1.tool_hooks) = "normalize";
+  // The group a create would add, named by the four values that fix it.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new placement group \"{label}\" ({placement_group_type}, {placement_group_policy} policy) will be created in region {region}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
+
+  // The rules run in written order, before the membership readers on the type
+  // and policy fields, which keeps the order the checks have always answered
+  // in: label, region, type, policy.
+  option (buf.validate.message).cel = {
+    id: "placement_group_create.label.required"
+    message: "label is required"
+    expression: "this.label != ''"
+  };
+  option (buf.validate.message).cel = {
+    id: "placement_group_create.label.pattern"
+    message: "label must start and end with an alphanumeric character and contain only alphanumeric characters, hyphens, underscores, or periods"
+    expression: "this.label.matches('^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$')"
+  };
+  option (buf.validate.message).cel = {
+    id: "placement_group_create.region.required"
+    message: "region is required"
+    expression: "this.region != ''"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -126,10 +168,21 @@ message PlacementGroupCreateInput {
   string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Region where the placement group is created.
   string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Placement group type. Currently anti_affinity:local.
-  string placement_group_type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Placement group policy: flexible or strict.
-  PlacementGroupPolicy.Value placement_group_policy = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Placement group type. Currently anti_affinity:local. The vocabulary rides
+  // reader_values because the API documents this as free text with one legal
+  // value today, and an enum here would change the client-visible schema.
+  string placement_group_type = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER,
+    (linode.mcp.v1.reader_values) = "anti_affinity:local"
+  ];
+  // Placement group policy: flexible or strict. The membership reader checks
+  // the raw argument, because a policy naming no member decodes to the enum's
+  // zero, the same as an absent one.
+  PlacementGroupPolicy.Value placement_group_policy = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
   // Must be true to confirm placement group creation. Ignored when
   // dry_run=true.
   bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -147,14 +200,47 @@ message PlacementGroupUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroup";
+  option (linode.mcp.v1.tool_description) = "Updates one placement group label by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to update placement group {group_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a placement group. Set confirm=true to proceed.";
+  // Go has never retried this route.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The label an update would store; the group as it stands is not read.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The placement group's label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
+
+  // The rule holds its peace until the id is usable and the label is non-empty,
+  // which are the readers' sentences to answer; a label that is only padding is
+  // refused as blank before the pattern sees it.
+  option (buf.validate.message).cel = {
+    id: "placement_group_update.label.pattern"
+    message: "label must start and end with an alphanumeric character and contain only alphanumeric characters, hyphens, underscores, or periods"
+    expression: "this.group_id < 1 || this.label == '' || this.label.matches('^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Placement group ID to update.
-  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 group_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // New placement group label.
-  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  string label = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    // An absent label answers the same sentence as one sent as a number or as
+    // spaces, which is what this tool has always said to all three.
+    (linode.mcp.v1.reader_message) = {
+      absent: "label must be a non-empty string"
+      unusable: "label must be a non-empty string"
+    }
+  ];
   // Must be true to confirm placement group update.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -172,8 +258,19 @@ message PlacementGroupDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a placement group by its ID. This destructive action requires confirm=true. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the placement group";
+  option (linode.mcp.v1.success_message) = "Placement group {group_id} deleted successfully";
   option (linode.mcp.v1.resource_type) = "PlacementGroup";
+  // Go has never retried this route, so a replay cannot re-run the delete
+  // against a group the first attempt already removed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_placement_group_get"
+  };
+  // The walk names the member Linodes the delete detaches, which the fetched
+  // group carries.
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -205,14 +302,44 @@ message PlacementGroupAssignInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Assigns one or more Linodes to a placement group.";
+  option (linode.mcp.v1.error_message) = "Failed to assign Linodes to placement group {group_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This assigns Linodes to a placement group. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Assigned {linodes:len} Linode(s) to placement group {group_id}";
+  // Go has never retried this route, so a replay cannot re-run a membership
+  // change against a group the first attempt already altered.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The preview names each Linode whose membership changes, and only one
+  // language reports the body beside it.
+  option (linode.mcp.v1.tool_hooks) = "preview";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the placement group to assign Linodes to.
-  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 group_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "group_id must be a positive integer"
+      refused: "group_id must be a positive integer"
+    }
+  ];
   // Array of Linode IDs to assign to the placement group.
-  repeated int32 linodes = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  //
+  // The reader's three arms are a convergence: Go answered five sentences for
+  // this list and Python one, and a member is what it accepts and which
+  // refusals it tells apart. Empty, non-positive and repeated all name what the
+  // list must be, because a caller reading any of them has the same edit to
+  // make.
+  repeated int32 linodes = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ID_LIST,
+    (linode.mcp.v1.reader_message) = {
+      absent: "linodes is required"
+      unusable: "linodes must be a JSON array of positive integer Linode IDs"
+      refused: "linodes must be a non-empty array of distinct positive integer Linode IDs"
+    }
+  ];
   // Must be true to confirm assigning Linodes to the placement group. Ignored
   // when dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -234,15 +361,44 @@ message PlacementGroupUnassignInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Unassigns Linodes from a placement group.";
+  option (linode.mcp.v1.error_message) = "Failed to unassign placement group {group_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This unassigns Linodes from a placement group. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Linodes unassigned from placement group {group_id} successfully";
+  // Go has never retried this route, so a replay cannot re-run a membership
+  // change against a group the first attempt already altered.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The preview names each Linode whose membership changes, and only one
+  // language reports the body beside it.
+  option (linode.mcp.v1.tool_hooks) = "preview";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the placement group.
-  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 group_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "group_id must be a positive integer"
+      refused: "group_id must be a positive integer"
+    }
+  ];
   // Linode IDs to unassign from the placement group.
-  repeated int32 linodes = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  //
+  // The reader's three arms are a convergence: Go answered five sentences for
+  // this list and Python one, and a member is what it accepts and which
+  // refusals it tells apart. Empty, non-positive and repeated all name what the
+  // list must be, because a caller reading any of them has the same edit to
+  // make.
+  repeated int32 linodes = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ID_LIST,
+    (linode.mcp.v1.reader_message) = {
+      absent: "linodes is required"
+      unusable: "linodes must be a JSON array of positive integer Linode IDs"
+      refused: "linodes must be a non-empty array of distinct positive integer Linode IDs"
+    }
+  ];
   // Must be true to confirm placement group unassignment. Ignored when
   // dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

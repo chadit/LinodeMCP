@@ -4,18 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/common.proto";
 import "linode/mcp/v1/options.proto";
-
-// LKETier is the service tier of an LKE cluster. Values are the exact lowercase
-// Linode API strings, authored from the live OpenAPI spec (POST /lke/clusters).
-// See the enum-wrapper convention in nodebalancer_config.proto.
-message LKETier {
-  enum Value {
-    unspecified = 0;
-    standard = 1;
-    enterprise = 2;
-  }
-}
 
 // LKETierVersion is one Kubernetes version available for a specific LKE tier.
 message LKETierVersion {
@@ -38,15 +28,30 @@ message LKETierVersionGetInput {
     method: "GET"
     path: "/lke/tiers/{tier}/versions/{version}"
   };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKETierVersion";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific Kubernetes version for an LKE tier";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve LKE tier version '{version}' for tier '{tier}': {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The LKE tier ID, standard or enterprise (required).
-  LKETier.Value tier = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  LKETier.Value tier = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
   // The Kubernetes version ID (required).
-  string version = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  string version = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_FRAGMENT_SAFE_TEXT,
+    // A version sent as anything but text reads as one nobody sent, and the
+    // refusal names the fragment marker among the classes.
+    (linode.mcp.v1.reader_message) = {
+      unusable: "version is required"
+      refused: "version must not contain path separators, query separators, fragments, or traversal segments"
+    }
+  ];
 }
 
 // LKETierVersionListInput is the input contract for
@@ -57,11 +62,18 @@ message LKETierVersionListInput {
     method: "GET"
     path: "/lke/tiers/{tier}/versions"
   };
+  option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKETierVersionListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists available LKE tier versions for the requested tier";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // LKE tier: standard or enterprise (required).
-  LKETier.Value tier = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // LKE tier: standard or enterprise (required). The membership reader checks
+  // the raw argument, because a tier naming no member decodes to the enum's
+  // zero, the same as an absent one.
+  LKETier.Value tier = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_ENUM_MEMBER
+  ];
 }

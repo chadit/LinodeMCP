@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "linode/mcp/v1/options.proto";
+
+// Entity is one managed object on the account, the unit the IAM surface grants
+// access over.
+//
+// type stays a plain string. The spec enumerates the kinds it knows today and
+// gains more as the API surface grows, so a kind this repo has not heard of
+// reaches the caller rather than failing to decode.
+message Entity {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+}
+
+// EntityListResponse is the linode_entity_list envelope: count and the full
+// proto Entity elements. The tool has no filter param, so filter is omitted.
+message EntityListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Entity entities = 3;
+}
+
+// EntityListInput is the input contract for linode_entity_list. The route
+// publishes no page controls in the reviewed spec snapshot, so no page/page_size
+// travels here even though the answer arrives in a paginated envelope.
+message EntityListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_entity_list"
+    method: "GET"
+    path: "/entities"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.EntityListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the managed objects on the account that IAM roles can grant access over, such as instances and firewalls.";
+  option (linode.mcp.v1.error_message) = "Failed to list account entities: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}

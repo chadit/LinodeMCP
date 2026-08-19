@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "buf/validate/validate.proto";
 import "linode/mcp/v1/options.proto";
 
 // Vpc mirrors the Linode Virtual Private Cloud object. Field order and JSON names
@@ -73,11 +74,16 @@ message VpcGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Vpc";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a single VPC by its ID";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve VPC {vpc_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the VPC to retrieve (required).
-  int32 vpc_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 vpc_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // VpcSubnetWriteResponse is the {message, subnet} envelope the VPC subnet write
@@ -104,13 +110,21 @@ message VpcSubnetGetInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnet";
+  option (linode.mcp.v1.tool_description) = "Retrieves details of a specific subnet within a VPC";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve subnet {subnet_id} for VPC {vpc_id}: {error}";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the VPC (required).
-  int32 vpc_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 vpc_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // The ID of the subnet to retrieve (required).
-  int32 subnet_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 subnet_id = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
 }
 
 // VPCIP mirrors one IP address associated with a VPC, from GET /vpcs/ips and
@@ -160,11 +174,15 @@ message VpcListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all VPCs. Can filter by label or region.";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter VPCs by label containing this string (case-insensitive).
-  optional string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  optional string label = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY,
+    (linode.mcp.v1.list_filter) = {match: MATCH_CONTAINS}
+  ];
   // Filter VPCs by region (exact match, case-insensitive).
   optional string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Page of results to return (optional, minimum 1).
@@ -194,9 +212,44 @@ message VpcCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new VPC. WARNING: This creates a billable resource. Use linode_region_list to find valid region values.";
+  option (linode.mcp.v1.error_message) = "Failed to create VPC: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a billable VPC resource. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "VPC '{label}' (ID: {id}) created in {region}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The VPC and the region it lands in, which the body carries separately.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new VPC \"{label}\" will be created in region {region}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  option (buf.validate.message).cel = {
+    id: "vpc_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_create.description.present"
+    message: "description must be a non-empty string"
+    expression: "!has(this.description) || this.description.matches('[^ \\t\\r\\n]')"
+  };
+  // The runtime item reader owns list shape, per-item typing, and unknown item
+  // keys; these two add the member content it cannot express.
+  option (buf.validate.message).cel = {
+    id: "vpc_create.subnets.label"
+    message: "subnets entries must carry a label"
+    expression: "this.subnets.all(s, s.label.matches('[^ \\t\\r\\n]'))"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_create.subnets.ipv4"
+    message: "subnets entries must carry an ipv4 range"
+    expression: "this.subnets.all(s, s.ipv4.matches('[^ \\t\\r\\n]'))"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -226,8 +279,31 @@ message VpcUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates an existing VPC's label or description.";
+  option (linode.mcp.v1.error_message) = "Failed to modify VPC {vpc_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the VPC configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "VPC {vpc_id} modified successfully";
+  // preview reads the VPC so the label a change starts from can be named; the
+  // request carries only the new values.
+  option (linode.mcp.v1.tool_hooks) = "preview";
+
+  // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
+  // zero, and negative vpc_id alike.
+  option (buf.validate.message).cel = {
+    id: "vpc_update.vpc_id.positive"
+    message: "vpc_id must be a positive integer"
+    expression: "this.vpc_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_update.label.present"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_update.description.present"
+    message: "description must be a non-empty string"
+    expression: "!has(this.description) || this.description.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -253,8 +329,25 @@ message VpcDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. All subnets in the VPC will also be deleted. Set confirm=true to proceed.";
   option (linode.mcp.v1.resource_type) = "VPC";
+  option (linode.mcp.v1.success_message) = "VPC {vpc_id} removed successfully";
+  // A replay would report a VPC the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the VPC a delete removes. The walk lists the subnets that go
+  // with it, which is the cascade a caller cannot see from the request.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_vpc_get"
+  };
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+
+  option (buf.validate.message).cel = {
+    id: "vpc_delete.vpc_id.positive"
+    message: "vpc_id must be a positive integer"
+    expression: "this.vpc_id >= 1"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -283,6 +376,7 @@ message VPCIPAllListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VPCIPListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all IP addresses across all VPCs";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -301,11 +395,15 @@ message VPCIPListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VPCIPListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all IP addresses for a specific VPC";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the VPC.
-  int32 vpc_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 vpc_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -321,11 +419,15 @@ message VpcSubnetListInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists all subnets for a specific VPC";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the VPC.
-  int32 vpc_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  int32 vpc_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
   // Page of results to return (optional, minimum 1).
   optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
@@ -341,9 +443,35 @@ message VpcSubnetCreateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a new subnet within a VPC.";
+  option (linode.mcp.v1.error_message) = "Failed to create subnet in VPC {vpc_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a new subnet in the VPC. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Subnet '{label}' (ID: {id}) created in VPC {vpc_id}";
   option (linode.mcp.v1.retry_disabled) = true;
+  // The subnet and the range it claims. The range is spelled unconditionally
+  // because the contract requires it before this runs.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new subnet \"{label}\" will be created in VPC {vpc_id} with IPv4 range {ipv4}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+
+  // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
+  // zero, and negative vpc_id alike.
+  option (buf.validate.message).cel = {
+    id: "vpc_subnet_create.vpc_id.positive"
+    message: "vpc_id must be a positive integer"
+    expression: "this.vpc_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_subnet_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_subnet_create.ipv4.required"
+    message: "ipv4 is required (CIDR notation, e.g. 10.0.0.0/24)"
+    expression: "this.ipv4.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -369,8 +497,33 @@ message VpcSubnetUpdateInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates the label of a subnet within a VPC.";
+  option (linode.mcp.v1.error_message) = "Failed to modify subnet {subnet_id} in VPC {vpc_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the subnet configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Subnet {subnet_id} in VPC {vpc_id} modified successfully";
+  // The read is the subnet whose label the update replaces, which is the
+  // whole answer both languages gave.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_vpc_subnet_get"
+  };
+
+  // proto3 collapses an absent int32 onto 0, so each of these answers absent,
+  // zero, and negative alike.
+  option (buf.validate.message).cel = {
+    id: "vpc_subnet_update.vpc_id.positive"
+    message: "vpc_id must be a positive integer"
+    expression: "this.vpc_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_subnet_update.subnet_id.positive"
+    message: "subnet_id must be a positive integer"
+    expression: "this.subnet_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "vpc_subnet_update.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -396,8 +549,18 @@ message VpcSubnetDeleteInput {
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a subnet from a VPC. WARNING: This is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. The subnet will be permanently deleted. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Subnet {subnet_id} deleted from VPC {vpc_id} successfully";
   option (linode.mcp.v1.resource_type) = "VPCSubnet";
+  // A replay would report a subnet the first attempt already removed as one the
+  // VPC never had.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_vpc_subnet_get"
+  };
+  // dependency_walk names the interfaces that lose the subnet.
+  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

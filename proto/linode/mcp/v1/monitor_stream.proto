@@ -1,0 +1,657 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "buf/validate/validate.proto";
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
+
+// MonitorStreamType is the kind of log a stream carries. See the enum-wrapper
+// convention in nodebalancer_config.proto.
+message MonitorStreamType {
+  enum Value {
+    unspecified = 0;
+    audit_logs = 1;
+    lke_audit_logs = 2;
+  }
+}
+
+// MonitorStreamStatus is whether a stream is delivering. See the enum-wrapper
+// convention in nodebalancer_config.proto.
+message MonitorStreamStatus {
+  enum Value {
+    unspecified = 0;
+    active = 1;
+    inactive = 2;
+  }
+}
+
+// MonitorStreamDestinationDetails is the sync point one referenced destination
+// writes to. The API returns the access key id but never its secret half, so no
+// credential travels back through this message.
+message MonitorStreamDestinationDetails {
+  string access_key_id = 1;
+  string bucket_name = 2;
+  string host = 3;
+  string path = 4;
+}
+
+// MonitorStreamDestinationRef is one sync point a stream delivers logs to, as
+// the stream routes return it. A write names destinations by id instead, so
+// this message is read-only.
+//
+// The stream routes render a destination narrower than its own routes do: only
+// the Object Storage settings, and none of the audit or status members
+// MonitorStreamDestination carries. Sharing one message would answer half the
+// members of whichever route did not fill them.
+message MonitorStreamDestinationRef {
+  MonitorStreamDestinationDetails details = 1;
+  int32 id = 2;
+  string label = 3;
+  string type = 4;
+}
+
+// MonitorStreamDetails is a stream's type-specific configuration. The LKE
+// audit-log streams are the only kind that fills it today.
+message MonitorStreamDetails {
+  repeated int32 cluster_ids = 1;
+  bool is_auto_add_all_clusters_enabled = 2;
+}
+
+// MonitorStream mirrors a Linode Monitor logs stream. type is fixed at create:
+// the update route publishes no type member.
+message MonitorStream {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string status = 4;
+  repeated MonitorStreamDestinationRef destinations = 5;
+  MonitorStreamDetails details = 6;
+  int32 version = 7;
+  string created = 8;
+  string created_by = 9;
+  string updated = 10;
+  string updated_by = 11;
+}
+
+// MonitorStreamListResponse is the linode_monitor_stream_list envelope: count
+// and the full proto MonitorStream elements. The tool has no filter param, so
+// filter stays unset.
+message MonitorStreamListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorStream streams = 3;
+}
+
+// MonitorStreamHistoryListResponse is the linode_monitor_stream_history_list
+// envelope: count and the recorded versions of one stream, each a full stream
+// as it stood. The tool has no filter param, so filter stays unset.
+message MonitorStreamHistoryListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorStream versions = 3;
+}
+
+// MonitorStreamWriteResponse is the linode_monitor_stream_create and _update
+// envelope: a confirmation message plus the stream the API returned.
+message MonitorStreamWriteResponse {
+  string message = 1;
+  MonitorStream stream = 2;
+}
+
+// MonitorStreamDeleteResponse is the linode_monitor_stream_delete envelope: a
+// confirmation message plus the stream ID the delete acted on. The route
+// answers with an empty body, so the echo is what confirms the target.
+message MonitorStreamDeleteResponse {
+  string message = 1;
+  int32 stream_id = 2;
+}
+
+// MonitorStreamListInput is the input contract for linode_monitor_stream_list.
+// The route publishes no page controls in the reviewed spec snapshot, so no
+// page/page_size travels here.
+message MonitorStreamListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_list"
+    method: "GET"
+    path: "/monitor/streams"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the monitoring log streams on the account.";
+  option (linode.mcp.v1.error_message) = "Failed to list monitor streams: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorStreamGetInput is the input contract for linode_monitor_stream_get.
+message MonitorStreamGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_get"
+    method: "GET"
+    path: "/monitor/streams/{stream_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStream";
+  option (linode.mcp.v1.tool_description) = "Gets one monitoring log stream by stream_id.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve monitor stream {stream_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_get.stream_id.positive"
+    message: "stream_id must be a positive integer"
+    expression: "this.stream_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Stream ID to retrieve.
+  int32 stream_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// MonitorStreamHistoryListInput is the input contract for
+// linode_monitor_stream_history_list. The route publishes no page controls in
+// the reviewed spec snapshot, so no page/page_size travels here.
+message MonitorStreamHistoryListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_history_list"
+    method: "GET"
+    path: "/monitor/streams/{stream_id}/history"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamHistoryListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the recorded versions of one monitoring log stream, by stream_id.";
+  option (linode.mcp.v1.error_message) = "Failed to list history for monitor stream {stream_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_history_list.stream_id.positive"
+    message: "stream_id must be a positive integer"
+    expression: "this.stream_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Stream ID whose history should be listed.
+  int32 stream_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// MonitorStreamCreateInput is the input contract for
+// linode_monitor_stream_create. details is a free-form object because its
+// members vary by stream type, the same way the alert-channel details do.
+message MonitorStreamCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_create"
+    method: "POST"
+    path: "/monitor/streams"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a monitoring log stream. Requires confirm=true. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.confirm_message) = "This creates a monitor stream. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor stream '{label}' created";
+  option (linode.mcp.v1.error_message) = "Failed to create monitor stream: {error}";
+  // A replayed POST would create a second stream delivering the same logs, so
+  // this one is not retried.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one.
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_create.type.known"
+    message: "type must be one of: audit_logs, lke_audit_logs"
+    expression: "this.type != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_create.destinations.required"
+    message: "destinations must contain at least one destination id"
+    expression: "size(this.destinations) > 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_create.destinations.entries"
+    message: "destinations entries must be positive integers"
+    expression: "this.destinations.all(d, d >= 1)"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_create.status.known"
+    message: "status must be one of: active, inactive"
+    expression: "!has(this.status) || this.status != 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Descriptive name for the stream.
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Kind of log the stream carries: audit_logs or lke_audit_logs.
+  MonitorStreamType.Value type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // IDs of the destinations that receive the logs.
+  repeated int32 destinations = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the stream delivers: active or inactive (optional, the API defaults
+  // to active).
+  optional MonitorStreamStatus.Value status = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Type-specific configuration object (optional). An LKE audit-log stream
+  // reads cluster_ids and is_auto_add_all_clusters_enabled here.
+  map<string, google.protobuf.Value> details = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm creating a stream. Ignored when dry_run=true.
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorStreamUpdateInput is the input contract for
+// linode_monitor_stream_update. type is fixed at create, so it does not travel
+// here.
+message MonitorStreamUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_update"
+    method: "PUT"
+    path: "/monitor/streams/{stream_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates one monitoring log stream by stream_id. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This updates a monitor stream. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor stream {stream_id} updated";
+  option (linode.mcp.v1.error_message) = "Failed to update monitor stream {stream_id}: {error}";
+  // Converged with the alert-channel update in this family: the PUT replaces
+  // the members it carries, so a replay would reapply a set the first call may
+  // already have changed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_update.stream_id.positive"
+    message: "stream_id must be a positive integer"
+    expression: "this.stream_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_update.label.non_blank"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_update.destinations.entries"
+    message: "destinations entries must be positive integers"
+    expression: "this.destinations.all(d, d >= 1)"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_update.status.known"
+    message: "status must be one of: active, inactive"
+    expression: "!has(this.status) || this.status != 0"
+  };
+  // Last, matching the sibling update: a caller who supplied a bad value hears
+  // about that value rather than about the empty update it also amounts to.
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_update.any"
+    message: "at least one update field is required"
+    expression: "has(this.label) || has(this.status) || size(this.destinations) > 0 || size(this.details) > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Stream ID to update.
+  int32 stream_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Optional descriptive name for the stream.
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional replacement list of destination IDs that receive the logs.
+  repeated int32 destinations = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional delivery state: active or inactive.
+  optional MonitorStreamStatus.Value status = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional type-specific configuration object. An LKE audit-log stream reads
+  // cluster_ids and is_auto_add_all_clusters_enabled here.
+  map<string, google.protobuf.Value> details = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm updating a stream. Ignored when dry_run=true.
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorStreamDeleteInput is the input contract for
+// linode_monitor_stream_delete.
+//
+// It declares no fetch_state hook: the get above reads the same route, so the
+// preview and the plan hash read the stream through that rather than through a
+// hand-written step per removal.
+message MonitorStreamDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_delete"
+    method: "DELETE"
+    path: "/monitor/streams/{stream_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one monitoring log stream by stream_id, which stops its delivery to every destination it names. Requires confirm=true. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.confirm_message) = "This deletes a monitor stream and stops its log delivery. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor stream {stream_id} deleted";
+  option (linode.mcp.v1.error_message) = "Failed to delete monitor stream {stream_id}: {error}";
+  // A replay would report a stream the first attempt already removed as one that
+  // never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_delete.stream_id.positive"
+    message: "stream_id must be a positive integer"
+    expression: "this.stream_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Stream ID to delete.
+  int32 stream_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm deleting a stream. Ignored when dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorStreamDestinationType is where a destination delivers logs: an Akamai
+// Object Storage bucket or a caller-run HTTPS endpoint. See the enum-wrapper
+// convention in nodebalancer_config.proto.
+message MonitorStreamDestinationType {
+  enum Value {
+    unspecified = 0;
+    akamai_object_storage = 1;
+    custom_https = 2;
+  }
+}
+
+// MonitorStreamDestination is a logs destination as its own routes return it,
+// which is more than the MonitorStreamDestinationRef a stream embeds.
+//
+// details holds whichever settings the destination's type calls for, so it
+// travels as the object the API sends rather than as one of the two shapes.
+message MonitorStreamDestination {
+  string created = 1;
+  string created_by = 2;
+  google.protobuf.Struct details = 3;
+  int32 id = 4;
+  string label = 5;
+  string status = 6;
+  string type = 7;
+  string updated = 8;
+  string updated_by = 9;
+  int32 version = 10;
+}
+
+// MonitorStreamDestinationListResponse is the
+// linode_monitor_stream_destination_list envelope: count and the full proto
+// destination elements. The tool has no filter param, so filter stays unset.
+message MonitorStreamDestinationListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorStreamDestination destinations = 3;
+}
+
+// MonitorStreamDestinationHistoryListResponse is the
+// linode_monitor_stream_destination_history_list envelope: count and the
+// recorded versions of one destination, each a full destination as it stood.
+// The tool has no filter param, so filter stays unset.
+message MonitorStreamDestinationHistoryListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorStreamDestination versions = 3;
+}
+
+// MonitorStreamDestinationWriteResponse is the
+// linode_monitor_stream_destination_create and _update envelope: a confirmation
+// message plus the destination the API returned.
+message MonitorStreamDestinationWriteResponse {
+  string message = 1;
+  MonitorStreamDestination destination = 2;
+}
+
+// MonitorStreamDestinationDeleteResponse is the
+// linode_monitor_stream_destination_delete envelope: a confirmation message
+// plus the destination ID the delete acted on. The route answers with an empty
+// body, so the echo is what confirms the target.
+message MonitorStreamDestinationDeleteResponse {
+  string message = 1;
+  int32 destination_id = 2;
+}
+
+// MonitorStreamDestinationListInput is the input contract for
+// linode_monitor_stream_destination_list. The route publishes no page controls
+// in the reviewed spec snapshot, so no page/page_size travels here.
+message MonitorStreamDestinationListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_destination_list"
+    method: "GET"
+    path: "/monitor/streams/destinations"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the logs destinations that monitoring streams can deliver to.";
+  option (linode.mcp.v1.error_message) = "Failed to list monitor stream destinations: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorStreamDestinationGetInput is the input contract for
+// linode_monitor_stream_destination_get.
+message MonitorStreamDestinationGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_destination_get"
+    method: "GET"
+    path: "/monitor/streams/destinations/{destination_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestination";
+  option (linode.mcp.v1.tool_description) = "Gets one logs destination by destination_id.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve monitor stream destination {destination_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_get.destination_id.positive"
+    message: "destination_id must be a positive integer"
+    expression: "this.destination_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Destination ID to retrieve.
+  int32 destination_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// MonitorStreamDestinationHistoryListInput is the input contract for
+// linode_monitor_stream_destination_history_list. The route publishes no page
+// controls in the reviewed spec snapshot, so no page/page_size travels here.
+message MonitorStreamDestinationHistoryListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_destination_history_list"
+    method: "GET"
+    path: "/monitor/streams/destinations/{destination_id}/history"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationHistoryListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists the recorded versions of one logs destination, by destination_id.";
+  option (linode.mcp.v1.error_message) = "Failed to list history for monitor stream destination {destination_id}: {error}";
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_history_list.destination_id.positive"
+    message: "destination_id must be a positive integer"
+    expression: "this.destination_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Destination ID whose history should be listed.
+  int32 destination_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// MonitorStreamDestinationCreateInput is the input contract for
+// linode_monitor_stream_destination_create. details is a free-form object
+// because its members are the ones the chosen type calls for, the same way the
+// stream and alert-channel details are.
+message MonitorStreamDestinationCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_destination_create"
+    method: "POST"
+    path: "/monitor/streams/destinations"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates a logs destination that monitoring streams can deliver to. Requires confirm=true. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.confirm_message) = "This creates a monitor stream destination. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor stream destination '{label}' created";
+  option (linode.mcp.v1.error_message) = "Failed to create monitor stream destination: {error}";
+  // A replayed POST would create a second destination pointing at the same sync
+  // point, so this one is not retried.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  // An enum argument naming no member arrives as the enum's zero, the same as
+  // an absent one.
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_create.type.known"
+    message: "type must be one of: akamai_object_storage, custom_https"
+    expression: "this.type != 0"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_create.details.required"
+    message: "details is required and must carry the settings the chosen type takes"
+    expression: "size(this.details) > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Descriptive name for the destination.
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Where the destination delivers: akamai_object_storage or custom_https.
+  MonitorStreamDestinationType.Value type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Settings the chosen type takes. An Object Storage destination reads host,
+  // bucket_name, access_key_id and access_key_secret, with an optional path; a
+  // custom HTTPS destination reads endpoint_url, authentication, content_type
+  // and data_compression.
+  //
+  // Redacted in a preview rather than echoed: an Object Storage key secret, a
+  // basic-auth password and a client private key all arrive through here, and a
+  // dry run exists to report the call rather than to widen where those are
+  // written.
+  map<string, google.protobuf.Value> details = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
+  // Must be true to confirm creating a destination. Ignored when dry_run=true.
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorStreamDestinationUpdateInput is the input contract for
+// linode_monitor_stream_destination_update.
+//
+// The route's request schema also renders the audit members the resource
+// carries (created, updated, version and their authors). Those are the API's
+// own record of the destination, so no argument for them travels here.
+message MonitorStreamDestinationUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_destination_update"
+    method: "PUT"
+    path: "/monitor/streams/destinations/{destination_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates one logs destination by destination_id. Requires confirm=true. Pass dry_run=true to preview without updating.";
+  option (linode.mcp.v1.confirm_message) = "This updates a monitor stream destination. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor stream destination {destination_id} updated";
+  option (linode.mcp.v1.error_message) = "Failed to update monitor stream destination {destination_id}: {error}";
+  // Converged with the stream update in this family: the PUT replaces the
+  // members it carries, so a replay would reapply a set the first call may
+  // already have changed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_update.destination_id.positive"
+    message: "destination_id must be a positive integer"
+    expression: "this.destination_id >= 1"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_update.label.non_blank"
+    message: "label must be a non-empty string"
+    expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_update.type.known"
+    message: "type must be one of: akamai_object_storage, custom_https"
+    expression: "!has(this.type) || this.type != 0"
+  };
+  // Last, matching the sibling update: a caller who supplied a bad value hears
+  // about that value rather than about the empty update it also amounts to.
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_update.any"
+    message: "at least one update field is required"
+    expression: "has(this.label) || has(this.type) || size(this.details) > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Destination ID to update.
+  int32 destination_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Optional descriptive name for the destination.
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional delivery target: akamai_object_storage or custom_https.
+  optional MonitorStreamDestinationType.Value type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional replacement settings for the destination's type. Redacted in a
+  // preview for the reason the create's are: credentials arrive through here.
+  map<string, google.protobuf.Value> details = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.preview_redact) = true
+  ];
+  // Must be true to confirm updating a destination. Ignored when dry_run=true.
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorStreamDestinationDeleteInput is the input contract for
+// linode_monitor_stream_destination_delete.
+//
+// It declares no fetch_state hook: the get above reads the same route, so the
+// preview and the plan hash read the destination through that rather than
+// through a hand-written step per removal.
+message MonitorStreamDestinationDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_stream_destination_delete"
+    method: "DELETE"
+    path: "/monitor/streams/destinations/{destination_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one logs destination by destination_id. Requires confirm=true. Pass dry_run=true to preview without deleting.";
+  option (linode.mcp.v1.confirm_message) = "This deletes a monitor stream destination. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor stream destination {destination_id} deleted";
+  option (linode.mcp.v1.error_message) = "Failed to delete monitor stream destination {destination_id}: {error}";
+  // A replay would report a destination the first attempt already removed as one
+  // that never existed.
+  option (linode.mcp.v1.retry_disabled) = true;
+
+  option (buf.validate.message).cel = {
+    id: "monitor_stream_destination_delete.destination_id.positive"
+    message: "destination_id must be a positive integer"
+    expression: "this.destination_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Destination ID to delete.
+  int32 destination_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm deleting a destination. Ignored when dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
