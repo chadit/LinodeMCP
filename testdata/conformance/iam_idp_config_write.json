@@ -1,0 +1,66 @@
+{
+  "message": "linode.mcp.v1.IamIdpConfigWriteResponse",
+  "description": "IDP configuration write envelope: a confirmation message plus the configuration the API returned. updated and updated_by arrive as JSON null on a configuration that has never been changed, so this pins the null-to-empty decode both languages have to agree on, alongside the nested SAML object and its certificate list.",
+  "input": {
+    "message": "IDP configuration 'okta-prod' created",
+    "idp_config": {
+      "created": "2026-03-04T12:00:00",
+      "created_by": "jsmith",
+      "enabled": true,
+      "enforce": true,
+      "excluded_users_count": 2,
+      "id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+      "included_users_count": 0,
+      "label": "okta-prod",
+      "saml": {
+        "entity_id": "https://idp.example.com/saml/metadata",
+        "identity_element": "USER_ID_ATTRIBUTE",
+        "idp_url": "https://idp.example.com/sso/saml",
+        "public_certificates": [
+          {
+            "certificate": "MIIDexampleCertificateData",
+            "created": "2026-03-04T12:00:00",
+            "created_by": "jsmith",
+            "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+            "not_after": "2027-03-04T12:00:00",
+            "not_before": "2026-03-04T12:00:00"
+          }
+        ],
+        "user_id_attribute": "email"
+      },
+      "updated": null,
+      "updated_by": null
+    }
+  },
+  "canonical": {
+    "message": "IDP configuration 'okta-prod' created",
+    "idp_config": {
+      "created": "2026-03-04T12:00:00",
+      "created_by": "jsmith",
+      "enabled": true,
+      "enforce": true,
+      "excluded_users_count": 2,
+      "id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+      "included_users_count": 0,
+      "label": "okta-prod",
+      "saml": {
+        "entity_id": "https://idp.example.com/saml/metadata",
+        "identity_element": "USER_ID_ATTRIBUTE",
+        "idp_url": "https://idp.example.com/sso/saml",
+        "public_certificates": [
+          {
+            "certificate": "MIIDexampleCertificateData",
+            "created": "2026-03-04T12:00:00",
+            "created_by": "jsmith",
+            "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+            "not_after": "2027-03-04T12:00:00",
+            "not_before": "2026-03-04T12:00:00"
+          }
+        ],
+        "user_id_attribute": "email"
+      },
+      "updated": "",
+      "updated_by": ""
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "tool": "linode_lke_cluster_recycle",
-  "description": "Destroy-capability but Go uses a plain confirm gate (no bypass gate); Python enforces the dispatch bypass gate. Only the agreed cases are pinned: cluster_id-required and the confirmed+bypassed POST. The confirm-alone gate diverges (see report).",
+  "description": "Generated destroy. Pins cluster_id-required and the negative-id refusal (both through the bypass), the confirm-alone destroy gate, a string that is not a confirmation, and the confirmed+bypassed POST.",
   "cases": [
     {
       "name": "confirm alone is blocked by the destroy gate",
@@ -11,12 +11,29 @@
       "expect_error": "linode_lke_cluster_recycle is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
     },
     {
+      "name": "a truthy string is not a confirmation",
+      "args": {
+        "cluster_id": 12345,
+        "confirm": "yes"
+      },
+      "expect_error": "Recycles all nodes in the cluster. This causes temporary disruption. Set confirm=true to proceed."
+    },
+    {
       "name": "requires cluster_id",
       "args": {
         "confirm": true,
         "confirm_bypass_dry_run": true
       },
       "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "a negative cluster_id is refused",
+      "args": {
+        "cluster_id": -5,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "cluster_id must be a positive integer"
     },
     {
       "name": "recycles the cluster",

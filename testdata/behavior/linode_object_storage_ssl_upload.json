@@ -4,52 +4,134 @@
   "cases": [
     {
       "name": "requires certificate",
-      "args": { "region": "us-east", "label": "my-bucket", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "confirm": true
+      },
       "expect_error": "certificate is required"
     },
     {
       "name": "requires private_key",
-      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "confirm": true
+      },
       "expect_error": "private_key is required"
     },
     {
       "name": "uploads a certificate",
-      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
-      "api_response": { "ssl": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "private_key": "key-pem",
+        "confirm": true
+      },
+      "api_response": {
+        "ssl": true
+      },
       "expect_request": {
         "method": "POST",
         "path": "/object-storage/buckets/us-east/my-bucket/ssl",
-        "body": { "certificate": "cert-pem", "private_key": "key-pem" }
+        "body": {
+          "certificate": "cert-pem",
+          "private_key": "key-pem"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem"},
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "private_key": "key-pem"
+      },
       "expect_error": "This uploads an SSL certificate to the bucket. Set confirm=true to proceed."
     },
     {
       "name": "rejects a null API response",
-      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "private_key": "key-pem",
+        "confirm": true
+      },
       "api_response": null,
       "expect_api_error": "Failed to upload SSL certificate"
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "private_key": "key-pem",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to upload SSL certificate"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "private_key": "key-pem",
+        "confirm": true
+      },
       "api_response": true,
       "expect_api_error": "Failed to upload SSL certificate"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
-      "api_response": [1, 2],
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "private_key": "key-pem",
+        "confirm": true
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to upload SSL certificate"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "certificate": "cert-pem",
+        "private_key": "key-pem",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_ssl_upload",
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/my-bucket/ssl",
+          "body": {
+            "certificate": {
+              "redacted": true
+            },
+            "private_key": {
+              "redacted": true
+            }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

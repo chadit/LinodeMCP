@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_create",
-  "description": "Pins the three shared field-required rejections and the create POST body. Both languages omit booted (API defaults true) and backups_enabled (API default) unless the caller sets them, so a minimal call sends the same body: region, type, interface_generation, and one public interface. A success body that is not a JSON object must fail rather than turn into a zeroed instance record.",
+  "description": "Pins the three shared field-required rejections and the create POST body. Both languages omit booted (API defaults true) and backups_enabled (API default) unless the caller sets them, so a minimal call sends the same body: region, type, interface_generation, and one public interface. That interface is assembled from the flat firewall_id, route_ipv4 and route_ipv6 arguments; a caller who supplies interfaces themselves gets the list sent verbatim with nothing synthesized beside it. Both route flags travel under their declared defaults, so an explicit false is sent rather than dropped. A success body that is not a JSON object must fail rather than turn into a zeroed instance record.",
   "cases": [
     {
       "name": "requires region",
@@ -23,6 +23,26 @@
         "confirm": true,
         "region": "us-east",
         "type": "g6-nanode-1"
+      },
+      "expect_error": "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
+    },
+    {
+      "name": "rejects a zero firewall_id",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 0
+      },
+      "expect_error": "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
+    },
+    {
+      "name": "rejects a negative firewall_id",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": -1
       },
       "expect_error": "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
     },
@@ -169,6 +189,336 @@
         ]
       },
       "expect_error": "tags entries must be non-empty strings"
+    },
+    {
+      "name": "rejects a blank region",
+      "args": {
+        "confirm": true,
+        "region": "  ",
+        "type": "g6-nanode-1",
+        "firewall_id": 123
+      },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects a root_pass shorter than twelve characters",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "root_pass": "Short1"
+      },
+      "expect_error": "root_pass must be at least 12 characters"
+    },
+    {
+      "name": "rejects a root_pass longer than 128 characters",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "root_pass": "Aa1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "expect_error": "root_pass must not exceed 128 characters"
+    },
+    {
+      "name": "rejects a root_pass missing a character class",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "root_pass": "alllowercase1"
+      },
+      "expect_error": "root_pass must contain uppercase, lowercase, and digits"
+    },
+    {
+      "name": "rejects a non-positive stackscript_id",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "stackscript_id": 0
+      },
+      "expect_error": "stackscript_id must be a positive integer"
+    },
+    {
+      "name": "rejects a non-positive backup_id",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "backup_id": -1
+      },
+      "expect_error": "backup_id must be a positive integer"
+    },
+    {
+      "name": "rejects an unknown disk_encryption",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "disk_encryption": "maybe"
+      },
+      "expect_error": "disk_encryption must be one of: disabled, enabled"
+    },
+    {
+      "name": "rejects an unknown maintenance_policy",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "maintenance_policy": "linode/whenever"
+      },
+      "expect_error": "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    },
+    {
+      "name": "sends every declared field in the body",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "label": "web",
+        "image": "linode/debian11",
+        "root_pass": "Str0ngPassphrase",
+        "backups_enabled": true,
+        "authorized_keys": [
+          "ssh-rsa AAAA"
+        ],
+        "booted": false,
+        "tags": [
+          "prod"
+        ],
+        "stackscript_id": 42,
+        "stackscript_data": {
+          "answer": "yes"
+        },
+        "metadata": {
+          "user_data": "I2Nsb3VkLWNvbmZpZwo="
+        },
+        "placement_group": {
+          "id": 7,
+          "compliant_only": true
+        },
+        "disk_encryption": "enabled",
+        "maintenance_policy": "linode/migrate",
+        "authorized_users": [
+          "ops"
+        ],
+        "ipv4": [
+          "192.0.2.10"
+        ],
+        "backup_id": 55,
+        "boot_size": 2048,
+        "swap_size": 512,
+        "kernel": "linode/latest-64bit",
+        "network_helper": true,
+        "private_ip": true
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web",
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "status": "provisioning"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances",
+        "body": {
+          "region": "us-east",
+          "type": "g6-nanode-1",
+          "label": "web",
+          "image": "linode/debian11",
+          "root_pass": "Str0ngPassphrase",
+          "backups_enabled": true,
+          "authorized_keys": [
+            "ssh-rsa AAAA"
+          ],
+          "booted": false,
+          "tags": [
+            "prod"
+          ],
+          "stackscript_id": 42,
+          "stackscript_data": {
+            "answer": "yes"
+          },
+          "metadata": {
+            "user_data": "I2Nsb3VkLWNvbmZpZwo="
+          },
+          "placement_group": {
+            "id": 7,
+            "compliant_only": true
+          },
+          "disk_encryption": "enabled",
+          "maintenance_policy": "linode/migrate",
+          "authorized_users": [
+            "ops"
+          ],
+          "ipv4": [
+            "192.0.2.10"
+          ],
+          "backup_id": 55,
+          "boot_size": 2048,
+          "swap_size": 512,
+          "kernel": "linode/latest-64bit",
+          "network_helper": true,
+          "private_ip": true,
+          "interface_generation": "linode",
+          "interfaces": [
+            {
+              "public": {},
+              "firewall_id": 123,
+              "default_route": {
+                "ipv4": true,
+                "ipv6": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sends both route flags when the caller turns them off",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "route_ipv4": false,
+        "route_ipv6": false
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web",
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "status": "provisioning"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances",
+        "body": {
+          "region": "us-east",
+          "type": "g6-nanode-1",
+          "interface_generation": "linode",
+          "interfaces": [
+            {
+              "public": {},
+              "firewall_id": 123,
+              "default_route": {
+                "ipv4": false,
+                "ipv6": false
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sends a caller-supplied interfaces list verbatim",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "route_ipv4": false,
+        "interfaces": [
+          {
+            "vpc": {
+              "subnet_id": 7
+            },
+            "firewall_id": 9
+          }
+        ]
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web",
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "status": "provisioning"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances",
+        "body": {
+          "region": "us-east",
+          "type": "g6-nanode-1",
+          "interface_generation": "linode",
+          "interfaces": [
+            {
+              "vpc": {
+                "subnet_id": 7
+              },
+              "firewall_id": 9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects an interfaces value that is not an array of objects",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "interfaces": 5
+      },
+      "expect_error": "interfaces must be an array of objects"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "image": "linode/debian11",
+        "root_pass": "Str0ngPassphrase",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances",
+          "body": {
+            "region": "us-east",
+            "type": "g6-nanode-1",
+            "image": "linode/debian11",
+            "root_pass": {
+              "redacted": true
+            },
+            "interface_generation": "linode",
+            "interfaces": [
+              {
+                "public": {},
+                "firewall_id": 123,
+                "default_route": {
+                  "ipv4": true,
+                  "ipv6": true
+                }
+              }
+            ]
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new g6-nanode-1 instance will be created in region us-east from image linode/debian11."
+        ],
+        "warnings": [
+          "Billing for the instance starts immediately on creation."
+        ]
+      }
     }
   ]
 }

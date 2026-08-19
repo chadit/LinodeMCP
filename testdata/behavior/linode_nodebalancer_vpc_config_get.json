@@ -3,10 +3,47 @@
   "description": "Pins the VPC-config GET path. Missing/invalid id error text diverges between languages (see report).",
   "cases": [
     {
+      "name": "requires nodebalancer_id",
+      "args": {},
+      "expect_error": "nodebalancer_id is required"
+    },
+    {
+      "name": "rejects a non-positive nodebalancer_id",
+      "args": {
+        "nodebalancer_id": 0
+      },
+      "expect_error": "nodebalancer_id must be a positive integer"
+    },
+    {
+      "name": "requires vpc_config_id",
+      "args": {
+        "nodebalancer_id": 1
+      },
+      "expect_error": "vpc_config_id is required"
+    },
+    {
+      "name": "rejects a non-positive vpc_config_id",
+      "args": {
+        "nodebalancer_id": 1,
+        "vpc_config_id": 0
+      },
+      "expect_error": "vpc_config_id must be a positive integer"
+    },
+    {
       "name": "gets a vpc config by ids",
-      "args": { "nodebalancer_id": 456, "vpc_config_id": 3 },
-      "api_response": { "id": 3, "nodebalancer_id": 456, "vpc_id": 12 },
-      "expect_request": { "method": "GET", "path": "/nodebalancers/456/vpcs/3" }
+      "args": {
+        "nodebalancer_id": 456,
+        "vpc_config_id": 3
+      },
+      "api_response": {
+        "id": 3,
+        "nodebalancer_id": 456,
+        "vpc_id": 12
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/nodebalancers/456/vpcs/3"
+      }
     }
   ]
 }

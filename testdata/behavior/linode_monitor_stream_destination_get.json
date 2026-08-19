@@ -1,0 +1,37 @@
+{
+  "tool": "linode_monitor_stream_destination_get",
+  "description": "Gets one logs destination. The custom-HTTPS case is the one that proves details travels whole: its authentication and header settings have no member of their own in the message.",
+  "cases": [
+    {
+      "name": "rejects a non-positive destination_id",
+      "args": { "destination_id": 0 },
+      "expect_error": "destination_id must be a positive integer"
+    },
+    {
+      "name": "gets a destination",
+      "args": { "destination_id": 235 },
+      "api_response": {
+        "id": 235,
+        "label": "siem endpoint",
+        "type": "custom_https",
+        "status": "active",
+        "details": {
+          "endpoint_url": "https://siem.example.test/log-intake",
+          "content_type": "application/json",
+          "data_compression": "gzip",
+          "authentication": { "type": "basic" },
+          "custom_headers": [{ "name": "x-team", "value": "platform" }]
+        },
+        "version": 3,
+        "created": "2026-01-03T03:04:05",
+        "created_by": "opsuser",
+        "updated": "2026-01-04T09:00:00",
+        "updated_by": "secuser"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/monitor/streams/destinations/235"
+      }
+    }
+  ]
+}

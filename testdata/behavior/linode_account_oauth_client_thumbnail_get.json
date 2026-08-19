@@ -1,6 +1,6 @@
 {
   "tool": "linode_account_oauth_client_thumbnail_get",
-  "description": "OAuth client thumbnail get: missing client_id agrees; success pins the thumbnail GET path.",
+  "description": "A read whose route answers with raw image/png rather than JSON: an execute hook makes the call and base64-encodes what comes back, and the handler places that text beside the client_id it was addressed by. client_id is checked by the same three rules the sibling update and delete carry, so a blank or path-bearing id answers one sentence in both languages.",
   "cases": [
     {
       "name": "requires client_id",
@@ -8,10 +8,46 @@
       "expect_error": "client_id is required"
     },
     {
+      "name": "reads a non-text client_id as absent",
+      "args": { "client_id": 123 },
+      "expect_error": "client_id is required"
+    },
+    {
+      "name": "rejects a blank client_id",
+      "args": { "client_id": "   " },
+      "expect_error": "client_id must be a non-empty string"
+    },
+    {
+      "name": "rejects a path separator in client_id",
+      "args": { "client_id": "abc/123" },
+      "expect_error": "client_id must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "rejects a traversal client_id",
+      "args": { "client_id": ".." },
+      "expect_error": "client_id must not contain path separators, query separators, or traversal segments"
+    },
+    {
       "name": "gets an OAuth client thumbnail",
       "args": { "client_id": "abc123" },
       "api_response": {},
       "expect_request": { "method": "GET", "path": "/account/oauth-clients/abc123/thumbnail" }
+    },
+    {
+      "name": "answers with the encoded image beside the client it was asked for",
+      "args": { "client_id": "abc123" },
+      "api_response_raw": "PNGDATA",
+      "expect_result": {
+        "client_id": "abc123",
+        "thumbnail_png_base64": "UE5HREFUQQ=="
+      }
+    },
+    {
+      "name": "reports the API failure under the declared sentence",
+      "args": { "client_id": "abc123" },
+      "api_status": 404,
+      "api_response": { "errors": [{ "reason": "Not Found" }] },
+      "expect_api_error": "Failed to get account OAuth client thumbnail 'abc123'"
     }
   ]
 }

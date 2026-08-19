@@ -1,62 +1,230 @@
 {
   "tool": "linode_instance_backup_create",
-  "description": "Snapshot create needs confirm; POSTs the label body. No-confirm message text diverges (see report), so only the post-confirm linode_id rejection is fixtured. A success body that is not a JSON object must fail rather than turn into a zeroed snapshot record; the two languages name the subject differently, so only the failure verb is shared.",
+  "description": "Snapshot create needs confirm; POSTs the label body. No-confirm message text diverges (see report), so only the post-confirm linode_id rejection is fixtured. The preview reads the instance whose manual snapshot slot would be overwritten. A success body that is not a JSON object must fail rather than turn into a zeroed snapshot record; the two languages name the subject differently, so only the failure verb is shared.",
   "cases": [
     {
       "name": "rejects missing linode_id once confirmed",
-      "args": { "confirm": true },
-      "expect_error": "linode_id is required"
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "creates a snapshot with the label body",
-      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
-      "api_response": { "id": 999 },
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 999
+      },
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances/123/backups",
-        "body": { "label": "snap-1" }
+        "body": {
+          "label": "snap-1"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 123, "label": "snap-1"},
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1"
+      },
       "expect_error": "This creates a manual snapshot and overwrites any existing one. Set confirm=true to proceed."
     },
     {
+      "name": "rejects a linode_id below one",
+      "args": {
+        "confirm": true,
+        "linode_id": 0,
+        "label": "snap-1"
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a label that is not a string",
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "label": 7
+      },
+      "expect_error": "label must be a string"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_backup_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/backups",
+          "body": {
+            "label": "snap-1"
+          }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    },
+    {
       "name": "rejects a null API response",
-      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "confirm": true
+      },
       "api_response": null,
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
-      "api_response": [1, 2],
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "confirm": true
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a string API response",
-      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "confirm": true
+      },
       "api_response": "not-an-object",
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "snap-1",
+        "confirm": true
+      },
       "api_response": true,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a snapshot with no label",
+      "args": {
+        "linode_id": 123,
+        "confirm": true
+      },
+      "expect_error": "label is required"
     }
   ]
 }

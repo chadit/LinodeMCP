@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_get",
-  "description": "Pins the instance_id rejections and the GET. instance_id is an integer path param, so both languages reject a missing or non-positive value with the same text.",
+  "description": "Pins the instance_id rejections and the GET. instance_id is an integer path param, so both languages reject a missing or non-positive value with the same text, and both read a whole float as the resource it names.",
   "cases": [
     {
       "name": "requires instance_id",
@@ -18,6 +18,17 @@
       "name": "gets the instance",
       "args": {
         "instance_id": 5
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/instances/5"
+      }
+    },
+    {
+      "name": "reads a whole float instance_id",
+      "args": {
+        "instance_id": 5.0
       },
       "api_response": {},
       "expect_request": {

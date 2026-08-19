@@ -1,0 +1,36 @@
+{
+  "tool": "linode_profile_draft_save",
+  "description": "CapMeta builder tool writing a draft into the config file (no Linode API call). Pins every refusal that answers before the file is touched, in the order the handler asks them: name, confirm, built-in name, then the registry lookup.",
+  "cases": [
+    {
+      "name": "refuses an absent name",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "name argument is required"
+    },
+    {
+      "name": "refuses without confirm",
+      "args": {
+        "name": "seam-fixture"
+      },
+      "expect_error": "confirm=true is required for draft save"
+    },
+    {
+      "name": "refuses a built-in profile name",
+      "args": {
+        "name": "default",
+        "confirm": true
+      },
+      "expect_error": "cannot save over built-in profile name: default"
+    },
+    {
+      "name": "refuses a name no draft carries",
+      "args": {
+        "name": "no-such-draft",
+        "confirm": true
+      },
+      "expect_error": "draft not found: no-such-draft"
+    }
+  ]
+}

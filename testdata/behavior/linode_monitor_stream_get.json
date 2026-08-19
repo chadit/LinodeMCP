@@ -1,0 +1,44 @@
+{
+  "tool": "linode_monitor_stream_get",
+  "description": "Gets one log stream. The populated case pins the decode of the nested destination details and the type-specific details object.",
+  "cases": [
+    {
+      "name": "rejects a non-positive stream_id",
+      "args": { "stream_id": 0 },
+      "expect_error": "stream_id must be a positive integer"
+    },
+    {
+      "name": "gets a stream",
+      "args": { "stream_id": 890 },
+      "api_response": {
+        "id": 890,
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "status": "active",
+        "destinations": [
+          {
+            "id": 234,
+            "label": "ops bucket",
+            "type": "akamai_object_storage",
+            "details": {
+              "access_key_id": "AKIAEXAMPLE",
+              "bucket_name": "ops-audit",
+              "host": "us-east-1.linodeobjects.com",
+              "path": "streams/audit"
+            }
+          }
+        ],
+        "details": {
+          "cluster_ids": [101, 102],
+          "is_auto_add_all_clusters_enabled": false
+        },
+        "version": 3,
+        "created": "2026-01-02T03:04:05",
+        "created_by": "opsuser",
+        "updated": "2026-01-03T03:04:05",
+        "updated_by": "opsuser"
+      },
+      "expect_request": { "method": "GET", "path": "/monitor/streams/890" }
+    }
+  ]
+}

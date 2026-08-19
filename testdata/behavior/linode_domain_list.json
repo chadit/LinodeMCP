@@ -1,12 +1,61 @@
 {
   "tool": "linode_domain_list",
-  "description": "Domain list GETs the /domains collection. Label/type filters are applied client-side and do not change the request path.",
+  "description": "Domain list GETs the /domains collection. Label/type filters are applied client-side and do not change the request path. A wrong-typed filter reads as unasked: Go reads every filter with request.GetString, so a numeric one narrows nothing and echoes nothing.",
   "cases": [
     {
       "name": "lists domains",
       "args": {},
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/domains" }
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/domains"
+      }
+    },
+    {
+      "name": "reads a numeric filter as unasked",
+      "args": {
+        "type": 5
+      },
+      "api_response": {
+        "data": [
+          {
+            "id": 1,
+            "domain": "a.com",
+            "type": "master"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_result": {
+        "count": 1,
+        "domains": [
+          {
+            "id": 1,
+            "domain": "a.com",
+            "type": "master",
+            "status": "",
+            "soa_email": "",
+            "description": "",
+            "retry_sec": 0,
+            "master_ips": [],
+            "axfr_ips": [],
+            "expire_sec": 0,
+            "refresh_sec": 0,
+            "ttl_sec": 0,
+            "tags": [],
+            "created": "",
+            "updated": "",
+            "group": ""
+          }
+        ]
+      }
     }
   ]
 }

@@ -1,0 +1,137 @@
+{
+  "tool": "linode_iam_user_role_permission_update",
+  "description": "Replaces one user's access level. The call replaces rather than merges, so the empty-lists case is a real request: it is how the API documents blocking a user's access, and it must reach the wire as two empty arrays rather than as an omitted body.",
+  "cases": [
+    {
+      "name": "rejects a blank username",
+      "args": {
+        "username": "   ",
+        "account_access": ["account_linode_creator"],
+        "confirm": true
+      },
+      "expect_error": "username is required"
+    },
+    {
+      "name": "rejects an entity_access entry with no id",
+      "args": {
+        "username": "jsmith",
+        "entity_access": [{ "type": "linode", "roles": ["linode_contributor"] }],
+        "confirm": true
+      },
+      "expect_error": "entity_access entries must carry an entity id, a type, and at least one role"
+    },
+    {
+      "name": "rejects an entity_access entry with no roles",
+      "args": {
+        "username": "jsmith",
+        "entity_access": [{ "id": 1, "type": "linode", "roles": [] }],
+        "confirm": true
+      },
+      "expect_error": "entity_access entries must carry an entity id, a type, and at least one role"
+    },
+    {
+      "name": "rejects an entity_access entry with a blank type",
+      "args": {
+        "username": "jsmith",
+        "entity_access": [{ "id": 1, "type": "  ", "roles": ["linode_contributor"] }],
+        "confirm": true
+      },
+      "expect_error": "entity_access entries must carry an entity id, a type, and at least one role"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "username": "jsmith",
+        "account_access": ["account_linode_creator"]
+      },
+      "expect_error": "This replaces a user's account and entity access roles. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts the replacement access level",
+      "args": {
+        "username": "jsmith",
+        "account_access": ["account_linode_creator", "account_firewall_creator"],
+        "entity_access": [
+          { "id": 1, "type": "linode", "roles": ["linode_contributor"] },
+          { "id": 4, "type": "firewall", "roles": ["firewall_admin"] }
+        ],
+        "confirm": true
+      },
+      "api_response": {
+        "account_access": ["account_linode_creator", "account_firewall_creator"],
+        "entity_access": [
+          { "id": 1, "type": "linode", "roles": ["linode_contributor"] },
+          { "id": 4, "type": "firewall", "roles": ["firewall_admin"] }
+        ]
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/iam/users/jsmith/role-permissions",
+        "body": {
+          "account_access": ["account_linode_creator", "account_firewall_creator"],
+          "entity_access": [
+            { "id": 1, "roles": ["linode_contributor"], "type": "linode" },
+            { "id": 4, "roles": ["firewall_admin"], "type": "firewall" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "blocks all access with empty lists",
+      "args": {
+        "username": "jsmith",
+        "account_access": [],
+        "entity_access": [],
+        "confirm": true
+      },
+      "api_response": { "account_access": [], "entity_access": [] },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/iam/users/jsmith/role-permissions",
+        "body": { "account_access": [], "entity_access": [] }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "username": "jsmith",
+        "account_access": ["account_linode_creator"],
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "username": "jsmith",
+        "account_access": ["account_linode_creator"],
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the access level replacement",
+      "args": {
+        "username": "jsmith",
+        "account_access": ["account_linode_creator"],
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_user_role_permission_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/iam/users/jsmith/role-permissions",
+          "body": { "account_access": ["account_linode_creator"] }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

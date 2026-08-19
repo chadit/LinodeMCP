@@ -13,7 +13,7 @@
         ],
         "confirm": true
       },
-      "expect_error": "entity_ids must be an array of non-empty strings"
+      "expect_error": "entity_ids must be an array of strings"
     },
     {
       "name": "rejects out-of-range severity",
@@ -23,7 +23,7 @@
         "severity": 4,
         "confirm": true
       },
-      "expect_error": "severity must be an integer from 0 through 3"
+      "expect_error": "severity must be one of: 0, 1, 2, 3"
     },
     {
       "name": "puts the update body with trimmed label",
@@ -133,6 +133,88 @@
         ]
       },
       "expect_error": "group_by must be an array of non-empty strings"
+    },
+    {
+      "name": "rejects an update with no fields",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "confirm": true
+      },
+      "expect_error": "at least one update field is required"
+    },
+    {
+      "name": "rejects an unknown status",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "status": "paused",
+        "confirm": true
+      },
+      "expect_error": "status must be enabled or disabled"
+    },
+    {
+      "name": "trims the status before sending it",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "status": "  disabled  ",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 42,
+        "label": "Source CPU alert"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/monitor/services/dbaas/alert-definitions/42",
+        "body": {
+          "status": "disabled"
+        }
+      }
+    },
+    {
+      "name": "previews the update request and the definition it changes",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU high",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /monitor/services/dbaas/alert-definitions/42": {
+          "criteria": null,
+          "description": "",
+          "id": 42,
+          "label": "Source CPU alert",
+          "service_type": "dbaas",
+          "severity": 1,
+          "type": "user"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_service_alert_definition_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/monitor/services/dbaas/alert-definitions/42",
+          "body": {
+            "label": "CPU high"
+          }
+        },
+        "current_state": {
+          "criteria": null,
+          "description": "",
+          "id": 42,
+          "label": "Source CPU alert",
+          "service_type": "dbaas",
+          "severity": 1,
+          "type": "user"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

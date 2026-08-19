@@ -1,6 +1,6 @@
 {
   "tool": "linode_longview_plan_update",
-  "description": "Pins the plan-update PUT and the longview-<n> pattern rejection now enforced in both languages (Go gained Python's pattern). The pattern case sets confirm:true so both reach the check.",
+  "description": "Pins the plan-update PUT, the longview-<n> pattern rejection enforced in both languages, and the trim both now apply to the slug (Python gained Go's trim). The pattern case sets confirm:true so both reach the check. The two required-slug sentences stay out: each language words that one differently.",
   "cases": [
     {
       "name": "rejects a non-plan subscription",
@@ -10,6 +10,16 @@
     {
       "name": "updates the longview plan",
       "args": { "longview_subscription": "longview-10", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/longview/plan",
+        "body": { "longview_subscription": "longview-10" }
+      }
+    },
+    {
+      "name": "trims the subscription before sending it",
+      "args": { "longview_subscription": "  longview-10  ", "confirm": true },
       "api_response": {},
       "expect_request": {
         "method": "PUT",

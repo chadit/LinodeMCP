@@ -1,0 +1,66 @@
+{
+  "message": "linode.mcp.v1.MonitorStreamWriteResponse",
+  "description": "Monitor stream write envelope (create and update): a confirmation message plus the stream the API returned. destinations comes back as whole sync-point objects even though a write names them by id, and details carries the type-specific configuration an LKE audit-log stream fills.",
+  "input": {
+    "message": "Monitor stream 'audit to object storage' created",
+    "stream": {
+      "id": 890,
+      "label": "audit to object storage",
+      "type": "lke_audit_logs",
+      "status": "active",
+      "destinations": [
+        {
+          "id": 234,
+          "label": "ops bucket",
+          "type": "akamai_object_storage",
+          "details": {
+            "access_key_id": "AKIAEXAMPLE",
+            "bucket_name": "ops-audit",
+            "host": "us-east-1.linodeobjects.com",
+            "path": "streams/audit"
+          }
+        }
+      ],
+      "details": {
+        "cluster_ids": [101, 102],
+        "is_auto_add_all_clusters_enabled": true
+      },
+      "version": 3,
+      "created": "2025-03-20T01:41:09",
+      "created_by": "opsuser",
+      "updated": "2025-03-21T01:41:09",
+      "updated_by": "opsuser"
+    }
+  },
+  "canonical": {
+    "message": "Monitor stream 'audit to object storage' created",
+    "stream": {
+      "id": 890,
+      "label": "audit to object storage",
+      "type": "lke_audit_logs",
+      "status": "active",
+      "destinations": [
+        {
+          "id": 234,
+          "label": "ops bucket",
+          "type": "akamai_object_storage",
+          "details": {
+            "access_key_id": "AKIAEXAMPLE",
+            "bucket_name": "ops-audit",
+            "host": "us-east-1.linodeobjects.com",
+            "path": "streams/audit"
+          }
+        }
+      ],
+      "details": {
+        "cluster_ids": [101, 102],
+        "is_auto_add_all_clusters_enabled": true
+      },
+      "version": 3,
+      "created": "2025-03-20T01:41:09",
+      "created_by": "opsuser",
+      "updated": "2025-03-21T01:41:09",
+      "updated_by": "opsuser"
+    }
+  }
+}

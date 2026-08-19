@@ -3,20 +3,59 @@
   "description": "Firewall rule version get fetches one historical rule version via GET. Both languages reject non-positive firewall_id and version with the same text; the missing-version message diverges (see report).",
   "cases": [
     {
+      "name": "requires firewall_id",
+      "args": {},
+      "expect_error": "firewall_id is required"
+    },
+    {
+      "name": "rejects a numeric-string firewall_id",
+      "args": {
+        "firewall_id": "1"
+      },
+      "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "requires version",
+      "args": {
+        "firewall_id": 1
+      },
+      "expect_error": "version is required"
+    },
+    {
+      "name": "rejects a numeric-string version",
+      "args": {
+        "firewall_id": 1,
+        "version": "1"
+      },
+      "expect_error": "version must be a positive integer"
+    },
+    {
       "name": "rejects a non-positive firewall_id",
-      "args": { "firewall_id": -1, "version": 2 },
+      "args": {
+        "firewall_id": -1,
+        "version": 2
+      },
       "expect_error": "firewall_id must be a positive integer"
     },
     {
       "name": "rejects a non-positive version",
-      "args": { "firewall_id": 5, "version": -2 },
+      "args": {
+        "firewall_id": 5,
+        "version": -2
+      },
       "expect_error": "version must be a positive integer"
     },
     {
       "name": "gets a firewall rule version",
-      "args": { "firewall_id": 5, "version": 2 },
+      "args": {
+        "firewall_id": 5,
+        "version": 2
+      },
       "api_response": {},
-      "expect_request": { "method": "GET", "path": "/networking/firewalls/5/history/rules/2" }
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/firewalls/5/history/rules/2"
+      }
     }
   ]
 }

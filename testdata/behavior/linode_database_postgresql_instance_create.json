@@ -159,6 +159,18 @@
           "Creating a Managed Database can incur billing."
         ]
       }
+    },
+    {
+      "name": "rejects a cluster size outside the documented set",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "confirm": true,
+        "cluster_size": 4
+      },
+      "expect_error": "cluster_size must be one of: 1, 2, 3"
     }
   ]
 }

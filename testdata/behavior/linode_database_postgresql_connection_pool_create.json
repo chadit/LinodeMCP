@@ -1,0 +1,172 @@
+{
+  "tool": "linode_database_postgresql_connection_pool_create",
+  "description": "PostgreSQL connection pool create. The username cases pin the nullable body member both ways: an explicit null travels as null, and an omitted argument leaves the key off the body entirely.",
+  "cases": [
+    {
+      "name": "rejects a non-positive instance_id",
+      "args": {
+        "instance_id": 0,
+        "label": "Connection-Pool-01",
+        "confirm": true
+      },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "rejects a missing label",
+      "args": {
+        "instance_id": 890,
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "instance_id": 890,
+        "label": "   ",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects an unknown mode",
+      "args": {
+        "instance_id": 890,
+        "label": "Connection-Pool-01",
+        "mode": "batch",
+        "confirm": true
+      },
+      "expect_error": "mode must be one of: session, statement, transaction"
+    },
+    {
+      "name": "rejects a non-positive size",
+      "args": {
+        "instance_id": 890,
+        "label": "Connection-Pool-01",
+        "size": 0,
+        "confirm": true
+      },
+      "expect_error": "size must be a positive integer"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "instance_id": 890,
+        "label": "Connection-Pool-01"
+      },
+      "expect_error": "This creates a PostgreSQL connection pool. Set confirm=true to proceed."
+    },
+    {
+      "name": "posts the create body",
+      "args": {
+        "instance_id": 890,
+        "database": "PostgreSQL-DB-video-streaming-data",
+        "label": "Connection-Pool-01",
+        "mode": "session",
+        "size": 10,
+        "username": "john-doe",
+        "confirm": true
+      },
+      "api_response": {
+        "database": "PostgreSQL-DB-video-streaming-data",
+        "label": "Connection-Pool-01",
+        "mode": "session",
+        "size": 10,
+        "username": "john-doe"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/postgresql/instances/890/connection-pools",
+        "body": {
+          "database": "PostgreSQL-DB-video-streaming-data",
+          "label": "Connection-Pool-01",
+          "mode": "session",
+          "size": 10,
+          "username": "john-doe"
+        }
+      }
+    },
+    {
+      "name": "sends an explicit null username",
+      "args": {
+        "instance_id": 890,
+        "label": "Connection-Pool-01",
+        "username": null,
+        "confirm": true
+      },
+      "api_response": {
+        "database": "defaultdb",
+        "label": "Connection-Pool-01",
+        "mode": "transaction",
+        "size": 10,
+        "username": null
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/postgresql/instances/890/connection-pools",
+        "body": {
+          "label": "Connection-Pool-01",
+          "username": null
+        }
+      }
+    },
+    {
+      "name": "omits the members the caller left out",
+      "args": {
+        "instance_id": 890,
+        "label": "Connection-Pool-01",
+        "confirm": true
+      },
+      "api_response": {
+        "database": "defaultdb",
+        "label": "Connection-Pool-01",
+        "mode": "transaction",
+        "size": 10,
+        "username": null
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/postgresql/instances/890/connection-pools",
+        "body": { "label": "Connection-Pool-01" }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "instance_id": 890,
+        "label": "Connection-Pool-01",
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the connection pool create request",
+      "args": {
+        "instance_id": 890,
+        "label": "Connection-Pool-01",
+        "mode": "session",
+        "size": 10,
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_postgresql_connection_pool_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/databases/postgresql/instances/890/connection-pools",
+          "body": {
+            "label": "Connection-Pool-01",
+            "mode": "session",
+            "size": 10
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

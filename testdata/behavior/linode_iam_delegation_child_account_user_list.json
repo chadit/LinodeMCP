@@ -1,0 +1,34 @@
+{
+  "tool": "linode_iam_delegation_child_account_user_list",
+  "description": "Lists the delegate users on one child account. The API pages bare usernames, so the answer carries them under the member the wire names rather than through a count envelope, and the empty case must stay an empty list rather than a dropped member.",
+  "cases": [
+    {
+      "name": "rejects a blank euuid",
+      "args": { "euuid": "   " },
+      "expect_error": "euuid is required"
+    },
+    {
+      "name": "lists no delegate users",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/users"
+      }
+    },
+    {
+      "name": "lists the delegate users",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890" },
+      "api_response": {
+        "data": ["jsmith", "adevi"],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/users"
+      }
+    }
+  ]
+}

@@ -1,17 +1,44 @@
 {
   "tool": "linode_profile_tfa_disable",
-  "description": "Disables TFA with a single POST once confirmed. Confirm text diverges (see report).",
+  "description": "Disabling two-factor auth takes no arguments: the confirm gate, the POST, and the dry-run preview, which carries the security warning the downgrade earns.",
   "cases": [
     {
       "name": "disables two-factor authentication",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/profile/tfa-disable" }
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/tfa-disable"
+      }
     },
     {
       "name": "requires confirm",
       "args": {},
       "expect_error": "This disables two-factor authentication for the profile. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_tfa_disable",
+        "would_execute": {
+          "method": "POST",
+          "path": "/profile/tfa-disable"
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "Two-factor authentication is disabled for this profile."
+        ],
+        "warnings": [
+          "Disabling two-factor authentication reduces account security."
+        ]
+      }
     }
   ]
 }

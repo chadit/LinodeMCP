@@ -1,7 +1,20 @@
 {
   "tool": "linode_networking_ip_update",
-  "description": "Networking IP update rejects a malformed address once confirmed, then PUTs the rdns change. The no-confirm text and missing-rdns message diverge between languages (see report).",
+  "description": "Networking IP update PUTs the rdns change once confirmed. The address is checked before the rdns value so a call naming neither reports the address, and the dry run reads the address so a caller sees the reverse DNS being replaced.",
   "cases": [
+    {
+      "name": "requires confirm",
+      "args": {
+        "address": "203.0.113.5",
+        "rdns": "host.example.com"
+      },
+      "expect_error": "This updates reverse DNS for an IP address. Set confirm=true to proceed."
+    },
+    {
+      "name": "requires an address",
+      "args": { "confirm": true, "rdns": "host.example.com" },
+      "expect_error": "address must be a non-empty string"
+    },
     {
       "name": "rejects a malformed address once confirmed",
       "args": {
@@ -10,6 +23,26 @@
         "rdns": "host.example.com"
       },
       "expect_error": "address must be a valid IP address"
+    },
+    {
+      "name": "requires rdns",
+      "args": { "confirm": true, "address": "203.0.113.5" },
+      "expect_error": "rdns is required"
+    },
+    {
+      "name": "rejects a non-string rdns",
+      "args": { "confirm": true, "address": "203.0.113.5", "rdns": 7 },
+      "expect_error": "rdns must be a string"
+    },
+    {
+      "name": "rejects a non-boolean reserved",
+      "args": {
+        "confirm": true,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com",
+        "reserved": "yes"
+      },
+      "expect_error": "reserved must be a boolean"
     },
     {
       "name": "updates reverse DNS",
@@ -26,14 +59,6 @@
           "rdns": "host.example.com"
         }
       }
-    },
-    {
-      "name": "requires confirm",
-      "args": {
-        "address": "203.0.113.5",
-        "rdns": "host.example.com"
-      },
-      "expect_error": "This updates reverse DNS for an IP address. Set confirm=true to proceed."
     },
     {
       "name": "carries the reserved flag into the body",
@@ -78,14 +103,37 @@
       }
     },
     {
-      "name": "rejects a non-boolean reserved",
+      "name": "reports the updated address",
       "args": {
         "confirm": true,
         "address": "203.0.113.5",
-        "rdns": "host.example.com",
-        "reserved": "yes"
+        "rdns": "host.example.com"
       },
-      "expect_error": "reserved must be a boolean"
+      "api_response": {
+        "address": "203.0.113.5",
+        "gateway": "203.0.113.1",
+        "subnet_mask": "255.255.255.0",
+        "prefix": 24,
+        "type": "ipv4",
+        "public": true,
+        "rdns": "host.example.com",
+        "linode_id": 123,
+        "region": "us-east"
+      },
+      "expect_result": {
+        "message": "Networking IP 203.0.113.5 RDNS updated",
+        "ip": {
+          "address": "203.0.113.5",
+          "gateway": "203.0.113.1",
+          "subnet_mask": "255.255.255.0",
+          "prefix": 24,
+          "type": "ipv4",
+          "public": true,
+          "rdns": "host.example.com",
+          "linode_id": 123,
+          "region": "us-east"
+        }
+      }
     },
     {
       "name": "rejects a non-object API response",
@@ -95,7 +143,53 @@
         "rdns": "host.example.com"
       },
       "api_response": 7,
-      "expect_api_error": "IP"
+      "expect_api_error": "networking ip update response must be a JSON object"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com"
+      },
+      "api_responses": {
+        "GET /networking/ips/203.0.113.5": {
+          "address": "203.0.113.5",
+          "gateway": "203.0.113.1",
+          "subnet_mask": "255.255.255.0",
+          "prefix": 24,
+          "type": "ipv4",
+          "public": true,
+          "rdns": "old.example.com",
+          "linode_id": 123,
+          "region": "us-east"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_networking_ip_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/networking/ips/203.0.113.5",
+          "body": {
+            "rdns": "host.example.com"
+          }
+        },
+        "current_state": {
+          "address": "203.0.113.5",
+          "gateway": "203.0.113.1",
+          "subnet_mask": "255.255.255.0",
+          "prefix": 24,
+          "type": "ipv4",
+          "public": true,
+          "rdns": "old.example.com",
+          "linode_id": 123,
+          "region": "us-east"
+        },
+        "dependencies": [],
+        "side_effects": ["Reverse DNS (rDNS) is set to \"host.example.com\"."],
+        "warnings": []
+      }
     }
   ]
 }

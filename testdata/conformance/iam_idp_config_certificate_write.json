@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.IamIdpConfigCertificateWriteResponse",
+  "description": "IDP certificate write envelope: a confirmation message plus the certificate the API returned. The validity window and the provenance are derived from the certificate itself, so they arrive on the answer to a call that sent only the certificate data.",
+  "input": {
+    "message": "IDP certificate added to configuration 'b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b'",
+    "certificate": {
+      "certificate": "MIIDexampleCertificateData",
+      "created": "2026-03-04T12:00:00",
+      "created_by": "jsmith",
+      "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+      "not_after": "2027-03-04T12:00:00",
+      "not_before": "2026-03-04T12:00:00"
+    }
+  },
+  "canonical": {
+    "message": "IDP certificate added to configuration 'b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b'",
+    "certificate": {
+      "certificate": "MIIDexampleCertificateData",
+      "created": "2026-03-04T12:00:00",
+      "created_by": "jsmith",
+      "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+      "not_after": "2027-03-04T12:00:00",
+      "not_before": "2026-03-04T12:00:00"
+    }
+  }
+}

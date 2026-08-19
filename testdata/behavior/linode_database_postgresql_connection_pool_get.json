@@ -1,0 +1,51 @@
+{
+  "tool": "linode_database_postgresql_connection_pool_get",
+  "description": "PostgreSQL connection pool get. The null-username case pins that a pool reusing the inbound user decodes rather than failing, since the API sends JSON null there.",
+  "cases": [
+    {
+      "name": "rejects a non-positive instance_id",
+      "args": { "instance_id": 0, "pool_name": "Connection-Pool-01" },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank pool_name",
+      "args": { "instance_id": 890, "pool_name": "   " },
+      "expect_error": "pool_name must be a non-empty string"
+    },
+    {
+      "name": "rejects a pool_name with a query separator",
+      "args": { "instance_id": 890, "pool_name": "pool?page=2" },
+      "expect_error": "pool_name must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "gets a connection pool",
+      "args": { "instance_id": 890, "pool_name": "Connection-Pool-01" },
+      "api_response": {
+        "database": "PostgreSQL-DB-video-streaming-data",
+        "label": "Connection-Pool-01",
+        "mode": "session",
+        "size": 10,
+        "username": "john-doe"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/databases/postgresql/instances/890/connection-pools/Connection-Pool-01"
+      }
+    },
+    {
+      "name": "gets a connection pool that reuses the inbound user",
+      "args": { "instance_id": 890, "pool_name": "Connection-Pool-01" },
+      "api_response": {
+        "database": "defaultdb",
+        "label": "Connection-Pool-01",
+        "mode": "transaction",
+        "size": 10,
+        "username": null
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/databases/postgresql/instances/890/connection-pools/Connection-Pool-01"
+      }
+    }
+  ]
+}

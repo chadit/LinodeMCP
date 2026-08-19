@@ -4,9 +4,54 @@
   "cases": [
     {
       "name": "gets a private image",
-      "args": { "image_id": "private/123" },
+      "args": {
+        "image_id": "private/123"
+      },
       "api_response": {},
-      "expect_request": { "method": "GET", "path": "/images/private%2F123" }
+      "expect_request": {
+        "method": "GET",
+        "path": "/images/private%2F123"
+      }
+    },
+    {
+      "name": "preserves documented explicit nulls",
+      "args": {
+        "image_id": "private/123"
+      },
+      "api_response": {
+        "id": "private/123",
+        "label": "web-base",
+        "description": "golden image",
+        "type": "manual",
+        "vendor": "",
+        "status": "available",
+        "created": "2026-01-01T00:00:00",
+        "created_by": "tester",
+        "expiry": null,
+        "eol": null,
+        "capabilities": [],
+        "tags": [],
+        "size": 2048,
+        "is_public": false,
+        "deprecated": false
+      },
+      "expect_result": {
+        "id": "private/123",
+        "label": "web-base",
+        "description": "golden image",
+        "type": "manual",
+        "vendor": "",
+        "status": "available",
+        "created": "2026-01-01T00:00:00",
+        "created_by": "tester",
+        "expiry": null,
+        "eol": null,
+        "capabilities": [],
+        "tags": [],
+        "size": 2048,
+        "is_public": false,
+        "deprecated": false
+      }
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "tool": "linode_vpc_create",
-  "description": "VPC create requires label and region (with confirm), then POSTs them to /vpcs. The no-confirm text diverges so rejections use confirm:true plus a missing field; see report.",
+  "description": "VPC create reads label and region from the declared rules and the subnets array from the typed item reader: the list shape, item typing, and unknown item keys answer indexed sentences, while a member left blank answers the entries rule. Success POSTs the create body. The no-confirm text diverges so rejections carry confirm:true plus a bad field.",
   "cases": [
     {
       "name": "requires label",
@@ -8,9 +8,84 @@
       "expect_error": "label is required"
     },
     {
+      "name": "rejects a blank label",
+      "args": { "confirm": true, "label": "   " },
+      "expect_error": "label is required"
+    },
+    {
       "name": "requires region",
       "args": { "confirm": true, "label": "my-vpc" },
       "expect_error": "region is required"
+    },
+    {
+      "name": "rejects a blank description",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "description": ""
+      },
+      "expect_error": "description must be a non-empty string"
+    },
+    {
+      "name": "rejects subnets that are not a list",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "subnets": "[{\"label\":\"sub1\",\"ipv4\":\"10.0.0.0/24\"}]"
+      },
+      "expect_error": "subnets must be an array of objects"
+    },
+    {
+      "name": "rejects a subnet entry that is not an object",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "subnets": ["sub1"]
+      },
+      "expect_error": "subnets must be an array of objects"
+    },
+    {
+      "name": "rejects a subnet entry key the message does not declare",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "subnets": [{ "label": "sub1", "ipv4": "10.0.0.0/24", "bogus": true }]
+      },
+      "expect_error": "subnets[0] has no field \"bogus\""
+    },
+    {
+      "name": "rejects a subnet entry without a label",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "subnets": [{ "ipv4": "10.0.0.0/24" }]
+      },
+      "expect_error": "subnets entries must carry a label"
+    },
+    {
+      "name": "rejects a subnet entry without an ipv4 range",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "subnets": [{ "label": "sub1" }]
+      },
+      "expect_error": "subnets entries must carry an ipv4 range"
+    },
+    {
+      "name": "rejects a subnet entry whose label is not a string",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "subnets": [{ "label": 5, "ipv4": "10.0.0.0/24" }]
+      },
+      "expect_error": "subnets[0].label must be a string"
     },
     {
       "name": "creates the VPC",
@@ -23,8 +98,54 @@
       }
     },
     {
+      "name": "creates the VPC with initial subnets",
+      "args": {
+        "confirm": true,
+        "label": "my-vpc",
+        "region": "us-east",
+        "description": "prod network",
+        "subnets": [
+          { "label": "sub1", "ipv4": "10.0.0.0/24" },
+          { "label": "sub2", "ipv4": "10.0.1.0/24" }
+        ]
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/vpcs",
+        "body": {
+          "label": "my-vpc",
+          "region": "us-east",
+          "description": "prod network",
+          "subnets": [
+            { "label": "sub1", "ipv4": "10.0.0.0/24" },
+            { "label": "sub2", "ipv4": "10.0.1.0/24" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "label": "my-vpc", "region": "us-east", "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_vpc_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/vpcs",
+          "body": { "label": "my-vpc", "region": "us-east" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new VPC \"my-vpc\" will be created in region us-east."
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "requires confirm",
-      "args": {"label": "my-vpc", "region": "us-east"},
+      "args": { "label": "my-vpc", "region": "us-east" },
       "expect_error": "This creates a billable VPC resource. Set confirm=true to proceed."
     }
   ]

@@ -1,11 +1,26 @@
 {
   "tool": "linode_vpc_update",
-  "description": "VPC update requires vpc_id (an integer id here), then PUTs only the set fields.",
+  "description": "VPC update takes a positive vpc_id, then PUTs only the set fields. The preview reads the VPC so the label a change starts from can be named.",
   "cases": [
     {
       "name": "requires vpc_id",
       "args": { "confirm": true },
-      "expect_error": "vpc_id is required"
+      "expect_error": "vpc_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative vpc_id",
+      "args": { "confirm": true, "vpc_id": -5, "label": "new-label" },
+      "expect_error": "vpc_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": { "confirm": true, "vpc_id": 5, "label": "   " },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects a blank description",
+      "args": { "confirm": true, "vpc_id": 5, "description": "" },
+      "expect_error": "description must be a non-empty string"
     },
     {
       "name": "updates the VPC label",
@@ -18,8 +33,44 @@
       }
     },
     {
+      "name": "dry_run_preview",
+      "args": { "vpc_id": 5, "label": "new-label", "dry_run": true },
+      "api_responses": {
+        "GET /vpcs/5": {
+          "created": "",
+          "description": "",
+          "id": 5,
+          "label": "old-label",
+          "region": "",
+          "subnets": null,
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_vpc_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/vpcs/5",
+          "body": { "label": "new-label" }
+        },
+        "current_state": {
+          "created": "",
+          "description": "",
+          "id": 5,
+          "label": "old-label",
+          "region": "",
+          "subnets": null,
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": ["Label changes from \"old-label\" to \"new-label\"."],
+        "warnings": []
+      }
+    },
+    {
       "name": "requires confirm",
-      "args": {"vpc_id": 5, "label": "new-label"},
+      "args": { "vpc_id": 5, "label": "new-label" },
       "expect_error": "This modifies the VPC configuration. Set confirm=true to proceed."
     }
   ]

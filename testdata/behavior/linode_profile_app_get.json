@@ -3,15 +3,41 @@
   "description": "Shared non-positive app_id rejection and the OAuth-app GET path. Missing-app_id text diverges (see report).",
   "cases": [
     {
+      "name": "requires app_id",
+      "args": {},
+      "expect_error": "app_id is required"
+    },
+    {
+      "name": "rejects a non-positive app_id",
+      "args": {
+        "app_id": 0
+      },
+      "expect_error": "app_id must be a positive integer"
+    },
+    {
+      "name": "rejects an app_id past the JSON-safe range",
+      "args": {
+        "app_id": 9007199254740992
+      },
+      "expect_error": "app_id must be a positive integer"
+    },
+    {
       "name": "rejects non-positive app_id",
-      "args": { "app_id": 0 },
+      "args": {
+        "app_id": 0
+      },
       "expect_error": "app_id must be a positive integer"
     },
     {
       "name": "gets an OAuth app authorization by id",
-      "args": { "app_id": 123 },
+      "args": {
+        "app_id": 123
+      },
       "api_response": {},
-      "expect_request": { "method": "GET", "path": "/profile/apps/123" }
+      "expect_request": {
+        "method": "GET",
+        "path": "/profile/apps/123"
+      }
     }
   ]
 }

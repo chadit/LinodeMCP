@@ -1,11 +1,23 @@
 {
   "tool": "linode_stackscript_delete",
-  "description": "StackScript delete (Capability Destroy). Missing stackscript_id, the confirm-only bypass gate, and the success bypass agree across languages; the plain no-confirm message diverges (see report).",
+  "description": "StackScript delete (Capability Destroy). Every case here is one both languages answer the same way. A call with neither confirm nor an id is not among them: Go's destroy driver reads the id before the confirm gate and Python's reports it after, which is the whole tier's split and not this tool's.",
   "cases": [
     {
       "name": "requires stackscript_id",
-      "args": {},
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "expect_error": "stackscript_id is required"
+    },
+    {
+      "name": "rejects a negative stackscript_id",
+      "args": {
+        "stackscript_id": -1,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "stackscript_id must be a positive integer"
     },
     {
       "name": "confirm alone requires a bypass assertion",

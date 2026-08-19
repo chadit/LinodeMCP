@@ -1,13 +1,23 @@
 {
   "tool": "linode_instance_reboot",
-  "description": "Pins the shared instance_id-required rejection, the confirm gate (both languages as of 2026-07-07), and the power-action POST.",
+  "description": "Pins the power action: the id rule its contract declares, the confirm gate, the POST it sends with and without a configuration profile, the id echo it answers with, and the preview reading the instance whose power state would change.",
   "cases": [
     {
-      "name": "requires instance_id",
+      "name": "rejects an instance_id below one",
       "args": {
+        "instance_id": 0,
         "confirm": true
       },
-      "expect_error": "instance_id is required"
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "rejects a config_id below one",
+      "args": {
+        "instance_id": 5,
+        "config_id": 0,
+        "confirm": true
+      },
+      "expect_error": "config_id must be a positive integer"
     },
     {
       "name": "requires confirm",
@@ -25,7 +35,135 @@
       "api_response": {},
       "expect_request": {
         "method": "POST",
-        "path": "/linode/instances/5/reboot"
+        "path": "/linode/instances/5/reboot",
+        "body": {}
+      }
+    },
+    {
+      "name": "reboots with the configuration profile the call named",
+      "args": {
+        "instance_id": 5,
+        "config_id": 77,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/reboot",
+        "body": {
+          "config_id": 77
+        }
+      }
+    },
+    {
+      "name": "answers with the id the call named",
+      "args": {
+        "instance_id": 5,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_result": {
+        "message": "Instance 5 reboot initiated successfully",
+        "instance_id": 5
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "instance_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/5": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_reboot",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/5/reboot",
+          "body": {}
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
       }
     }
   ]

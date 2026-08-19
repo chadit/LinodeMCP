@@ -1,0 +1,82 @@
+{
+  "tool": "linode_monitor_alert_channel_update",
+  "description": "Alert channel update. channel_type is not writable after create, so only label and details travel; an update naming neither is refused rather than sent as an empty PUT.",
+  "cases": [
+    {
+      "name": "rejects a non-positive channel_id",
+      "args": { "channel_id": 0, "label": "ops on call", "confirm": true },
+      "expect_error": "channel_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": { "channel_id": 7, "label": "   ", "confirm": true },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects an empty update",
+      "args": { "channel_id": 7, "confirm": true },
+      "expect_error": "at least one update field is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": { "channel_id": 7, "label": "ops on call" },
+      "expect_error": "This updates a monitor alert channel. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts the update body",
+      "args": {
+        "channel_id": 7,
+        "details": { "email": { "usernames": ["opsuser", "seconduser"] } },
+        "label": "ops on call",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "label": "ops on call",
+        "channel_type": "email"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/monitor/alert-channels/7",
+        "body": {
+          "details": { "email": { "usernames": ["opsuser", "seconduser"] } },
+          "label": "ops on call"
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "channel_id": 7, "label": "ops on call", "confirm": true },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "channel_id": 7, "label": "ops on call", "confirm": true },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the alert channel update request",
+      "args": {
+        "channel_id": 7,
+        "label": "ops on call",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_alert_channel_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/monitor/alert-channels/7",
+          "body": { "label": "ops on call" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

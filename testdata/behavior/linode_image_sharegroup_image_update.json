@@ -7,7 +7,46 @@
       "args": {
         "confirm": true
       },
-      "expect_error": "sharegroup_id is required"
+      "expect_error": "sharegroup_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative sharegroup_id",
+      "args": {
+        "sharegroup_id": -5,
+        "image_id": "shared/1",
+        "label": "new-label",
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id must be a positive integer"
+    },
+    {
+      "name": "rejects an image_id that is not a shared slug",
+      "args": {
+        "sharegroup_id": 5,
+        "image_id": "private/1",
+        "label": "new-label",
+        "confirm": true
+      },
+      "expect_error": "image_id must match shared/<positive integer>"
+    },
+    {
+      "name": "rejects a call with neither field",
+      "args": {
+        "sharegroup_id": 5,
+        "image_id": "shared/1",
+        "confirm": true
+      },
+      "expect_error": "at least one of label or description is required"
+    },
+    {
+      "name": "rejects a label that is only padding",
+      "args": {
+        "sharegroup_id": 5,
+        "image_id": "shared/1",
+        "label": "   ",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
     },
     {
       "name": "updates a shared image label",
@@ -23,6 +62,25 @@
         "path": "/images/sharegroups/5/images/shared%2F1",
         "body": {
           "label": "new-label"
+        }
+      }
+    },
+    {
+      "name": "trims the padding off both fields",
+      "args": {
+        "sharegroup_id": 5,
+        "image_id": "shared/1",
+        "label": "  new-label  ",
+        "description": "  new description  ",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/images/sharegroups/5/images/shared%2F1",
+        "body": {
+          "label": "new-label",
+          "description": "new description"
         }
       }
     },

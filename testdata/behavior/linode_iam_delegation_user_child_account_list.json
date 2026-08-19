@@ -1,0 +1,37 @@
+{
+  "tool": "linode_iam_delegation_user_child_account_list",
+  "description": "Lists the child accounts one parent-account user is delegated into. Same envelope and elements as the other two child-account collections, read per user.",
+  "cases": [
+    {
+      "name": "rejects a blank username",
+      "args": { "username": "   " },
+      "expect_error": "username is required"
+    },
+    {
+      "name": "lists no delegations for the user",
+      "args": { "username": "jsmith" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/users/jsmith/child-accounts"
+      }
+    },
+    {
+      "name": "lists the user's delegations",
+      "args": { "username": "jsmith" },
+      "api_response": {
+        "data": [
+          { "company": "Wayfarer Media", "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890" },
+          { "company": "Northwind Labs", "euuid": "B2C3D4E5-F6A7-8901-BCDEF12345678901" }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/users/jsmith/child-accounts"
+      }
+    }
+  ]
+}

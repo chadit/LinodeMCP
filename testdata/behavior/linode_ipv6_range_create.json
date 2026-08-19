@@ -1,26 +1,137 @@
 {
   "tool": "linode_ipv6_range_create",
-  "description": "IPv6 range create POSTs prefix_length (and linode_id when routing to an instance), and requires exactly one assignment target (Go now mirrors Python's linode_id-or-route_target requirement). The prefix_length range and route_target format still diverge (see report).",
+  "description": "IPv6 range create POSTs prefix_length and exactly one assignment target. The two divergences the earlier fixture recorded are closed here: prefix_length is the 56-or-64 pair the API documents (Go accepted 1 through 128), and route_target has to parse as a zoneless IPv6 address (Python accepted any non-empty string). Every sentence is a contract rule, so both languages answer them in the same order.",
   "cases": [
     {
       "name": "creates a range routed to a linode",
-      "args": { "confirm": true, "prefix_length": 64, "linode_id": 123 },
+      "args": {
+        "confirm": true,
+        "prefix_length": 64,
+        "linode_id": 123
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/networking/ipv6/ranges",
-        "body": { "prefix_length": 64, "linode_id": 123 }
+        "body": {
+          "prefix_length": 64,
+          "linode_id": 123
+        }
       }
     },
     {
+      "name": "creates a range routed to a route target",
+      "args": {
+        "confirm": true,
+        "prefix_length": 56,
+        "route_target": "2001:db8::1"
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/ipv6/ranges",
+        "body": {
+          "prefix_length": 56,
+          "route_target": "2001:db8::1"
+        }
+      }
+    },
+    {
+      "name": "rejects a prefix_length outside the documented pair",
+      "args": {
+        "confirm": true,
+        "prefix_length": 48,
+        "linode_id": 123
+      },
+      "expect_error": "prefix_length must be 56 or 64"
+    },
+    {
+      "name": "rejects a non-positive linode_id",
+      "args": {
+        "confirm": true,
+        "prefix_length": 64,
+        "linode_id": 0
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank route_target",
+      "args": {
+        "confirm": true,
+        "prefix_length": 64,
+        "route_target": "   "
+      },
+      "expect_error": "route_target must be a non-empty string"
+    },
+    {
+      "name": "rejects a route_target that is not an IPv6 address",
+      "args": {
+        "confirm": true,
+        "prefix_length": 64,
+        "route_target": "192.0.2.1"
+      },
+      "expect_error": "route_target must be a valid IPv6 address"
+    },
+    {
+      "name": "rejects a zoned route_target",
+      "args": {
+        "confirm": true,
+        "prefix_length": 64,
+        "route_target": "fe80::1%eth0"
+      },
+      "expect_error": "route_target must be a valid IPv6 address"
+    },
+    {
       "name": "requires an assignment target",
-      "args": { "confirm": true, "prefix_length": 64 },
+      "args": {
+        "confirm": true,
+        "prefix_length": 64
+      },
       "expect_error": "linode_id or route_target is required"
     },
     {
+      "name": "refuses both assignment targets",
+      "args": {
+        "confirm": true,
+        "prefix_length": 64,
+        "linode_id": 123,
+        "route_target": "2001:db8::1"
+      },
+      "expect_error": "linode_id and route_target are mutually exclusive"
+    },
+    {
       "name": "requires confirm",
-      "args": {"prefix_length": 64, "linode_id": 123},
+      "args": {
+        "prefix_length": 64,
+        "linode_id": 123
+      },
       "expect_error": "This creates an IPv6 range and changes networking configuration. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true,
+        "prefix_length": 64,
+        "linode_id": 123
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_ipv6_range_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/ipv6/ranges",
+          "body": {
+            "prefix_length": 64,
+            "linode_id": 123
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new IPv6 range with prefix length /64 will be allocated and routed to instance 123."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

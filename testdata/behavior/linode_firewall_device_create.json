@@ -1,11 +1,40 @@
 {
   "tool": "linode_firewall_device_create",
-  "description": "Firewall device create POSTs the device id/type to the firewall's devices collection. All local validation messages diverge between languages (see report), so only the confirmed success path is captured.",
+  "description": "Firewall device create POSTs the device id/type to the firewall's devices collection. Both languages now serve it from the proto contract, so every local validation message is one sentence. type is a required enum, so an absent one and an unknown one both answer the one-of sentence.",
   "cases": [
     {
       "name": "rejects a non-positive firewall_id once confirmed",
       "args": { "confirm": true, "firewall_id": -1, "id": 10, "type": "linode" },
       "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "rejects a non-positive device id once confirmed",
+      "args": { "confirm": true, "firewall_id": 5, "id": 0, "type": "linode" },
+      "expect_error": "id must be a positive integer"
+    },
+    {
+      "name": "rejects an absent device type once confirmed",
+      "args": { "confirm": true, "firewall_id": 5, "id": 10 },
+      "expect_error": "type must be one of: linode, nodebalancer, linode_interface"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "firewall_id": 5, "id": 10, "type": "linode", "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_device_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/firewalls/5/devices",
+          "body": { "id": 10, "type": "linode" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "The linode 10 will be attached to firewall 5."
+        ],
+        "warnings": []
+      }
     },
     {
       "name": "assigns a device to a firewall",

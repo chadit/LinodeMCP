@@ -1,11 +1,16 @@
 {
   "tool": "linode_instance_backup_list",
-  "description": "Requires linode_id, then GETs the instance backups collection.",
+  "description": "Requires a positive linode_id, then GETs the instance backups collection.",
   "cases": [
     {
       "name": "rejects missing linode_id",
       "args": {},
-      "expect_error": "linode_id is required"
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative linode_id",
+      "args": { "linode_id": -1 },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "lists backups with a plain GET",

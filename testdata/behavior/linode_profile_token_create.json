@@ -4,30 +4,101 @@
   "cases": [
     {
       "name": "creates a personal access token",
-      "args": { "label": "my-token", "scopes": "linodes:read_only", "confirm": true },
-      "api_response": { "id": 123, "label": "my-token", "token": "shh" },
+      "args": {
+        "label": "my-token",
+        "scopes": "linodes:read_only",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-token",
+        "token": "shh"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/profile/tokens",
-        "body": { "label": "my-token", "scopes": "linodes:read_only" }
+        "body": {
+          "label": "my-token",
+          "scopes": "linodes:read_only"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"label": "my-token", "scopes": "linodes:read_only"},
+      "args": {
+        "label": "my-token",
+        "scopes": "linodes:read_only"
+      },
       "expect_error": "This creates a personal access token. Set confirm=true to proceed."
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "label": "my-token", "scopes": "linodes:read_only", "confirm": true },
+      "args": {
+        "label": "my-token",
+        "scopes": "linodes:read_only",
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "label": "my-token", "scopes": "linodes:read_only", "confirm": true },
+      "args": {
+        "label": "my-token",
+        "scopes": "linodes:read_only",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "trims the label and scopes it sends",
+      "args": {
+        "label": "  my-token  ",
+        "scopes": "  linodes:read_only  ",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-token",
+        "token": "shh"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/tokens",
+        "body": {
+          "label": "my-token",
+          "scopes": "linodes:read_only"
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "label": "my-token",
+        "scopes": "linodes:read_only",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_token_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/profile/tokens",
+          "body": {
+            "label": "my-token",
+            "scopes": "linodes:read_only"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new personal access token \"my-token\" will be created."
+        ],
+        "warnings": [
+          "The token secret is returned only once, at creation time."
+        ]
+      }
     }
   ]
 }

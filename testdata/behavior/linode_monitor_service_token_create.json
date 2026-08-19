@@ -30,7 +30,7 @@
         ],
         "confirm": true
       },
-      "expect_error": "entity_ids must be a non-empty array of positive integers"
+      "expect_error": "entity_ids must be an array of integers"
     },
     {
       "name": "posts the token create body",
@@ -132,6 +132,37 @@
           ],
           "add": "extra"
         }
+      }
+    },
+    {
+      "name": "previews the token create request",
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          10,
+          20
+        ],
+        "add": "extra",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_service_token_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/monitor/services/dbaas/token",
+          "body": {
+            "entity_ids": [
+              10,
+              20
+            ],
+            "add": "extra"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
       }
     }
   ]

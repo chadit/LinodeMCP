@@ -4,23 +4,73 @@
   "cases": [
     {
       "name": "rejects missing otp_code",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "otp_code must be a non-empty string"
     },
     {
       "name": "verifies a phone number",
-      "args": { "otp_code": "123456", "confirm": true },
+      "args": {
+        "otp_code": "123456",
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/profile/phone-number/verify",
-        "body": { "otp_code": "123456" }
+        "body": {
+          "otp_code": "123456"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"otp_code": "123456"},
+      "args": {
+        "otp_code": "123456"
+      },
       "expect_error": "This verifies a profile phone number. Set confirm=true to proceed."
+    },
+    {
+      "name": "trims the code it sends",
+      "args": {
+        "otp_code": "  123456  ",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/phone-number/verify",
+        "body": {
+          "otp_code": "123456"
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "otp_code": "123456",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_phone_number_verify",
+        "would_execute": {
+          "method": "POST",
+          "path": "/profile/phone-number/verify",
+          "body": {
+            "otp_code": {
+              "redacted": true
+            }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "The phone number is verified and added to the profile."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

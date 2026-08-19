@@ -1,0 +1,31 @@
+{
+  "tool": "linode_iam_delegation_profile_child_account_list",
+  "description": "Lists the child accounts the caller is delegated into. Same envelope and same elements as the account-wide list, read from the caller's own side of the delegation.",
+  "cases": [
+    {
+      "name": "lists no delegations for the caller",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/profile/child-accounts"
+      }
+    },
+    {
+      "name": "lists the caller's delegations",
+      "args": {},
+      "api_response": {
+        "data": [
+          { "company": "Wayfarer Media", "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890" }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/profile/child-accounts"
+      }
+    }
+  ]
+}

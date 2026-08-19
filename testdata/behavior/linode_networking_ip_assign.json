@@ -1,26 +1,242 @@
 {
   "tool": "linode_networking_ip_assign",
-  "description": "Networking IP assign gates on confirm with the same text in both languages, then POSTs the region/assignments to the generic assign endpoint. Post-confirm arg validation diverges (see report).",
+  "description": "Networking IP assign gates on confirm, checks the contract rules, then POSTs region/assignments to the generic assign endpoint. The route answers with an opaque body, so the response echoes the region and the assignment list the caller submitted.",
   "cases": [
     {
       "name": "requires confirm before assigning",
-      "args": { "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] },
+      "args": {
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 123
+          }
+        ]
+      },
       "expect_error": "This assigns IP addresses to Linodes. Set confirm=true to proceed."
     },
     {
+      "name": "requires region",
+      "args": {
+        "confirm": true,
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 123
+          }
+        ]
+      },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires assignments",
+      "args": {
+        "confirm": true,
+        "region": "us-east"
+      },
+      "expect_error": "assignments must contain at least one assignment"
+    },
+    {
+      "name": "refuses an empty assignments list",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": []
+      },
+      "expect_error": "assignments must contain at least one assignment"
+    },
+    {
+      "name": "refuses assignments that is not a list",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": "192.0.2.1"
+      },
+      "expect_error": "assignments must be an array of objects"
+    },
+    {
+      "name": "refuses a wrong-typed item member",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": "123"
+          }
+        ]
+      },
+      "expect_error": "assignments[0].linode_id must be an integer"
+    },
+    {
+      "name": "refuses an item key the message does not declare",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 123,
+            "bogus": 1
+          }
+        ]
+      },
+      "expect_error": "assignments[0] has no field \"bogus\""
+    },
+    {
+      "name": "refuses an item with no address",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "linode_id": 123
+          }
+        ]
+      },
+      "expect_error": "assignments entries must carry an address"
+    },
+    {
+      "name": "refuses a blank address",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "  ",
+            "linode_id": 123
+          }
+        ]
+      },
+      "expect_error": "assignments entries must carry an address"
+    },
+    {
+      "name": "refuses an item with no linode_id",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1"
+          }
+        ]
+      },
+      "expect_error": "assignments entries must carry a positive linode_id"
+    },
+    {
+      "name": "refuses a non-positive linode_id",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 0
+          }
+        ]
+      },
+      "expect_error": "assignments entries must carry a positive linode_id"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 123
+          }
+        ]
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_networking_ip_assign",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/ips/assign",
+          "body": {
+            "region": "us-east",
+            "assignments": [
+              {
+                "address": "192.0.2.1",
+                "linode_id": 123
+              }
+            ]
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    },
+    {
       "name": "assigns IPs to linodes",
-      "args": { "confirm": true, "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] },
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 123
+          },
+          {
+            "address": "192.0.2.2",
+            "linode_id": 456
+          }
+        ]
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/networking/ips/assign",
-        "body": { "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] }
+        "body": {
+          "region": "us-east",
+          "assignments": [
+            {
+              "address": "192.0.2.1",
+              "linode_id": 123
+            },
+            {
+              "address": "192.0.2.2",
+              "linode_id": 456
+            }
+          ]
+        }
       }
     },
     {
-      "name": "requires confirm",
-      "args": {"region": "us-east", "assignments": [{"address": "192.0.2.1", "linode_id": 123}]},
-      "expect_error": "This assigns IP addresses to Linodes. Set confirm=true to proceed."
+      "name": "echoes the region and assignments the call carried",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 123
+          },
+          {
+            "address": "192.0.2.2",
+            "linode_id": 456
+          }
+        ]
+      },
+      "api_response": {},
+      "expect_result": {
+        "message": "Networking IP assignments updated",
+        "region": "us-east",
+        "assignments": [
+          {
+            "address": "192.0.2.1",
+            "linode_id": 123
+          },
+          {
+            "address": "192.0.2.2",
+            "linode_id": 456
+          }
+        ]
+      }
     }
   ]
 }

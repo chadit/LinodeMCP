@@ -1,0 +1,6 @@
+{
+  "message": "linode.mcp.v1.IamDelegationChildAccountUsers",
+  "description": "The delegate list both the read and the replace route answer with. The usernames arrive as a page of bare strings, so the member keeps the name the wire gives it and the empty case must stay an empty array in both languages.",
+  "input": { "data": ["jsmith", "adevi"] },
+  "canonical": { "data": ["jsmith", "adevi"] }
+}

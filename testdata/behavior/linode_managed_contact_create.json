@@ -4,40 +4,127 @@
   "cases": [
     {
       "name": "rejects non-object phone",
-      "args": { "phone": "5551234" },
+      "args": {
+        "phone": "5551234",
+        "confirm": true
+      },
       "expect_error": "phone must be an object"
     },
     {
       "name": "rejects read-only fields",
-      "args": { "id": 5, "name": "Ops", "email": "ops@example.com" },
+      "args": {
+        "id": 5,
+        "name": "Ops",
+        "email": "ops@example.com",
+        "confirm": true
+      },
       "expect_error": "id and updated are read-only and cannot be set when creating a managed contact"
     },
     {
       "name": "creates a managed contact",
-      "args": { "name": "Ops", "email": "ops@example.com", "confirm": true },
-      "api_response": { "id": 12, "name": "Ops", "email": "ops@example.com" },
+      "args": {
+        "name": "Ops",
+        "email": "ops@example.com",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 12,
+        "name": "Ops",
+        "email": "ops@example.com"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/managed/contacts",
-        "body": { "name": "Ops", "email": "ops@example.com" }
+        "body": {
+          "name": "Ops",
+          "email": "ops@example.com"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"name": "Ops", "email": "ops@example.com"},
+      "args": {
+        "name": "Ops",
+        "email": "ops@example.com"
+      },
       "expect_error": "This creates a managed contact. Set confirm=true to proceed."
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "name": "Ops", "email": "ops@example.com", "confirm": true },
+      "args": {
+        "name": "Ops",
+        "email": "ops@example.com",
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "name": "Ops", "email": "ops@example.com", "confirm": true },
+      "args": {
+        "name": "Ops",
+        "email": "ops@example.com",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a phone member the API does not publish",
+      "args": {
+        "name": "Ops",
+        "phone": {
+          "mobile": "5551234"
+        },
+        "confirm": true
+      },
+      "expect_error": "phone has unknown fields: mobile"
+    },
+    {
+      "name": "rejects a blank phone number",
+      "args": {
+        "name": "Ops",
+        "phone": {
+          "primary": "  "
+        },
+        "confirm": true
+      },
+      "expect_error": "phone.primary must be a non-empty string or null"
+    },
+    {
+      "name": "rejects a phone object naming neither number",
+      "args": {
+        "name": "Ops",
+        "phone": {},
+        "confirm": true
+      },
+      "expect_error": "phone must include primary or secondary"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "name": "Ops",
+        "email": "ops@example.com",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_managed_contact_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/managed/contacts",
+          "body": {
+            "name": "Ops",
+            "email": "ops@example.com"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A Managed contact is created."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

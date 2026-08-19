@@ -4,9 +4,17 @@
   "cases": [
     {
       "name": "generates a two-factor secret",
-      "args": { "confirm": true },
-      "api_response": { "secret": "ABCD", "expiry": "2030-01-01T00:00:00" },
-      "expect_request": { "method": "POST", "path": "/profile/tfa-enable" }
+      "args": {
+        "confirm": true
+      },
+      "api_response": {
+        "secret": "ABCD",
+        "expiry": "2030-01-01T00:00:00"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/tfa-enable"
+      }
     },
     {
       "name": "requires confirm",
@@ -15,15 +23,40 @@
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to generate"
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to generate"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_tfa_enable",
+        "would_execute": {
+          "method": "POST",
+          "path": "/profile/tfa-enable",
+          "body": {}
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new two-factor authentication secret is generated; it must be confirmed before two-factor authentication becomes active."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

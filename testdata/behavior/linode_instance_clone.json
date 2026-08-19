@@ -1,15 +1,28 @@
 {
   "tool": "linode_instance_clone",
-  "description": "Pins the linode_id-required rejection and the clone POST with an empty body. Confirm passed so Go clears its confirm gate; the confirm-message text diverges (see report).",
+  "description": "Pins the positive-integer id rule, the clone POST with an empty body, the target linode_id body spelling, the typed metadata and placement_group members, and the preview that reads the Linode being copied.",
   "cases": [
     {
-      "name": "requires linode_id",
-      "args": { "confirm": true },
-      "expect_error": "linode_id is required"
+      "name": "rejects a missing linode_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a linode_id below one",
+      "args": {
+        "linode_id": -1,
+        "confirm": true
+      },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "clones the instance",
-      "args": { "linode_id": 5, "confirm": true },
+      "args": {
+        "linode_id": 5,
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
@@ -19,8 +32,210 @@
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 5},
+      "args": {
+        "linode_id": 5
+      },
       "expect_error": "This clones a Linode instance and creates a billable resource. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a target_linode_id below one",
+      "args": {
+        "linode_id": 5,
+        "confirm": true,
+        "target_linode_id": 0
+      },
+      "expect_error": "target_linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects an unknown maintenance policy",
+      "args": {
+        "linode_id": 5,
+        "confirm": true,
+        "maintenance_policy": "linode/nope"
+      },
+      "expect_error": "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    },
+    {
+      "name": "rejects a placement_group without an id",
+      "args": {
+        "linode_id": 5,
+        "confirm": true,
+        "placement_group": {
+          "compliant_only": true
+        }
+      },
+      "expect_error": "placement_group.id is required"
+    },
+    {
+      "name": "rejects a metadata member the message does not declare",
+      "args": {
+        "linode_id": 5,
+        "confirm": true,
+        "metadata": {
+          "nope": "x"
+        }
+      },
+      "expect_error": "metadata has no field \"nope\""
+    },
+    {
+      "name": "clones onto an existing Linode with every body field",
+      "args": {
+        "linode_id": 5,
+        "confirm": true,
+        "target_linode_id": 77,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "label": "clone-1",
+        "backups_enabled": true,
+        "configs": [
+          11,
+          22
+        ],
+        "disks": [
+          33
+        ],
+        "maintenance_policy": "linode/power_off_on",
+        "metadata": {
+          "user_data": "I2Nsb3VkLWNvbmZpZw=="
+        },
+        "placement_group": {
+          "id": 9,
+          "compliant_only": true
+        },
+        "private_ip": true,
+        "group": "legacy-fleet"
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/clone",
+        "body": {
+          "region": "us-east",
+          "type": "g6-nanode-1",
+          "label": "clone-1",
+          "backups_enabled": true,
+          "configs": [
+            11,
+            22
+          ],
+          "disks": [
+            33
+          ],
+          "linode_id": 77,
+          "maintenance_policy": "linode/power_off_on",
+          "metadata": {
+            "user_data": "I2Nsb3VkLWNvbmZpZw=="
+          },
+          "placement_group": {
+            "id": 9,
+            "compliant_only": true
+          },
+          "private_ip": true,
+          "group": "legacy-fleet"
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 5,
+        "label": "clone-1",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/5": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_clone",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/5/clone",
+          "body": {
+            "label": "clone-1"
+          }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

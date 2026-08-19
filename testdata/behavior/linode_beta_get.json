@@ -3,15 +3,36 @@
   "description": "Beta program get. Missing beta_id agrees across languages; the invalid-character and non-string rejections diverge (see report), so only the missing rejection and the success GET are pinned.",
   "cases": [
     {
+      "name": "rejects a non-string beta_id",
+      "args": {
+        "beta_id": 3
+      },
+      "expect_error": "beta_id must be a non-empty string"
+    },
+    {
+      "name": "rejects a charset-invalid beta_id",
+      "args": {
+        "beta_id": "beta/one"
+      },
+      "expect_error": "beta_id must contain only letters, numbers, underscores, and hyphens"
+    },
+    {
       "name": "requires beta_id",
       "args": {},
       "expect_error": "beta_id is required"
     },
     {
       "name": "gets one beta program by id",
-      "args": { "beta_id": "example-beta" },
-      "api_response": { "id": "example-beta" },
-      "expect_request": { "method": "GET", "path": "/betas/example-beta" }
+      "args": {
+        "beta_id": "example-beta"
+      },
+      "api_response": {
+        "id": "example-beta"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/betas/example-beta"
+      }
     }
   ]
 }

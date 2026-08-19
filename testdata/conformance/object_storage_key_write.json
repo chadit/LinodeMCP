@@ -1,18 +1,17 @@
 {
   "message": "linode.mcp.v1.ObjectStorageKeyWriteResponse",
-  "description": "Object Storage key write envelope: warning notice, confirmation message, and the full key element with synthetic (non-real) key material.",
+  "description": "Object Storage key update envelope: a confirmation message and the echoed key. The update re-reads no secret, so the envelope carries no warning member and secret_key comes back empty.",
   "input": {
-    "warning": "IMPORTANT: The secret_key below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
-    "message": "Access key 'ci-deploy-key' created successfully (ID: 314)",
+    "message": "Access key 314 modified successfully",
     "key": {
       "label": "ci-deploy-key",
       "access_key": "SYNTHETICACCESSKEY000000",
-      "secret_key": "SYNTHETICSECRETKEYPLACEHOLDER00000000000",
+      "secret_key": "",
       "bucket_access": [
         {
           "bucket_name": "assets-prod",
           "region": "us-east-1",
-          "permissions": "read_write"
+          "permissions": "read_only"
         }
       ],
       "regions": [
@@ -26,16 +25,16 @@
     }
   },
   "canonical": {
-    "message": "Access key 'ci-deploy-key' created successfully (ID: 314)",
+    "message": "Access key 314 modified successfully",
     "key": {
       "label": "ci-deploy-key",
       "access_key": "SYNTHETICACCESSKEY000000",
-      "secret_key": "SYNTHETICSECRETKEYPLACEHOLDER00000000000",
+      "secret_key": "",
       "bucket_access": [
         {
           "bucket_name": "assets-prod",
           "region": "us-east-1",
-          "permissions": "read_write"
+          "permissions": "read_only"
         }
       ],
       "regions": [
@@ -46,7 +45,6 @@
       ],
       "id": 314,
       "limited": true
-    },
-    "warning": "IMPORTANT: The secret_key below is shown ONLY ONCE. Save it now - it cannot be retrieved later."
+    }
   }
 }

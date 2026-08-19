@@ -1,17 +1,194 @@
 {
   "tool": "linode_image_sharegroup_create",
-  "description": "With a valid label and no confirm both languages return the same confirm message. Success POSTs the create body.",
+  "description": "Both languages read the label from the declared rules and the images array from the typed item reader: the list shape and each item's members answer one sentence per failure, indexed. Success POSTs the create body.",
   "cases": [
     {
       "name": "requires confirm",
-      "args": { "label": "my-group" },
+      "args": {
+        "label": "my-group"
+      },
       "expect_error": "This creates an image share group. Set confirm=true to proceed."
     },
     {
-      "name": "creates a share group",
-      "args": { "label": "my-group", "confirm": true },
+      "name": "rejects a missing label",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "label": "   ",
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects images that are not a list",
+      "args": {
+        "label": "my-group",
+        "images": "private/123",
+        "confirm": true
+      },
+      "expect_error": "images must be an array of objects"
+    },
+    {
+      "name": "rejects a list entry that is not an object",
+      "args": {
+        "label": "my-group",
+        "images": [
+          "private/123"
+        ],
+        "confirm": true
+      },
+      "expect_error": "images must be an array of objects"
+    },
+    {
+      "name": "rejects an item without an image id",
+      "args": {
+        "label": "my-group",
+        "images": [
+          {
+            "label": "first"
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images entries must carry an image id"
+    },
+    {
+      "name": "rejects an item whose label is not a string",
+      "args": {
+        "label": "my-group",
+        "images": [
+          {
+            "id": "private/123"
+          },
+          {
+            "id": "private/124",
+            "label": 5
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images[1].label must be a string"
+    },
+    {
+      "name": "rejects an item key the message does not declare",
+      "args": {
+        "label": "my-group",
+        "images": [
+          {
+            "id": "private/123",
+            "bogus": true
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images[0] has no field \"bogus\""
+    },
+    {
+      "name": "rejects a blank item id",
+      "args": {
+        "label": "my-group",
+        "images": [
+          {
+            "id": "   "
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images entries must carry an image id"
+    },
+    {
+      "name": "trims the label and description before sending",
+      "args": {
+        "label": "  my-group  ",
+        "description": "\tshared\n",
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/images/sharegroups", "body": { "label": "my-group" } }
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups",
+        "body": {
+          "label": "my-group",
+          "description": "shared"
+        }
+      }
+    },
+    {
+      "name": "previews the create without sending it",
+      "args": {
+        "label": "my-group",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_sharegroup_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/images/sharegroups",
+          "body": {
+            "label": "my-group"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new image share group labeled \"my-group\" will be created."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "creates a share group",
+      "args": {
+        "label": "my-group",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups",
+        "body": {
+          "label": "my-group"
+        }
+      }
+    },
+    {
+      "name": "creates a share group with images",
+      "args": {
+        "label": "my-group",
+        "images": [
+          {
+            "id": "private/123",
+            "label": "first"
+          },
+          {
+            "id": "private/124"
+          }
+        ],
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups",
+        "body": {
+          "label": "my-group",
+          "images": [
+            {
+              "id": "private/123",
+              "label": "first"
+            },
+            {
+              "id": "private/124"
+            }
+          ]
+        }
+      }
     }
   ]
 }

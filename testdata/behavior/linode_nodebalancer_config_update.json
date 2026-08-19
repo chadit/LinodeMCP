@@ -48,6 +48,152 @@
       "args": { "nodebalancer_id": 100, "config_id": 7, "port": 9090, "confirm": true },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "port": 8080,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5/configs/7": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_config_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/nodebalancers/5/configs/7",
+          "body": {
+            "port": 8080
+          }
+        },
+        "current_state": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "dry_run_preview redacts the TLS material",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "protocol": "https",
+        "ssl_cert": "-----BEGIN CERTIFICATE-----",
+        "ssl_key": "-----BEGIN PRIVATE KEY-----",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5/configs/7": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_config_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/nodebalancers/5/configs/7",
+          "body": {
+            "protocol": "https",
+            "ssl_cert": {
+              "redacted": true
+            },
+            "ssl_key": {
+              "redacted": true
+            }
+          }
+        },
+        "current_state": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

@@ -13,19 +13,24 @@
       "expect_error": "address must be a valid IPv4 address"
     },
     {
+      "name": "rejects a non-address string",
+      "args": { "address": "not-an-ip", "tags": ["prod"], "confirm": true },
+      "expect_error": "address must be a valid IPv4 address"
+    },
+    {
       "name": "rejects missing tags because the update replaces the whole set",
       "args": { "address": "192.0.2.10", "confirm": true },
       "expect_error": "tags is required"
     },
     {
       "name": "rejects a non-list tags argument",
-      "args": { "address": "192.0.2.10", "tags": "prod", "confirm": true },
-      "expect_error": "tags must be a list of strings"
+      "args": { "address": "192.0.2.10", "tags": 5, "confirm": true },
+      "expect_error": "tags must be a JSON string array"
     },
     {
       "name": "rejects an empty tag",
       "args": { "address": "192.0.2.10", "tags": [""], "confirm": true },
-      "expect_error": "tags must contain only non-empty strings"
+      "expect_error": "tags entries must be non-empty strings"
     },
     {
       "name": "rejects missing confirmation without updating",
@@ -131,19 +136,19 @@
       "name": "rejects a bare-array API response",
       "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": true },
       "api_response": [],
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip update response must be a JSON object"
     },
     {
       "name": "rejects a JSON null API response",
       "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": true },
       "api_response_raw": "null",
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip update response must be a JSON object"
     },
     {
       "name": "rejects a bare-number API response",
       "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": true },
       "api_response_raw": "42",
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip update response must be a JSON object"
     },
     {
       "name": "dry_run_preview",

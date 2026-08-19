@@ -1,48 +1,153 @@
 {
   "tool": "linode_support_ticket_reply_create",
-  "description": "Support ticket reply create: the confirm gate, invalid-ticket_id and description-required rejections (confirm set so both reach them), and the reply POST once confirmed. The missing-ticket_id message diverges (see report). A body that will not parse must fail rather than turn into a made-up reply. The two languages frame the parse failure differently, so the shared assertion is the parser's position marker.",
+  "description": "Support ticket reply create: the confirm gate, invalid-ticket_id and description-required rejections (confirm set so both reach them), and the reply POST once confirmed. The dry run reads the ticket the reply joins and echoes the body it would send, and it pins the trim the normalize hook applies. A body that will not parse must fail rather than turn into a made-up reply. The two languages frame the parse failure differently, so the shared assertion is the parser's position marker.",
   "cases": [
     {
       "name": "requires confirm before replying",
-      "args": { "ticket_id": 123, "description": "Any update?" },
+      "args": {
+        "ticket_id": 123,
+        "description": "Any update?"
+      },
       "expect_error": "This creates a support ticket reply. Set confirm=true to proceed."
     },
     {
       "name": "rejects non-positive ticket_id",
-      "args": { "confirm": true, "ticket_id": 0, "description": "Any update?" },
+      "args": {
+        "confirm": true,
+        "ticket_id": 0,
+        "description": "Any update?"
+      },
       "expect_error": "ticket_id must be a positive integer"
     },
     {
       "name": "requires description",
-      "args": { "confirm": true, "ticket_id": 123 },
+      "args": {
+        "confirm": true,
+        "ticket_id": 123
+      },
       "expect_error": "description is required"
     },
     {
       "name": "creates a reply",
-      "args": { "confirm": true, "ticket_id": 123, "description": "Thanks for the help" },
-      "api_response": { "id": 900, "description": "Thanks for the help" },
+      "args": {
+        "confirm": true,
+        "ticket_id": 123,
+        "description": "Thanks for the help"
+      },
+      "api_response": {
+        "id": 900,
+        "description": "Thanks for the help"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/support/tickets/123/replies",
-        "body": { "description": "Thanks for the help" }
+        "body": {
+          "description": "Thanks for the help"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"ticket_id": 123, "description": "Thanks for the help"},
+      "args": {
+        "ticket_id": 123,
+        "description": "Thanks for the help"
+      },
       "expect_error": "This creates a support ticket reply. Set confirm=true to proceed."
     },
     {
       "name": "rejects malformed success body",
-      "args": { "confirm": true, "ticket_id": 123, "description": "Thanks for the help" },
+      "args": {
+        "confirm": true,
+        "ticket_id": 123,
+        "description": "Thanks for the help"
+      },
       "api_response_raw": "not json",
       "expect_api_error": "line 1"
     },
     {
       "name": "rejects empty success body",
-      "args": { "confirm": true, "ticket_id": 123, "description": "Thanks for the help" },
+      "args": {
+        "confirm": true,
+        "ticket_id": 123,
+        "description": "Thanks for the help"
+      },
       "api_response_raw": "",
       "expect_api_error": "line 1"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "ticket_id": 123,
+        "description": "  Thanks for the help  ",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /support/tickets/123": {
+          "attachments": [],
+          "closable": true,
+          "closed": null,
+          "description": "My Linode is unreachable via SSH.",
+          "entity": null,
+          "gravatar_id": "0",
+          "id": 123,
+          "opened": "2026-01-01T00:00:00",
+          "opened_by": "adevi",
+          "status": "open",
+          "summary": "Cannot reach server",
+          "updated": "2026-01-02T00:00:00",
+          "updated_by": "adevi"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_support_ticket_reply_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/support/tickets/123/replies",
+          "body": {
+            "description": "Thanks for the help"
+          }
+        },
+        "current_state": {
+          "attachments": [],
+          "closable": true,
+          "closed": null,
+          "description": "My Linode is unreachable via SSH.",
+          "entity": null,
+          "gravatar_id": "0",
+          "id": 123,
+          "opened": "2026-01-01T00:00:00",
+          "opened_by": "adevi",
+          "status": "open",
+          "summary": "Cannot reach server",
+          "updated": "2026-01-02T00:00:00",
+          "updated_by": "adevi"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "A reply will be posted to support ticket 123."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "trims the reply description before sending it",
+      "args": {
+        "confirm": true,
+        "ticket_id": 123,
+        "description": "  Thanks for the help  "
+      },
+      "api_response": {
+        "id": 900,
+        "description": "Thanks for the help"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/support/tickets/123/replies",
+        "body": {
+          "description": "Thanks for the help"
+        }
+      }
     }
   ]
 }

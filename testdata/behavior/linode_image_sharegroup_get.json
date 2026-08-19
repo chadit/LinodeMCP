@@ -17,6 +17,36 @@
         "method": "GET",
         "path": "/images/sharegroups/5"
       }
+    },
+    {
+      "name": "preserves documented explicit nulls",
+      "args": {
+        "sharegroup_id": 3
+      },
+      "api_response": {
+        "id": 3,
+        "uuid": "22222222-2222-2222-2222-222222222222",
+        "label": "share",
+        "description": null,
+        "is_suspended": false,
+        "created": "2026-01-01T00:00:00",
+        "updated": null,
+        "expiry": null,
+        "images_count": 0,
+        "members_count": 0
+      },
+      "expect_result": {
+        "id": 3,
+        "uuid": "22222222-2222-2222-2222-222222222222",
+        "label": "share",
+        "description": null,
+        "is_suspended": false,
+        "created": "2026-01-01T00:00:00",
+        "updated": null,
+        "expiry": null,
+        "images_count": 0,
+        "members_count": 0
+      }
     }
   ]
 }

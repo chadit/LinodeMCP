@@ -1,0 +1,40 @@
+{
+  "message": "linode.mcp.v1.IamUserRolePermissionsWriteResponse",
+  "description": "IAM per-user access-level write envelope: a confirmation message plus the access level the API returned. account_access is a flat list of role names; each entity_access entry names one entity and the roles held over it, which is the shape that replaces the deprecated grants object.",
+  "input": {
+    "message": "Role permissions updated for user 'jsmith'",
+    "role_permissions": {
+      "account_access": ["account_linode_creator", "account_firewall_creator"],
+      "entity_access": [
+        {
+          "id": 1,
+          "roles": ["linode_contributor"],
+          "type": "linode"
+        },
+        {
+          "id": 4,
+          "roles": ["firewall_admin", "firewall_viewer"],
+          "type": "firewall"
+        }
+      ]
+    }
+  },
+  "canonical": {
+    "message": "Role permissions updated for user 'jsmith'",
+    "role_permissions": {
+      "account_access": ["account_linode_creator", "account_firewall_creator"],
+      "entity_access": [
+        {
+          "id": 1,
+          "roles": ["linode_contributor"],
+          "type": "linode"
+        },
+        {
+          "id": 4,
+          "roles": ["firewall_admin", "firewall_viewer"],
+          "type": "firewall"
+        }
+      ]
+    }
+  }
+}

@@ -127,19 +127,19 @@
       "name": "rejects a bare-array API response",
       "args": { "address": "192.0.2.10" },
       "api_response": [],
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip get response must be a JSON object"
     },
     {
       "name": "rejects a JSON null API response",
       "args": { "address": "192.0.2.10" },
       "api_response_raw": "null",
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip get response must be a JSON object"
     },
     {
       "name": "rejects a bare-string API response",
       "args": { "address": "192.0.2.10" },
       "api_response_raw": "\"reserved\"",
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip get response must be a JSON object"
     }
   ]
 }

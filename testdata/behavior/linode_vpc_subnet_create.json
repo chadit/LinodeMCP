@@ -1,11 +1,21 @@
 {
   "tool": "linode_vpc_subnet_create",
-  "description": "VPC subnet create requires vpc_id (integer), label, and ipv4 (with confirm), then POSTs label/ipv4 to the subnet collection.",
+  "description": "VPC subnet create takes a positive vpc_id plus label and ipv4, then POSTs label/ipv4 to the subnet collection. The ipv4 sentence carries the CIDR hint, which is the longer of the two wordings the languages answered.",
   "cases": [
     {
       "name": "requires vpc_id",
       "args": { "confirm": true },
-      "expect_error": "vpc_id is required"
+      "expect_error": "vpc_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative vpc_id",
+      "args": {
+        "confirm": true,
+        "vpc_id": -5,
+        "label": "sub1",
+        "ipv4": "10.0.0.0/24"
+      },
+      "expect_error": "vpc_id must be a positive integer"
     },
     {
       "name": "requires label",
@@ -13,8 +23,28 @@
       "expect_error": "label is required"
     },
     {
+      "name": "rejects a blank label",
+      "args": { "confirm": true, "vpc_id": 5, "label": "   " },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires ipv4",
+      "args": { "confirm": true, "vpc_id": 5, "label": "sub1" },
+      "expect_error": "ipv4 is required (CIDR notation, e.g. 10.0.0.0/24)"
+    },
+    {
+      "name": "rejects a blank ipv4",
+      "args": { "confirm": true, "vpc_id": 5, "label": "sub1", "ipv4": "  " },
+      "expect_error": "ipv4 is required (CIDR notation, e.g. 10.0.0.0/24)"
+    },
+    {
       "name": "creates the subnet",
-      "args": { "confirm": true, "vpc_id": 5, "label": "sub1", "ipv4": "10.0.0.0/24" },
+      "args": {
+        "confirm": true,
+        "vpc_id": 5,
+        "label": "sub1",
+        "ipv4": "10.0.0.0/24"
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
@@ -23,8 +53,36 @@
       }
     },
     {
+      "name": "dry_run_preview",
+      "args": {
+        "vpc_id": 5,
+        "label": "sub1",
+        "ipv4": "10.0.0.0/24",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_vpc_subnet_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/vpcs/5/subnets",
+          "body": { "label": "sub1", "ipv4": "10.0.0.0/24" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new subnet \"sub1\" will be created in VPC 5 with IPv4 range 10.0.0.0/24."
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "requires confirm",
-      "args": {"vpc_id": 5, "label": "sub1", "ipv4": "10.0.0.0/24"},
+      "args": {
+        "vpc_id": 5,
+        "label": "sub1",
+        "ipv4": "10.0.0.0/24"
+      },
       "expect_error": "This creates a new subnet in the VPC. Set confirm=true to proceed."
     }
   ]

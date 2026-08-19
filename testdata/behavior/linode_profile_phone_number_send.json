@@ -4,28 +4,86 @@
   "cases": [
     {
       "name": "rejects missing iso_code",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "iso_code must be a non-empty string"
     },
     {
       "name": "rejects missing phone_number",
-      "args": { "iso_code": "US" },
+      "args": {
+        "iso_code": "US",
+        "confirm": true
+      },
       "expect_error": "phone_number must be a non-empty string"
     },
     {
       "name": "sends a phone verification code",
-      "args": { "iso_code": "US", "phone_number": "5551234567", "confirm": true },
+      "args": {
+        "iso_code": "US",
+        "phone_number": "5551234567",
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/profile/phone-number",
-        "body": { "iso_code": "US", "phone_number": "5551234567" }
+        "body": {
+          "iso_code": "US",
+          "phone_number": "5551234567"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"iso_code": "US", "phone_number": "5551234567"},
+      "args": {
+        "iso_code": "US",
+        "phone_number": "5551234567"
+      },
       "expect_error": "This sends a phone number verification code. Set confirm=true to proceed."
+    },
+    {
+      "name": "trims the values it sends",
+      "args": {
+        "iso_code": "  US  ",
+        "phone_number": "  5551234567  ",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/phone-number",
+        "body": {
+          "iso_code": "US",
+          "phone_number": "5551234567"
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "iso_code": "US",
+        "phone_number": "5551234567",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_phone_number_send",
+        "would_execute": {
+          "method": "POST",
+          "path": "/profile/phone-number",
+          "body": {
+            "iso_code": "US",
+            "phone_number": "5551234567"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A verification code is sent to the supplied phone number."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

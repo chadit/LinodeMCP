@@ -1,31 +1,53 @@
 {
   "tool": "linode_profile_preferences_update",
-  "description": "Preferences update: the PUT body once confirmed, the non-empty-object rejection, and the response shape. A bare-array body is rejected in both languages now that Python's client raises instead of swapping any non-object body for an empty object. JSON null stays a success in both: Go decodes preferences into a map, where encoding/json leaves a null body alone without erroring.",
+  "description": "Preferences update, generated on the write tier: the PUT body once confirmed, the non-empty-object rejection, the response shape, and the preview. The map declares body_root, so its members ARE the body rather than nesting under \"preferences\". The empty-object case carries confirm because the generated write tier gates before it validates, so an unconfirmed call hears the gate first. A bare-array body is rejected in both languages; a JSON null stays a success, which the free-form payload reads as an empty object.",
   "cases": [
     {
       "name": "rejects an empty preferences object",
-      "args": { "preferences": {} },
+      "args": {
+        "preferences": {},
+        "confirm": true
+      },
       "expect_error": "preferences must be a non-empty object"
     },
     {
       "name": "updates profile preferences",
-      "args": { "preferences": { "theme": "dark" }, "confirm": true },
-      "api_response": { "theme": "dark" },
+      "args": {
+        "preferences": {
+          "theme": "dark"
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "theme": "dark"
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/profile/preferences",
-        "body": { "theme": "dark" }
+        "body": {
+          "theme": "dark"
+        }
       }
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "preferences": { "theme": "dark" }, "confirm": true },
+      "args": {
+        "preferences": {
+          "theme": "dark"
+        },
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to update"
     },
     {
       "name": "reads a null body as empty preferences",
-      "args": { "preferences": { "theme": "dark" }, "confirm": true },
+      "args": {
+        "preferences": {
+          "theme": "dark"
+        },
+        "confirm": true
+      },
       "api_response_raw": "null",
       "expect_result": {
         "message": "Profile preferences updated successfully",
@@ -34,8 +56,38 @@
     },
     {
       "name": "requires confirm",
-      "args": {"preferences": {"theme": "dark"}},
+      "args": {
+        "preferences": {
+          "theme": "dark"
+        }
+      },
       "expect_error": "This updates profile preferences. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "preferences": {
+          "theme": "light",
+          "collapsed": true
+        },
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_preferences_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/profile/preferences",
+          "body": {
+            "collapsed": true,
+            "theme": "light"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

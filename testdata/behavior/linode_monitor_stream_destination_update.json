@@ -1,0 +1,112 @@
+{
+  "tool": "linode_monitor_stream_destination_update",
+  "description": "Logs destination update. An update naming nothing is refused rather than sent as an empty PUT, and details is redacted in the preview for the reason the create's is: replacement credentials arrive through it.",
+  "cases": [
+    {
+      "name": "rejects a non-positive destination_id",
+      "args": { "destination_id": 0, "label": "ops bucket", "confirm": true },
+      "expect_error": "destination_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": { "destination_id": 234, "label": "   ", "confirm": true },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects an unknown type",
+      "args": { "destination_id": 234, "type": "syslog", "confirm": true },
+      "expect_error": "type must be one of: akamai_object_storage, custom_https"
+    },
+    {
+      "name": "rejects an empty update",
+      "args": { "destination_id": 234, "confirm": true },
+      "expect_error": "at least one update field is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": { "destination_id": 234, "label": "ops cold bucket" },
+      "expect_error": "This updates a monitor stream destination. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts the update body",
+      "args": {
+        "destination_id": 234,
+        "label": "ops cold bucket",
+        "details": {
+          "host": "us-east-1.linodeobjects.com",
+          "bucket_name": "ops-cold",
+          "access_key_id": "AKIAEXAMPLE",
+          "access_key_secret": "not-a-real-value"
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 234,
+        "label": "ops cold bucket",
+        "type": "akamai_object_storage",
+        "status": "active",
+        "details": {
+          "access_key_id": "AKIAEXAMPLE",
+          "bucket_name": "ops-cold",
+          "host": "us-east-1.linodeobjects.com"
+        },
+        "version": 2,
+        "created": "2026-01-02T03:04:05",
+        "created_by": "opsuser",
+        "updated": "2026-01-05T11:00:00",
+        "updated_by": "opsuser"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/monitor/streams/destinations/234",
+        "body": {
+          "label": "ops cold bucket",
+          "details": {
+            "host": "us-east-1.linodeobjects.com",
+            "bucket_name": "ops-cold",
+            "access_key_id": "AKIAEXAMPLE",
+            "access_key_secret": "not-a-real-value"
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "destination_id": 234, "label": "ops cold bucket", "confirm": true },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "destination_id": 234, "label": "ops cold bucket", "confirm": true },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the destination update request with details redacted",
+      "args": {
+        "destination_id": 234,
+        "label": "ops cold bucket",
+        "details": { "bucket_name": "ops-cold" },
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_stream_destination_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/monitor/streams/destinations/234",
+          "body": {
+            "label": "ops cold bucket",
+            "details": { "redacted": true }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

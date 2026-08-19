@@ -3,15 +3,44 @@
   "description": "Support ticket get: the invalid-ticket_id rejection both languages agree on and the single GET by ID. The missing-ticket_id message diverges (see report).",
   "cases": [
     {
+      "name": "requires ticket_id",
+      "args": {},
+      "expect_error": "ticket_id is required"
+    },
+    {
+      "name": "rejects a non-positive ticket_id",
+      "args": {
+        "ticket_id": 0
+      },
+      "expect_error": "ticket_id must be a positive integer"
+    },
+    {
+      "name": "rejects a numeric-string ticket_id",
+      "args": {
+        "ticket_id": "1"
+      },
+      "expect_error": "ticket_id must be a positive integer"
+    },
+    {
       "name": "rejects non-positive ticket_id",
-      "args": { "ticket_id": 0 },
+      "args": {
+        "ticket_id": 0
+      },
       "expect_error": "ticket_id must be a positive integer"
     },
     {
       "name": "gets a support ticket",
-      "args": { "ticket_id": 123 },
-      "api_response": { "id": 123, "summary": "Cannot reach server" },
-      "expect_request": { "method": "GET", "path": "/support/tickets/123" }
+      "args": {
+        "ticket_id": 123
+      },
+      "api_response": {
+        "id": 123,
+        "summary": "Cannot reach server"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/support/tickets/123"
+      }
     }
   ]
 }

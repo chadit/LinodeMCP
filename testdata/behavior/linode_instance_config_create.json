@@ -1,82 +1,584 @@
 {
   "tool": "linode_instance_config_create",
-  "description": "Pins the shared missing-linode_id and missing-label rejections and the config-create POST body. devices/size rejection text diverges (see report). A success body that is not a JSON object must fail rather than turn into a zeroed config record; the two languages name the subject differently, so only the failure verb is shared.",
+  "description": "Pins the id, label and enum rules, the device-slot ladder the validate hook walks, the config-create POST body, and the preview that reads the instance the profile lands on. A success body that is not a JSON object must fail rather than turn into a zeroed config record; the two languages name the subject differently, so only the failure verb is shared.",
   "cases": [
     {
       "name": "rejects missing linode_id",
-      "args": {},
-      "expect_error": "linode_id is required"
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "rejects missing label",
-      "args": { "linode_id": 123, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "confirm": true
+      },
       "expect_error": "label is required"
     },
     {
+      "name": "rejects a whitespace-padded label",
+      "args": {
+        "linode_id": 123,
+        "label": " boot ",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
+      "expect_error": "label must not include leading or trailing whitespace"
+    },
+    {
       "name": "creates a config profile",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances/123/configs",
-        "body": { "label": "boot", "devices": { "sda": { "disk_id": 111 } } }
+        "body": {
+          "label": "boot",
+          "devices": {
+            "sda": {
+              "disk_id": 111
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "carries the helpers object into the body",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "helpers": {
+          "distro": true,
+          "network": false
+        },
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/configs",
+        "body": {
+          "label": "boot",
+          "devices": {
+            "sda": {
+              "disk_id": 111
+            }
+          },
+          "helpers": {
+            "distro": true,
+            "network": false
+          }
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 123, "label": "boot", "devices": {"sda": {"disk_id": 111}}},
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        }
+      },
       "expect_error": "This creates a configuration profile on the instance. Set confirm=true to proceed."
     },
     {
       "name": "rejects an invalid run_level (proto ConfigRunLevel enum)",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "run_level": "turbo", "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "run_level": "turbo",
+        "confirm": true
+      },
       "expect_error": "run_level must be one of: default, single, binbash"
     },
     {
       "name": "rejects an invalid virt_mode (proto ConfigVirtMode enum)",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "virt_mode": "hvm", "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "virt_mode": "hvm",
+        "confirm": true
+      },
       "expect_error": "virt_mode must be one of: paravirt, fullvirt"
     },
     {
+      "name": "rejects a memory_limit below one",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "memory_limit": 0,
+        "confirm": true
+      },
+      "expect_error": "memory_limit must be a positive integer"
+    },
+    {
+      "name": "rejects missing devices",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "confirm": true
+      },
+      "expect_error": "devices is required"
+    },
+    {
+      "name": "rejects an empty devices object",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {},
+        "confirm": true
+      },
+      "expect_error": "devices must include at least one device slot"
+    },
+    {
       "name": "rejects an invalid device slot",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sdz": { "disk_id": 111 } }, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sdz": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
       "expect_error": "device slot sdz must be one of sda through sdh"
     },
     {
+      "name": "rejects a device naming neither id",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {}
+        },
+        "confirm": true
+      },
+      "expect_error": "device sda requires disk_id or volume_id"
+    },
+    {
+      "name": "rejects a device disk_id of zero",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 0
+          }
+        },
+        "confirm": true
+      },
+      "expect_error": "device sda disk_id must be greater than 0"
+    },
+    {
+      "name": "rejects a device volume_id of zero",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "volume_id": 0
+          }
+        },
+        "confirm": true
+      },
+      "expect_error": "device sda volume_id must be greater than 0"
+    },
+    {
+      "name": "rejects a device naming both ids",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111,
+            "volume_id": 222
+          }
+        },
+        "confirm": true
+      },
+      "expect_error": "device sda can use disk_id or volume_id, not both"
+    },
+    {
+      "name": "rejects a device member the API does not publish",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111,
+            "no_such_member": 1
+          }
+        },
+        "confirm": true
+      },
+      "expect_error": "invalid devices JSON: unknown field \"no_such_member\""
+    },
+    {
+      "name": "rejects a device id that is not an integer",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": "111"
+          }
+        },
+        "confirm": true
+      },
+      "expect_error": "invalid devices JSON: sda.disk_id must be an integer"
+    },
+    {
+      "name": "rejects a helper the API does not publish",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "helpers": {
+          "turbo": true
+        },
+        "confirm": true
+      },
+      "expect_error": "invalid helpers JSON: unknown field \"turbo\""
+    },
+    {
+      "name": "rejects an interface purpose the API does not publish",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "interfaces": [
+          {
+            "purpose": "carrier-pigeon"
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "interfaces[0].purpose must be one of: public, vlan, vpc"
+    },
+    {
       "name": "rejects a null API response",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
       "api_response": null,
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
-      "api_response": [1, 2],
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a string API response",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
       "api_response": "not-an-object",
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "confirm": true
+      },
       "api_response": true,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects devices sent as a string",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": "sda",
+        "confirm": true
+      },
+      "expect_error": "devices must be a JSON object"
+    },
+    {
+      "name": "rejects a device slot that is not an object",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": 111
+        },
+        "confirm": true
+      },
+      "expect_error": "device sda must be an object"
+    },
+    {
+      "name": "rejects helpers sent as a string",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "helpers": "distro",
+        "confirm": true
+      },
+      "expect_error": "helpers must be a JSON object"
+    },
+    {
+      "name": "rejects an interface entry that is not an object",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "interfaces": [
+          "public"
+        ],
+        "confirm": true
+      },
+      "expect_error": "interfaces must be an array of objects"
+    },
+    {
+      "name": "rejects an interface entry naming no purpose",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "interfaces": [
+          {}
+        ],
+        "confirm": true
+      },
+      "expect_error": "interfaces[0].purpose must be one of: public, vlan, vpc"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "devices": {
+          "sda": {
+            "disk_id": 111
+          }
+        },
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_config_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/configs",
+          "body": {
+            "label": "boot",
+            "devices": {
+              "sda": {
+                "disk_id": 111
+              }
+            }
+          }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "A new configuration profile will be created on instance 123 labeled \"boot\"."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

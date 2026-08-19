@@ -57,7 +57,8 @@
         "tool": "linode_lke_cluster_regenerate",
         "would_execute": {
           "method": "POST",
-          "path": "/lke/clusters/12345/regenerate"
+          "path": "/lke/clusters/12345/regenerate",
+          "body": {}
         },
         "current_state": {
           "control_plane": {

@@ -1,11 +1,31 @@
 {
   "tool": "linode_lke_acl_update",
-  "description": "Pins the cluster_id-required rejection (with confirm so both reach it; the languages check cluster_id vs confirm in a different order) and the confirmed PUT with a fully-populated acl body. The acl-required text and the confirm-required text both diverge (see report). A response that is not a JSON object must fail rather than yield a zeroed ACL.",
+  "description": "Pins the cluster_id and acl rejections, the confirm gate, the confirmed PUT with a fully-populated acl body, and the dry-run preview. cluster_id is an integer path param, and proto3 collapses an absent one onto zero, so absent, zero, and negative all answer the positive-integer sentence. The confirm gate is asked before the arguments are read, so the rejection cases carry confirm=true to reach the check they pin. A response that is not a JSON object must fail rather than yield a zeroed ACL.",
   "cases": [
     {
       "name": "requires cluster_id",
-      "args": { "confirm": true },
-      "expect_error": "cluster_id is required"
+      "args": { "confirm": true, "acl": { "enabled": true } },
+      "expect_error": "cluster_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative cluster_id",
+      "args": { "cluster_id": -1, "confirm": true, "acl": { "enabled": true } },
+      "expect_error": "cluster_id must be a positive integer"
+    },
+    {
+      "name": "requires acl",
+      "args": { "cluster_id": 12345, "confirm": true },
+      "expect_error": "acl is required and must be an object"
+    },
+    {
+      "name": "rejects an empty acl",
+      "args": { "cluster_id": 12345, "confirm": true, "acl": {} },
+      "expect_error": "acl is required and must be an object"
+    },
+    {
+      "name": "answers the confirm gate before the missing acl",
+      "args": { "cluster_id": 12345 },
+      "expect_error": "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed."
     },
     {
       "name": "updates the control plane acl",
@@ -25,6 +45,40 @@
       "name": "requires confirm",
       "args": {"cluster_id": 12345, "acl": {"enabled": true, "addresses": {"ipv4": ["203.0.113.1/32"], "ipv6": ["2001:db8::/32"]}}},
       "expect_error": "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "acl": { "enabled": true, "addresses": { "ipv4": [ "203.0.113.1/32" ], "ipv6": [ "2001:db8::/32" ] } },
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345/control_plane_acl": {
+          "acl": {
+            "enabled": false,
+            "addresses": { "ipv4": [], "ipv6": [] }
+          }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_acl_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/lke/clusters/12345/control_plane_acl",
+          "body": { "acl": { "enabled": true, "addresses": { "ipv4": [ "203.0.113.1/32" ], "ipv6": [ "2001:db8::/32" ] } } }
+        },
+        "current_state": {
+          "enabled": false,
+          "addresses": { "ipv4": [], "ipv6": [] }
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The control-plane ACL is enabled; only the listed addresses may reach the Kubernetes API."
+        ],
+        "warnings": []
+      }
     },
     {
       "name": "rejects a bare-array API response",

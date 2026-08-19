@@ -1,0 +1,176 @@
+{
+  "tool": "linode_monitor_stream_create",
+  "description": "Stream create. destinations names existing sync points by id; details is a free-form object like the alert-channel details, so its members are pinned by the wire body rather than by field rules.",
+  "cases": [
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "label": "   ",
+        "type": "lke_audit_logs",
+        "destinations": [234],
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a missing type",
+      "args": {
+        "label": "audit to object storage",
+        "destinations": [234],
+        "confirm": true
+      },
+      "expect_error": "type must be one of: audit_logs, lke_audit_logs"
+    },
+    {
+      "name": "rejects an unknown type",
+      "args": {
+        "label": "audit to object storage",
+        "type": "syslog",
+        "destinations": [234],
+        "confirm": true
+      },
+      "expect_error": "type must be one of: audit_logs, lke_audit_logs"
+    },
+    {
+      "name": "rejects an empty destinations list",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [],
+        "confirm": true
+      },
+      "expect_error": "destinations must contain at least one destination id"
+    },
+    {
+      "name": "rejects a non-positive destination id",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [0],
+        "confirm": true
+      },
+      "expect_error": "destinations entries must be positive integers"
+    },
+    {
+      "name": "rejects an unknown status",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [234],
+        "status": "paused",
+        "confirm": true
+      },
+      "expect_error": "status must be one of: active, inactive"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [234]
+      },
+      "expect_error": "This creates a monitor stream. Set confirm=true to proceed."
+    },
+    {
+      "name": "posts the create body",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [234],
+        "status": "active",
+        "details": {
+          "cluster_ids": [101, 102],
+          "is_auto_add_all_clusters_enabled": false
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 890,
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "status": "active",
+        "destinations": [
+          {
+            "id": 234,
+            "label": "ops bucket",
+            "type": "akamai_object_storage",
+            "details": {
+              "access_key_id": "AKIAEXAMPLE",
+              "bucket_name": "ops-audit",
+              "host": "us-east-1.linodeobjects.com",
+              "path": "streams/audit"
+            }
+          }
+        ],
+        "details": {
+          "cluster_ids": [101, 102],
+          "is_auto_add_all_clusters_enabled": false
+        },
+        "version": 1
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/streams",
+        "body": {
+          "label": "audit to object storage",
+          "type": "lke_audit_logs",
+          "destinations": [234],
+          "status": "active",
+          "details": {
+            "cluster_ids": [101, 102],
+            "is_auto_add_all_clusters_enabled": false
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [234],
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [234],
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the stream create request",
+      "args": {
+        "label": "audit to object storage",
+        "type": "lke_audit_logs",
+        "destinations": [234],
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_stream_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/monitor/streams",
+          "body": {
+            "label": "audit to object storage",
+            "type": "lke_audit_logs",
+            "destinations": [234]
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

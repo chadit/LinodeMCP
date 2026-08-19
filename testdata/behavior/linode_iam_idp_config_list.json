@@ -1,0 +1,96 @@
+{
+  "tool": "linode_iam_idp_config_list",
+  "description": "IDP configuration list. An account holds at most one configuration, so the empty page is the ordinary answer and the populated one carries the whole SAML object with its certificate list.",
+  "cases": [
+    {
+      "name": "lists IDP configurations",
+      "args": {},
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "lists a populated IDP configuration",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "created": "2026-03-04T12:00:00",
+            "created_by": "jsmith",
+            "enabled": true,
+            "enforce": true,
+            "excluded_users_count": 2,
+            "id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+            "included_users_count": 0,
+            "label": "okta-prod",
+            "saml": {
+              "entity_id": "https://idp.example.com/saml/metadata",
+              "identity_element": "NAME_ID",
+              "idp_url": "https://idp.example.com/sso/saml",
+              "public_certificates": [
+                {
+                  "certificate": "MIIDexampleCertificateData",
+                  "created": "2026-03-04T12:00:00",
+                  "created_by": "jsmith",
+                  "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+                  "not_after": "2027-03-04T12:00:00",
+                  "not_before": "2026-03-04T12:00:00"
+                }
+              ]
+            },
+            "updated": null,
+            "updated_by": null
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "carries the page controls the caller supplied",
+      "args": {
+        "page": 2,
+        "page_size": 50
+      },
+      "api_response": {
+        "data": [],
+        "page": 2,
+        "pages": 2,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs?page=2&page_size=50",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "rejects a page below the minimum",
+      "args": {
+        "page": 0
+      },
+      "expect_error": "page must be an integer greater than or equal to 1"
+    },
+    {
+      "name": "rejects a page_size out of range",
+      "args": {
+        "page_size": 501
+      },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    }
+  ]
+}

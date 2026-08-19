@@ -3,10 +3,38 @@
   "description": "Placement group get: the single GET by ID. group_id validation text diverges across both languages, so only the success path is pinned (see report).",
   "cases": [
     {
+      "name": "requires group_id",
+      "args": {},
+      "expect_error": "group_id is required"
+    },
+    {
+      "name": "rejects a non-positive group_id",
+      "args": {
+        "group_id": 0
+      },
+      "expect_error": "group_id must be a positive integer"
+    },
+    {
+      "name": "rejects a numeric-string group_id",
+      "args": {
+        "group_id": "1"
+      },
+      "expect_error": "group_id must be a positive integer"
+    },
+    {
       "name": "gets a placement group",
-      "args": { "group_id": 123 },
-      "api_response": { "id": 123, "label": "my-group", "region": "us-east" },
-      "expect_request": { "method": "GET", "path": "/placement/groups/123" }
+      "args": {
+        "group_id": 123
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-group",
+        "region": "us-east"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/placement/groups/123"
+      }
     }
   ]
 }

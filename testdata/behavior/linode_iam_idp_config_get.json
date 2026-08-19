@@ -1,0 +1,52 @@
+{
+  "tool": "linode_iam_idp_config_get",
+  "description": "IDP configuration read. The id is a UUID string rather than an integer, and updated arrives as JSON null on a configuration nobody has changed yet.",
+  "cases": [
+    {
+      "name": "rejects a blank idp_config_id",
+      "args": {
+        "idp_config_id": "   "
+      },
+      "expect_error": "idp_config_id is required"
+    },
+    {
+      "name": "gets one IDP configuration",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b"
+      },
+      "api_response": {
+        "created": "2026-03-04T12:00:00",
+        "created_by": "jsmith",
+        "enabled": true,
+        "enforce": false,
+        "excluded_users_count": 0,
+        "id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "included_users_count": 3,
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "USER_ID_ATTRIBUTE",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData",
+              "created": "2026-03-04T12:00:00",
+              "created_by": "jsmith",
+              "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+              "not_after": "2027-03-04T12:00:00",
+              "not_before": "2026-03-04T12:00:00"
+            }
+          ],
+          "user_id_attribute": "email"
+        },
+        "updated": null,
+        "updated_by": null
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "api_surface": "v4beta"
+      }
+    }
+  ]
+}

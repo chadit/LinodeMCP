@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_settings_update",
-  "description": "Firewall settings update PUTs the default_firewall_ids map once confirmed. The no-confirm and missing/invalid default_firewall_ids messages diverge between languages (see report).",
+  "description": "Firewall settings update PUTs the default_firewall_ids map once confirmed. A map field carries no presence a rule can read and each refusal names the key it is about, so both languages answer Go's four sentences through a validate hook rather than Python's single combined one.",
   "cases": [
     {
       "name": "updates the linode default firewall",
@@ -16,6 +16,60 @@
       "name": "requires confirm",
       "args": {"default_firewall_ids": {"linode": 5}},
       "expect_error": "This updates default Cloud Firewall assignments. Set confirm=true to proceed."
+    },
+    {
+      "name": "requires default_firewall_ids",
+      "args": { "confirm": true },
+      "expect_error": "default_firewall_ids is required"
+    },
+    {
+      "name": "rejects an empty default_firewall_ids",
+      "args": { "confirm": true, "default_firewall_ids": {} },
+      "expect_error": "default_firewall_ids must be a non-empty object"
+    },
+    {
+      "name": "rejects an unsupported key by name",
+      "args": { "confirm": true, "default_firewall_ids": { "volume": 5 } },
+      "expect_error": "default_firewall_ids contains unsupported key: volume"
+    },
+    {
+      "name": "rejects a non-positive id by key",
+      "args": { "confirm": true, "default_firewall_ids": { "nodebalancer": 0 } },
+      "expect_error": "default_firewall_ids.nodebalancer must be a positive integer"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "dry_run": true, "default_firewall_ids": { "linode": 5 } },
+      "api_responses": {
+        "GET /networking/firewalls/settings": {
+          "default_firewall_ids": {
+            "linode": 9,
+            "nodebalancer": 9,
+            "public_interface": 9,
+            "vpc_interface": 9
+          }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_settings_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/networking/firewalls/settings",
+          "body": { "default_firewall_ids": { "linode": 5 } }
+        },
+        "current_state": {
+          "default_firewall_ids": {
+            "linode": 9,
+            "nodebalancer": 9,
+            "public_interface": 9,
+            "vpc_interface": 9
+          }
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

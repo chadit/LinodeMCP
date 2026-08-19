@@ -8,6 +8,21 @@
       "expect_error": "token_uuid must be a non-empty string"
     },
     {
+      "name": "rejects a path-unsafe token_uuid",
+      "args": { "token_uuid": "../../images", "label": "new-label", "confirm": true },
+      "expect_error": "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+    },
+    {
+      "name": "rejects a non-canonical token_uuid",
+      "args": { "token_uuid": "123e4567e89b12d3a456426614174000", "label": "new-label", "confirm": true },
+      "expect_error": "token_uuid must be a UUID"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000", "label": "   ", "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
       "name": "updates a token label",
       "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000", "label": "new-label", "confirm": true },
       "api_response": {},

@@ -22,6 +22,16 @@
       "expect_error": "region_id must be a lowercase region slug"
     },
     {
+      "name": "rejects a label carrying a path separator",
+      "args": {
+        "region_id": "us-east",
+        "label": "vl/app",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "label must not contain path separators, query separators, or traversal segments"
+    },
+    {
       "name": "requires region_id",
       "args": {
         "confirm": true,

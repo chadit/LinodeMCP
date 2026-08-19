@@ -1,0 +1,149 @@
+{
+  "tool": "linode_lock_create",
+  "description": "Resource lock create. The LKE case pins the union rule: the API accepts only the plain lock for lkecluster and lkenodepool, so the cross-field sentence answers there rather than the API rejecting the call.",
+  "cases": [
+    {
+      "name": "rejects a missing entity_type",
+      "args": {
+        "entity_id": 97531,
+        "lock_type": "cannot_delete",
+        "confirm": true
+      },
+      "expect_error": "entity_type must be one of: linode, lkecluster, lkenodepool, nodebalancer, volume"
+    },
+    {
+      "name": "rejects an unknown entity_type",
+      "args": {
+        "entity_id": 97531,
+        "entity_type": "database",
+        "lock_type": "cannot_delete",
+        "confirm": true
+      },
+      "expect_error": "entity_type must be one of: linode, lkecluster, lkenodepool, nodebalancer, volume"
+    },
+    {
+      "name": "rejects a non-positive entity_id",
+      "args": {
+        "entity_id": 0,
+        "entity_type": "linode",
+        "lock_type": "cannot_delete",
+        "confirm": true
+      },
+      "expect_error": "entity_id must be a positive integer"
+    },
+    {
+      "name": "rejects a missing lock_type",
+      "args": {
+        "entity_id": 97531,
+        "entity_type": "linode",
+        "confirm": true
+      },
+      "expect_error": "lock_type must be one of: cannot_delete, cannot_delete_with_subresources"
+    },
+    {
+      "name": "rejects a subresource lock on an LKE cluster",
+      "args": {
+        "entity_id": 97531,
+        "entity_type": "lkecluster",
+        "lock_type": "cannot_delete_with_subresources",
+        "confirm": true
+      },
+      "expect_error": "lock_type must be cannot_delete when entity_type is lkecluster or lkenodepool"
+    },
+    {
+      "name": "accepts the plain lock on an LKE node pool",
+      "args": {
+        "entity_id": 4242,
+        "entity_type": "lkenodepool",
+        "lock_type": "cannot_delete",
+        "confirm": true
+      },
+      "api_response": {
+        "entity": "lkenodepool",
+        "id": 26,
+        "lock_type": "cannot_delete"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/locks",
+        "api_surface": "v4beta",
+        "body": {
+          "entity_id": 4242,
+          "entity_type": "lkenodepool",
+          "lock_type": "cannot_delete"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "entity_id": 97531,
+        "entity_type": "linode",
+        "lock_type": "cannot_delete"
+      },
+      "expect_error": "This creates a resource lock. Set confirm=true to proceed."
+    },
+    {
+      "name": "posts the create body",
+      "args": {
+        "entity_id": 97531,
+        "entity_type": "linode",
+        "lock_type": "cannot_delete_with_subresources",
+        "confirm": true
+      },
+      "api_response": {
+        "entity": "linode",
+        "id": 25,
+        "lock_type": "cannot_delete_with_subresources"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/locks",
+        "api_surface": "v4beta",
+        "body": {
+          "entity_id": 97531,
+          "entity_type": "linode",
+          "lock_type": "cannot_delete_with_subresources"
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "entity_id": 97531,
+        "entity_type": "linode",
+        "lock_type": "cannot_delete",
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the resource lock create request",
+      "args": {
+        "entity_id": 97531,
+        "entity_type": "linode",
+        "lock_type": "cannot_delete",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lock_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/v4beta/locks",
+          "body": {
+            "entity_id": 97531,
+            "entity_type": "linode",
+            "lock_type": "cannot_delete"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

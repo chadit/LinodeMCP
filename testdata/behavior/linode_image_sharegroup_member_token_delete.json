@@ -4,8 +4,21 @@
   "cases": [
     {
       "name": "rejects missing sharegroup_id",
-      "args": {},
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "rejects a token_uuid carrying a path separator",
+      "args": {
+        "sharegroup_id": 5,
+        "token_uuid": "abc/def",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
     },
     {
       "name": "confirm alone hits the destroy gate",

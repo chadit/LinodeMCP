@@ -4,13 +4,32 @@
   "cases": [
     {
       "name": "requires username",
-      "args": {},
+      "args": { "confirm": true },
       "expect_error": "username is required"
     },
     {
       "name": "requires email",
-      "args": { "username": "alice" },
+      "args": { "username": "alice", "confirm": true },
       "expect_error": "email is required"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "username": "alice", "email": "alice@example.com", "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_user_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/account/users",
+          "body": { "username": "alice", "email": "alice@example.com" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new account user \"alice\" will be created with restricted=false."
+        ],
+        "warnings": []
+      }
     },
     {
       "name": "requires confirm before creating",

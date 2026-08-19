@@ -1,10 +1,10 @@
 {
   "tool": "linode_instance_interface_update",
-  "description": "Pins the shared interface_id positive-int rejection and the instance-interface update PUT body. linode_id and no-fields rejection text diverges (see report).",
+  "description": "Pins the typed interface update body: each arm read to the depth its message declares, default_route changeable on its own, and an explicit null travelling as the API's detach spelling. Rejection cases set confirm:true because the confirm gate runs ahead of validation.",
   "cases": [
     {
       "name": "rejects non-positive interface_id",
-      "args": { "linode_id": 123, "interface_id": 0 },
+      "args": { "linode_id": 123, "interface_id": 0, "confirm": true, "public": {} },
       "expect_error": "interface_id must be a positive integer"
     },
     {
@@ -18,9 +18,185 @@
       }
     },
     {
+      "name": "updates the default route on its own",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "default_route": { "ipv4": true, "ipv6": false }
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/interfaces/9",
+        "body": { "default_route": { "ipv4": true, "ipv6": false } }
+      }
+    },
+    {
+      "name": "updates a vpc arm down to its nested addresses",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "vpc": {
+          "subnet_id": 456,
+          "ipv4": {
+            "addresses": [{ "address": "auto", "primary": true }],
+            "ranges": [{ "range": "10.0.0.0/28" }]
+          }
+        }
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/interfaces/9",
+        "body": {
+          "vpc": {
+            "subnet_id": 456,
+            "ipv4": {
+              "addresses": [{ "address": "auto", "primary": true }],
+              "ranges": [{ "range": "10.0.0.0/28" }]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "sends an explicit null as the detach it is",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "default_route": { "ipv4": false },
+        "vpc": null
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/interfaces/9",
+        "body": { "default_route": { "ipv4": false }, "vpc": null }
+      }
+    },
+    {
+      "name": "answers with the interface the API returned",
+      "args": { "linode_id": 123, "interface_id": 9, "confirm": true, "public": {} },
+      "api_response": {
+        "id": 9,
+        "vlan": { "vlan_label": "backend", "ipam_address": "10.0.0.1/24" }
+      },
+      "expect_result": {
+        "message": "Interface 9 updated on instance 123 successfully",
+        "interface": {
+          "id": 9,
+          "vlan": { "vlan_label": "backend", "ipam_address": "10.0.0.1/24" }
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "dry_run": true,
+        "default_route": { "ipv4": true }
+      },
+      "api_responses": {
+        "GET /linode/instances/123/interfaces/9": {
+          "id": 9,
+          "vlan": { "vlan_label": "backend", "ipam_address": "10.0.0.1/24" }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_interface_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/linode/instances/123/interfaces/9",
+          "body": { "default_route": { "ipv4": true } }
+        },
+        "current_state": {
+          "id": 9,
+          "vlan": { "vlan_label": "backend", "ipam_address": "10.0.0.1/24" }
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Interface 9 on Linode 123 will be updated."
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "requires confirm",
-      "args": {"linode_id": 123, "interface_id": 9, "public": {}},
+      "args": { "linode_id": 123, "interface_id": 9, "public": {} },
       "expect_error": "This updates a network interface on the Linode instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a call carrying no update fields",
+      "args": { "linode_id": 123, "interface_id": 9, "confirm": true },
+      "expect_error": "at least one of default_route, public, vpc, or vlan is required"
+    },
+    {
+      "name": "rejects a body of nothing but nulls",
+      "args": { "linode_id": 123, "interface_id": 9, "confirm": true, "vpc": null },
+      "expect_error": "at least one of default_route, public, vpc, or vlan is required"
+    },
+    {
+      "name": "rejects a call naming two arms",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "public": {},
+        "vlan": { "vlan_label": "backend" }
+      },
+      "expect_error": "exactly one of public, vpc, or vlan is required"
+    },
+    {
+      "name": "rejects a vpc arm without a positive subnet_id",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "vpc": { "subnet_id": 0 }
+      },
+      "expect_error": "vpc.subnet_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank vlan label",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "vlan": { "vlan_label": "  " }
+      },
+      "expect_error": "vlan.vlan_label is required"
+    },
+    {
+      "name": "names the nested entry a missing member sits in",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "public": { "ipv4": { "addresses": [{ "primary": true }] } }
+      },
+      "expect_error": "public.ipv4.addresses[0].address is required"
+    },
+    {
+      "name": "refuses an arm that is neither an object nor null",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "confirm": true,
+        "default_route": { "ipv4": true },
+        "public": 1
+      },
+      "expect_error": "public must be an object or null"
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "linode_id": 123, "interface_id": 9, "confirm": true, "public": {} },
+      "api_response": "not-an-object",
+      "expect_api_error": "Failed to update interface 9 on instance 123"
     }
   ]
 }

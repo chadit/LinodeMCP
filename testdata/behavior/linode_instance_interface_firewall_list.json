@@ -3,10 +3,48 @@
   "description": "Pins the instance-interface firewalls GET. linode_id/interface_id rejection text diverges between languages (see report).",
   "cases": [
     {
+      "name": "requires linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects a non-positive linode_id",
+      "args": {
+        "linode_id": 0
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "requires interface_id",
+      "args": {
+        "linode_id": 1
+      },
+      "expect_error": "interface_id is required"
+    },
+    {
+      "name": "rejects a non-positive interface_id",
+      "args": {
+        "linode_id": 1,
+        "interface_id": 0
+      },
+      "expect_error": "interface_id must be a positive integer"
+    },
+    {
       "name": "lists firewalls for an interface",
-      "args": { "linode_id": 123, "interface_id": 9 },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/linode/instances/123/interfaces/9/firewalls" }
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/instances/123/interfaces/9/firewalls"
+      }
     }
   ]
 }

@@ -4,18 +4,93 @@
   "cases": [
     {
       "name": "rejects missing image_id",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "image_id must be a non-empty string"
     },
     {
+      "name": "dry_run_preview",
+      "args": {
+        "image_id": "private/123",
+        "label": "new-label",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /images/private%2F123": {
+          "capabilities": [],
+          "created": "",
+          "created_by": "",
+          "deprecated": false,
+          "description": "",
+          "eol": null,
+          "expiry": null,
+          "id": "",
+          "is_public": false,
+          "label": "",
+          "size": 0,
+          "status": "",
+          "tags": [],
+          "type": "",
+          "vendor": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/images/private%2F123",
+          "body": {
+            "label": "new-label"
+          }
+        },
+        "current_state": {
+          "capabilities": [],
+          "created": "",
+          "created_by": "",
+          "deprecated": false,
+          "description": "",
+          "eol": null,
+          "expiry": null,
+          "id": "",
+          "is_public": false,
+          "label": "",
+          "size": 0,
+          "status": "",
+          "tags": [],
+          "type": "",
+          "vendor": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Image 'private/123' will be updated."
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "updates the label",
-      "args": { "image_id": "private/123", "label": "new-label", "confirm": true },
+      "args": {
+        "image_id": "private/123",
+        "label": "new-label",
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "PUT", "path": "/images/private%2F123", "body": { "label": "new-label" } }
+      "expect_request": {
+        "method": "PUT",
+        "path": "/images/private%2F123",
+        "body": {
+          "label": "new-label"
+        }
+      }
     },
     {
       "name": "requires confirm",
-      "args": {"image_id": "private/123", "label": "new-label"},
+      "args": {
+        "image_id": "private/123",
+        "label": "new-label"
+      },
       "expect_error": "This updates image metadata. Set confirm=true to proceed."
     }
   ]

@@ -4,55 +4,140 @@
   "cases": [
     {
       "name": "requires label",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "label is required"
     },
     {
       "name": "rejects read-only fields",
-      "args": { "id": 5, "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30 },
+      "args": {
+        "id": 5,
+        "label": "web",
+        "service_type": "url",
+        "address": "https://ex.com",
+        "timeout": 30,
+        "confirm": true
+      },
       "expect_error": "Read-only fields are not accepted: id"
     },
     {
       "name": "requires address",
-      "args": { "label": "web", "service_type": "url" },
+      "args": {
+        "label": "web",
+        "service_type": "url",
+        "confirm": true
+      },
       "expect_error": "address is required"
     },
     {
       "name": "requires confirm before creating",
-      "args": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30 },
+      "args": {
+        "label": "web",
+        "service_type": "url",
+        "address": "https://ex.com",
+        "timeout": 30
+      },
       "expect_error": "This creates a Managed service monitor. Set confirm=true to proceed."
     },
     {
       "name": "creates a managed service",
-      "args": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30, "confirm": true },
-      "api_response": { "id": 5, "label": "web" },
+      "args": {
+        "label": "web",
+        "service_type": "url",
+        "address": "https://ex.com",
+        "timeout": 30,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 5,
+        "label": "web"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/managed/services",
-        "body": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30 }
+        "body": {
+          "label": "web",
+          "service_type": "url",
+          "address": "https://ex.com",
+          "timeout": 30
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30},
+      "args": {
+        "label": "web",
+        "service_type": "url",
+        "address": "https://ex.com",
+        "timeout": 30
+      },
       "expect_error": "This creates a Managed service monitor. Set confirm=true to proceed."
     },
     {
       "name": "rejects an invalid service_type",
-      "args": { "label": "web", "service_type": "ping", "address": "https://ex.com", "timeout": 30, "confirm": true },
+      "args": {
+        "label": "web",
+        "service_type": "ping",
+        "address": "https://ex.com",
+        "timeout": 30,
+        "confirm": true
+      },
       "expect_error": "service_type must be one of: tcp, url"
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30, "confirm": true },
+      "args": {
+        "label": "web",
+        "service_type": "url",
+        "address": "https://ex.com",
+        "timeout": 30,
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30, "confirm": true },
+      "args": {
+        "label": "web",
+        "service_type": "url",
+        "address": "https://ex.com",
+        "timeout": 30,
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "label": "web",
+        "service_type": "url",
+        "address": "https://ex.com",
+        "timeout": 30,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_managed_service_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/managed/services",
+          "body": {
+            "label": "web",
+            "service_type": "url",
+            "address": "https://ex.com",
+            "timeout": 30
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A Managed service monitor is created."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -8,9 +8,15 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "channel_ids": [101, 202],
+        "channel_ids": [
+          101,
+          202
+        ],
         "description": "CPU clone for overnight load",
-        "group_by": ["entity_id", "region"],
+        "group_by": [
+          "entity_id",
+          "region"
+        ],
         "rule_criteria": {
           "rules": [
             {
@@ -31,7 +37,10 @@
         "POST /monitor/services/dbaas/alert-definitions/42/clone": {
           "id": 9002,
           "label": "CPU clone",
-          "group_by": ["entity_id", "region"]
+          "group_by": [
+            "entity_id",
+            "region"
+          ]
         }
       },
       "expect_result": {
@@ -46,7 +55,10 @@
           "status": "",
           "channel_ids": [],
           "entity_ids": [],
-          "group_by": ["entity_id", "region"],
+          "group_by": [
+            "entity_id",
+            "region"
+          ],
           "scope": "",
           "regions": []
         }
@@ -58,9 +70,15 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "channel_ids": [101, 202],
+        "channel_ids": [
+          101,
+          202
+        ],
         "description": "CPU clone for overnight load",
-        "group_by": ["entity_id", "region"],
+        "group_by": [
+          "entity_id",
+          "region"
+        ],
         "rule_criteria": {
           "rules": [
             {
@@ -86,9 +104,15 @@
         "path": "/monitor/services/dbaas/alert-definitions/42/clone",
         "body": {
           "label": "CPU clone",
-          "channel_ids": [101, 202],
+          "channel_ids": [
+            101,
+            202
+          ],
           "description": "CPU clone for overnight load",
-          "group_by": ["entity_id", "region"],
+          "group_by": [
+            "entity_id",
+            "region"
+          ],
           "rule_criteria": {
             "rules": [
               {
@@ -112,7 +136,11 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "Entity clone",
-        "entity_ids": ["13116", "13217", "13331"],
+        "entity_ids": [
+          "13116",
+          "13217",
+          "13331"
+        ],
         "confirm": true
       },
       "api_response": {
@@ -124,7 +152,11 @@
         "path": "/monitor/services/dbaas/alert-definitions/42/clone",
         "body": {
           "label": "Entity clone",
-          "entity_ids": ["13116", "13217", "13331"]
+          "entity_ids": [
+            "13116",
+            "13217",
+            "13331"
+          ]
         }
       }
     },
@@ -134,7 +166,10 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "Region clone",
-        "regions": ["us-east", "us-iad"],
+        "regions": [
+          "us-east",
+          "us-iad"
+        ],
         "confirm": true
       },
       "api_response": {
@@ -146,7 +181,10 @@
         "path": "/monitor/services/dbaas/alert-definitions/42/clone",
         "body": {
           "label": "Region clone",
-          "regions": ["us-east", "us-iad"]
+          "regions": [
+            "us-east",
+            "us-iad"
+          ]
         }
       }
     },
@@ -156,7 +194,10 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "Region clone",
-        "regions": ["us-east", "us-iad"],
+        "regions": [
+          "us-east",
+          "us-iad"
+        ],
         "confirm": true
       },
       "api_responses": {
@@ -164,7 +205,10 @@
           "id": 9004,
           "label": "Region clone",
           "scope": "region",
-          "regions": ["us-east", "us-iad"]
+          "regions": [
+            "us-east",
+            "us-iad"
+          ]
         }
       },
       "expect_result": {
@@ -181,7 +225,10 @@
           "entity_ids": [],
           "group_by": [],
           "scope": "region",
-          "regions": ["us-east", "us-iad"]
+          "regions": [
+            "us-east",
+            "us-iad"
+          ]
         }
       }
     },
@@ -233,7 +280,10 @@
         "service_type": "db--aas",
         "alert_id": 42.0,
         "label": "Integral numbers",
-        "channel_ids": [101.0, 202.0],
+        "channel_ids": [
+          101.0,
+          202.0
+        ],
         "severity": 2.0,
         "confirm": true
       },
@@ -246,7 +296,10 @@
         "path": "/monitor/services/db--aas/alert-definitions/42/clone",
         "body": {
           "label": "Integral numbers",
-          "channel_ids": [101, 202],
+          "channel_ids": [
+            101,
+            202
+          ],
           "severity": 2
         }
       }
@@ -308,7 +361,7 @@
         "severity": 1.5,
         "confirm": true
       },
-      "expect_error": "severity must be an integer from 0 through 3"
+      "expect_error": "severity must be an integer"
     },
     {
       "name": "rejects fractional channel id",
@@ -316,10 +369,12 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "channel_ids": [101.5],
+        "channel_ids": [
+          101.5
+        ],
         "confirm": true
       },
-      "expect_error": "channel_ids must be an array of positive integers"
+      "expect_error": "channel_ids must be an array of integers"
     },
     {
       "name": "rejects zero channel id",
@@ -327,7 +382,9 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "channel_ids": [0],
+        "channel_ids": [
+          0
+        ],
         "confirm": true
       },
       "expect_error": "channel_ids must be an array of positive integers"
@@ -338,7 +395,9 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "channel_ids": [-1],
+        "channel_ids": [
+          -1
+        ],
         "confirm": true
       },
       "expect_error": "channel_ids must be an array of positive integers"
@@ -349,7 +408,9 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "group_by": [" "],
+        "group_by": [
+          " "
+        ],
         "confirm": true
       },
       "expect_error": "group_by must be an array of non-empty strings"
@@ -360,7 +421,9 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "regions": [""],
+        "regions": [
+          ""
+        ],
         "confirm": true
       },
       "expect_error": "regions must be an array of non-empty strings"
@@ -392,9 +455,15 @@
         "service_type": "dbaas",
         "alert_id": 42,
         "label": "CPU clone",
-        "channel_ids": [101, 202],
+        "channel_ids": [
+          101,
+          202
+        ],
         "description": "CPU clone for overnight load",
-        "group_by": ["entity_id", "region"],
+        "group_by": [
+          "entity_id",
+          "region"
+        ],
         "rule_criteria": {
           "rules": [
             {
@@ -429,9 +498,15 @@
           "method": "POST",
           "path": "/monitor/services/dbaas/alert-definitions/42/clone",
           "body": {
-            "channel_ids": [101, 202],
+            "channel_ids": [
+              101,
+              202
+            ],
             "description": "CPU clone for overnight load",
-            "group_by": ["entity_id", "region"],
+            "group_by": [
+              "entity_id",
+              "region"
+            ],
             "label": "CPU clone",
             "rule_criteria": {
               "rules": [

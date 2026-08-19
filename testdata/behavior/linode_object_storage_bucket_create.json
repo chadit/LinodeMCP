@@ -129,6 +129,34 @@
         "endpoint_type": "E9"
       },
       "expect_error": "endpoint_type must be one of: E0, E1, E2, E3"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "label": "my-bucket",
+        "region": "us-east",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_bucket_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets",
+          "body": {
+            "label": "my-bucket",
+            "region": "us-east"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new Object Storage bucket \"my-bucket\" will be created in us-east."
+        ],
+        "warnings": [
+          "Billing for Object Storage starts immediately on creation."
+        ]
+      }
     }
   ]
 }

@@ -3,14 +3,45 @@
   "description": "Pins the child-account token POST path. Missing-euuid, confirm-gate, and euuid-validation text all diverge, so only the success capture is shared (see report).",
   "cases": [
     {
+      "name": "requires euuid",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "euuid is required"
+    },
+    {
+      "name": "rejects a blank euuid",
+      "args": {
+        "euuid": "  ",
+        "confirm": true
+      },
+      "expect_error": "euuid must be a non-empty string"
+    },
+    {
+      "name": "rejects a path separator in euuid",
+      "args": {
+        "euuid": "a/b",
+        "confirm": true
+      },
+      "expect_error": "euuid must not contain path separators, query separators, or traversal segments"
+    },
+    {
       "name": "creates a child account proxy token",
-      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890", "confirm": true },
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/account/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/token" }
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/token"
+      }
     },
     {
       "name": "requires confirm",
-      "args": {"euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890"},
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890"
+      },
       "expect_error": "This creates a proxy user token for a child account. Set confirm=true to proceed."
     }
   ]

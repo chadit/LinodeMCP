@@ -1,11 +1,26 @@
 {
   "tool": "linode_instance_delete",
-  "description": "Two-stage destroy flagship. Pins the instance_id-required rejection (through the bypass so both reach it), the confirm-alone destroy gate, and the bypassed delete DELETE.",
+  "description": "Two-stage destroy flagship. Pins the instance_id-required rejection (through the bypass so both reach it), the typed-id refusals this tier makes that the read and write tiers do not, the confirm-alone destroy gate, and the bypassed delete DELETE.",
   "cases": [
     {
       "name": "requires instance_id",
       "args": { "confirm": true, "confirm_bypass_dry_run": true },
       "expect_error": "instance_id is required"
+    },
+    {
+      "name": "refuses a numeric-string instance_id",
+      "args": { "instance_id": "5", "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "refuses a boolean instance_id",
+      "args": { "instance_id": true, "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "refuses a fractional instance_id rather than truncating onto a live resource",
+      "args": { "instance_id": 5.7, "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "instance_id must be a positive integer"
     },
     {
       "name": "confirm alone hits the destroy gate",

@@ -1,32 +1,72 @@
 {
   "tool": "linode_account_payment_create",
-  "description": "Account payment create: missing usd agrees and the POST body once confirmed. Confirm-gate and invalid-usd texts diverge (see report). A successful response must be a decodable JSON object.",
+  "description": "Account payment create: missing usd agrees and the POST body once confirmed. Rejections carry confirm because the gate runs before the rules. Invalid-amount texts diverge per language and stay in each one's validate hook. A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "requires usd",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "usd is required"
     },
     {
       "name": "creates a payment",
-      "args": { "usd": "10.00", "confirm": true },
-      "api_response": { "id": 123, "usd": "10.00" },
+      "args": {
+        "usd": "10.00",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "usd": "10.00"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/account/payments",
-        "body": { "usd": "10.00" }
+        "body": {
+          "usd": "10.00"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"usd": "10.00"},
+      "args": {
+        "usd": "10.00"
+      },
       "expect_error": "This makes an account payment. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "usd": "10.00", "confirm": true },
+      "args": {
+        "usd": "10.00",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects an amount that is not a positive dollar figure",
+      "args": {
+        "usd": "0.00",
+        "confirm": true
+      },
+      "expect_error": "usd must be a positive dollar amount with up to two decimals"
+    },
+    {
+      "name": "rejects an amount carrying more than two decimals",
+      "args": {
+        "usd": "25.001",
+        "confirm": true
+      },
+      "expect_error": "usd must be a positive dollar amount with up to two decimals"
+    },
+    {
+      "name": "rejects a non-positive payment method id",
+      "args": {
+        "usd": "10.00",
+        "payment_method_id": 0,
+        "confirm": true
+      },
+      "expect_error": "payment_method_id must be a positive integer"
     }
   ]
 }

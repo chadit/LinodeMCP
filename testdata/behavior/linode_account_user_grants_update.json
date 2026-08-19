@@ -1,36 +1,238 @@
 {
   "tool": "linode_account_user_grants_update",
-  "description": "Account user grants update: missing username agrees, confirm gate, and the PUT body once confirmed. Empty-grants text diverges (see report).",
+  "description": "Account user grants update: missing username agrees, confirm gate, the grant-section shape sentence, and the PUT body once confirmed. Empty-grants text diverges (see report).",
   "cases": [
     {
       "name": "requires username",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "username is required"
     },
     {
       "name": "requires confirm before updating grants",
-      "args": { "username": "alice", "global": { "account_access": "read_only" } },
+      "args": {
+        "username": "alice",
+        "global": {
+          "account_access": "read_only"
+        }
+      },
       "expect_error": "This updates account user grants. Set confirm=true to proceed."
     },
     {
       "name": "updates account user grants",
-      "args": { "username": "alice", "global": { "account_access": "read_only" }, "confirm": true },
+      "args": {
+        "username": "alice",
+        "global": {
+          "account_access": "read_only"
+        },
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "PUT",
         "path": "/account/users/alice/grants",
-        "body": { "global": { "account_access": "read_only" } }
+        "body": {
+          "global": {
+            "account_access": "read_only"
+          }
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"username": "alice", "global": {"account_access": "read_only"}},
+      "args": {
+        "username": "alice",
+        "global": {
+          "account_access": "read_only"
+        }
+      },
       "expect_error": "This updates account user grants. Set confirm=true to proceed."
     },
     {
+      "name": "rejects a grant section that is not an array of objects",
+      "args": {
+        "username": "alice",
+        "linode": "read_only",
+        "confirm": true
+      },
+      "expect_error": "linode must be an array of objects"
+    },
+    {
       "name": "rejects an invalid resource grant permission",
-      "args": {"username": "alice", "linode": [{"id": 123, "permissions": "read_everything"}]},
+      "args": {
+        "username": "alice",
+        "linode": [
+          {
+            "id": 123,
+            "permissions": "read_everything"
+          }
+        ],
+        "confirm": true
+      },
       "expect_error": "linode[0].permissions must be one of: read_only, read_write"
+    },
+    {
+      "name": "rejects a call naming no grant section",
+      "args": {
+        "username": "alice",
+        "confirm": true
+      },
+      "expect_error": "at least one grant section is required"
+    },
+    {
+      "name": "rejects an argument the tool does not declare",
+      "args": {
+        "username": "alice",
+        "global": {
+          "account_access": "read_only"
+        },
+        "sharegroup": [],
+        "confirm": true
+      },
+      "expect_error": "unknown grant update fields: sharegroup"
+    },
+    {
+      "name": "rejects a global grants object that is not an object",
+      "args": {
+        "username": "alice",
+        "global": "read_only",
+        "confirm": true
+      },
+      "expect_error": "global must be an object matching the grants schema"
+    },
+    {
+      "name": "rejects a global member the API does not publish",
+      "args": {
+        "username": "alice",
+        "global": {
+          "add_pigeons": true
+        },
+        "confirm": true
+      },
+      "expect_error": "global has unknown fields: add_pigeons"
+    },
+    {
+      "name": "rejects a global flag that is not a boolean",
+      "args": {
+        "username": "alice",
+        "global": {
+          "add_linodes": "yes"
+        },
+        "confirm": true
+      },
+      "expect_error": "global.add_linodes must be a boolean"
+    },
+    {
+      "name": "rejects a global account_access outside the vocabulary",
+      "args": {
+        "username": "alice",
+        "global": {
+          "account_access": "admin"
+        },
+        "confirm": true
+      },
+      "expect_error": "global.account_access must be one of: read_only, read_write"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "username": "alice",
+        "global": {
+          "account_access": "read_write"
+        },
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /account/users/alice/grants": {
+          "global": {
+            "account_access": "read_only",
+            "add_databases": false,
+            "add_domains": true,
+            "add_firewalls": false,
+            "add_images": true,
+            "add_linodes": true,
+            "add_longview": false,
+            "add_nodebalancers": false,
+            "add_stackscripts": true,
+            "add_volumes": false,
+            "add_vpcs": false,
+            "cancel_account": false,
+            "child_account_access": false,
+            "longview_subscription": false
+          },
+          "linode": [
+            {
+              "id": 5,
+              "label": "web-1",
+              "permissions": "read_write"
+            }
+          ],
+          "domain": [],
+          "nodebalancer": [],
+          "image": [],
+          "longview": [],
+          "stackscript": [],
+          "volume": [],
+          "database": [],
+          "firewall": [],
+          "vpc": [],
+          "lkecluster": []
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_user_grants_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/account/users/alice/grants",
+          "body": {
+            "global": {
+              "account_access": "read_write"
+            }
+          }
+        },
+        "current_state": {
+          "global": {
+            "account_access": "read_only",
+            "add_databases": false,
+            "add_domains": true,
+            "add_firewalls": false,
+            "add_images": true,
+            "add_linodes": true,
+            "add_longview": false,
+            "add_nodebalancers": false,
+            "add_stackscripts": true,
+            "add_volumes": false,
+            "add_vpcs": false,
+            "cancel_account": false,
+            "child_account_access": false,
+            "longview_subscription": false
+          },
+          "linode": [
+            {
+              "id": 5,
+              "label": "web-1",
+              "permissions": "read_write"
+            }
+          ],
+          "domain": [],
+          "nodebalancer": [],
+          "image": [],
+          "longview": [],
+          "stackscript": [],
+          "volume": [],
+          "database": [],
+          "firewall": [],
+          "vpc": [],
+          "lkecluster": []
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Account grants for user \"alice\" will be updated."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

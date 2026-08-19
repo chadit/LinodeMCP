@@ -1,0 +1,62 @@
+{
+  "message": "linode.mcp.v1.MonitorAlertChannelWriteResponse",
+  "description": "Monitor alert-channel write envelope (create and update): a confirmation message plus the channel the API returned. details is the writable half the caller sent, content the read-only half the API derives from it, and alerts the single count-and-link summary.",
+  "input": {
+    "message": "Monitor alert channel created",
+    "alert_channel": {
+      "id": 10000,
+      "label": "ops on call",
+      "type": "user",
+      "channel_type": "email",
+      "content": {
+        "email": {
+          "email_addresses": ["ops@example.com"]
+        }
+      },
+      "details": {
+        "email": {
+          "recipient_type": "user",
+          "usernames": ["opsuser"]
+        }
+      },
+      "alerts": {
+        "alert_count": 2,
+        "type": "alert-definitions",
+        "url": "/monitor/alert-channels/10000/alerts"
+      },
+      "created": "2025-03-20T01:41:09",
+      "created_by": "opsuser",
+      "updated": "2025-03-21T01:41:09",
+      "updated_by": "opsuser"
+    }
+  },
+  "canonical": {
+    "message": "Monitor alert channel created",
+    "alert_channel": {
+      "id": 10000,
+      "label": "ops on call",
+      "type": "user",
+      "channel_type": "email",
+      "content": {
+        "email": {
+          "email_addresses": ["ops@example.com"]
+        }
+      },
+      "details": {
+        "email": {
+          "recipient_type": "user",
+          "usernames": ["opsuser"]
+        }
+      },
+      "alerts": {
+        "alert_count": 2,
+        "type": "alert-definitions",
+        "url": "/monitor/alert-channels/10000/alerts"
+      },
+      "created": "2025-03-20T01:41:09",
+      "created_by": "opsuser",
+      "updated": "2025-03-21T01:41:09",
+      "updated_by": "opsuser"
+    }
+  }
+}

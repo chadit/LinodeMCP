@@ -1,0 +1,95 @@
+{
+  "tool": "linode_monitor_stream_destination_delete",
+  "description": "Destroy tool. The preview case is what proves the synthesized state fetch: the tool declares no fetch_state hook, so both languages read the destination through linode_monitor_stream_destination_get, the sibling declared on the same route, and report it as that read's own message.",
+  "cases": [
+    {
+      "name": "rejects a non-positive destination_id",
+      "args": {
+        "destination_id": 0,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "destination_id must be a positive integer"
+    },
+    {
+      "name": "refuses a fractional destination_id rather than truncating it",
+      "args": {
+        "destination_id": 5.7,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "destination_id must be a positive integer"
+    },
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": {
+        "destination_id": 42,
+        "confirm": true
+      },
+      "expect_error": "linode_monitor_stream_destination_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the monitor stream destination",
+      "args": {
+        "destination_id": 42,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/monitor/streams/destinations/42"
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "destination_id": 42,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /monitor/streams/destinations/42": {
+          "created": "2026-01-02T03:04:05",
+          "created_by": "someuser",
+          "details": {
+            "bucket_name": "audit-logs",
+            "host": "us-east-1.linodeobjects.com"
+          },
+          "id": 42,
+          "label": "audit log sink",
+          "status": "active",
+          "type": "akamai_object_storage",
+          "updated": "2026-01-03T04:05:06",
+          "updated_by": "someuser",
+          "version": 3
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_stream_destination_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/monitor/streams/destinations/42"
+        },
+        "current_state": {
+          "created": "2026-01-02T03:04:05",
+          "created_by": "someuser",
+          "details": {
+            "bucket_name": "audit-logs",
+            "host": "us-east-1.linodeobjects.com"
+          },
+          "id": 42,
+          "label": "audit log sink",
+          "status": "active",
+          "type": "akamai_object_storage",
+          "updated": "2026-01-03T04:05:06",
+          "updated_by": "someuser",
+          "version": 3
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

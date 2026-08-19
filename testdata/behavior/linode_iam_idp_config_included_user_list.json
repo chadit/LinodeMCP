@@ -1,0 +1,73 @@
+{
+  "tool": "linode_iam_idp_config_included_user_list",
+  "description": "Included user list. Same page shape as the excluded list, over the users the configuration applies to while enforcement is off.",
+  "cases": [
+    {
+      "name": "rejects a blank idp_config_id",
+      "args": {
+        "idp_config_id": "   "
+      },
+      "expect_error": "idp_config_id is required"
+    },
+    {
+      "name": "lists no included users",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b"
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/users-included",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "lists a populated included user",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b"
+      },
+      "api_response": {
+        "data": [
+          {
+            "id": "adevlin",
+            "label": "adevlin",
+            "type": "user",
+            "url": "/v4/account/users/adevlin"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/users-included",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "carries the page controls the caller supplied",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "page": 2,
+        "page_size": 50
+      },
+      "api_response": {
+        "data": [],
+        "page": 2,
+        "pages": 2,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/users-included?page=2&page_size=50",
+        "api_surface": "v4beta"
+      }
+    }
+  ]
+}

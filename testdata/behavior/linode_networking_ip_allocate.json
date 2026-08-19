@@ -1,15 +1,55 @@
 {
   "tool": "linode_networking_ip_allocate",
-  "description": "Networking IP allocate POSTs linode_id/type/public once confirmed. public is required by the API (no default) so both languages reject a missing public rather than injecting one. The no-confirm text and other validation messages diverge between languages (see report).",
+  "description": "Networking IP allocate POSTs linode_id/type/public once confirmed. public is required by the API (no default) so both languages reject a missing public rather than injecting one, and the success line names the address the API answered with.",
   "cases": [
+    {
+      "name": "requires confirm",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true },
+      "expect_error": "This allocates a new IP address which may incur charges. Set confirm=true to proceed."
+    },
+    {
+      "name": "refuses a non-positive linode_id",
+      "args": { "confirm": true, "linode_id": 0, "type": "ipv4", "public": true },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "requires type",
+      "args": { "confirm": true, "linode_id": 123, "public": true },
+      "expect_error": "type must be a non-empty string"
+    },
+    {
+      "name": "rejects an invalid type",
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "type": "ipv6-range",
+        "public": true
+      },
+      "expect_error": "type must be one of: ipv4"
+    },
     {
       "name": "requires public once confirmed",
       "args": { "confirm": true, "linode_id": 123, "type": "ipv4" },
       "expect_error": "public is required"
     },
     {
+      "name": "refuses a non-boolean public",
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": "yes"
+      },
+      "expect_error": "public must be a boolean"
+    },
+    {
       "name": "allocates an IP for a linode",
-      "args": { "confirm": true, "linode_id": 123, "type": "ipv4", "public": true },
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
@@ -18,14 +58,71 @@
       }
     },
     {
-      "name": "rejects an invalid type",
-      "args": { "confirm": true, "linode_id": 123, "type": "ipv6-range", "public": true },
-      "expect_error": "type must be one of: ipv4"
+      "name": "reports the allocated address",
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true
+      },
+      "api_response": {
+        "address": "203.0.113.9",
+        "gateway": "203.0.113.1",
+        "subnet_mask": "255.255.255.0",
+        "prefix": 24,
+        "type": "ipv4",
+        "public": true,
+        "rdns": "li-9.members.linode.com",
+        "linode_id": 123,
+        "region": "us-east"
+      },
+      "expect_result": {
+        "message": "IP 203.0.113.9 allocated for Linode 123",
+        "ip": {
+          "address": "203.0.113.9",
+          "gateway": "203.0.113.1",
+          "subnet_mask": "255.255.255.0",
+          "prefix": 24,
+          "type": "ipv4",
+          "public": true,
+          "rdns": "li-9.members.linode.com",
+          "linode_id": 123,
+          "region": "us-east"
+        }
+      }
     },
     {
-      "name": "requires confirm",
-      "args": {"linode_id": 123, "type": "ipv4", "public": true},
-      "expect_error": "This allocates a new IP address which may incur charges. Set confirm=true to proceed."
+      "name": "rejects a bare-array API response",
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true
+      },
+      "api_response": [],
+      "expect_api_error": "networking ip allocate response must be a JSON object"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true,
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_networking_ip_allocate",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/ips",
+          "body": { "linode_id": 123, "type": "ipv4", "public": true }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

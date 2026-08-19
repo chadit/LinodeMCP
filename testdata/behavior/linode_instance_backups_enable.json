@@ -1,22 +1,143 @@
 {
   "tool": "linode_instance_backups_enable",
-  "description": "Enable needs confirm; POSTs the enable endpoint with no body. No-confirm message text diverges (see report).",
+  "description": "Pins the linode_id rule its contract declares, the confirm gate, the bodyless POST, the id echo it answers with, and the preview reading the instance the backup service would be billed for.",
   "cases": [
     {
-      "name": "rejects missing linode_id once confirmed",
-      "args": { "confirm": true },
-      "expect_error": "linode_id is required"
-    },
-    {
-      "name": "enables backups with a plain POST",
-      "args": { "linode_id": 123, "confirm": true },
-      "api_response": {},
-      "expect_request": { "method": "POST", "path": "/linode/instances/123/backups/enable" }
+      "name": "rejects a linode_id below one",
+      "args": {
+        "linode_id": 0,
+        "confirm": true
+      },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 123},
+      "args": {
+        "linode_id": 123
+      },
       "expect_error": "Enabling backups adds a recurring charge to your account. Set confirm=true to proceed."
+    },
+    {
+      "name": "enables backups with a plain POST",
+      "args": {
+        "linode_id": 123,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/backups/enable"
+      }
+    },
+    {
+      "name": "answers with the id the call named",
+      "args": {
+        "linode_id": 123,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_result": {
+        "message": "Backup service enabled for instance 123",
+        "linode_id": 123
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 123,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_backups_enable",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/backups/enable"
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 123,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

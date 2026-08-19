@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.IamDelegationDefaultRolePermissionsWriteResponse",
+  "description": "Default delegate assignment update envelope: a confirmation message plus the assignment the API returned. The entity half is the same message a single user's own assignment carries.",
+  "input": {
+    "message": "Default delegate role permissions updated",
+    "default_role_permissions": {
+      "account_access": ["account_linode_creator", "account_firewall_creator"],
+      "entity_access": [
+        { "id": 1, "roles": ["linode_contributor"], "type": "linode" },
+        { "id": 4, "roles": ["firewall_admin", "firewall_viewer"], "type": "firewall" }
+      ]
+    }
+  },
+  "canonical": {
+    "message": "Default delegate role permissions updated",
+    "default_role_permissions": {
+      "account_access": ["account_linode_creator", "account_firewall_creator"],
+      "entity_access": [
+        { "id": 1, "roles": ["linode_contributor"], "type": "linode" },
+        { "id": 4, "roles": ["firewall_admin", "firewall_viewer"], "type": "firewall" }
+      ]
+    }
+  }
+}

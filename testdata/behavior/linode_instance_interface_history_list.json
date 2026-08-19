@@ -1,17 +1,49 @@
 {
   "tool": "linode_instance_interface_history_list",
-  "description": "Pins the shared non-integer page rejection and the interface-history list GET. linode_id rejection text diverges (see report).",
+  "description": "Pins the interface-history list GET, the shared non-integer page rejection, and the linode_id refusals, which agree across languages through the contract's positive-id reader.",
   "cases": [
     {
+      "name": "requires linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects a non-positive linode_id",
+      "args": {
+        "linode_id": 0
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a decimal-string linode_id",
+      "args": {
+        "linode_id": "1.5"
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
       "name": "rejects non-integer page",
-      "args": { "linode_id": 123, "page": "x" },
+      "args": {
+        "linode_id": 123,
+        "page": "x"
+      },
       "expect_error": "page must be an integer"
     },
     {
       "name": "lists interface history",
-      "args": { "linode_id": 123 },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/linode/instances/123/interfaces/history" }
+      "args": {
+        "linode_id": 123
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/instances/123/interfaces/history"
+      }
     }
   ]
 }

@@ -1,22 +1,77 @@
 {
   "tool": "linode_managed_contact_delete",
-  "description": "Contact delete: shared confirm gate and the DELETE (Admin, not Destroy). Id missing/invalid text diverges (see report).",
+  "description": "Contact delete: the id rule, the confirm gate, the DELETE (Admin, not Destroy), and the preview that reads the contact.",
   "cases": [
     {
+      "name": "rejects a non-positive contact_id",
+      "args": {
+        "contact_id": 0,
+        "confirm": true
+      },
+      "expect_error": "contact_id must be a positive integer"
+    },
+    {
       "name": "requires confirm before deleting",
-      "args": { "contact_id": 4 },
+      "args": {
+        "contact_id": 4
+      },
       "expect_error": "This deletes a Managed contact. Set confirm=true to proceed."
     },
     {
       "name": "deletes a managed contact",
-      "args": { "contact_id": 4, "confirm": true },
+      "args": {
+        "contact_id": 4,
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "DELETE", "path": "/managed/contacts/4" }
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/managed/contacts/4"
+      }
     },
     {
-      "name": "requires confirm",
-      "args": {"contact_id": 4},
-      "expect_error": "This deletes a Managed contact. Set confirm=true to proceed."
+      "name": "dry_run_preview",
+      "args": {
+        "contact_id": 4,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /managed/contacts/4": {
+          "email": "ops@example.com",
+          "group": "",
+          "id": 4,
+          "name": "Ops",
+          "phone": {
+            "primary": null,
+            "secondary": null
+          },
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_managed_contact_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/managed/contacts/4"
+        },
+        "current_state": {
+          "email": "ops@example.com",
+          "group": "",
+          "id": 4,
+          "name": "Ops",
+          "phone": {
+            "primary": null,
+            "secondary": null
+          },
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The selected Managed contact is deleted."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

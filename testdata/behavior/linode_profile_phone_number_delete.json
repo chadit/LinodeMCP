@@ -1,17 +1,40 @@
 {
   "tool": "linode_profile_phone_number_delete",
-  "description": "Deletes the profile phone number with a single DELETE once confirmed. Confirm text diverges (see report).",
+  "description": "Profile phone number delete takes no arguments: the confirm gate, the DELETE, and the dry-run preview, which reports the call alone because the tool is not addressed at anything it could fetch.",
   "cases": [
     {
       "name": "deletes the profile phone number",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "DELETE", "path": "/profile/phone-number" }
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/profile/phone-number"
+      }
     },
     {
       "name": "requires confirm",
       "args": {},
       "expect_error": "This deletes the profile phone number. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_phone_number_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/profile/phone-number"
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

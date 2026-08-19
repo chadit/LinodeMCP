@@ -1,21 +1,87 @@
 {
   "tool": "linode_networking_ip_share",
-  "description": "Networking IP share POSTs linode_id/ips to the generic share endpoint once confirmed. The no-confirm text and arg validation diverge between languages (see report).",
+  "description": "Networking IP share POSTs linode_id/ips to the generic share endpoint once confirmed. The endpoint answers with an opaque body, so the tool echoes the primary Linode and the address list the call carried. An empty list is the documented way to remove every share.",
   "cases": [
     {
+      "name": "requires confirm",
+      "args": { "linode_id": 123, "ips": ["192.0.2.1"] },
+      "expect_error": "This changes shared IP assignments. Set confirm=true to proceed."
+    },
+    {
+      "name": "refuses a non-positive linode_id",
+      "args": { "confirm": true, "linode_id": 0, "ips": ["192.0.2.1"] },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "refuses a linode_id that is not a number",
+      "args": { "confirm": true, "linode_id": "abc", "ips": ["192.0.2.1"] },
+      "expect_error": "linode_id must be an integer"
+    },
+    {
+      "name": "requires ips",
+      "args": { "confirm": true, "linode_id": 123 },
+      "expect_error": "ips is required"
+    },
+    {
+      "name": "refuses ips that is not a list",
+      "args": { "confirm": true, "linode_id": 123, "ips": "192.0.2.1" },
+      "expect_error": "ips must be an array of strings"
+    },
+    {
+      "name": "refuses a blank address",
+      "args": { "confirm": true, "linode_id": 123, "ips": [" "] },
+      "expect_error": "ips must not include blank IP addresses"
+    },
+    {
       "name": "shares IPs with a primary linode",
-      "args": { "confirm": true, "linode_id": 123, "ips": [ "192.0.2.1" ] },
+      "args": { "confirm": true, "linode_id": 123, "ips": ["192.0.2.1"] },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/networking/ips/share",
-        "body": { "linode_id": 123, "ips": [ "192.0.2.1" ] }
+        "body": { "linode_id": 123, "ips": ["192.0.2.1"] }
       }
     },
     {
-      "name": "requires confirm",
-      "args": {"linode_id": 123, "ips": ["192.0.2.1"]},
-      "expect_error": "This changes shared IP assignments. Set confirm=true to proceed."
+      "name": "an empty list removes every share",
+      "args": { "confirm": true, "linode_id": 123, "ips": [] },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/ips/share",
+        "body": { "linode_id": 123, "ips": [] }
+      }
+    },
+    {
+      "name": "echoes the primary linode and the addresses the call carried",
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "ips": ["192.0.2.1", "2001:db8::/64"]
+      },
+      "api_response": {},
+      "expect_result": {
+        "message": "Networking IP sharing updated",
+        "linode_id": 123,
+        "ips": ["192.0.2.1", "2001:db8::/64"]
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "dry_run": true, "linode_id": 123, "ips": ["192.0.2.1"] },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_networking_ip_share",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/ips/share",
+          "body": { "linode_id": 123, "ips": ["192.0.2.1"] }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

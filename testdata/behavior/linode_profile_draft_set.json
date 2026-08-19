@@ -1,0 +1,21 @@
+{
+  "tool": "linode_profile_draft_set",
+  "description": "CapMeta builder tool setting draft fields (no Linode API call). Pins the two refusals: an absent name and a name the registry does not hold.",
+  "cases": [
+    {
+      "name": "refuses an absent name",
+      "args": {
+        "allow_yolo": true
+      },
+      "expect_error": "name argument is required"
+    },
+    {
+      "name": "refuses a name no draft carries",
+      "args": {
+        "name": "no-such-draft",
+        "allow_yolo": true
+      },
+      "expect_error": "draft not found: no-such-draft"
+    }
+  ]
+}

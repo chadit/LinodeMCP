@@ -257,6 +257,76 @@
       }
     },
     {
+      "name": "dry_run_preview",
+      "args": {
+        "firewall_id": 123,
+        "inbound": [],
+        "outbound": [],
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /networking/firewalls/123/rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": [
+                  "192.0.2.0/24"
+                ],
+                "ipv6": [
+                  "2001:db8::/32"
+                ]
+              },
+              "label": "allow-ssh",
+              "description": "ssh ingress"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_rules_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/networking/firewalls/123/rules",
+          "body": {
+            "inbound": [],
+            "outbound": []
+          }
+        },
+        "current_state": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": [
+                  "192.0.2.0/24"
+                ],
+                "ipv6": [
+                  "2001:db8::/32"
+                ]
+              },
+              "label": "allow-ssh",
+              "description": "ssh ingress"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    },
+    {
       "name": "rejects an unknown inbound_policy",
       "args": {
         "confirm": true,

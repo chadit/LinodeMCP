@@ -1,22 +1,44 @@
 {
   "tool": "linode_ipv6_range_delete",
-  "description": "IPv6 range delete is Destroy: confirm alone is blocked by the bypass gate, and a bypass DELETEs the slash path-escaped range. Missing-range rejection diverges (Go 'range must be a non-empty string' vs Python 'range is required') so it is left out; see report.",
+  "description": "IPv6 range delete is Destroy: confirm alone is blocked by the bypass gate, and a bypass DELETEs the slash path-escaped range. The preview reports that same escaped path, since it is the one the live call sends.",
   "cases": [
     {
+      "name": "requires range",
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "range is required"
+    },
+    {
       "name": "rejects a malformed range",
-      "args": { "range": "not-a-range" },
+      "args": {
+        "range": "not-a-range",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "expect_error": "range must be a valid IPv6 prefix"
     },
     {
       "name": "confirm alone is blocked by the destroy gate",
-      "args": { "range": "2600:3c03::/64", "confirm": true },
+      "args": {
+        "range": "2600:3c03::/64",
+        "confirm": true
+      },
       "expect_error": "linode_ipv6_range_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
     },
     {
       "name": "deletes the IPv6 range when authorized",
-      "args": { "range": "2600:3c03::/64", "confirm": true, "confirm_bypass_dry_run": true },
+      "args": {
+        "range": "2600:3c03::/64",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "api_response": {},
-      "expect_request": { "method": "DELETE", "path": "/networking/ipv6/ranges/2600:3c03::%2F64" }
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/networking/ipv6/ranges/2600:3c03::%2F64"
+      }
     },
     {
       "name": "dry_run_preview",
@@ -25,12 +47,6 @@
         "dry_run": true
       },
       "api_responses": {
-        "GET /networking/ipv6/ranges/2600:3c03::/64": {
-          "range": "2600:3c03::",
-          "prefix": 64,
-          "region": "us-east",
-          "route_target": ""
-        },
         "GET /networking/ipv6/ranges/2600:3c03::%2F64": {
           "range": "2600:3c03::",
           "prefix": 64,
@@ -43,7 +59,7 @@
         "tool": "linode_ipv6_range_delete",
         "would_execute": {
           "method": "DELETE",
-          "path": "/networking/ipv6/ranges/2600:3c03::/64"
+          "path": "/networking/ipv6/ranges/2600:3c03::%2F64"
         },
         "current_state": {
           "prefix": 64,

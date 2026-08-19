@@ -1,13 +1,13 @@
 {
   "tool": "linode_instance_disk_create",
-  "description": "Pins the shared missing-linode_id and missing-label rejections and the disk-create POST body. size rejection text diverges (see report).",
+  "description": "Pins the id, label, size, filesystem and root-password rules, the disk-create POST body, the comma-separated lists the body carries as arrays, and the preview that reads the instance the disk lands on.",
   "cases": [
     {
       "name": "rejects missing linode_id",
       "args": {
         "confirm": true
       },
-      "expect_error": "linode_id is required"
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "rejects missing label",
@@ -17,6 +17,60 @@
         "confirm": true
       },
       "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a size below one",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 0,
+        "confirm": true
+      },
+      "expect_error": "size is required and must be greater than 0"
+    },
+    {
+      "name": "rejects a filesystem the API does not publish",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "filesystem": "btrfs",
+        "confirm": true
+      },
+      "expect_error": "filesystem must be one of: raw, swap, ext2, ext3, ext4, initrd"
+    },
+    {
+      "name": "rejects a root_pass shorter than twelve characters",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "root_pass": "Short1",
+        "confirm": true
+      },
+      "expect_error": "root_pass must be at least 12 characters"
+    },
+    {
+      "name": "rejects a root_pass missing a character class",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "root_pass": "alllowercase1",
+        "confirm": true
+      },
+      "expect_error": "root_pass must contain uppercase, lowercase, and digits"
+    },
+    {
+      "name": "rejects a stackscript_id below one",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "stackscript_id": 0,
+        "confirm": true
+      },
+      "expect_error": "stackscript_id must be a positive integer"
     },
     {
       "name": "creates a disk",
@@ -78,6 +132,48 @@
       }
     },
     {
+      "name": "splits the comma-separated lists into body arrays",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "confirm": true,
+        "authorized_keys": "ssh-ed25519 AAAA one, ssh-ed25519 BBBB two ",
+        "authorized_users": "alice, bob"
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/disks",
+        "body": {
+          "label": "boot",
+          "size": 1024,
+          "authorized_keys": ["ssh-ed25519 AAAA one", "ssh-ed25519 BBBB two"],
+          "authorized_users": ["alice", "bob"]
+        }
+      }
+    },
+    {
+      "name": "carries an emptied list as an empty array",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "confirm": true,
+        "authorized_keys": ""
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/disks",
+        "body": {
+          "label": "boot",
+          "size": 1024,
+          "authorized_keys": []
+        }
+      }
+    },
+    {
       "name": "rejects a stackscript_data value that is not an object",
       "args": {
         "linode_id": 123,
@@ -111,6 +207,114 @@
       },
       "api_response": 7,
       "expect_api_error": "disk"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "root_pass": "Sup3rSecretPass",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_disk_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/disks",
+          "body": {
+            "label": "boot",
+            "size": 1024,
+            "root_pass": { "redacted": true }
+          }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "A new 1024 MB disk \"boot\" will be created on instance 123."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

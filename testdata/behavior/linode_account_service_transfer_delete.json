@@ -1,27 +1,90 @@
 {
   "tool": "linode_account_service_transfer_delete",
-  "description": "Shared missing/path-separator token rejections and the delete DELETE path. Confirm-gate and non-string/empty text diverge (see report).",
+  "description": "Service transfer cancel: the three token sentences the contract carries, the confirm gate, the DELETE once confirmed, and the preview that reads the transfer.",
   "cases": [
     {
       "name": "requires token",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "token is required"
     },
     {
       "name": "rejects a token with path separators",
-      "args": { "token": "abc/def" },
+      "args": {
+        "token": "abc/def",
+        "confirm": true
+      },
       "expect_error": "token must not contain path separators, query separators, or traversal segments"
     },
     {
       "name": "cancels an account service transfer",
-      "args": { "token": "svc-token-123", "confirm": true },
+      "args": {
+        "token": "svc-token-123",
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "DELETE", "path": "/account/service-transfers/svc-token-123" }
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/account/service-transfers/svc-token-123"
+      }
     },
     {
       "name": "requires confirm",
-      "args": {"token": "svc-token-123"},
+      "args": {
+        "token": "svc-token-123"
+      },
       "expect_error": "This cancels an account service transfer. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "token": "svc-token-123",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /account/service-transfers/svc-token-123": {
+          "created": "2026-01-02T03:04:05",
+          "expiry": "2026-01-09T03:04:05",
+          "status": "pending",
+          "token": "svc-token-123",
+          "updated": "2026-01-02T03:04:05",
+          "entities": {
+            "linodes": [
+              111,
+              222
+            ]
+          },
+          "is_sender": true
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_service_transfer_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/account/service-transfers/svc-token-123"
+        },
+        "current_state": {
+          "created": "2026-01-02T03:04:05",
+          "expiry": "2026-01-09T03:04:05",
+          "status": "pending",
+          "token": "svc-token-123",
+          "updated": "2026-01-02T03:04:05",
+          "entities": {
+            "linodes": [
+              111,
+              222
+            ]
+          },
+          "is_sender": true
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The selected account service transfer is canceled."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -1,0 +1,21 @@
+{
+  "tool": "linode_profile_draft_discard",
+  "description": "CapMeta builder tool removing one draft (no Linode API call). Discard is idempotent, so the miss is an answer rather than a refusal; only an absent name refuses.",
+  "cases": [
+    {
+      "name": "refuses an absent name",
+      "args": {},
+      "expect_error": "name argument is required"
+    },
+    {
+      "name": "answers discarded false for a draft that was never there",
+      "args": {
+        "name": "no-such-draft"
+      },
+      "expect_result": {
+        "name": "no-such-draft",
+        "discarded": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "tool": "linode_iam_role_permission_list",
+  "description": "No local validation; pins the plain role-permissions GET. The route is a catalog that takes no parameters, so no query travels with it, and its response is an object with two collections rather than a page.",
+  "cases": [
+    {
+      "name": "lists the roles that can be granted",
+      "args": {},
+      "api_response": {
+        "account_access": [
+          {
+            "type": "account",
+            "roles": [
+              {
+                "name": "account_viewer",
+                "description": "Access to view every resource on the account.",
+                "permissions": ["list_linodes", "view_linode"]
+              }
+            ]
+          }
+        ],
+        "entity_access": [
+          {
+            "type": "linode",
+            "roles": [
+              {
+                "name": "linode_admin",
+                "description": "Full access to one Linode.",
+                "permissions": ["update_linode", "delete_linode"]
+              }
+            ]
+          }
+        ]
+      },
+      "expect_request": { "method": "GET", "path": "/iam/role-permissions" }
+    }
+  ]
+}

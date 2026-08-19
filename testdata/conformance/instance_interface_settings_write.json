@@ -4,14 +4,14 @@
   "input": {
     "message": "Interface settings for instance 123 updated successfully",
     "settings": {
-      "default_route": {"ipv4": true, "ipv6": false},
+      "default_route": {"ipv4_interface_id": 1001, "ipv6_interface_id": 1002},
       "network_helper": true
     }
   },
   "canonical": {
     "message": "Interface settings for instance 123 updated successfully",
     "settings": {
-      "default_route": {"ipv4": true, "ipv6": false},
+      "default_route": {"ipv4_interface_id": 1001, "ipv6_interface_id": 1002},
       "network_helper": true
     }
   }

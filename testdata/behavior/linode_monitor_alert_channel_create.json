@@ -1,0 +1,123 @@
+{
+  "tool": "linode_monitor_alert_channel_create",
+  "description": "Alert channel create. details is a free-form object like rule_criteria, so its members are pinned by the wire body rather than by field rules.",
+  "cases": [
+    {
+      "name": "rejects a missing channel_type",
+      "args": {
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "confirm": true
+      },
+      "expect_error": "channel_type must be one of: email"
+    },
+    {
+      "name": "rejects an unknown channel_type",
+      "args": {
+        "channel_type": "carrier-pigeon",
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "confirm": true
+      },
+      "expect_error": "channel_type must be one of: email"
+    },
+    {
+      "name": "rejects empty details",
+      "args": {
+        "channel_type": "email",
+        "details": {},
+        "confirm": true
+      },
+      "expect_error": "details must be a non-empty object"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "channel_type": "email",
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "label": "   ",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "channel_type": "email",
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "label": "ops on call"
+      },
+      "expect_error": "This creates a monitor alert channel. Set confirm=true to proceed."
+    },
+    {
+      "name": "posts the create body",
+      "args": {
+        "channel_type": "email",
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "label": "ops on call",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "label": "ops on call",
+        "channel_type": "email"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/alert-channels",
+        "body": {
+          "channel_type": "email",
+          "details": { "email": { "usernames": ["opsuser"] } },
+          "label": "ops on call"
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "channel_type": "email",
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "label": "ops on call",
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "channel_type": "email",
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "label": "ops on call",
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the alert channel create request",
+      "args": {
+        "channel_type": "email",
+        "details": { "email": { "usernames": ["opsuser"] } },
+        "label": "ops on call",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_alert_channel_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/monitor/alert-channels",
+          "body": {
+            "channel_type": "email",
+            "details": { "email": { "usernames": ["opsuser"] } },
+            "label": "ops on call"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

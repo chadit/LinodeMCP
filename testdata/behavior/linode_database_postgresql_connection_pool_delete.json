@@ -1,0 +1,94 @@
+{
+  "tool": "linode_database_postgresql_connection_pool_delete",
+  "description": "Destroy tool addressed by two ids. The preview case is what proves the synthesized state fetch: the tool declares no fetch_state hook, so both languages read the pool through linode_database_postgresql_connection_pool_get, the sibling declared on the same route, and report it as that read's own message.",
+  "cases": [
+    {
+      "name": "rejects a non-positive instance_id",
+      "args": {
+        "instance_id": 0,
+        "pool_name": "Connection-Pool-01",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank pool_name",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "   ",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "pool_name must be a non-empty string"
+    },
+    {
+      "name": "rejects a pool_name with a path separator",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "pools/Connection-Pool-01",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "pool_name must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "confirm": true
+      },
+      "expect_error": "linode_database_postgresql_connection_pool_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the connection pool",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/databases/postgresql/instances/890/connection-pools/Connection-Pool-01"
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /databases/postgresql/instances/890/connection-pools/Connection-Pool-01": {
+          "database": "PostgreSQL-DB-video-streaming-data",
+          "label": "Connection-Pool-01",
+          "mode": "session",
+          "size": 10,
+          "username": "john-doe"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_postgresql_connection_pool_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/databases/postgresql/instances/890/connection-pools/Connection-Pool-01"
+        },
+        "current_state": {
+          "database": "PostgreSQL-DB-video-streaming-data",
+          "label": "Connection-Pool-01",
+          "mode": "session",
+          "size": 10,
+          "username": "john-doe"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

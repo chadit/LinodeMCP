@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_ip_allocate",
-  "description": "Allocate needs confirm; public is required by the API (no default) so both languages reject a missing public rather than injecting one; then POSTs the type/public body. No-confirm and missing-type message text diverge (see report). A success body that is not a JSON object must fail rather than turn into a zeroed address record.",
+  "description": "Allocate needs confirm; public is required by the API (no default) so both languages reject a missing public rather than injecting one; then POSTs the type/public body. A success body that is not a JSON object must fail rather than turn into a zeroed address record. The preview reports the call without reading state: the route creates an address rather than replacing one.",
   "cases": [
     {
       "name": "rejects missing linode_id once confirmed",
@@ -8,7 +8,7 @@
         "confirm": true,
         "type": "ipv4"
       },
-      "expect_error": "linode_id is required"
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "requires public once confirmed",
@@ -28,7 +28,8 @@
         "confirm": true
       },
       "api_response": {
-        "address": "203.0.113.5"
+        "address": "203.0.113.5",
+        "linode_id": 123
       },
       "expect_request": {
         "method": "POST",
@@ -36,6 +37,40 @@
         "body": {
           "type": "ipv4",
           "public": true
+        }
+      }
+    },
+    {
+      "name": "reports the allocated address",
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true
+      },
+      "api_response": {
+        "address": "203.0.113.5",
+        "gateway": "203.0.113.1",
+        "subnet_mask": "255.255.255.0",
+        "prefix": 24,
+        "type": "ipv4",
+        "public": true,
+        "rdns": "li-5.members.linode.com",
+        "linode_id": 123,
+        "region": "us-east"
+      },
+      "expect_result": {
+        "message": "IP 203.0.113.5 allocated for instance 123",
+        "ip": {
+          "address": "203.0.113.5",
+          "gateway": "203.0.113.1",
+          "subnet_mask": "255.255.255.0",
+          "prefix": 24,
+          "type": "ipv4",
+          "public": true,
+          "rdns": "li-5.members.linode.com",
+          "linode_id": 123,
+          "region": "us-east"
         }
       }
     },
@@ -137,7 +172,8 @@
         "address": "203.0.113.9"
       },
       "api_response": {
-        "address": "203.0.113.9"
+        "address": "203.0.113.9",
+        "linode_id": 123
       },
       "expect_request": {
         "method": "POST",
@@ -147,6 +183,50 @@
           "public": true,
           "address": "203.0.113.9"
         }
+      }
+    },
+    {
+      "name": "rejects a non-boolean public",
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": "yes",
+        "confirm": true
+      },
+      "expect_error": "public must be a boolean"
+    },
+    {
+      "name": "rejects an omitted type",
+      "args": {
+        "linode_id": 123,
+        "public": true,
+        "confirm": true
+      },
+      "expect_error": "type must be one of: ipv4"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_ip_allocate",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/ips",
+          "body": {
+            "type": "ipv4",
+            "public": true
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
       }
     }
   ]

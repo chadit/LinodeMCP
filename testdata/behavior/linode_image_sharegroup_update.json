@@ -1,13 +1,48 @@
 {
   "tool": "linode_image_sharegroup_update",
-  "description": "With confirm set both languages reach the sharegroup_id check. The update PUT sends only the provided fields.",
+  "description": "With confirm set both languages reach the sharegroup_id check. The update PUT sends only the provided fields, trimmed.",
   "cases": [
     {
       "name": "rejects missing sharegroup_id",
       "args": {
         "confirm": true
       },
-      "expect_error": "sharegroup_id is required"
+      "expect_error": "sharegroup_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative sharegroup_id",
+      "args": {
+        "sharegroup_id": -5,
+        "label": "new-label",
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id must be a positive integer"
+    },
+    {
+      "name": "rejects a call with neither field",
+      "args": {
+        "sharegroup_id": 5,
+        "confirm": true
+      },
+      "expect_error": "at least one of label or description is required"
+    },
+    {
+      "name": "rejects a label that is only padding",
+      "args": {
+        "sharegroup_id": 5,
+        "label": "   ",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects a description that is only padding",
+      "args": {
+        "sharegroup_id": 5,
+        "description": "\t",
+        "confirm": true
+      },
+      "expect_error": "description must be a non-empty string"
     },
     {
       "name": "updates the label",
@@ -22,6 +57,24 @@
         "path": "/images/sharegroups/5",
         "body": {
           "label": "new-label"
+        }
+      }
+    },
+    {
+      "name": "trims the padding off both fields",
+      "args": {
+        "sharegroup_id": 5,
+        "label": "  new-label  ",
+        "description": "  new description  ",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/images/sharegroups/5",
+        "body": {
+          "label": "new-label",
+          "description": "new description"
         }
       }
     },

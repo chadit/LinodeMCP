@@ -1,11 +1,21 @@
 {
   "tool": "linode_image_sharegroup_token_image_list",
-  "description": "Pins the token_uuid rejection and the images-by-token GET.",
+  "description": "Pins the token_uuid rejections and the images-by-token GET.",
   "cases": [
     {
       "name": "rejects missing token_uuid",
       "args": {},
       "expect_error": "token_uuid must be a non-empty string"
+    },
+    {
+      "name": "rejects a token carrying a path separator",
+      "args": { "token_uuid": "tokens/123e4567-e89b-12d3-a456-426614174000" },
+      "expect_error": "token_uuid must not contain path separators, query separators, fragments, or traversal segments"
+    },
+    {
+      "name": "rejects a non-canonical uuid",
+      "args": { "token_uuid": "123e4567e89b12d3a456426614174000" },
+      "expect_error": "token_uuid must be a UUID"
     },
     {
       "name": "lists images available through a token",

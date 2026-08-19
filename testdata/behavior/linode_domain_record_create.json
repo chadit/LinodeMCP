@@ -1,13 +1,24 @@
 {
   "tool": "linode_domain_record_create",
-  "description": "Domain record create requires domain_id and type (with confirm), then POSTs the record. A public A record captures type/name/target.",
+  "description": "Domain record create requires a positive domain_id and a type (with confirm), then POSTs the record. A public A record captures type/name/target.",
   "cases": [
     {
-      "name": "requires domain_id",
+      "name": "requires a positive domain_id",
       "args": {
         "confirm": true
       },
-      "expect_error": "domain_id is required"
+      "expect_error": "domain_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative domain_id",
+      "args": {
+        "confirm": true,
+        "domain_id": -5,
+        "type": "A",
+        "name": "www",
+        "target": "8.8.8.8"
+      },
+      "expect_error": "domain_id must be a positive integer"
     },
     {
       "name": "requires type",
@@ -68,6 +79,16 @@
         "tag": "issuance"
       },
       "expect_error": "tag must be one of: issue, issuewild, iodef"
+    },
+    {
+      "name": "an omitted target is refused by the record-type check rather than sent empty",
+      "args": {
+        "confirm": true,
+        "domain_id": 5,
+        "type": "A",
+        "name": "www"
+      },
+      "expect_error": "target is required"
     }
   ]
 }

@@ -4,29 +4,90 @@
   "cases": [
     {
       "name": "requires confirm before updating",
-      "args": { "client_id": "abc123", "label": "new-label" },
+      "args": {
+        "client_id": "abc123",
+        "label": "new-label"
+      },
       "expect_error": "This updates an OAuth client. Set confirm=true to proceed."
     },
     {
       "name": "updates an OAuth client",
-      "args": { "client_id": "abc123", "label": "new-label", "confirm": true },
-      "api_response": { "id": "abc123", "label": "new-label" },
+      "args": {
+        "client_id": "abc123",
+        "label": "new-label",
+        "confirm": true
+      },
+      "api_response": {
+        "id": "abc123",
+        "label": "new-label"
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/account/oauth-clients/abc123",
-        "body": { "label": "new-label" }
+        "body": {
+          "label": "new-label"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"client_id": "abc123", "label": "new-label"},
+      "args": {
+        "client_id": "abc123",
+        "label": "new-label"
+      },
       "expect_error": "This updates an OAuth client. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "client_id": "abc123", "label": "new-label", "confirm": true },
+      "args": {
+        "client_id": "abc123",
+        "label": "new-label",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "client_id": "abc123",
+        "label": "new-label",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /account/oauth-clients/abc123": {
+          "id": "abc123",
+          "label": "ci-client",
+          "public": false,
+          "redirect_uri": "https://example.com/callback",
+          "status": "active",
+          "thumbnail_url": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_oauth_client_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/account/oauth-clients/abc123",
+          "body": {
+            "label": "new-label"
+          }
+        },
+        "current_state": {
+          "id": "abc123",
+          "label": "ci-client",
+          "public": false,
+          "redirect_uri": "https://example.com/callback",
+          "status": "active",
+          "thumbnail_url": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The selected OAuth client configuration is updated."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -1,17 +1,163 @@
 {
   "tool": "linode_instance_interface_upgrade",
-  "description": "Pins the interface-upgrade POST. linode_id, config_id, and api_dry_run rejection text diverges between languages (see report).",
+  "description": "Pins the interface-upgrade POST, the api_dry_run rename to the wire's dry_run, the preview that reads the Linode first, and the API-filled answer: config_id and dry_run come back from the route, not from the call.",
   "cases": [
     {
       "name": "upgrades legacy interfaces",
       "args": { "linode_id": 123, "confirm": true },
-      "api_response": {},
+      "api_response": { "config_id": 55, "dry_run": false, "interfaces": [] },
       "expect_request": { "method": "POST", "path": "/linode/instances/123/upgrade-interfaces" }
+    },
+    {
+      "name": "sends api_dry_run under the wire's dry_run key",
+      "args": { "linode_id": 123, "confirm": true, "config_id": 55, "api_dry_run": true },
+      "api_response": { "config_id": 55, "dry_run": true, "interfaces": [] },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/upgrade-interfaces",
+        "body": { "config_id": 55, "dry_run": true }
+      }
+    },
+    {
+      "name": "answers with the profile the API upgraded, not the one asked for",
+      "args": { "linode_id": 123, "confirm": true, "config_id": 55 },
+      "api_response": {
+        "config_id": 77,
+        "dry_run": false,
+        "interfaces": [
+          { "id": 9, "vlan": { "vlan_label": "dev", "ipam_address": "10.0.0.1/24" } }
+        ]
+      },
+      "expect_result": {
+        "message": "Linode 123 interface upgrade initiated",
+        "config_id": 77,
+        "dry_run": false,
+        "interfaces": [
+          {
+            "id": 9,
+            "vlan": { "vlan_label": "dev", "ipam_address": "10.0.0.1/24" }
+          }
+        ]
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "linode_id": 123, "dry_run": true },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_interface_upgrade",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/upgrade-interfaces",
+          "body": {}
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Linode 123 will be upgraded to Linode Interfaces."
+        ],
+        "warnings": []
+      }
     },
     {
       "name": "requires confirm",
       "args": {"linode_id": 123},
       "expect_error": "This irreversibly upgrades Linode network interfaces. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a config_id below one",
+      "args": { "linode_id": 123, "confirm": true, "config_id": 0 },
+      "expect_error": "config_id must be a positive integer"
+    },
+    {
+      "name": "rejects an api_dry_run that is not a boolean",
+      "args": { "linode_id": 123, "confirm": true, "api_dry_run": "yes" },
+      "expect_error": "api_dry_run must be a boolean"
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "linode_id": 123, "confirm": true },
+      "api_response": "not-an-object",
+      "expect_api_error": "Failed to upgrade interfaces for instance 123"
     }
   ]
 }

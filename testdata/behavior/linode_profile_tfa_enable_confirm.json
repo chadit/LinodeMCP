@@ -1,26 +1,64 @@
 {
   "tool": "linode_profile_tfa_enable_confirm",
-  "description": "Shared tfa_code rejection and the confirm POST body. Confirm text diverges (see report). Response-shape coverage is missing. Python fabricates a zeroed success record from every non-object body where Go errors, so no shared case passes yet (see report).",
+  "description": "Shared tfa_code rejection, the confirm POST body, and the preview that redacts the code while naming what confirming turns on. The response carries the account-recovery scratch code and its expiry, which the envelope decodes.",
   "cases": [
     {
       "name": "rejects missing tfa_code",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "tfa_code must be a non-empty string"
     },
     {
       "name": "confirms two-factor enablement",
-      "args": { "tfa_code": "123456", "confirm": true },
-      "api_response": { "scratch": "abcd", "expiry": "2030-01-01T00:00:00" },
+      "args": {
+        "tfa_code": "123456",
+        "confirm": true
+      },
+      "api_response": {
+        "scratch": "abcd",
+        "expiry": "2030-01-01T00:00:00"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/profile/tfa-enable-confirm",
-        "body": { "tfa_code": "123456" }
+        "body": {
+          "tfa_code": "123456"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"tfa_code": "123456"},
+      "args": {
+        "tfa_code": "123456"
+      },
       "expect_error": "This enables two-factor authentication for the profile. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "tfa_code": "  123456  ",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_tfa_enable_confirm",
+        "would_execute": {
+          "method": "POST",
+          "path": "/profile/tfa-enable-confirm",
+          "body": {
+            "tfa_code": {
+              "redacted": true
+            }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "Two-factor authentication is enabled for this profile."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

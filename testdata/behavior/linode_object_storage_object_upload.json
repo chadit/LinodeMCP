@@ -1,0 +1,207 @@
+{
+  "tool": "linode_object_storage_object_upload",
+  "cases": [
+    {
+      "name": "rejects a missing region",
+      "args": {
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "/tmp/app.tar.gz",
+        "confirm": true
+      },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects a missing label",
+      "args": {
+        "region": "us-east",
+        "name": "releases/app.tar.gz",
+        "source_path": "/tmp/app.tar.gz",
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a missing object key",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "source_path": "/tmp/app.tar.gz",
+        "confirm": true
+      },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "rejects a missing source path",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "confirm": true
+      },
+      "expect_error": "source_path is required"
+    },
+    {
+      "name": "rejects a source path of spaces alone",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "   ",
+        "confirm": true
+      },
+      "expect_error": "source_path is required"
+    },
+    {
+      "name": "rejects a relative source path",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "app.tar.gz",
+        "confirm": true
+      },
+      "expect_error": "source_path must be a local, absolute path"
+    },
+    {
+      "name": "rejects an expires_in outside the signing window",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "/tmp/app.tar.gz",
+        "expires_in": 604801,
+        "confirm": true
+      },
+      "expect_error": "expires_in must be between 1 and 604800 seconds (7 days)"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "/tmp/app.tar.gz"
+      },
+      "expect_error": "This uploads a local file to Object Storage, replacing any object already stored under that key. Set confirm=true to proceed."
+    },
+    {
+      "name": "previews the transfer without making it",
+      "files": {
+        "small.bin": { "content": "hello object storage" }
+      },
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "{{file:small.bin}}",
+        "dry_run": true
+      },
+      "expect_result": {
+        "tool": "linode_object_storage_object_upload",
+        "dry_run": true,
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "content_type": "application/octet-stream",
+            "expires_in": 3600,
+            "method": "PUT"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "20 bytes will be uploaded to 'releases/app.tar.gz' in bucket 'artifacts' as a single part."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "uploads a small object and reports what landed",
+      "files": {
+        "small.bin": { "content": "hello object storage" }
+      },
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "{{file:small.bin}}",
+        "confirm": true
+      },
+      "api_responses": {
+        "POST /object-storage/buckets/us-east/artifacts/object-url": {
+          "url": "{{api_base}}/artifacts/releases/app.tar.gz?sig=fixture"
+        },
+        "PUT /artifacts/releases/app.tar.gz": {}
+      },
+      "api_response_headers": {
+        "PUT /artifacts/releases/app.tar.gz": {
+          "ETag": "\"5eb63bbbe01eeed093cb22bb8f5acdc3\""
+        }
+      },
+      "expect_result": {
+        "message": "Object 'releases/app.tar.gz' uploaded to bucket 'artifacts'",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "size_bytes": 20,
+        "etag": "5eb63bbbe01eeed093cb22bb8f5acdc3",
+        "upload_mode": "single"
+      }
+    },
+    {
+      "name": "refuses a file above the single-part ceiling",
+      "files": {
+        "big.bin": { "size": 2048, "fill": "a" }
+      },
+      "config": {
+        "object_storage": { "max_single_part_bytes": 1024 }
+      },
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/big.bin",
+        "source_path": "{{file:big.bin}}",
+        "confirm": true
+      },
+      "api_responses": {
+        "POST /object-storage/buckets/us-east/artifacts/object-url": {
+          "url": "{{api_base}}/artifacts/releases/big.bin?sig=fixture"
+        }
+      },
+      "expect_error": "Failed to upload 'releases/big.bin' to bucket 'artifacts': source_path is above the single-part upload ceiling: 2048 bytes exceeds the 1024 byte ceiling, and multipart upload is not implemented yet"
+    },
+    {
+      "name": "refuses a source path with no file behind it",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "/nonexistent/upload-fixture-missing.bin",
+        "confirm": true
+      },
+      "api_responses": {
+        "POST /object-storage/buckets/us-east/artifacts/object-url": {
+          "url": "{{api_base}}/artifacts/releases/app.tar.gz?sig=fixture"
+        }
+      },
+      "expect_error": "Failed to upload 'releases/app.tar.gz' to bucket 'artifacts': source_path names no readable file: /nonexistent/upload-fixture-missing.bin"
+    },
+    {
+      "name": "rejects a presign response that is not an object",
+      "files": {
+        "small.bin": { "content": "hello object storage" }
+      },
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "{{file:small.bin}}",
+        "confirm": true
+      },
+      "api_response_raw": "[]",
+      "expect_api_error": "object storage object upload"
+    }
+  ]
+}

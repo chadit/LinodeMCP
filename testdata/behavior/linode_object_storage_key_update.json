@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_key_update",
-  "description": "Pins the shared key_id validation (with confirm) and the key update PUT body. The key_id case carries confirm:true because Go validates behind the confirm gate while Python validates ahead of it; they only agree once confirm is set. A success body that is not a JSON object must fail rather than turn into a zeroed key record; the two languages word that failure differently, so only the key subject is shared.",
+  "description": "Pins the key_id rule (behind confirm), the typed bucket_access array, the regions replacement list, and the key update PUT body. Every case carries confirm:true because the gate is asked ahead of validation. A success body that is not a JSON object must fail rather than turn into a zeroed key record; the two languages word that failure differently, so only the key subject is shared.",
   "cases": [
     {
       "name": "requires positive key_id",
@@ -8,7 +8,31 @@
         "label": "renamed-key",
         "confirm": true
       },
-      "expect_error": "key_id is required and must be a positive integer"
+      "expect_error": "key_id must be a positive integer"
+    },
+    {
+      "name": "rejects a label longer than 50 characters",
+      "args": {
+        "key_id": 123,
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "confirm": true
+      },
+      "expect_error": "access key label must not exceed 50 characters"
+    },
+    {
+      "name": "rejects an invalid bucket_access permission",
+      "args": {
+        "key_id": 123,
+        "confirm": true,
+        "bucket_access": [
+          {
+            "bucket_name": "my-bucket",
+            "region": "us-east",
+            "permissions": "bogus"
+          }
+        ]
+      },
+      "expect_error": "bucket_access entries must carry a bucket_name and a region, with permissions of read_only or read_write"
     },
     {
       "name": "updates a key label",
@@ -30,12 +54,87 @@
       }
     },
     {
+      "name": "replaces the bucket access scopes",
+      "args": {
+        "key_id": 123,
+        "confirm": true,
+        "bucket_access": [
+          {
+            "bucket_name": "my-bucket",
+            "region": "us-east",
+            "permissions": "read_write"
+          }
+        ]
+      },
+      "api_response": {
+        "id": 123,
+        "label": "key"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/object-storage/keys/123",
+        "body": {
+          "bucket_access": [
+            {
+              "bucket_name": "my-bucket",
+              "region": "us-east",
+              "permissions": "read_write"
+            }
+          ]
+        }
+      }
+    },
+    {
       "name": "requires confirm",
       "args": {
         "key_id": 123,
         "label": "renamed-key"
       },
       "expect_error": "This modifies access key permissions. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "key_id": 123,
+        "label": "renamed-key",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /object-storage/keys/123": {
+          "id": 123,
+          "label": "old-key",
+          "access_key": "AK",
+          "secret_key": "",
+          "limited": false,
+          "bucket_access": [],
+          "regions": []
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_key_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/object-storage/keys/123",
+          "body": {
+            "label": "renamed-key"
+          }
+        },
+        "current_state": {
+          "id": 123,
+          "label": "old-key",
+          "access_key": "AK",
+          "secret_key": "",
+          "limited": false,
+          "bucket_access": [],
+          "regions": []
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Label changes from \"old-key\" to \"renamed-key\"."
+        ],
+        "warnings": []
+      }
     },
     {
       "name": "rejects a numeric API response",

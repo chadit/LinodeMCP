@@ -1,17 +1,61 @@
 {
   "tool": "linode_account_settings_managed_enable",
-  "description": "Pins the managed-enable POST path. Confirm-gate text diverges, so only the success capture is shared (see report).",
+  "description": "Enabling Linode Managed takes no arguments: the confirm gate, the POST, and the dry-run preview, which reads the settings so a caller can see whether Managed is already on.",
   "cases": [
     {
       "name": "enables Linode Managed",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/account/settings/managed-enable" }
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/settings/managed-enable"
+      }
     },
     {
       "name": "requires confirm",
       "args": {},
       "expect_error": "This enables Linode Managed for the account. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /account/settings": {
+          "backups_enabled": false,
+          "managed": false,
+          "longview_subscription": "",
+          "network_helper": false,
+          "object_storage": "",
+          "interfaces_for_new_linodes": "",
+          "maintenance_policy": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_settings_managed_enable",
+        "would_execute": {
+          "method": "POST",
+          "path": "/account/settings/managed-enable"
+        },
+        "current_state": {
+          "backups_enabled": false,
+          "managed": false,
+          "longview_subscription": "",
+          "network_helper": false,
+          "object_storage": "",
+          "interfaces_for_new_linodes": "",
+          "maintenance_policy": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Linode Managed is enabled for this account."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

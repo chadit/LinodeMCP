@@ -3,15 +3,44 @@
   "description": "Requires linode_id, then GETs the instance firewalls collection (no query when pagination is unset).",
   "cases": [
     {
+      "name": "requires linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects a non-positive linode_id",
+      "args": {
+        "linode_id": 0
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a numeric-string linode_id",
+      "args": {
+        "linode_id": "1"
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
       "name": "rejects missing linode_id",
       "args": {},
       "expect_error": "linode_id is required"
     },
     {
       "name": "lists firewalls with a plain GET",
-      "args": { "linode_id": 123 },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/linode/instances/123/firewalls" }
+      "args": {
+        "linode_id": 123
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/instances/123/firewalls"
+      }
     }
   ]
 }

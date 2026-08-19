@@ -1,10 +1,25 @@
 {
   "tool": "linode_networking_ip_get",
-  "description": "Networking IP get rejects a malformed address the same way in both languages, then GETs one IP by address. The missing-address message diverges (see report).",
+  "description": "Networking IP get names a missing, non-string, malformed, or zoned address the same way in both languages, then GETs one IP by address.",
   "cases": [
+    {
+      "name": "rejects a missing address",
+      "args": {},
+      "expect_error": "address must be a non-empty string"
+    },
+    {
+      "name": "rejects a non-string address",
+      "args": { "address": 5 },
+      "expect_error": "address must be a non-empty string"
+    },
     {
       "name": "rejects a malformed address",
       "args": { "address": "not-an-ip" },
+      "expect_error": "address must be a valid IP address"
+    },
+    {
+      "name": "rejects a zoned IPv6 address",
+      "args": { "address": "fe80::1%eth0" },
       "expect_error": "address must be a valid IP address"
     },
     {

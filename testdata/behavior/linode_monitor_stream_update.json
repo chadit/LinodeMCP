@@ -1,0 +1,120 @@
+{
+  "tool": "linode_monitor_stream_update",
+  "description": "Stream update. type is fixed at create, so only label, destinations, status, and details travel; an update naming none of them is refused rather than sent as an empty PUT.",
+  "cases": [
+    {
+      "name": "rejects a non-positive stream_id",
+      "args": { "stream_id": 0, "label": "audit to object storage", "confirm": true },
+      "expect_error": "stream_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": { "stream_id": 890, "label": "   ", "confirm": true },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects a non-positive destination id",
+      "args": { "stream_id": 890, "destinations": [0], "confirm": true },
+      "expect_error": "destinations entries must be positive integers"
+    },
+    {
+      "name": "rejects an unknown status",
+      "args": { "stream_id": 890, "status": "paused", "confirm": true },
+      "expect_error": "status must be one of: active, inactive"
+    },
+    {
+      "name": "rejects an empty update",
+      "args": { "stream_id": 890, "confirm": true },
+      "expect_error": "at least one update field is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": { "stream_id": 890, "status": "inactive" },
+      "expect_error": "This updates a monitor stream. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts the update body",
+      "args": {
+        "stream_id": 890,
+        "label": "audit to cold storage",
+        "destinations": [234, 235],
+        "status": "inactive",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 890,
+        "label": "audit to cold storage",
+        "type": "lke_audit_logs",
+        "status": "inactive",
+        "destinations": [
+          {
+            "id": 234,
+            "label": "ops bucket",
+            "type": "akamai_object_storage",
+            "details": {
+              "access_key_id": "AKIAEXAMPLE",
+              "bucket_name": "ops-audit",
+              "host": "us-east-1.linodeobjects.com",
+              "path": "streams/audit"
+            }
+          },
+          {
+            "id": 235,
+            "label": "cold bucket",
+            "type": "akamai_object_storage",
+            "details": {
+              "access_key_id": "AKIAEXAMPLE",
+              "bucket_name": "ops-cold",
+              "host": "us-east-1.linodeobjects.com",
+              "path": "streams/audit"
+            }
+          }
+        ],
+        "version": 4
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/monitor/streams/890",
+        "body": {
+          "label": "audit to cold storage",
+          "destinations": [234, 235],
+          "status": "inactive"
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "stream_id": 890, "status": "inactive", "confirm": true },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "stream_id": 890, "status": "inactive", "confirm": true },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the stream update request",
+      "args": {
+        "stream_id": 890,
+        "status": "inactive",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_stream_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/monitor/streams/890",
+          "body": { "status": "inactive" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

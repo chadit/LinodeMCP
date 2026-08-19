@@ -1,16 +1,21 @@
 {
   "tool": "linode_instance_disk_update",
-  "description": "Pins the shared missing-linode_id and missing-disk_id rejections and the disk-update PUT body.",
+  "description": "Pins the shared linode_id and disk_id rejections, the disk-update PUT body, and the preview that reads the disk being renamed.",
   "cases": [
     {
       "name": "rejects missing linode_id",
       "args": { "disk_id": 5, "confirm": true },
-      "expect_error": "linode_id is required"
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "rejects missing disk_id",
       "args": { "linode_id": 123, "confirm": true },
-      "expect_error": "disk_id is required"
+      "expect_error": "disk_id must be a positive integer"
+    },
+    {
+      "name": "rejects a disk_id below one",
+      "args": { "linode_id": 123, "disk_id": 0, "confirm": true },
+      "expect_error": "disk_id must be a positive integer"
     },
     {
       "name": "updates a disk label",
@@ -23,9 +28,50 @@
       }
     },
     {
+      "name": "rejects a label that is not a string",
+      "args": { "linode_id": 123, "disk_id": 5, "confirm": true, "label": 7 },
+      "expect_error": "label must be a string"
+    },
+    {
       "name": "requires confirm",
       "args": {"linode_id": 123, "disk_id": 5, "label": "newlabel"},
       "expect_error": "This modifies the disk configuration. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "linode_id": 123, "disk_id": 5, "label": "newlabel", "dry_run": true },
+      "api_responses": {
+        "GET /linode/instances/123/disks/5": {
+          "created": "",
+          "filesystem": "ext4",
+          "id": 5,
+          "label": "boot-disk",
+          "size": 25600,
+          "status": "ready",
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_disk_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/linode/instances/123/disks/5",
+          "body": { "label": "newlabel" }
+        },
+        "current_state": {
+          "created": "",
+          "filesystem": "ext4",
+          "id": 5,
+          "label": "boot-disk",
+          "size": 25600,
+          "status": "ready",
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

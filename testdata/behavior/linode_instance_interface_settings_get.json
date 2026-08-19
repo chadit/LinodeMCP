@@ -1,12 +1,36 @@
 {
   "tool": "linode_instance_interface_settings_get",
-  "description": "Pins the interface-settings GET. linode_id rejection text diverges between languages (see report).",
+  "description": "Pins the interface-settings GET and the linode_id refusals, which agree across languages through the contract's positive-id reader.",
   "cases": [
     {
+      "name": "requires linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects a non-positive linode_id",
+      "args": {
+        "linode_id": 0
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a decimal-string linode_id",
+      "args": {
+        "linode_id": "1.5"
+      },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
       "name": "gets interface settings",
-      "args": { "linode_id": 123 },
+      "args": {
+        "linode_id": 123
+      },
       "api_response": {},
-      "expect_request": { "method": "GET", "path": "/linode/instances/123/interfaces/settings" }
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/instances/123/interfaces/settings"
+      }
     }
   ]
 }

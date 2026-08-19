@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.DatabaseConnectionPoolWriteResponse",
+  "description": "PostgreSQL connection pool write envelope (create and update): a confirmation message plus the pool the API returned. username is the member the API sends as JSON null when the pool reuses the inbound user.",
+  "input": {
+    "message": "PostgreSQL connection pool created",
+    "connection_pool": {
+      "database": "PostgreSQL-DB-video-streaming-data",
+      "label": "Connection-Pool-01",
+      "mode": "session",
+      "size": 10,
+      "username": "john-doe"
+    }
+  },
+  "canonical": {
+    "message": "PostgreSQL connection pool created",
+    "connection_pool": {
+      "database": "PostgreSQL-DB-video-streaming-data",
+      "label": "Connection-Pool-01",
+      "mode": "session",
+      "size": 10,
+      "username": "john-doe"
+    }
+  }
+}

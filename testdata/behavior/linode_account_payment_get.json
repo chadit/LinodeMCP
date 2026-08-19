@@ -3,15 +3,37 @@
   "description": "Account payment get: missing payment_id agrees; success pins the GET path. Invalid-id text diverges (see report).",
   "cases": [
     {
+      "name": "rejects a non-positive payment_id",
+      "args": {
+        "payment_id": 0
+      },
+      "expect_error": "payment_id must be a positive integer"
+    },
+    {
+      "name": "rejects an payment_id past the JSON-safe range",
+      "args": {
+        "payment_id": 9007199254740992
+      },
+      "expect_error": "payment_id must be a positive integer"
+    },
+    {
       "name": "requires payment_id",
       "args": {},
       "expect_error": "payment_id is required"
     },
     {
       "name": "gets a payment by id",
-      "args": { "payment_id": 123 },
-      "api_response": { "id": 123, "usd": "10.00" },
-      "expect_request": { "method": "GET", "path": "/account/payments/123" }
+      "args": {
+        "payment_id": 123
+      },
+      "api_response": {
+        "id": 123,
+        "usd": "10.00"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/account/payments/123"
+      }
     }
   ]
 }

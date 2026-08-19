@@ -5,7 +5,12 @@
     {
       "name": "requires volume_id",
       "args": { "confirm": true },
-      "expect_error": "volume_id is required"
+      "expect_error": "volume_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative volume_id",
+      "args": { "confirm": true, "volume_id": -1, "label": "new-label" },
+      "expect_error": "volume_id must be a positive integer"
     },
     {
       "name": "updates a volume label",

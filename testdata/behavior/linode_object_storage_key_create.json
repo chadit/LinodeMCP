@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_key_create",
-  "description": "Pins the shared label validation (behind confirm) and the key create POST body. The secret_key is returned by design; only request behavior is pinned. Every case carries confirm:true because the confirm-gate message text diverges. A success body that is not a JSON object must fail rather than turn into a zeroed key record.",
+  "description": "Pins the label rules (behind confirm), the typed bucket_access array on the wire, and the key create POST body. The secret_key is returned by design; only request behavior is pinned. Every case carries confirm:true because the confirm-gate message text diverges. A success body that is not a JSON object must fail rather than turn into a zeroed key record.",
   "cases": [
     {
       "name": "requires label",
@@ -14,8 +14,32 @@
     },
     {
       "name": "rejects an invalid bucket_access permission",
-      "args": { "label": "test-key", "confirm": true, "bucket_access": "[{\"bucket_name\": \"my-bucket\", \"region\": \"us-east\", \"permissions\": \"bogus\"}]" },
-      "expect_error": "entry 0: permissions must be one of: read_only, read_write"
+      "args": {
+        "label": "test-key",
+        "confirm": true,
+        "bucket_access": [{ "bucket_name": "my-bucket", "region": "us-east", "permissions": "bogus" }]
+      },
+      "expect_error": "bucket_access entries must carry a bucket_name and a region, with permissions of read_only or read_write"
+    },
+    {
+      "name": "rejects a bucket_access entry with no bucket_name",
+      "args": {
+        "label": "test-key",
+        "confirm": true,
+        "bucket_access": [{ "region": "us-east", "permissions": "read_only" }]
+      },
+      "expect_error": "bucket_access entries must carry a bucket_name and a region, with permissions of read_only or read_write"
+    },
+    {
+      "name": "rejects a bucket_access entry naming a field the item has not got",
+      "args": {
+        "label": "test-key",
+        "confirm": true,
+        "bucket_access": [
+          { "bucket_name": "my-bucket", "region": "us-east", "permissions": "read_only", "cluster": "us-east-1" }
+        ]
+      },
+      "expect_error": "bucket_access[0] has no field \"cluster\""
     },
     {
       "name": "creates a key",
@@ -28,9 +52,43 @@
       }
     },
     {
+      "name": "carries a limited key's bucket access into the body",
+      "args": {
+        "label": "limited-key",
+        "confirm": true,
+        "bucket_access": [{ "bucket_name": "my-bucket", "region": "us-east", "permissions": "read_only" }]
+      },
+      "api_response": { "id": 56, "label": "limited-key", "access_key": "AK", "secret_key": "SK" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/keys",
+        "body": {
+          "label": "limited-key",
+          "bucket_access": [{ "bucket_name": "my-bucket", "region": "us-east", "permissions": "read_only" }]
+        }
+      }
+    },
+    {
       "name": "requires confirm",
       "args": {"label": "test-key"},
       "expect_error": "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "label": "test-key", "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_key_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/keys",
+          "body": { "label": "test-key" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": ["A new Object Storage access key \"test-key\" will be created."],
+        "warnings": ["The secret key is returned only once, at creation time."]
+      }
     },
     {
       "name": "rejects a numeric API response",

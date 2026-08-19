@@ -3,15 +3,37 @@
   "description": "OAuth client get: missing client_id agrees; success pins the GET path.",
   "cases": [
     {
+      "name": "rejects a blank client_id",
+      "args": {
+        "client_id": "  "
+      },
+      "expect_error": "client_id must be a non-empty string"
+    },
+    {
+      "name": "rejects a path separator in client_id",
+      "args": {
+        "client_id": "a/b"
+      },
+      "expect_error": "client_id must not contain path separators, query separators, or traversal segments"
+    },
+    {
       "name": "requires client_id",
       "args": {},
       "expect_error": "client_id is required"
     },
     {
       "name": "gets an OAuth client by id",
-      "args": { "client_id": "abc123" },
-      "api_response": { "id": "abc123", "label": "my-app" },
-      "expect_request": { "method": "GET", "path": "/account/oauth-clients/abc123" }
+      "args": {
+        "client_id": "abc123"
+      },
+      "api_response": {
+        "id": "abc123",
+        "label": "my-app"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/account/oauth-clients/abc123"
+      }
     }
   ]
 }

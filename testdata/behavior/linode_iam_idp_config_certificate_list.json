@@ -1,0 +1,75 @@
+{
+  "tool": "linode_iam_idp_config_certificate_list",
+  "description": "IDP certificate list. The validity window on each entry is derived from the certificate itself, so a populated page carries members no call ever sends.",
+  "cases": [
+    {
+      "name": "rejects a blank idp_config_id",
+      "args": {
+        "idp_config_id": "   "
+      },
+      "expect_error": "idp_config_id is required"
+    },
+    {
+      "name": "lists no certificates",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b"
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "lists a populated certificate",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b"
+      },
+      "api_response": {
+        "data": [
+          {
+            "certificate": "MIIDexampleCertificateData",
+            "created": "2026-03-04T12:00:00",
+            "created_by": "jsmith",
+            "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+            "not_after": "2027-03-04T12:00:00",
+            "not_before": "2026-03-04T12:00:00"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "carries the page controls the caller supplied",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "page": 2,
+        "page_size": 50
+      },
+      "api_response": {
+        "data": [],
+        "page": 2,
+        "pages": 2,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates?page=2&page_size=50",
+        "api_surface": "v4beta"
+      }
+    }
+  ]
+}

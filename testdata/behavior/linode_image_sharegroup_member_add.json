@@ -7,7 +7,17 @@
       "args": {
         "confirm": true
       },
-      "expect_error": "sharegroup_id is required"
+      "expect_error": "sharegroup_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative sharegroup_id",
+      "args": {
+        "sharegroup_id": -5,
+        "label": "member-label",
+        "token": "tok-abc",
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id must be a positive integer"
     },
     {
       "name": "adds a member to the group",
@@ -35,6 +45,60 @@
         "token": "tok-abc"
       },
       "expect_error": "This adds members to an image share group. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "sharegroup_id": 5,
+        "label": "member-label",
+        "token": "tok-abc",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /images/sharegroups/5": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 0,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_sharegroup_member_add",
+        "would_execute": {
+          "method": "POST",
+          "path": "/images/sharegroups/5/members",
+          "body": {
+            "label": "member-label",
+            "token": {
+              "redacted": true
+            }
+          }
+        },
+        "current_state": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 0,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Members will be added to the image share group."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -1,22 +1,145 @@
 {
   "tool": "linode_instance_firewall_apply",
-  "description": "Apply needs confirm; POSTs the apply endpoint with no body. No-confirm message text diverges (see report), so the missing-linode_id rejection carries confirm to reach the shared validation.",
+  "description": "Pins the linode_id rule its contract declares, the confirm gate, the bodyless POST, the id echo it answers with, and the preview, which now both reads the instance (Go's shape) and names the reassignment (Python's sentence).",
   "cases": [
     {
-      "name": "rejects missing linode_id once confirmed",
-      "args": { "confirm": true },
-      "expect_error": "linode_id is required"
-    },
-    {
-      "name": "reapplies firewalls with a plain POST",
-      "args": { "linode_id": 123, "confirm": true },
-      "api_response": {},
-      "expect_request": { "method": "POST", "path": "/linode/instances/123/firewalls/apply" }
+      "name": "rejects a linode_id below one",
+      "args": {
+        "linode_id": 0,
+        "confirm": true
+      },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 123},
+      "args": {
+        "linode_id": 123
+      },
       "expect_error": "This reapplies assigned firewalls to the Linode. Set confirm=true to proceed."
+    },
+    {
+      "name": "reapplies firewalls with a plain POST",
+      "args": {
+        "linode_id": 123,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/firewalls/apply"
+      }
+    },
+    {
+      "name": "answers with the id the call named",
+      "args": {
+        "linode_id": 123,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_result": {
+        "message": "Firewall apply initiated for instance 123",
+        "linode_id": 123
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 123,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_firewall_apply",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/firewalls/apply"
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 123,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Cloud Firewall assignments will be applied to Linode 123."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

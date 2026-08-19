@@ -1,10 +1,10 @@
 {
   "tool": "linode_instance_interface_add",
-  "description": "Pins the instance-interface add POST body and the interface-shape rejections now enforced in both languages (Python gained Go's exactly-one-of check). Cases set confirm:true so both reach the shape check.",
+  "description": "Pins the typed interface body the add route takes: the arms are top-level keys with no wrapper object, each read to the depth its message declares, and an arm sent as null names no arm. Rejection cases set confirm:true because the confirm gate runs ahead of validation.",
   "cases": [
     {
       "name": "adds a public interface",
-      "args": { "linode_id": 123, "confirm": true, "interface": { "public": {} } },
+      "args": { "linode_id": 123, "confirm": true, "public": {} },
       "api_response": {},
       "expect_request": {
         "method": "POST",
@@ -13,19 +13,264 @@
       }
     },
     {
-      "name": "rejects an interface with no type",
-      "args": { "linode_id": 123, "confirm": true, "interface": {} },
-      "expect_error": "interface must define exactly one of public, vpc, or vlan"
+      "name": "adds a vpc interface with its nested addresses and ranges",
+      "args": {
+        "linode_id": 123,
+        "confirm": true,
+        "vpc": {
+          "subnet_id": 456,
+          "ipv4": {
+            "addresses": [
+              { "address": "auto", "primary": true, "nat_1_1_address": "auto" }
+            ],
+            "ranges": [{ "range": "10.0.0.0/28" }]
+          }
+        },
+        "default_route": { "ipv4": true },
+        "firewall_id": 321
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/interfaces",
+        "body": {
+          "vpc": {
+            "subnet_id": 456,
+            "ipv4": {
+              "addresses": [
+                { "address": "auto", "primary": true, "nat_1_1_address": "auto" }
+              ],
+              "ranges": [{ "range": "10.0.0.0/28" }]
+            }
+          },
+          "default_route": { "ipv4": true },
+          "firewall_id": 321
+        }
+      }
     },
     {
-      "name": "rejects a vpc interface without a positive subnet_id",
-      "args": { "linode_id": 123, "confirm": true, "interface": { "vpc": { "subnet_id": 0 } } },
-      "expect_error": "interface.vpc.subnet_id must be a positive integer"
+      "name": "adds a vlan interface without an ipam address",
+      "args": {
+        "linode_id": 123,
+        "confirm": true,
+        "vlan": { "vlan_label": "backend" }
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/interfaces",
+        "body": { "vlan": { "vlan_label": "backend" } }
+      }
+    },
+    {
+      "name": "sends the arms it is not using as explicit nulls",
+      "args": {
+        "linode_id": 123,
+        "confirm": true,
+        "public": {},
+        "vpc": null,
+        "vlan": null
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/interfaces",
+        "body": { "public": {}, "vpc": null, "vlan": null }
+      }
+    },
+    {
+      "name": "answers with the interface the API created",
+      "args": { "linode_id": 123, "confirm": true, "public": {} },
+      "api_response": {
+        "id": 1234,
+        "public": { "ipv4": { "addresses": [{ "address": "192.0.2.7", "primary": true }] } }
+      },
+      "expect_result": {
+        "message": "Interface added to instance 123 successfully",
+        "interface": {
+          "id": 1234,
+          "public": {
+            "ipv4": { "addresses": [{ "address": "192.0.2.7", "primary": true }] }
+          }
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "linode_id": 123, "dry_run": true, "vlan": { "vlan_label": "backend" } },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_interface_add",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/interfaces",
+          "body": { "vlan": { "vlan_label": "backend" } }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "An interface will be added to Linode 123."
+        ],
+        "warnings": []
+      }
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 123, "interface": {"public": {}}},
+      "args": { "linode_id": 123, "public": {} },
       "expect_error": "This adds a network interface to the Linode instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a linode_id below one",
+      "args": { "linode_id": 0, "confirm": true, "public": {} },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a call naming no arm",
+      "args": { "linode_id": 123, "confirm": true },
+      "expect_error": "exactly one of public, vpc, or vlan is required"
+    },
+    {
+      "name": "rejects a call naming two arms",
+      "args": {
+        "linode_id": 123,
+        "confirm": true,
+        "public": {},
+        "vlan": { "vlan_label": "backend" }
+      },
+      "expect_error": "exactly one of public, vpc, or vlan is required"
+    },
+    {
+      "name": "rejects a vpc arm without a positive subnet_id",
+      "args": { "linode_id": 123, "confirm": true, "vpc": { "subnet_id": 0 } },
+      "expect_error": "vpc.subnet_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank vlan label",
+      "args": { "linode_id": 123, "confirm": true, "vlan": { "vlan_label": "  " } },
+      "expect_error": "vlan.vlan_label is required"
+    },
+    {
+      "name": "names the nested entry a wrong member sits in",
+      "args": {
+        "linode_id": 123,
+        "confirm": true,
+        "vpc": {
+          "subnet_id": 456,
+          "ipv4": {
+            "addresses": [
+              { "address": "auto" },
+              { "address": "auto", "primary": "yes" }
+            ]
+          }
+        }
+      },
+      "expect_error": "vpc.ipv4.addresses[1].primary must be a boolean"
+    },
+    {
+      "name": "names the nested entry a missing member sits in",
+      "args": {
+        "linode_id": 123,
+        "confirm": true,
+        "vpc": {
+          "subnet_id": 456,
+          "ipv4": { "addresses": [{ "primary": true }] }
+        }
+      },
+      "expect_error": "vpc.ipv4.addresses[0].address is required"
+    },
+    {
+      "name": "refuses an undeclared member on a nested message",
+      "args": {
+        "linode_id": 123,
+        "confirm": true,
+        "vpc": { "subnet_id": 456, "ipv4": { "extra": 1 } }
+      },
+      "expect_error": "vpc.ipv4 has no field \"extra\""
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "linode_id": 123, "confirm": true, "public": {} },
+      "api_response": "not-an-object",
+      "expect_api_error": "Failed to add interface to instance 123"
     }
   ]
 }

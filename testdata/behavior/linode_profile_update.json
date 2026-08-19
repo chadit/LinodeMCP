@@ -1,0 +1,194 @@
+{
+  "tool": "linode_profile_update",
+  "description": "Profile self-update. The route changes only the members it is given, so a call naming none is refused here rather than sent as an empty body. lish_auth_method is an enum, and a string naming no member arrives as the enum's zero marked present, which is what lets the rule tell a wrong value from an absent one.",
+  "cases": [
+    {
+      "name": "rejects a call naming no update field",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "at least one update field is required: email, timezone, email_notifications, authorized_keys, lish_auth_method, restricted, or two_factor_auth"
+    },
+    {
+      "name": "rejects a blank email",
+      "args": {
+        "email": "   ",
+        "confirm": true
+      },
+      "expect_error": "email must not be blank"
+    },
+    {
+      "name": "rejects an unknown lish_auth_method",
+      "args": {
+        "lish_auth_method": "password_only",
+        "confirm": true
+      },
+      "expect_error": "lish_auth_method must be one of: password_keys, keys_only, disabled"
+    },
+    {
+      "name": "rejects a blank authorized_keys entry",
+      "args": {
+        "authorized_keys": [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example",
+          "  "
+        ],
+        "confirm": true
+      },
+      "expect_error": "authorized_keys entries must not be blank"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "timezone": "US/Pacific"
+      },
+      "expect_error": "This changes your own Linode profile. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts only the members the caller named",
+      "args": {
+        "email": "newaddress@example.com",
+        "timezone": "US/Pacific",
+        "email_notifications": false,
+        "confirm": true
+      },
+      "api_response": {
+        "username": "exampleuser",
+        "email": "newaddress@example.com",
+        "timezone": "US/Pacific",
+        "uid": 1234,
+        "email_notifications": false,
+        "restricted": false,
+        "two_factor_auth": true,
+        "scopes": "*",
+        "authentication_type": "password",
+        "authorized_keys": null,
+        "ip_whitelist_enabled": false,
+        "lish_auth_method": "keys_only",
+        "referrals": {
+          "code": "abc123",
+          "completed": 2,
+          "credit": 40,
+          "pending": 1,
+          "total": 3,
+          "url": "https://www.linode.com/?r=abc123"
+        },
+        "verified_phone_number": null
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/profile",
+        "body": {
+          "email": "newaddress@example.com",
+          "timezone": "US/Pacific",
+          "email_notifications": false
+        }
+      }
+    },
+    {
+      "name": "sends the Lish settings together",
+      "args": {
+        "lish_auth_method": "keys_only",
+        "authorized_keys": [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example"
+        ],
+        "confirm": true
+      },
+      "api_response": {
+        "username": "exampleuser",
+        "email": "user@example.com",
+        "timezone": "US/Eastern",
+        "uid": 1234,
+        "email_notifications": true,
+        "restricted": false,
+        "two_factor_auth": true,
+        "scopes": "*",
+        "authentication_type": "password",
+        "authorized_keys": [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example"
+        ],
+        "ip_whitelist_enabled": false,
+        "lish_auth_method": "keys_only",
+        "verified_phone_number": null
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/profile",
+        "body": {
+          "authorized_keys": [
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example"
+          ],
+          "lish_auth_method": "keys_only"
+        }
+      }
+    },
+    {
+      "name": "clears the Lish keys with an empty list",
+      "args": {
+        "lish_auth_method": "disabled",
+        "authorized_keys": [],
+        "confirm": true
+      },
+      "api_response": {
+        "username": "exampleuser",
+        "email": "user@example.com",
+        "timezone": "US/Eastern",
+        "uid": 1234,
+        "email_notifications": true,
+        "restricted": false,
+        "two_factor_auth": true,
+        "scopes": "*",
+        "authorized_keys": [],
+        "lish_auth_method": "disabled"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/profile",
+        "body": {
+          "authorized_keys": [],
+          "lish_auth_method": "disabled"
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "timezone": "US/Pacific",
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "timezone": "US/Pacific",
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the profile update request",
+      "args": {
+        "timezone": "US/Pacific",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/profile",
+          "body": {
+            "timezone": "US/Pacific"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

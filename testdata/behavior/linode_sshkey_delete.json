@@ -25,7 +25,12 @@
         "dry_run": true
       },
       "api_responses": {
-        "GET /profile/sshkeys/123": {}
+        "GET /profile/sshkeys/123": {
+          "created": "2026-01-04T12:00:00",
+          "id": 123,
+          "label": "workstation",
+          "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyDataExampleKeyDataExampleKeyDataExampleKeyData test@example.com"
+        }
       },
       "expect_result": {
         "dry_run": true,
@@ -35,10 +40,10 @@
           "path": "/profile/sshkeys/123"
         },
         "current_state": {
-          "created": "",
-          "id": 0,
-          "label": "",
-          "ssh_key": ""
+          "created": "2026-01-04T12:00:00",
+          "id": 123,
+          "label": "workstation",
+          "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyDataExampleKeyDataExampleKeyDataExampleKeyData test@example.com"
         },
         "dependencies": [],
         "side_effects": [],

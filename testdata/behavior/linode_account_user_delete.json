@@ -1,27 +1,94 @@
 {
   "tool": "linode_account_user_delete",
-  "description": "Account user delete: missing username agrees, confirm gate, and the single DELETE once confirmed.",
+  "description": "Account user delete: the three username sentences the contract carries, the confirm gate, the DELETE once confirmed, and the preview that reads the user.",
   "cases": [
     {
       "name": "requires username",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "username is required"
     },
     {
+      "name": "rejects a username with path separators",
+      "args": {
+        "username": "ali/ce",
+        "confirm": true
+      },
+      "expect_error": "username must not contain '/', '?', '#', or '..'"
+    },
+    {
       "name": "requires confirm before deleting",
-      "args": { "username": "alice" },
+      "args": {
+        "username": "alice"
+      },
       "expect_error": "This deletes an account user. Set confirm=true to proceed."
     },
     {
       "name": "deletes an account user",
-      "args": { "username": "alice", "confirm": true },
+      "args": {
+        "username": "alice",
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "DELETE", "path": "/account/users/alice" }
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/account/users/alice"
+      }
     },
     {
-      "name": "requires confirm",
-      "args": {"username": "alice"},
-      "expect_error": "This deletes an account user. Set confirm=true to proceed."
+      "name": "dry_run_preview",
+      "args": {
+        "username": "alice",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /account/users/alice": {
+          "last_login": {
+            "login_datetime": "2026-01-02T03:04:05",
+            "status": "successful"
+          },
+          "password_created": "2025-12-01T00:00:00",
+          "verified_phone_number": "+15551234567",
+          "email": "alice@example.test",
+          "user_type": "default",
+          "username": "alice",
+          "ssh_keys": [
+            "ssh-rsa AAAA"
+          ],
+          "restricted": false,
+          "tfa_enabled": true
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_user_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/account/users/alice"
+        },
+        "current_state": {
+          "last_login": {
+            "login_datetime": "2026-01-02T03:04:05",
+            "status": "successful"
+          },
+          "password_created": "2025-12-01T00:00:00",
+          "verified_phone_number": "+15551234567",
+          "email": "alice@example.test",
+          "user_type": "default",
+          "username": "alice",
+          "ssh_keys": [
+            "ssh-rsa AAAA"
+          ],
+          "restricted": false,
+          "tfa_enabled": true
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The selected account user is deleted."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

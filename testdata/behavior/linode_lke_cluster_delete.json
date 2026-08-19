@@ -1,22 +1,52 @@
 {
   "tool": "linode_lke_cluster_delete",
-  "description": "Destroy tool. Pins cluster_id-required (through the bypass so both reach it), the confirm-alone destroy gate, and the bypassed DELETE.",
+  "description": "Generated destroy. Pins cluster_id-required and the negative-id refusal (both through the bypass so the two languages reach them), the confirm-alone destroy gate, a string that is not a confirmation, and the bypassed DELETE.",
   "cases": [
     {
       "name": "requires cluster_id",
-      "args": { "confirm": true, "confirm_bypass_dry_run": true },
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "expect_error": "cluster_id is required"
     },
     {
+      "name": "a negative cluster_id is refused",
+      "args": {
+        "cluster_id": -5,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "cluster_id must be a positive integer"
+    },
+    {
       "name": "confirm alone hits the destroy gate",
-      "args": { "cluster_id": 12345, "confirm": true },
+      "args": {
+        "cluster_id": 12345,
+        "confirm": true
+      },
       "expect_error": "linode_lke_cluster_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
     },
     {
+      "name": "a truthy string is not a confirmation",
+      "args": {
+        "cluster_id": 12345,
+        "confirm": "yes"
+      },
+      "expect_error": "This is irreversible. All node pools, nodes, and associated resources will be deleted. Set confirm=true to proceed."
+    },
+    {
       "name": "deletes the cluster",
-      "args": { "cluster_id": 12345, "confirm": true, "confirm_bypass_dry_run": true },
+      "args": {
+        "cluster_id": 12345,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "api_response": {},
-      "expect_request": { "method": "DELETE", "path": "/lke/clusters/12345" }
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/lke/clusters/12345"
+      }
     },
     {
       "name": "dry_run_preview",

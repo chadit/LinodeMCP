@@ -1,0 +1,65 @@
+{
+  "tool": "linode_iam_delegation_child_account_list",
+  "description": "Lists the child accounts this account delegates users into. The route publishes no page controls, so the tool advertises none, and the elements carry the company and euuid the delegation surface addresses an account by.",
+  "cases": [
+    {
+      "name": "lists no delegated child accounts",
+      "args": {},
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/child-accounts",
+        "api_surface": "v4"
+      }
+    },
+    {
+      "name": "lists delegated child accounts",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "company": "Wayfarer Media",
+            "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890"
+          },
+          {
+            "company": "Northwind Labs",
+            "euuid": "B2C3D4E5-F6A7-8901-BCDEF12345678901"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/child-accounts"
+      }
+    },
+    {
+      "name": "asks the route to report the delegated users",
+      "args": {
+        "users": true
+      },
+      "api_response": {
+        "data": [
+          {
+            "company": "Wayfarer Media",
+            "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/child-accounts?users=true"
+      }
+    }
+  ]
+}

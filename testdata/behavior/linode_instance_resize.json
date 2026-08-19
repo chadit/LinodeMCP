@@ -1,16 +1,33 @@
 {
   "tool": "linode_instance_resize",
-  "description": "Pins instance_id-required, type-required, and the resize POST body. Both languages omit allow_auto_disk_resize and migration_type unless the caller sets them (the API applies its own defaults: allow_auto_disk_resize=true, migration_type=cold), so a minimal call sends just type. Explicit values are sent verbatim.",
+  "description": "Pins the resize contract: the CEL rules on instance_id, type and migration_type, the POST body, and the preview. Both languages omit allow_auto_disk_resize and migration_type unless the caller sets them (the API applies its own defaults: allow_auto_disk_resize=true, migration_type=cold), so a minimal call sends just type. Explicit values are sent verbatim.",
   "cases": [
     {
-      "name": "requires instance_id",
-      "args": { "confirm": true },
-      "expect_error": "instance_id is required"
+      "name": "rejects an instance_id below one",
+      "args": {
+        "instance_id": 0,
+        "type": "g6-standard-2",
+        "confirm": true
+      },
+      "expect_error": "instance_id must be a positive integer"
     },
     {
       "name": "requires type",
-      "args": { "instance_id": 5, "confirm": true },
+      "args": {
+        "instance_id": 5,
+        "confirm": true
+      },
       "expect_error": "type is required"
+    },
+    {
+      "name": "rejects a migration_type outside the set",
+      "args": {
+        "instance_id": 5,
+        "type": "g6-standard-2",
+        "migration_type": "sideways",
+        "confirm": true
+      },
+      "expect_error": "migration_type must be one of: cold, warm"
     },
     {
       "name": "resizes the instance with API defaults",
@@ -49,9 +66,132 @@
       }
     },
     {
+      "name": "answers with the instance and the plan it is resizing to",
+      "args": {
+        "instance_id": 5,
+        "type": "g6-standard-2",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_result": {
+        "message": "Instance 5 resize to g6-standard-2 initiated successfully",
+        "instance_id": 5,
+        "new_type": "g6-standard-2"
+      }
+    },
+    {
       "name": "requires confirm",
-      "args": {"instance_id": 5, "type": "g6-standard-2"},
+      "args": {
+        "instance_id": 5,
+        "type": "g6-standard-2"
+      },
       "expect_error": "This operation causes downtime and may affect billing. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "instance_id": 5,
+        "type": "g6-standard-2",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/5": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_resize",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/5/resize",
+          "body": {
+            "type": "g6-standard-2"
+          }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Instance resizes from type g6-standard-1 to g6-standard-2; it reboots and is unavailable during the resize."
+        ],
+        "warnings": [
+          "Resizing changes the monthly price to match the new type."
+        ]
+      }
     }
   ]
 }

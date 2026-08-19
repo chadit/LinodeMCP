@@ -120,6 +120,17 @@
           "content_type": "text/plain"
         }
       }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "method": "GET"
+      },
+      "api_response": [],
+      "expect_api_error": "object storage presigned url create response must be a JSON object"
     }
   ]
 }

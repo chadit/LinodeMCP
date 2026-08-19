@@ -1,42 +1,198 @@
 {
   "tool": "linode_managed_service_update",
-  "description": "Service update: shared id rejection, the timeout range rejection (Python's text now matches Go's 'between 1 and 255'), confirm gate, and the PUT body once confirmed. A successful response must be a decodable JSON object.",
+  "description": "Service update: the id rule, the timeout range, the read-only refusal, the at-least-one refusal, the three states the explicit-null fields travel in, the confirm gate, the PUT body, and the dry-run preview. A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "rejects non-positive service_id",
-      "args": { "service_id": 0 },
+      "args": {
+        "service_id": 0,
+        "confirm": true
+      },
       "expect_error": "service_id must be a positive integer"
     },
     {
       "name": "rejects an out-of-range timeout",
-      "args": { "service_id": 8, "label": "web2", "timeout": 0, "confirm": true },
+      "args": {
+        "service_id": 8,
+        "label": "web2",
+        "timeout": 0,
+        "confirm": true
+      },
       "expect_error": "timeout must be an integer between 1 and 255"
     },
     {
       "name": "requires confirm before updating",
-      "args": { "service_id": 8, "label": "web2" },
+      "args": {
+        "service_id": 8,
+        "label": "web2"
+      },
       "expect_error": "This updates a Managed service monitor. Set confirm=true to proceed."
     },
     {
       "name": "updates a managed service",
-      "args": { "service_id": 8, "label": "web2", "confirm": true },
-      "api_response": { "id": 8, "label": "web2" },
+      "args": {
+        "service_id": 8,
+        "label": "web2",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 8,
+        "label": "web2"
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/managed/services/8",
-        "body": { "label": "web2" }
+        "body": {
+          "label": "web2"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"service_id": 8, "label": "web2"},
+      "args": {
+        "service_id": 8,
+        "label": "web2"
+      },
       "expect_error": "This updates a Managed service monitor. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "service_id": 8, "label": "web2", "confirm": true },
+      "args": {
+        "service_id": 8,
+        "label": "web2",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "rejects a call that changes nothing",
+      "args": {
+        "service_id": 8,
+        "confirm": true
+      },
+      "expect_error": "at least one managed service field is required"
+    },
+    {
+      "name": "rejects read-only fields",
+      "args": {
+        "service_id": 8,
+        "id": 8,
+        "label": "web2",
+        "confirm": true
+      },
+      "expect_error": "Read-only fields are not accepted: id"
+    },
+    {
+      "name": "clears the nullable fields with explicit nulls",
+      "args": {
+        "service_id": 8,
+        "body": null,
+        "notes": null,
+        "region": null,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 8,
+        "label": "web2"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/services/8",
+        "body": {
+          "body": null,
+          "notes": null,
+          "region": null
+        }
+      }
+    },
+    {
+      "name": "sends supplied nullable fields as themselves",
+      "args": {
+        "service_id": 8,
+        "body": "OK",
+        "notes": "call ops",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 8,
+        "label": "web2"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/services/8",
+        "body": {
+          "body": "OK",
+          "notes": "call ops",
+          "region": "us-east"
+        }
+      }
+    },
+    {
+      "name": "rejects a nullable field that is neither text nor null",
+      "args": {
+        "service_id": 8,
+        "notes": 7,
+        "confirm": true
+      },
+      "expect_error": "notes must be a string or null"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "service_id": 8,
+        "label": "web2",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /managed/services/8": {
+          "address": "https://example.com",
+          "body": null,
+          "consultation_group": "",
+          "created": "",
+          "credentials": null,
+          "id": 8,
+          "label": "web",
+          "notes": null,
+          "region": null,
+          "service_type": "url",
+          "status": "ok",
+          "timeout": 30,
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_managed_service_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/managed/services/8",
+          "body": {
+            "label": "web2"
+          }
+        },
+        "current_state": {
+          "address": "https://example.com",
+          "body": null,
+          "consultation_group": "",
+          "created": "",
+          "credentials": null,
+          "id": 8,
+          "label": "web",
+          "notes": null,
+          "region": null,
+          "service_type": "url",
+          "status": "ok",
+          "timeout": 30,
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Managed service monitor 8 will be updated."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

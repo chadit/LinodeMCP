@@ -1,9 +1,39 @@
 {
   "tool": "linode_monitor_service_metric_query",
-  "description": "Pins the metric-query POST with its empty body. The service_type rejection text diverges (see report), so only the success capture is fixtured.",
+  "description": "A read on a POST route: the empty body goes out, the samples come back untyped, and the envelope reports them beside the service type it was asked for. service_type is checked by the same slug rule the sibling alert-definition delete carries, so an absent, uppercase or path-bearing value answers one sentence in both languages.",
   "cases": [
     {
-      "name": "reads the monitor service metrics",
+      "name": "requires service_type",
+      "args": {},
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
+      "name": "rejects a path separator in service_type",
+      "args": { "service_type": "dbaas/postgres" },
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
+      "name": "rejects a traversal service_type",
+      "args": { "service_type": ".." },
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
+      "name": "rejects an uppercase service_type",
+      "args": { "service_type": "DBaaS" },
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
+      "name": "rejects a non-text service_type",
+      "args": { "service_type": 123 },
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
+      "name": "rejects a surrounding-space service_type",
+      "args": { "service_type": " dbaas" },
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
+      "name": "posts the empty body to the metrics route",
       "args": { "service_type": "dbaas" },
       "api_response": {},
       "expect_request": {
@@ -11,6 +41,51 @@
         "path": "/monitor/services/dbaas/metrics",
         "body": {}
       }
+    },
+    {
+      "name": "reports the samples under the service type it was asked for",
+      "args": { "service_type": "dbaas" },
+      "api_response": {
+        "data": {
+          "result": [{ "metric": { "entity_id": "123" }, "values": [[1700000000, "1.5"]] }],
+          "resultType": "matrix"
+        },
+        "isPartial": false,
+        "stats": { "executionTimeMsec": 12, "seriesFetched": "1" }
+      },
+      "expect_result": {
+        "message": "Monitor service metrics read for 'dbaas'",
+        "service_type": "dbaas",
+        "metrics": {
+          "data": {
+            "result": [
+              { "metric": { "entity_id": "123" }, "values": [[1700000000, "1.5"]] }
+            ],
+            "resultType": "matrix"
+          },
+          "isPartial": false,
+          "stats": { "executionTimeMsec": 12, "seriesFetched": "1" }
+        }
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "service_type": "dbaas" },
+      "api_response": [],
+      "expect_api_error": "monitor service metric query response must be a JSON object"
+    },
+    {
+      "name": "rejects a bare-string API response",
+      "args": { "service_type": "dbaas" },
+      "api_response_raw": "\"metrics\"",
+      "expect_api_error": "monitor service metric query response must be a JSON object"
+    },
+    {
+      "name": "reports the API failure under the declared sentence",
+      "args": { "service_type": "dbaas" },
+      "api_status": 403,
+      "api_response": { "errors": [{ "reason": "Unauthorized" }] },
+      "expect_api_error": "Failed to retrieve monitor service metrics for 'dbaas'"
     }
   ]
 }

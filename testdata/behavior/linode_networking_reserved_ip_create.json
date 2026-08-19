@@ -19,13 +19,13 @@
     },
     {
       "name": "rejects a non-list tags argument",
-      "args": { "region": "us-east", "tags": "prod", "confirm": true },
-      "expect_error": "tags must be a list of strings"
+      "args": { "region": "us-east", "tags": 5, "confirm": true },
+      "expect_error": "tags must be a JSON string array"
     },
     {
       "name": "rejects an empty tag",
       "args": { "region": "us-east", "tags": [""], "confirm": true },
-      "expect_error": "tags must contain only non-empty strings"
+      "expect_error": "tags entries must be non-empty strings"
     },
     {
       "name": "rejects missing confirmation without reserving",
@@ -127,19 +127,19 @@
       "name": "rejects a bare-array API response",
       "args": { "region": "us-east", "confirm": true },
       "api_response": [],
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip create response must be a JSON object"
     },
     {
       "name": "rejects a JSON null API response",
       "args": { "region": "us-east", "confirm": true },
       "api_response_raw": "null",
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip create response must be a JSON object"
     },
     {
       "name": "rejects a bare-string API response",
       "args": { "region": "us-east", "confirm": true },
       "api_response_raw": "\"reserved\"",
-      "expect_api_error": "reserved IP response must be an object"
+      "expect_api_error": "networking reserved ip create response must be a JSON object"
     },
     {
       "name": "dry_run_preview",

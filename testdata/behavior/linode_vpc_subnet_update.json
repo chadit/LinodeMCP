@@ -1,16 +1,26 @@
 {
   "tool": "linode_vpc_subnet_update",
-  "description": "VPC subnet update requires vpc_id, subnet_id (integers), and label (with confirm), then PUTs the new label.",
+  "description": "VPC subnet update takes positive vpc_id and subnet_id plus a label, then PUTs the new label. The preview reads the subnet so a caller sees the label being replaced; it adds no prose of its own.",
   "cases": [
     {
       "name": "requires vpc_id",
       "args": { "confirm": true },
-      "expect_error": "vpc_id is required"
+      "expect_error": "vpc_id must be a positive integer"
     },
     {
       "name": "requires subnet_id",
       "args": { "confirm": true, "vpc_id": 5 },
-      "expect_error": "subnet_id is required"
+      "expect_error": "subnet_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative subnet_id",
+      "args": {
+        "confirm": true,
+        "vpc_id": 5,
+        "subnet_id": -7,
+        "label": "new-label"
+      },
+      "expect_error": "subnet_id must be a positive integer"
     },
     {
       "name": "requires label",
@@ -18,8 +28,23 @@
       "expect_error": "label is required"
     },
     {
+      "name": "rejects a blank label",
+      "args": {
+        "confirm": true,
+        "vpc_id": 5,
+        "subnet_id": 7,
+        "label": "   "
+      },
+      "expect_error": "label is required"
+    },
+    {
       "name": "updates the subnet label",
-      "args": { "confirm": true, "vpc_id": 5, "subnet_id": 7, "label": "new-label" },
+      "args": {
+        "confirm": true,
+        "vpc_id": 5,
+        "subnet_id": 7,
+        "label": "new-label"
+      },
       "api_response": {},
       "expect_request": {
         "method": "PUT",
@@ -28,8 +53,61 @@
       }
     },
     {
+      "name": "dry_run_preview",
+      "args": {
+        "vpc_id": 5,
+        "subnet_id": 7,
+        "label": "new-label",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /vpcs/5/subnets/7": {
+          "created": "",
+          "id": 7,
+          "ipv4": "10.0.0.0/24",
+          "label": "subnet-a",
+          "linodes": [
+            {
+              "id": 9,
+              "interfaces": [{ "active": true, "config_id": 0, "id": 81 }]
+            }
+          ],
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_vpc_subnet_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/vpcs/5/subnets/7",
+          "body": { "label": "new-label" }
+        },
+        "current_state": {
+          "created": "",
+          "id": 7,
+          "ipv4": "10.0.0.0/24",
+          "label": "subnet-a",
+          "linodes": [
+            {
+              "id": 9,
+              "interfaces": [{ "active": true, "config_id": 0, "id": 81 }]
+            }
+          ],
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    },
+    {
       "name": "requires confirm",
-      "args": {"vpc_id": 5, "subnet_id": 7, "label": "new-label"},
+      "args": {
+        "vpc_id": 5,
+        "subnet_id": 7,
+        "label": "new-label"
+      },
       "expect_error": "This modifies the subnet configuration. Set confirm=true to proceed."
     }
   ]

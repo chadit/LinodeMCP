@@ -4,8 +4,27 @@
   "cases": [
     {
       "name": "rejects missing token_id",
-      "args": {},
-      "expect_error": "token_id is required"
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "token_id must be a positive integer"
+    },
+    {
+      "name": "rejects a missing label",
+      "args": {
+        "token_id": 123,
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "token_id": 123,
+        "label": "   ",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
     },
     {
       "name": "updates a personal access token label",
@@ -36,9 +55,53 @@
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "token_id": 123, "label": "renamed-token", "confirm": true },
+      "args": {
+        "token_id": 123,
+        "label": "renamed-token",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "token_id": 123,
+        "label": "renamed-token",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /profile/tokens/123": {
+          "id": 123,
+          "label": "ci-token",
+          "scopes": "linodes:read_only",
+          "created": "2024-05-01T00:01:01",
+          "expiry": "2024-06-01T00:01:01"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_profile_token_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/profile/tokens/123",
+          "body": {
+            "label": "renamed-token"
+          }
+        },
+        "current_state": {
+          "id": 123,
+          "label": "ci-token",
+          "scopes": "linodes:read_only",
+          "created": "2024-05-01T00:01:01",
+          "expiry": "2024-06-01T00:01:01"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The personal access token's label is set to \"renamed-token\"."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

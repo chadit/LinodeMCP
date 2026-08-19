@@ -5,8 +5,17 @@
     {
       "name": "lists monitor services",
       "args": {},
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/monitor/services" }
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/monitor/services",
+        "api_surface": "v4"
+      }
     }
   ]
 }

@@ -4,34 +4,193 @@
   "cases": [
     {
       "name": "rejects non-positive linode_id",
-      "args": { "linode_id": 0 },
+      "args": {
+        "linode_id": 0,
+        "confirm": true
+      },
       "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "rejects non-boolean ssh.access",
-      "args": { "linode_id": 5, "ssh": { "access": "yes" } },
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "access": "yes"
+        },
+        "confirm": true
+      },
       "expect_error": "ssh.access must be a boolean"
     },
     {
       "name": "updates managed ssh settings",
-      "args": { "linode_id": 5, "ssh": { "access": true }, "confirm": true },
-      "api_response": { "id": 5, "ssh": { "access": true } },
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "access": true
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 5,
+        "ssh": {
+          "access": true
+        }
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/managed/linode-settings/5",
-        "body": { "ssh": { "access": true } }
+        "body": {
+          "ssh": {
+            "access": true
+          }
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 5, "ssh": {"access": true}},
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "access": true
+        }
+      },
       "expect_error": "This updates Managed Linode settings. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "linode_id": 5, "ssh": { "access": true }, "confirm": true },
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "access": true
+        },
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "rejects an ssh member the API does not publish",
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "access": true,
+          "shell": "zsh"
+        },
+        "confirm": true
+      },
+      "expect_error": "ssh contains unsupported fields: shell"
+    },
+    {
+      "name": "rejects a blank ssh ip",
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "ip": "  "
+        },
+        "confirm": true
+      },
+      "expect_error": "ssh.ip must be a non-empty string"
+    },
+    {
+      "name": "rejects an ssh port outside the range",
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "port": 70000
+        },
+        "confirm": true
+      },
+      "expect_error": "ssh.port must be an integer from 1 to 65535 or null"
+    },
+    {
+      "name": "accepts a null ssh port, which clears it",
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "access": true,
+          "port": null
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 5,
+        "ssh": {
+          "access": true
+        }
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/linode-settings/5",
+        "body": {
+          "ssh": {
+            "access": true,
+            "port": null
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects an ssh user past the API cap",
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "user": "uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu"
+        },
+        "confirm": true
+      },
+      "expect_error": "ssh.user must be a string up to 32 characters or null"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 5,
+        "ssh": {
+          "access": true
+        },
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /managed/linode-settings/5": {
+          "label": "web-1",
+          "group": "",
+          "ssh": {
+            "port": null,
+            "user": null,
+            "ip": "",
+            "access": false
+          },
+          "id": 5
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_managed_linode_settings_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/managed/linode-settings/5",
+          "body": {
+            "ssh": {
+              "access": true
+            }
+          }
+        },
+        "current_state": {
+          "label": "web-1",
+          "group": "",
+          "ssh": {
+            "port": null,
+            "user": null,
+            "ip": "",
+            "access": false
+          },
+          "id": 5
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Managed SSH settings are updated for the selected Linode."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

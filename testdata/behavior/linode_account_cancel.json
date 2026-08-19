@@ -1,15 +1,20 @@
 {
   "tool": "linode_account_cancel",
-  "description": "Shared non-string comments rejection and the cancel POST. Confirm-gate text diverges (see report).",
+  "description": "Generated from the contract: a wrongly typed comments is the body builder's answer. The rejection carries confirm because the gate runs before it, and the preview keeps its irreversibility warning through a hook.",
   "cases": [
     {
       "name": "rejects non-string comments",
-      "args": { "comments": 123 },
+      "args": {
+        "comments": 123,
+        "confirm": true
+      },
       "expect_error": "comments must be a string"
     },
     {
       "name": "cancels the account",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",

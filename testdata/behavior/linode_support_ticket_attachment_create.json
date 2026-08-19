@@ -1,6 +1,6 @@
 {
   "tool": "linode_support_ticket_attachment_create",
-  "description": "Pins the ticket-attachment local validation incl. the API's documented extension allowlist (checked before any file read). The multipart success path is not pinnable: bodies carry random boundaries and no portable accepted-extension file exists on every machine; the transport itself is unit-tested per language.",
+  "description": "Pins the ticket-attachment local validation incl. the API's documented extension allowlist (checked before any file read), and the preview, which reads the ticket but never opens the file. The multipart success path is not pinnable: bodies carry random boundaries and no portable accepted-extension file exists on every machine; the transport itself is unit-tested per language.",
   "cases": [
     {
       "name": "requires confirm before attaching",
@@ -44,6 +44,62 @@
         "confirm": true
       },
       "expect_error": "file must have an accepted extension: .gif, .jpg, .jpeg, .pjpg, .pjpeg, .tif, .tiff, .png, .pdf, or .txt"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "ticket_id": 123,
+        "file": "  /tmp/log.txt  ",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /support/tickets/123": {
+          "attachments": [],
+          "closable": true,
+          "closed": null,
+          "description": "My Linode is unreachable via SSH.",
+          "entity": null,
+          "gravatar_id": "0",
+          "id": 123,
+          "opened": "2026-01-01T00:00:00",
+          "opened_by": "adevi",
+          "status": "open",
+          "summary": "Cannot reach server",
+          "updated": "2026-01-02T00:00:00",
+          "updated_by": "adevi"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_support_ticket_attachment_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/support/tickets/123/attachments",
+          "body": {
+            "file": "/tmp/log.txt"
+          }
+        },
+        "current_state": {
+          "attachments": [],
+          "closable": true,
+          "closed": null,
+          "description": "My Linode is unreachable via SSH.",
+          "entity": null,
+          "gravatar_id": "0",
+          "id": 123,
+          "opened": "2026-01-01T00:00:00",
+          "opened_by": "adevi",
+          "status": "open",
+          "summary": "Cannot reach server",
+          "updated": "2026-01-02T00:00:00",
+          "updated_by": "adevi"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "A file attachment will be uploaded to support ticket 123."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "message": "linode.mcp.v1.Profile",
-  "description": "Authenticated user's Linode profile (/profile).",
+  "description": "Authenticated user's Linode profile (/profile). Carries the full documented answer: the referral standing, the Lish settings and the authentication type the message used to drop, plus scopes, which the reviewed spec snapshot omits but a personal access token really receives. authorized_keys and verified_phone_number arrive as JSON null when unset, so both null decodes are pinned here.",
   "input": {
     "username": "exampleuser",
     "email": "user@example.com",
@@ -9,7 +9,20 @@
     "email_notifications": true,
     "restricted": false,
     "two_factor_auth": true,
-    "scopes": "*"
+    "scopes": "*",
+    "authentication_type": "password",
+    "authorized_keys": null,
+    "ip_whitelist_enabled": false,
+    "lish_auth_method": "keys_only",
+    "referrals": {
+      "code": "abc123",
+      "completed": 2,
+      "credit": 40,
+      "pending": 1,
+      "total": 3,
+      "url": "https://www.linode.com/?r=abc123"
+    },
+    "verified_phone_number": null
   },
   "canonical": {
     "username": "exampleuser",
@@ -19,6 +32,19 @@
     "email_notifications": true,
     "restricted": false,
     "two_factor_auth": true,
-    "scopes": "*"
+    "scopes": "*",
+    "authentication_type": "password",
+    "authorized_keys": [],
+    "ip_whitelist_enabled": false,
+    "lish_auth_method": "keys_only",
+    "referrals": {
+      "code": "abc123",
+      "completed": 2,
+      "credit": 40,
+      "pending": 1,
+      "total": 3,
+      "url": "https://www.linode.com/?r=abc123"
+    },
+    "verified_phone_number": ""
   }
 }

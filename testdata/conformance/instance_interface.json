@@ -7,7 +7,10 @@
       "subnet_id": 12,
       "ipv4": {
         "addresses": [
-          {"address": "10.0.0.5", "primary": true}
+          {"address": "10.0.0.5", "primary": true, "nat_1_1_address": "192.0.2.20"}
+        ],
+        "ranges": [
+          {"range": "10.0.0.16/28"}
         ]
       }
     },
@@ -24,7 +27,10 @@
       "subnet_id": 12,
       "ipv4": {
         "addresses": [
-          {"address": "10.0.0.5", "primary": true}
+          {"address": "10.0.0.5", "primary": true, "nat_1_1_address": "192.0.2.20"}
+        ],
+        "ranges": [
+          {"range": "10.0.0.16/28"}
         ]
       }
     },

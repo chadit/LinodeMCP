@@ -1,0 +1,35 @@
+{
+  "tool": "linode_iam_user_role_permission_get",
+  "description": "Gets one user's access level. This route replaces the deprecated grants read, and the two shapes differ: account_access is a flat list of role names, and each entity_access entry names one entity with the roles held over it.",
+  "cases": [
+    {
+      "name": "rejects a blank username",
+      "args": { "username": "   " },
+      "expect_error": "username is required"
+    },
+    {
+      "name": "gets a user's access level",
+      "args": { "username": "jsmith" },
+      "api_response": {
+        "account_access": ["account_linode_creator", "account_firewall_creator"],
+        "entity_access": [
+          { "id": 1, "type": "linode", "roles": ["linode_contributor"] },
+          { "id": 4, "type": "firewall", "roles": ["firewall_admin"] }
+        ]
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/users/jsmith/role-permissions"
+      }
+    },
+    {
+      "name": "gets a user with no access at all",
+      "args": { "username": "newhire" },
+      "api_response": { "account_access": [], "entity_access": [] },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/users/newhire/role-permissions"
+      }
+    }
+  ]
+}

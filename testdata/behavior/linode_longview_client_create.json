@@ -1,6 +1,6 @@
 {
   "tool": "linode_longview_client_create",
-  "description": "Pins the label-required rejection and the 3-32 length + charset rejections now enforced in both languages (Go gained Python's checks), plus the create POST.",
+  "description": "Pins the label-required rejection and the 3-32 length + charset rejections now enforced in both languages (Go gained Python's checks), the create POST, and the preview sentence, whose label was quoted two ways until both languages settled on double quotes.",
   "cases": [
     {
       "name": "rejects missing label",
@@ -30,6 +30,25 @@
         "method": "POST",
         "path": "/longview/clients",
         "body": { "label": "myclient" }
+      }
+    },
+    {
+      "name": "previews the create without sending it",
+      "args": { "label": "myclient", "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_longview_client_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/longview/clients",
+          "body": { "label": "myclient" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A Longview client labeled \"myclient\" will be created."
+        ],
+        "warnings": []
       }
     },
     {

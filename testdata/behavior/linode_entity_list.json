@@ -1,0 +1,40 @@
+{
+  "tool": "linode_entity_list",
+  "description": "Account entity catalog. The route publishes no page controls, so the tool advertises none and the empty and populated envelopes are what both languages have to decode. type is decoded as a plain string so an entity kind newer than this repo still reaches the caller.",
+  "cases": [
+    {
+      "name": "lists account entities",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/entities" }
+    },
+    {
+      "name": "lists populated entities",
+      "args": {},
+      "api_response": {
+        "data": [
+          { "id": 97531, "label": "web-01", "type": "linode" },
+          { "id": 4242, "label": "edge-firewall", "type": "firewall" }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_request": { "method": "GET", "path": "/entities" }
+    },
+    {
+      "name": "carries an entity kind the repo does not enumerate",
+      "args": {},
+      "api_response": {
+        "data": [{ "id": 55, "label": "analytics-cluster", "type": "database" }],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_result": {
+        "count": 1,
+        "entities": [{ "id": 55, "label": "analytics-cluster", "type": "database" }]
+      }
+    }
+  ]
+}

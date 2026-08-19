@@ -1,11 +1,16 @@
 {
   "tool": "linode_lke_cluster_update",
-  "description": "Pins the cluster_id-required rejection and the confirmed PUT with a minimal label body. Confirm-message text diverges (see report), so no confirm-required case here. A response that is not a JSON object must fail rather than yield a zeroed cluster; the bare-array shape of that case is withheld because Python still fabricates a success from it (see report).",
+  "description": "Pins the cluster_id rejections, the confirm gate, the confirmed PUT with a minimal label body, and the dry-run preview. cluster_id is an integer path param, and proto3 collapses an absent one onto zero, so absent, zero, and negative all answer the positive-integer sentence. The confirm gate is asked before the arguments are read, so the rejection cases carry confirm=true to reach the check they pin. A response that is not a JSON object must fail rather than yield a zeroed cluster.",
   "cases": [
     {
-      "name": "rejects missing cluster_id",
-      "args": {},
-      "expect_error": "cluster_id is required"
+      "name": "requires cluster_id",
+      "args": { "confirm": true, "label": "renamed" },
+      "expect_error": "cluster_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative cluster_id",
+      "args": { "cluster_id": -1, "confirm": true, "label": "renamed" },
+      "expect_error": "cluster_id must be a positive integer"
     },
     {
       "name": "updates a cluster label",
@@ -17,6 +22,55 @@
       "name": "requires confirm",
       "args": {"cluster_id": 12345, "label": "renamed"},
       "expect_error": "This modifies the LKE cluster configuration. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "cluster_id": 12345, "label": "renamed", "k8s_version": "1.32", "dry_run": true },
+      "api_responses": {
+        "GET /lke/clusters/12345": {
+          "id": 12345,
+          "label": "before",
+          "region": "us-east",
+          "k8s_version": "1.30",
+          "status": "ready",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-02T00:00:00",
+          "tags": [],
+          "control_plane": { "high_availability": false }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_cluster_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/lke/clusters/12345",
+          "body": { "label": "renamed", "k8s_version": "1.32" }
+        },
+        "current_state": {
+          "id": 12345,
+          "label": "before",
+          "region": "us-east",
+          "k8s_version": "1.30",
+          "status": "ready",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-02T00:00:00",
+          "tags": [],
+          "control_plane": { "high_availability": false }
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Label changes from \"before\" to \"renamed\".",
+          "Kubernetes version changes from \"1.30\" to \"1.32\"; the control plane and nodes upgrade."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "cluster_id": 12345, "label": "renamed", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "LKE cluster"
     },
     {
       "name": "rejects a non-object API response",

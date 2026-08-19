@@ -1,0 +1,101 @@
+{
+  "tool": "linode_monitor_service_alert_definition_entity_list",
+  "description": "Entities one alert definition watches. The whole point of the two populated cases is the id member: the API types it per entity kind, an integer for a Managed Database node and a string for an Object Storage hostname, and it is a google.protobuf.Value so both round-trip. Narrowing it to either scalar would fail to decode the other, which is what these cases catch.",
+  "cases": [
+    {
+      "name": "rejects a blank service_type",
+      "args": { "service_type": "  ", "alert_id": 42 },
+      "expect_error": "service_type is required"
+    },
+    {
+      "name": "rejects a non-positive alert_id",
+      "args": { "service_type": "dbaas", "alert_id": 0 },
+      "expect_error": "alert_id must be a positive integer"
+    },
+    {
+      "name": "lists no entities",
+      "args": { "service_type": "dbaas", "alert_id": 42 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/monitor/services/dbaas/alert-definitions/42/entities"
+      }
+    },
+    {
+      "name": "decodes an integer entity id",
+      "args": { "service_type": "dbaas", "alert_id": 42 },
+      "api_response": {
+        "data": [
+          {
+            "id": 10000,
+            "label": "analytics-primary",
+            "type": "dbaas",
+            "url": "/v4beta/databases/postgresql/instances/10000"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_result": {
+        "count": 1,
+        "entities": [
+          {
+            "id": 10000,
+            "label": "analytics-primary",
+            "type": "dbaas",
+            "url": "/v4beta/databases/postgresql/instances/10000"
+          }
+        ]
+      }
+    },
+    {
+      "name": "decodes a string entity id",
+      "args": { "service_type": "objectstorage", "alert_id": 42 },
+      "api_response": {
+        "data": [
+          {
+            "id": "primary-bucket-1.us-east-12.linodeobjects.com",
+            "label": "primary-bucket-1",
+            "type": "objectstorage",
+            "url": "/v4/object-storage/buckets/us-east-12/primary-bucket-1"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_result": {
+        "count": 1,
+        "entities": [
+          {
+            "id": "primary-bucket-1.us-east-12.linodeobjects.com",
+            "label": "primary-bucket-1",
+            "type": "objectstorage",
+            "url": "/v4/object-storage/buckets/us-east-12/primary-bucket-1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "decodes both id shapes in one page",
+      "args": { "service_type": "dbaas", "alert_id": 42 },
+      "api_response": {
+        "data": [
+          { "id": 10000, "label": "analytics-primary", "type": "dbaas", "url": "" },
+          { "id": "primary-bucket-1.us-east-12.linodeobjects.com", "label": "primary-bucket-1", "type": "objectstorage", "url": "" }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_result": {
+        "count": 2,
+        "entities": [
+          { "id": 10000, "label": "analytics-primary", "type": "dbaas", "url": "" },
+          { "id": "primary-bucket-1.us-east-12.linodeobjects.com", "label": "primary-bucket-1", "type": "objectstorage", "url": "" }
+        ]
+      }
+    }
+  ]
+}

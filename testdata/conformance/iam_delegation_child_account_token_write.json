@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.IamDelegationChildAccountTokenWriteResponse",
+  "description": "Delegate user token create envelope: the confirmation, the shown-once notice, and the token itself. The secret is returned to the caller by design, so it is serialized rather than dropped.",
+  "input": {
+    "message": "Delegate user token created for child account 'A1B2C3D4-E5F6-7890-ABCDEF1234567890'",
+    "warning": "IMPORTANT: The token below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+    "token": {
+      "created": "2026-01-02T03:04:05",
+      "expiry": "2026-01-02T03:19:05",
+      "id": 918,
+      "label": "parent1_1234_2026-01-02T03:04:05",
+      "scopes": "*",
+      "token": "shh"
+    }
+  },
+  "canonical": {
+    "message": "Delegate user token created for child account 'A1B2C3D4-E5F6-7890-ABCDEF1234567890'",
+    "warning": "IMPORTANT: The token below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+    "token": {
+      "created": "2026-01-02T03:04:05",
+      "expiry": "2026-01-02T03:19:05",
+      "id": 918,
+      "label": "parent1_1234_2026-01-02T03:04:05",
+      "scopes": "*",
+      "token": "shh"
+    }
+  }
+}

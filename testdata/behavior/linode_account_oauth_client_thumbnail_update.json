@@ -1,27 +1,96 @@
 {
   "tool": "linode_account_oauth_client_thumbnail_update",
-  "description": "OAuth client thumbnail update: strict base64 rejection agrees, confirm gate, and the PUT once confirmed (binary body, so only method/path pinned). Missing client_id and missing-thumbnail texts diverge (see report).",
+  "description": "OAuth client thumbnail update: the id sentences, the base64 decode, the confirm gate, the raw-PNG PUT once confirmed (binary body, so only method/path pinned), and the preview that redacts the image.",
   "cases": [
     {
+      "name": "requires client_id",
+      "args": {
+        "thumbnail_png_base64": "aGVsbG8=",
+        "confirm": true
+      },
+      "expect_error": "client_id is required"
+    },
+    {
+      "name": "requires the image",
+      "args": {
+        "client_id": "abc123",
+        "confirm": true
+      },
+      "expect_error": "thumbnail_png_base64 is required"
+    },
+    {
       "name": "rejects invalid base64",
-      "args": { "client_id": "abc123", "thumbnail_png_base64": "not!!base64" },
+      "args": {
+        "client_id": "abc123",
+        "thumbnail_png_base64": "not!!base64",
+        "confirm": true
+      },
       "expect_error": "thumbnail_png_base64 must be valid standard base64"
     },
     {
       "name": "requires confirm before updating thumbnail",
-      "args": { "client_id": "abc123", "thumbnail_png_base64": "aGVsbG8=" },
+      "args": {
+        "client_id": "abc123",
+        "thumbnail_png_base64": "aGVsbG8="
+      },
       "expect_error": "This updates an OAuth client thumbnail. Set confirm=true to proceed."
     },
     {
       "name": "updates an OAuth client thumbnail",
-      "args": { "client_id": "abc123", "thumbnail_png_base64": "aGVsbG8=", "confirm": true },
+      "args": {
+        "client_id": "abc123",
+        "thumbnail_png_base64": "aGVsbG8=",
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "PUT", "path": "/account/oauth-clients/abc123/thumbnail" }
+      "expect_request": {
+        "method": "PUT",
+        "path": "/account/oauth-clients/abc123/thumbnail"
+      }
     },
     {
-      "name": "requires confirm",
-      "args": {"client_id": "abc123", "thumbnail_png_base64": "aGVsbG8="},
-      "expect_error": "This updates an OAuth client thumbnail. Set confirm=true to proceed."
+      "name": "dry_run_preview",
+      "args": {
+        "client_id": "abc123",
+        "thumbnail_png_base64": "aGVsbG8=",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /account/oauth-clients/abc123": {
+          "id": "abc123",
+          "label": "ci-client",
+          "redirect_uri": "https://example.test/callback",
+          "status": "active",
+          "thumbnail_url": "https://example.test/thumb.png",
+          "public": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_oauth_client_thumbnail_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/account/oauth-clients/abc123/thumbnail",
+          "body": {
+            "thumbnail_png_base64": {
+              "redacted": true
+            }
+          }
+        },
+        "current_state": {
+          "id": "abc123",
+          "label": "ci-client",
+          "redirect_uri": "https://example.test/callback",
+          "status": "active",
+          "thumbnail_url": "https://example.test/thumb.png",
+          "public": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The account OAuth client's thumbnail is updated."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

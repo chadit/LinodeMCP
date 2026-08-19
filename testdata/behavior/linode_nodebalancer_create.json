@@ -147,6 +147,36 @@
         "configs": 5
       },
       "expect_error": "configs must be an array of objects"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "label": "web-lb",
+        "ipv4": "192.0.2.10",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/nodebalancers",
+          "body": {
+            "region": "us-east",
+            "label": "web-lb",
+            "ipv4": "192.0.2.10"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new NodeBalancer \"web-lb\" will be created in region us-east. Reserved IPv4 address 192.0.2.10 will be assigned."
+        ],
+        "warnings": [
+          "Billing for the NodeBalancer starts immediately on creation."
+        ]
+      }
     }
   ]
 }

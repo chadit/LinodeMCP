@@ -1,16 +1,26 @@
 {
   "tool": "linode_instance_backup_restore",
-  "description": "Restore needs confirm; POSTs the target linode_id/overwrite body to the restore endpoint. No-confirm message text diverges (see report).",
+  "description": "Pins the restore contract: the three id rules it declares, the one confirm gate that names the overwrite danger to every caller, the POST whose body spells the target as linode_id, and the echo it answers with. overwrite is reported by the member of that name rather than inside the sentence, since a flag renders true in Go and True in python. The preview reads the backup and words both branches of what overwrite does to the target.",
   "cases": [
     {
-      "name": "rejects missing backup_id once confirmed",
-      "args": { "confirm": true, "linode_id": 123 },
-      "expect_error": "backup_id is required"
+      "name": "rejects a linode_id below one",
+      "args": { "confirm": true, "linode_id": 0, "backup_id": 456, "target_linode_id": 789 },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
-      "name": "rejects missing target_linode_id once confirmed",
+      "name": "rejects a backup_id below one",
+      "args": { "confirm": true, "linode_id": 123, "target_linode_id": 789 },
+      "expect_error": "backup_id must be a positive integer"
+    },
+    {
+      "name": "rejects a target_linode_id below one",
       "args": { "confirm": true, "linode_id": 123, "backup_id": 456 },
-      "expect_error": "target_linode_id is required"
+      "expect_error": "target_linode_id must be a positive integer"
+    },
+    {
+      "name": "requires confirm",
+      "args": { "linode_id": 123, "backup_id": 456, "target_linode_id": 789, "overwrite": false },
+      "expect_error": "This restores a backup to the target instance, and with overwrite=true it DESTROYS all existing disks and configs there. Set confirm=true to proceed."
     },
     {
       "name": "restores the backup to the target instance",
@@ -29,9 +39,149 @@
       }
     },
     {
-      "name": "requires confirm",
-      "args": {"linode_id": 123, "backup_id": 456, "target_linode_id": 789, "overwrite": false},
-      "expect_error": "This restores a backup to the target instance. Set confirm=true to proceed."
+      "name": "sends the target alone when the call named no overwrite",
+      "args": {
+        "linode_id": 123,
+        "backup_id": 456,
+        "target_linode_id": 789,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/backups/456/restore",
+        "body": { "linode_id": 789 }
+      }
+    },
+    {
+      "name": "answers with the ids and the overwrite flag the call named",
+      "args": {
+        "linode_id": 123,
+        "backup_id": 456,
+        "target_linode_id": 789,
+        "overwrite": true,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_result": {
+        "message": "Backup 456 restore initiated to instance 789",
+        "backup_id": 456,
+        "target_linode_id": 789,
+        "overwrite": true
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "backup_id": 456,
+        "target_linode_id": 789,
+        "overwrite": true,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123/backups/456": {
+          "id": 456,
+          "label": "nightly",
+          "status": "successful",
+          "type": "auto",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-01T01:00:00",
+          "finished": "2026-01-01T01:00:00",
+          "region": "us-east",
+          "available": true,
+          "configs": ["My Debian 12 Disk Profile"],
+          "disks": [
+            { "label": "Debian 12 Disk", "size": 25600, "filesystem": "ext4" }
+          ]
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_backup_restore",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/backups/456/restore",
+          "body": { "linode_id": 789, "overwrite": true }
+        },
+        "current_state": {
+          "id": 456,
+          "label": "nightly",
+          "status": "successful",
+          "type": "auto",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-01T01:00:00",
+          "finished": "2026-01-01T01:00:00",
+          "region": "us-east",
+          "available": true,
+          "configs": ["My Debian 12 Disk Profile"],
+          "disks": [
+            { "label": "Debian 12 Disk", "size": 25600, "filesystem": "ext4" }
+          ]
+        },
+        "dependencies": [],
+        "side_effects": [
+          "All existing disks and configs on target instance 789 are destroyed and replaced by the backup."
+        ],
+        "warnings": [
+          "overwrite=true: existing data on target instance 789 is permanently lost."
+        ]
+      }
+    },
+    {
+      "name": "previews the restore that lands beside what is already there",
+      "args": {
+        "linode_id": 123,
+        "backup_id": 456,
+        "target_linode_id": 789,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123/backups/456": {
+          "id": 456,
+          "label": "nightly",
+          "status": "successful",
+          "type": "auto",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-01T01:00:00",
+          "finished": "2026-01-01T01:00:00",
+          "region": "us-east",
+          "available": true,
+          "configs": ["My Debian 12 Disk Profile"],
+          "disks": [
+            { "label": "Debian 12 Disk", "size": 25600, "filesystem": "ext4" }
+          ]
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_backup_restore",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/backups/456/restore",
+          "body": { "linode_id": 789 }
+        },
+        "current_state": {
+          "id": 456,
+          "label": "nightly",
+          "status": "successful",
+          "type": "auto",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-01T01:00:00",
+          "finished": "2026-01-01T01:00:00",
+          "region": "us-east",
+          "available": true,
+          "configs": ["My Debian 12 Disk Profile"],
+          "disks": [
+            { "label": "Debian 12 Disk", "size": 25600, "filesystem": "ext4" }
+          ]
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The backup is restored onto target instance 789; the restore fails if its disks or configs collide."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

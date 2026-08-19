@@ -1,0 +1,30 @@
+{
+  "tool": "linode_monitor_alert_channel_alert_list",
+  "description": "Lists the alerts using one channel. The route publishes no page controls, so no query travels with it.",
+  "cases": [
+    {
+      "name": "rejects a non-positive channel_id",
+      "args": { "channel_id": 0 },
+      "expect_error": "channel_id must be a positive integer"
+    },
+    {
+      "name": "lists the alerts using a channel",
+      "args": { "channel_id": 7 },
+      "api_response": {
+        "data": [
+          {
+            "id": 42,
+            "label": "CPU high",
+            "type": "user",
+            "service_type": "dbaas",
+            "url": "/monitor/services/dbaas/alert-definitions/42"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": { "method": "GET", "path": "/monitor/alert-channels/7/alerts" }
+    }
+  ]
+}

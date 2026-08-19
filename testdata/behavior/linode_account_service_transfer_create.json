@@ -4,7 +4,9 @@
   "cases": [
     {
       "name": "requires linode_ids",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "linode_ids is required"
     },
     {

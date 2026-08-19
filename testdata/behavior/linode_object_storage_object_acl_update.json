@@ -4,57 +4,149 @@
   "cases": [
     {
       "name": "requires region",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "region is required"
     },
     {
       "name": "requires name",
-      "args": { "region": "us-east", "label": "my-bucket", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "confirm": true
+      },
       "expect_error": "name (object key) is required"
     },
     {
       "name": "updates object acl",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
-      "api_response": { "acl": "public-read" },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "acl": "public-read",
+        "confirm": true
+      },
+      "api_response": {
+        "acl": "public-read"
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/object-storage/buckets/us-east/my-bucket/object-acl",
-        "body": { "acl": "public-read", "name": "my-object.txt" }
+        "body": {
+          "acl": "public-read",
+          "name": "my-object.txt"
+        }
       }
     },
     {
       "name": "rejects an invalid acl",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "bogus", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "acl": "bogus",
+        "confirm": true
+      },
       "expect_error": "acl must be one of: private, public-read, authenticated-read, public-read-write"
     },
     {
       "name": "requires confirm",
-      "args": {"region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read"},
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "acl": "public-read"
+      },
       "expect_error": "This modifies the object's access permissions. Set confirm=true to proceed."
     },
     {
       "name": "rejects a null API response",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "acl": "public-read",
+        "confirm": true
+      },
       "api_response": null,
       "expect_api_error": "ACL"
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "acl": "public-read",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "ACL"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "acl": "public-read",
+        "confirm": true
+      },
       "api_response": true,
       "expect_api_error": "ACL"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
-      "api_response": [1, 2],
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "acl": "public-read",
+        "confirm": true
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "ACL"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "photo.jpg",
+        "acl": "public-read",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /object-storage/buckets/us-east/my-bucket/object-acl": {
+          "acl": "private",
+          "acl_xml": "<AccessControlPolicy/>"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_object_acl_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/object-storage/buckets/us-east/my-bucket/object-acl",
+          "body": {
+            "name": "photo.jpg",
+            "acl": "public-read"
+          }
+        },
+        "current_state": {
+          "acl": "private",
+          "acl_xml": "<AccessControlPolicy/>"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Object access control is set to \"public-read\"."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

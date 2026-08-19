@@ -1,0 +1,56 @@
+{
+  "message": "linode.mcp.v1.ProfileWriteResponse",
+  "description": "Profile update envelope: a confirmation message plus the profile the API returned. The answer is the whole profile, read-only members included, so the members a call can never send still have to round-trip identically in both languages.",
+  "input": {
+    "message": "Profile updated",
+    "profile": {
+      "username": "exampleuser",
+      "email": "newaddress@example.com",
+      "timezone": "US/Pacific",
+      "uid": 1234,
+      "email_notifications": false,
+      "restricted": false,
+      "two_factor_auth": true,
+      "scopes": "*",
+      "authentication_type": "password",
+      "authorized_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example"],
+      "ip_whitelist_enabled": false,
+      "lish_auth_method": "keys_only",
+      "referrals": {
+        "code": "abc123",
+        "completed": 2,
+        "credit": 40,
+        "pending": 1,
+        "total": 3,
+        "url": "https://www.linode.com/?r=abc123"
+      },
+      "verified_phone_number": "+15558675309"
+    }
+  },
+  "canonical": {
+    "message": "Profile updated",
+    "profile": {
+      "username": "exampleuser",
+      "email": "newaddress@example.com",
+      "timezone": "US/Pacific",
+      "uid": 1234,
+      "email_notifications": false,
+      "restricted": false,
+      "two_factor_auth": true,
+      "scopes": "*",
+      "authentication_type": "password",
+      "authorized_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example"],
+      "ip_whitelist_enabled": false,
+      "lish_auth_method": "keys_only",
+      "referrals": {
+        "code": "abc123",
+        "completed": 2,
+        "credit": 40,
+        "pending": 1,
+        "total": 3,
+        "url": "https://www.linode.com/?r=abc123"
+      },
+      "verified_phone_number": "+15558675309"
+    }
+  }
+}

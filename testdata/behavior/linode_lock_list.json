@@ -1,0 +1,47 @@
+{
+  "tool": "linode_lock_list",
+  "description": "Resource lock list. The route publishes no page controls, so the tool advertises none and the empty and populated envelopes are what both languages have to decode.",
+  "cases": [
+    {
+      "name": "lists resource locks",
+      "args": {},
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/locks",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "lists a populated resource lock",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "entity": {
+              "id": 97531,
+              "label": "Linode-video-streaming-assets-2025",
+              "type": "linode",
+              "url": "/v4/linode/instances/97531"
+            },
+            "id": 25,
+            "lock_type": "cannot_delete"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/locks",
+        "api_surface": "v4beta"
+      }
+    }
+  ]
+}

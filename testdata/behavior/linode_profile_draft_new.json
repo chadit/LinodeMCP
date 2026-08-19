@@ -1,0 +1,19 @@
+{
+  "tool": "linode_profile_draft_new",
+  "description": "CapMeta builder tool over the server's in-memory draft registry (no Linode API call). Pins the refusals both languages answer as tool results: an absent name and a clone source that resolves to no profile. The success path mutates the registry, so it is pinned by the in-package seam tests instead.",
+  "cases": [
+    {
+      "name": "refuses an absent name",
+      "args": {},
+      "expect_error": "name argument is required"
+    },
+    {
+      "name": "refuses a clone source that resolves to nothing",
+      "args": {
+        "name": "seam-fixture",
+        "clone_from": "no-such-profile"
+      },
+      "expect_error": "clone_from profile not found: no-such-profile"
+    }
+  ]
+}

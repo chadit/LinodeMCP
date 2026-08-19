@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.MonitorStreamDestinationWriteResponse",
+  "description": "Logs destination create and update envelope: a confirmation message plus the destination the API returned. details is the free-form half, so the fixture carries a custom-HTTPS one whose members no field of the message names.",
+  "input": {
+    "message": "Monitor stream destination 'siem endpoint' created",
+    "destination": {
+      "created": "2026-01-03T03:04:05",
+      "created_by": "opsuser",
+      "details": {
+        "endpoint_url": "https://siem.example.test/log-intake",
+        "content_type": "application/json",
+        "data_compression": "gzip",
+        "authentication": { "type": "basic" },
+        "custom_headers": [{ "name": "x-team", "value": "platform" }]
+      },
+      "id": 235,
+      "label": "siem endpoint",
+      "status": "active",
+      "type": "custom_https",
+      "updated": "2026-01-04T09:00:00",
+      "updated_by": "secuser",
+      "version": 3
+    }
+  },
+  "canonical": {
+    "message": "Monitor stream destination 'siem endpoint' created",
+    "destination": {
+      "created": "2026-01-03T03:04:05",
+      "created_by": "opsuser",
+      "details": {
+        "endpoint_url": "https://siem.example.test/log-intake",
+        "content_type": "application/json",
+        "data_compression": "gzip",
+        "authentication": { "type": "basic" },
+        "custom_headers": [{ "name": "x-team", "value": "platform" }]
+      },
+      "id": 235,
+      "label": "siem endpoint",
+      "status": "active",
+      "type": "custom_https",
+      "updated": "2026-01-04T09:00:00",
+      "updated_by": "secuser",
+      "version": 3
+    }
+  }
+}

@@ -3,15 +3,39 @@
   "description": "Pins the missing-client_id rejection both languages share and the get GET. The 0/negative/non-integer client_id messages diverge (Go pagination-style vs Python 'positive integer'), so only the missing case is fixtured (see report).",
   "cases": [
     {
+      "name": "requires client_id",
+      "args": {},
+      "expect_error": "client_id is required"
+    },
+    {
+      "name": "rejects a non-positive client_id",
+      "args": {
+        "client_id": 0
+      },
+      "expect_error": "client_id must be a positive integer"
+    },
+    {
+      "name": "rejects a numeric-string client_id",
+      "args": {
+        "client_id": "1"
+      },
+      "expect_error": "client_id must be a positive integer"
+    },
+    {
       "name": "rejects missing client_id",
       "args": {},
       "expect_error": "client_id is required"
     },
     {
       "name": "gets the longview client",
-      "args": { "client_id": 5 },
+      "args": {
+        "client_id": 5
+      },
       "api_response": {},
-      "expect_request": { "method": "GET", "path": "/longview/clients/5" }
+      "expect_request": {
+        "method": "GET",
+        "path": "/longview/clients/5"
+      }
     }
   ]
 }

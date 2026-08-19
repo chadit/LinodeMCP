@@ -1,16 +1,31 @@
 {
   "tool": "linode_lke_cluster_create",
-  "description": "Pins the label/region/k8s_version-required rejections (checked in order) and the confirmed POST body. The node_pools-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned. A response that is not a JSON object must fail rather than yield a zeroed cluster.",
+  "description": "Pins the label/region/k8s_version/node_pools rejections (checked in the order the rules declare), the confirmed POST body, and the arg-only dry-run preview. A response that is not a JSON object must fail rather than yield a zeroed cluster.",
   "cases": [
     {
       "name": "rejects missing label",
-      "args": {},
+      "args": {
+        "confirm": true,
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ]
+      },
       "expect_error": "label is required"
     },
     {
       "name": "rejects missing region",
       "args": {
-        "label": "prod"
+        "label": "prod",
+        "confirm": true,
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ]
       },
       "expect_error": "region is required"
     },
@@ -18,9 +33,27 @@
       "name": "rejects missing k8s_version",
       "args": {
         "label": "prod",
-        "region": "us-east"
+        "region": "us-east",
+        "confirm": true,
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ]
       },
       "expect_error": "k8s_version is required"
+    },
+    {
+      "name": "rejects empty node_pools",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [],
+        "confirm": true
+      },
+      "expect_error": "node_pools must contain at least one node pool"
     },
     {
       "name": "creates a cluster",
@@ -220,6 +253,65 @@
         "subnet_id": 0
       },
       "expect_error": "subnet_id must be an integer greater than or equal to 1"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_cluster_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/lke/clusters",
+          "body": {
+            "label": "prod",
+            "region": "us-east",
+            "k8s_version": "1.31",
+            "node_pools": [
+              {
+                "type": "g6-standard-1",
+                "count": 3
+              }
+            ]
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new LKE cluster \"prod\" will be created in region us-east running Kubernetes 1.31."
+        ],
+        "warnings": [
+          "Billing for the cluster's node pools starts immediately on creation."
+        ]
+      }
+    },
+    {
+      "name": "rejects a stack type the route does not offer",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
+        "confirm": true,
+        "stack_type": "ipv6"
+      },
+      "expect_error": "stack_type must be one of: ipv4, ipv4-ipv6"
     }
   ]
 }

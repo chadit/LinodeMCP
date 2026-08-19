@@ -1,0 +1,154 @@
+{
+  "tool": "linode_monitor_stream_destination_create",
+  "description": "Logs destination create. details carries the credentials the chosen kind needs (an Object Storage key secret here), which is why the preview case pins it as redacted rather than echoed while the live request sends it whole.",
+  "cases": [
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "label": "   ",
+        "type": "akamai_object_storage",
+        "details": { "host": "us-east-1.linodeobjects.com" },
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a missing type",
+      "args": {
+        "label": "ops bucket",
+        "details": { "host": "us-east-1.linodeobjects.com" },
+        "confirm": true
+      },
+      "expect_error": "type must be one of: akamai_object_storage, custom_https"
+    },
+    {
+      "name": "rejects an unknown type",
+      "args": {
+        "label": "ops bucket",
+        "type": "syslog",
+        "details": { "host": "us-east-1.linodeobjects.com" },
+        "confirm": true
+      },
+      "expect_error": "type must be one of: akamai_object_storage, custom_https"
+    },
+    {
+      "name": "rejects missing details",
+      "args": {
+        "label": "ops bucket",
+        "type": "akamai_object_storage",
+        "confirm": true
+      },
+      "expect_error": "details is required and must carry the settings the chosen type takes"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "label": "ops bucket",
+        "type": "akamai_object_storage",
+        "details": { "host": "us-east-1.linodeobjects.com" }
+      },
+      "expect_error": "This creates a monitor stream destination. Set confirm=true to proceed."
+    },
+    {
+      "name": "posts the create body",
+      "args": {
+        "label": "ops bucket",
+        "type": "akamai_object_storage",
+        "details": {
+          "host": "us-east-1.linodeobjects.com",
+          "bucket_name": "ops-audit",
+          "access_key_id": "AKIAEXAMPLE",
+          "access_key_secret": "not-a-real-value",
+          "path": "streams/audit"
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 234,
+        "label": "ops bucket",
+        "type": "akamai_object_storage",
+        "status": "active",
+        "details": {
+          "access_key_id": "AKIAEXAMPLE",
+          "bucket_name": "ops-audit",
+          "host": "us-east-1.linodeobjects.com",
+          "path": "streams/audit"
+        },
+        "version": 1,
+        "created": "2026-01-02T03:04:05",
+        "created_by": "opsuser",
+        "updated": "2026-01-02T03:04:05",
+        "updated_by": "opsuser"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/streams/destinations",
+        "body": {
+          "label": "ops bucket",
+          "type": "akamai_object_storage",
+          "details": {
+            "host": "us-east-1.linodeobjects.com",
+            "bucket_name": "ops-audit",
+            "access_key_id": "AKIAEXAMPLE",
+            "access_key_secret": "not-a-real-value",
+            "path": "streams/audit"
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "label": "ops bucket",
+        "type": "akamai_object_storage",
+        "details": { "host": "us-east-1.linodeobjects.com" },
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "label": "ops bucket",
+        "type": "akamai_object_storage",
+        "details": { "host": "us-east-1.linodeobjects.com" },
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the destination create request with details redacted",
+      "args": {
+        "label": "ops bucket",
+        "type": "akamai_object_storage",
+        "details": {
+          "host": "us-east-1.linodeobjects.com",
+          "bucket_name": "ops-audit",
+          "access_key_id": "AKIAEXAMPLE",
+          "access_key_secret": "not-a-real-value"
+        },
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_stream_destination_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/monitor/streams/destinations",
+          "body": {
+            "label": "ops bucket",
+            "type": "akamai_object_storage",
+            "details": { "redacted": true }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "tool": "linode_volume_detach",
-  "description": "Volume detach: volume_id-required rejection both languages agree on (confirm set so Go reaches it), plus the detach POST. Go requires confirm, Python does not (see report).",
+  "description": "Volume detach: volume_id-required rejection both languages agree on (confirm set so Go reaches it), the detach POST, and the dry-run preview, which reads the volume so it can name the instance the detach comes off.",
   "cases": [
     {
       "name": "requires volume_id",
@@ -26,6 +26,56 @@
       "expect_request": {
         "method": "POST",
         "path": "/volumes/123/detach"
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "volume_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /volumes/123": {
+          "id": 123,
+          "label": "data",
+          "status": "active",
+          "size": 20,
+          "region": "us-east",
+          "linode_id": 456,
+          "linode_label": "web",
+          "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data",
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "hardware_type": "nvme"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_volume_detach",
+        "would_execute": {
+          "method": "POST",
+          "path": "/volumes/123/detach"
+        },
+        "current_state": {
+          "id": 123,
+          "label": "data",
+          "status": "active",
+          "size": 20,
+          "region": "us-east",
+          "linode_id": 456,
+          "linode_label": "web",
+          "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data",
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "hardware_type": "nvme"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Volume 123 detaches from instance 456; its data is preserved and billing continues."
+        ],
+        "warnings": []
       }
     }
   ]

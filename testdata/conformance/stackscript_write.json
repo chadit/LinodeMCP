@@ -28,7 +28,8 @@
       "deployments_total": 12,
       "deployments_active": 1,
       "is_public": true,
-      "mine": true
+      "mine": true,
+      "rev_note": "Initial import"
     }
   },
   "canonical": {
@@ -58,7 +59,8 @@
       "deployments_total": 12,
       "deployments_active": 1,
       "is_public": true,
-      "mine": true
+      "mine": true,
+      "rev_note": "Initial import"
     }
   }
 }

@@ -4,33 +4,68 @@
   "cases": [
     {
       "name": "rejects an unsupported field",
-      "args": { "network_helper": true, "bogus_field": "x" },
+      "args": {
+        "network_helper": true,
+        "bogus_field": "x",
+        "confirm": true
+      },
       "expect_error": "Unsupported account settings field(s): bogus_field"
     },
     {
       "name": "rejects a non-boolean backups_enabled",
-      "args": { "backups_enabled": "yes" },
+      "args": {
+        "backups_enabled": "yes",
+        "confirm": true
+      },
       "expect_error": "backups_enabled must be a boolean"
     },
     {
       "name": "rejects a non-string object_storage",
-      "args": { "object_storage": 5 },
+      "args": {
+        "object_storage": 5,
+        "confirm": true
+      },
       "expect_error": "object_storage must be a string"
     },
     {
       "name": "updates account settings",
-      "args": { "backups_enabled": true, "confirm": true },
+      "args": {
+        "backups_enabled": true,
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "PUT",
         "path": "/account/settings",
-        "body": { "backups_enabled": true }
+        "body": {
+          "backups_enabled": true
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"backups_enabled": true},
+      "args": {
+        "backups_enabled": true
+      },
       "expect_error": "This updates account-wide settings. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a maintenance policy the account does not offer",
+      "args": {
+        "backups_enabled": true,
+        "confirm": true,
+        "maintenance_policy": "linode/reboot"
+      },
+      "expect_error": "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    },
+    {
+      "name": "rejects an interface default the account does not offer",
+      "args": {
+        "backups_enabled": true,
+        "confirm": true,
+        "interfaces_for_new_linodes": "linode_maybe"
+      },
+      "expect_error": "interfaces_for_new_linodes must be one of: legacy_config_only, legacy_config_default_but_linode_allowed, linode_default_but_legacy_config_allowed, linode_only"
     }
   ]
 }

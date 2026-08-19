@@ -4,13 +4,26 @@
   "cases": [
     {
       "name": "gets a tier version",
-      "args": { "tier": "standard", "version": "1.31" },
-      "api_response": { "id": "1.31", "tier": "standard" },
-      "expect_request": { "method": "GET", "path": "/lke/tiers/standard/versions/1.31" }
+      "args": {
+        "tier": "standard",
+        "version": "1.31"
+      },
+      "api_response": {
+        "id": "1.31",
+        "tier": "standard"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/lke/tiers/standard/versions/1.31",
+        "api_surface": "v4beta"
+      }
     },
     {
       "name": "rejects an invalid tier (proto LKETier enum)",
-      "args": { "tier": "premium", "version": "1.31" },
+      "args": {
+        "tier": "premium",
+        "version": "1.31"
+      },
       "expect_error": "tier must be one of: standard, enterprise"
     }
   ]

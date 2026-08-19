@@ -1,0 +1,72 @@
+{
+  "tool": "linode_monitor_stream_destination_list",
+  "description": "Logs destination list. The route publishes no page controls, so the tool advertises none. Both destination kinds are in the populated page because details holds whichever settings the kind calls for, and neither language may drop the half it did not expect.",
+  "cases": [
+    {
+      "name": "lists destinations",
+      "args": {},
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/monitor/streams/destinations",
+        "api_surface": "v4"
+      }
+    },
+    {
+      "name": "lists both destination kinds",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "id": 234,
+            "label": "ops bucket",
+            "type": "akamai_object_storage",
+            "status": "active",
+            "details": {
+              "access_key_id": "AKIAEXAMPLE",
+              "bucket_name": "ops-audit",
+              "host": "us-east-1.linodeobjects.com",
+              "path": "streams/audit"
+            },
+            "version": 1,
+            "created": "2026-01-02T03:04:05",
+            "created_by": "opsuser",
+            "updated": "2026-01-02T09:00:00",
+            "updated_by": "opsuser"
+          },
+          {
+            "id": 235,
+            "label": "siem endpoint",
+            "type": "custom_https",
+            "status": "inactive",
+            "details": {
+              "endpoint_url": "https://siem.example.test/log-intake",
+              "content_type": "application/json",
+              "data_compression": "gzip",
+              "authentication": {
+                "type": "none"
+              }
+            },
+            "version": 3,
+            "created": "2026-01-03T03:04:05",
+            "created_by": "opsuser",
+            "updated": "2026-01-04T09:00:00",
+            "updated_by": "secuser"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/monitor/streams/destinations"
+      }
+    }
+  ]
+}

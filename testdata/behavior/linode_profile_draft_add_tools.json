@@ -1,0 +1,25 @@
+{
+  "tool": "linode_profile_draft_add_tools",
+  "description": "CapMeta builder tool adding tools to a draft (no Linode API call). Pins the two refusals: an absent name and a name the registry does not hold. The success path mutates the registry, so it is pinned by the in-package tests.",
+  "cases": [
+    {
+      "name": "refuses an absent name",
+      "args": {
+        "tools": [
+          "linode_instance_boot"
+        ]
+      },
+      "expect_error": "name argument is required"
+    },
+    {
+      "name": "refuses a name no draft carries",
+      "args": {
+        "name": "no-such-draft",
+        "tools": [
+          "linode_instance_boot"
+        ]
+      },
+      "expect_error": "draft not found: no-such-draft"
+    }
+  ]
+}

@@ -3,6 +3,16 @@
   "description": "Firewall device delete removes one device assignment via DELETE when authorized. The id-validation messages and the destroy confirm gate diverge between languages (see report).",
   "cases": [
     {
+      "name": "rejects a non-positive device_id",
+      "args": {
+        "firewall_id": 5,
+        "device_id": -1,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "device_id must be a positive integer"
+    },
+    {
       "name": "confirm alone is blocked by the destroy gate",
       "args": {
         "firewall_id": 5,

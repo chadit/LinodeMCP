@@ -1,27 +1,92 @@
 {
   "tool": "linode_support_ticket_close",
-  "description": "Support ticket close: the confirm gate, the invalid-ticket_id rejection (confirm set so both reach it), and the close POST once confirmed.",
+  "description": "Support ticket close: the confirm gate, the invalid-ticket_id rejection (confirm set so both reach it), the close POST once confirmed, and the dry run, which reads the ticket so a caller sees what they are closing.",
   "cases": [
     {
       "name": "requires confirm before closing",
-      "args": { "ticket_id": 123 },
+      "args": {
+        "ticket_id": 123
+      },
       "expect_error": "This closes a support ticket. Set confirm=true to proceed."
     },
     {
       "name": "rejects non-positive ticket_id",
-      "args": { "confirm": true, "ticket_id": 0 },
+      "args": {
+        "confirm": true,
+        "ticket_id": 0
+      },
       "expect_error": "ticket_id must be a positive integer"
     },
     {
       "name": "closes a support ticket",
-      "args": { "confirm": true, "ticket_id": 123 },
+      "args": {
+        "confirm": true,
+        "ticket_id": 123
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/support/tickets/123/close" }
+      "expect_request": {
+        "method": "POST",
+        "path": "/support/tickets/123/close"
+      }
     },
     {
       "name": "requires confirm",
-      "args": {"ticket_id": 123},
+      "args": {
+        "ticket_id": 123
+      },
       "expect_error": "This closes a support ticket. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "ticket_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /support/tickets/123": {
+          "attachments": [],
+          "closable": true,
+          "closed": null,
+          "description": "My Linode is unreachable via SSH.",
+          "entity": null,
+          "gravatar_id": "0",
+          "id": 123,
+          "opened": "2026-01-01T00:00:00",
+          "opened_by": "adevi",
+          "status": "open",
+          "summary": "Cannot reach server",
+          "updated": "2026-01-02T00:00:00",
+          "updated_by": "adevi"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_support_ticket_close",
+        "would_execute": {
+          "method": "POST",
+          "path": "/support/tickets/123/close"
+        },
+        "current_state": {
+          "attachments": [],
+          "closable": true,
+          "closed": null,
+          "description": "My Linode is unreachable via SSH.",
+          "entity": null,
+          "gravatar_id": "0",
+          "id": 123,
+          "opened": "2026-01-01T00:00:00",
+          "opened_by": "adevi",
+          "status": "open",
+          "summary": "Cannot reach server",
+          "updated": "2026-01-02T00:00:00",
+          "updated_by": "adevi"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Support ticket 123 will be closed."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

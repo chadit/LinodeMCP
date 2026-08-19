@@ -81,6 +81,142 @@
       "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true, "nodes": [{ "label": "web", "address": "192.0.2.10:80" }] },
       "api_response": 7,
       "expect_api_error": "Failed to rebuild"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "port": 80,
+        "nodes": [
+          {
+            "label": "web-1",
+            "address": "192.168.1.5:80"
+          }
+        ],
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5/configs/7": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_config_rebuild",
+        "would_execute": {
+          "method": "POST",
+          "path": "/nodebalancers/5/configs/7/rebuild",
+          "body": {
+            "port": 80,
+            "nodes": [
+              {
+                "label": "web-1",
+                "address": "192.168.1.5:80"
+              }
+            ]
+          }
+        },
+        "current_state": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "a bodyless dry run is refused, because the preview validates what the call would send",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "dry_run": true
+      },
+      "expect_error": "nodes is required"
+    },
+    {
+      "name": "rejects an explicit null nodes value",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "confirm": true,
+        "nodes": null
+      },
+      "expect_error": "nodes must be an array of objects"
+    },
+    {
+      "name": "reports the rebuilt config under the success sentence",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "confirm": true,
+        "nodes": []
+      },
+      "api_response": {
+        "id": 7,
+        "port": 80,
+        "protocol": "http",
+        "nodebalancer_id": 5
+      },
+      "expect_result": {
+        "message": "Rebuilt config 7 for NodeBalancer 5 successfully",
+        "config": {
+          "id": 7,
+          "port": 80,
+          "protocol": "http",
+          "algorithm": "",
+          "stickiness": "",
+          "check": "",
+          "check_interval": 0,
+          "check_timeout": 0,
+          "check_attempts": 0,
+          "check_path": "",
+          "check_body": "",
+          "check_passive": false,
+          "cipher_suite": "",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "nodebalancer_id": 5
+        }
+      }
     }
   ]
 }

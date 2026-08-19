@@ -20,7 +20,7 @@
     {
       "name": "requires port",
       "args": {"nodebalancer_id": 100, "confirm": true},
-      "expect_error": "port is required"
+      "expect_error": "port must be an integer from 1 through 65535"
     },
     {
       "name": "rejects an out-of-range port",
@@ -88,6 +88,161 @@
       "args": { "nodebalancer_id": 100, "port": 8080, "confirm": true },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 5,
+        "port": 443,
+        "protocol": "https",
+        "ssl_cert": "-----BEGIN CERTIFICATE-----",
+        "ssl_key": "-----BEGIN PRIVATE KEY-----",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5/configs": {
+          "data": [
+            {
+              "algorithm": "",
+              "check": "",
+              "check_attempts": 0,
+              "check_body": "",
+              "check_interval": 0,
+              "check_passive": false,
+              "check_path": "",
+              "check_timeout": 0,
+              "cipher_suite": "",
+              "id": 7,
+              "nodebalancer_id": 5,
+              "nodes_status": {
+                "down": 0,
+                "up": 0
+              },
+              "port": 80,
+              "protocol": "http",
+              "ssl_commonname": "",
+              "ssl_fingerprint": "",
+              "stickiness": ""
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_config_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/nodebalancers/5/configs",
+          "body": {
+            "port": 443,
+            "protocol": "https",
+            "ssl_cert": {
+              "redacted": true
+            },
+            "ssl_key": {
+              "redacted": true
+            }
+          }
+        },
+        "current_state": [
+          {
+            "algorithm": "",
+            "check": "",
+            "check_attempts": 0,
+            "check_body": "",
+            "check_interval": 0,
+            "check_passive": false,
+            "check_path": "",
+            "check_timeout": 0,
+            "cipher_suite": "",
+            "id": 7,
+            "nodebalancer_id": 5,
+            "nodes_status": {
+              "down": 0,
+              "up": 0
+            },
+            "port": 80,
+            "protocol": "http",
+            "ssl_commonname": "",
+            "ssl_fingerprint": "",
+            "stickiness": ""
+          }
+        ],
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "carries the nodes array into the body",
+      "args": {
+        "nodebalancer_id": 5,
+        "port": 80,
+        "confirm": true,
+        "nodes": [
+          {
+            "label": "web-1",
+            "address": "192.168.1.5:80",
+            "weight": 100,
+            "mode": "accept",
+            "subnet_id": 3
+          }
+        ]
+      },
+      "api_response": {
+        "id": 7,
+        "port": 80,
+        "nodebalancer_id": 5
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers/5/configs",
+        "body": {
+          "port": 80,
+          "nodes": [
+            {
+              "label": "web-1",
+              "address": "192.168.1.5:80",
+              "weight": 100,
+              "mode": "accept",
+              "subnet_id": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a node item missing its address",
+      "args": {
+        "nodebalancer_id": 5,
+        "port": 80,
+        "confirm": true,
+        "nodes": [
+          {
+            "label": "web-1"
+          }
+        ]
+      },
+      "expect_error": "nodes[0].address is required"
+    },
+    {
+      "name": "rejects a node item carrying a field the item schema does not declare",
+      "args": {
+        "nodebalancer_id": 5,
+        "port": 80,
+        "confirm": true,
+        "nodes": [
+          {
+            "label": "web-1",
+            "address": "192.168.1.5:80",
+            "bogus": 1
+          }
+        ]
+      },
+      "expect_error": "nodes[0] has no field \"bogus\""
     }
   ]
 }

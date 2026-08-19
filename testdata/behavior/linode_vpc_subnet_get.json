@@ -3,6 +3,13 @@
   "description": "VPC subnet get requires an integer vpc_id and subnet_id, then GETs the subnet.",
   "cases": [
     {
+      "name": "rejects a non-positive vpc_id",
+      "args": {
+        "vpc_id": 0
+      },
+      "expect_error": "vpc_id must be a positive integer"
+    },
+    {
       "name": "requires vpc_id",
       "args": {},
       "expect_error": "vpc_id is required"

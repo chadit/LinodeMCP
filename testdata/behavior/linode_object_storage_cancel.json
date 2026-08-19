@@ -4,14 +4,37 @@
   "cases": [
     {
       "name": "cancels object storage",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/object-storage/cancel" }
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/cancel"
+      }
     },
     {
       "name": "requires confirm",
       "args": {},
       "expect_error": "This operation cancels Object Storage service for the account. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_cancel",
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/cancel"
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

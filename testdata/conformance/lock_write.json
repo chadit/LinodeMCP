@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.LockWriteResponse",
+  "description": "Resource lock create envelope: a confirmation message plus the lock the API returned. The create route answers with entity as the bare resource type, which is why this envelope carries LockCreateResult rather than the Lock the read routes serve.",
+  "input": {
+    "message": "Resource lock created",
+    "lock": {
+      "entity": "linode",
+      "id": 25,
+      "lock_type": "cannot_delete_with_subresources"
+    }
+  },
+  "canonical": {
+    "message": "Resource lock created",
+    "lock": {
+      "entity": "linode",
+      "id": 25,
+      "lock_type": "cannot_delete_with_subresources"
+    }
+  }
+}

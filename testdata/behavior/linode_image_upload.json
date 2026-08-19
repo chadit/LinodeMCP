@@ -1,6 +1,6 @@
 {
   "tool": "linode_image_upload",
-  "description": "Pins the upload POST body. label/region/confirm rejections diverge in text and order (see report). A success body that is not a JSON object must fail rather than turn into a zeroed upload record.",
+  "description": "Pins the upload POST body, the two required-string sentences the contract now carries, and the preview both languages answer. A success body that is not a JSON object must fail rather than turn into a zeroed upload record.",
   "cases": [
     {
       "name": "creates an upload target",
@@ -9,9 +9,73 @@
       "expect_request": { "method": "POST", "path": "/images/upload", "body": { "label": "custom-image", "region": "us-east" } }
     },
     {
+      "name": "trims both required strings before sending them",
+      "args": { "label": "  custom-image  ", "region": "\tus-east\n", "confirm": true },
+      "api_response": { "image": { "id": "private/999", "label": "custom-image" }, "upload_to": "https://upload.example.test/x" },
+      "expect_request": { "method": "POST", "path": "/images/upload", "body": { "label": "custom-image", "region": "us-east" } }
+    },
+    {
+      "name": "answers with the upload URL beside the image",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": { "image": { "id": "private/999", "label": "custom-image" }, "upload_to": "https://upload.example.test/x" },
+      "expect_result": {
+        "message": "Image upload 'custom-image' (private/999) created successfully",
+        "upload_to": "https://upload.example.test/x",
+        "image": {
+          "id": "private/999",
+          "label": "custom-image",
+          "description": "",
+          "type": "",
+          "vendor": "",
+          "status": "",
+          "created": "",
+          "created_by": "",
+          "capabilities": [],
+          "tags": [],
+          "size": 0,
+          "is_public": false,
+          "deprecated": false
+        }
+      }
+    },
+    {
+      "name": "previews the upload without sending it",
+      "args": { "label": "custom-image", "region": "us-east", "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_upload",
+        "would_execute": {
+          "method": "POST",
+          "path": "/images/upload",
+          "body": { "label": "custom-image", "region": "us-east" }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A pending image upload labeled \"custom-image\" will be created in \"us-east\"."
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "requires confirm",
       "args": {"label": "custom-image", "region": "us-east"},
       "expect_error": "This creates an image upload. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a blank label",
+      "args": { "label": "   ", "region": "us-east", "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a blank region",
+      "args": { "label": "custom-image", "region": "", "confirm": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects a cloud_init that is not a boolean",
+      "args": { "label": "custom-image", "region": "us-east", "cloud_init": "yes", "confirm": true },
+      "expect_error": "cloud_init must be a boolean"
     },
     {
       "name": "rejects a null API response",

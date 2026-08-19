@@ -27,7 +27,7 @@
         "confirm": true,
         "scope": "account"
       },
-      "expect_error": "entity_ids must be an array of non-empty strings"
+      "expect_error": "entity_ids must be an array of strings"
     },
     {
       "name": "rejects non-positive channel ids",
@@ -246,6 +246,220 @@
         "scope": "region"
       },
       "expect_error": "scope must be one of: account"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "service_type": "dbaas",
+        "label": "   ",
+        "severity": 1,
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "scope": "account",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects a missing severity",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "scope": "account",
+        "confirm": true
+      },
+      "expect_error": "severity is required"
+    },
+    {
+      "name": "rejects an out-of-range severity",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 4,
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "scope": "account",
+        "confirm": true
+      },
+      "expect_error": "severity must be one of: 0, 1, 2, 3"
+    },
+    {
+      "name": "rejects empty rule criteria",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": {},
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "scope": "account",
+        "confirm": true
+      },
+      "expect_error": "rule_criteria must be a non-empty object"
+    },
+    {
+      "name": "rejects empty trigger conditions",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {},
+        "channel_ids": [
+          10000
+        ],
+        "scope": "account",
+        "confirm": true
+      },
+      "expect_error": "trigger_conditions must be a non-empty object"
+    },
+    {
+      "name": "trims the label before sending it",
+      "args": {
+        "service_type": "dbaas",
+        "label": "  CPU high  ",
+        "severity": 1,
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "scope": "account",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 1,
+        "label": "CPU high"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/alert-definitions",
+        "body": {
+          "label": "CPU high",
+          "severity": 1,
+          "rule_criteria": {
+            "rules": [
+              {
+                "metric": "cpu_usage"
+              }
+            ]
+          },
+          "trigger_conditions": {
+            "criteria_condition": "ALL"
+          },
+          "channel_ids": [
+            10000
+          ],
+          "scope": "account"
+        }
+      }
+    },
+    {
+      "name": "previews the alert definition create request",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "scope": "account",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_service_alert_definition_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/monitor/services/dbaas/alert-definitions",
+          "body": {
+            "label": "CPU high",
+            "severity": 1,
+            "rule_criteria": {
+              "rules": [
+                {
+                  "metric": "cpu_usage"
+                }
+              ]
+            },
+            "trigger_conditions": {
+              "criteria_condition": "ALL"
+            },
+            "channel_ids": [
+              10000
+            ],
+            "scope": "account"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

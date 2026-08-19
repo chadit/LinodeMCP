@@ -1,0 +1,113 @@
+{
+  "tool": "linode_iam_idp_config_delete",
+  "description": "Destroy tool addressed by a UUID string. The preview case is what proves the synthesized state fetch: the tool declares no fetch_state hook, so both languages read the configuration through linode_iam_idp_config_get, the sibling declared on the same route, and report it as that read's own message.",
+  "cases": [
+    {
+      "name": "rejects a blank idp_config_id",
+      "args": {
+        "idp_config_id": "   ",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "idp_config_id is required"
+    },
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "confirm": true
+      },
+      "expect_error": "linode_iam_idp_config_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the IDP configuration",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b": {
+          "created": "2026-03-04T12:00:00",
+          "created_by": "jsmith",
+          "enabled": true,
+          "enforce": true,
+          "excluded_users_count": 1,
+          "id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+          "included_users_count": 3,
+          "label": "okta-prod",
+          "saml": {
+            "entity_id": "https://idp.example.com/saml/metadata",
+            "identity_element": "USER_ID_ATTRIBUTE",
+            "idp_url": "https://idp.example.com/sso/saml",
+            "public_certificates": [
+              {
+                "certificate": "MIIDexampleCertificateData",
+                "created": "2026-03-04T12:00:00",
+                "created_by": "jsmith",
+                "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+                "not_after": "2027-03-04T12:00:00",
+                "not_before": "2026-03-04T12:00:00"
+              }
+            ],
+            "user_id_attribute": "email"
+          },
+          "updated": "2026-04-01T09:30:00",
+          "updated_by": "jsmith"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_idp_config_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/v4beta/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b"
+        },
+        "current_state": {
+          "created": "2026-03-04T12:00:00",
+          "created_by": "jsmith",
+          "enabled": true,
+          "enforce": true,
+          "excluded_users_count": 1,
+          "id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+          "included_users_count": 3,
+          "label": "okta-prod",
+          "saml": {
+            "entity_id": "https://idp.example.com/saml/metadata",
+            "identity_element": "USER_ID_ATTRIBUTE",
+            "idp_url": "https://idp.example.com/sso/saml",
+            "public_certificates": [
+              {
+                "certificate": "MIIDexampleCertificateData",
+                "created": "2026-03-04T12:00:00",
+                "created_by": "jsmith",
+                "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+                "not_after": "2027-03-04T12:00:00",
+                "not_before": "2026-03-04T12:00:00"
+              }
+            ],
+            "user_id_attribute": "email"
+          },
+          "updated": "2026-04-01T09:30:00",
+          "updated_by": "jsmith"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

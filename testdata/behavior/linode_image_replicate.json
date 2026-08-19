@@ -4,18 +4,103 @@
   "cases": [
     {
       "name": "rejects missing image_id",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "image_id must be a non-empty string"
     },
     {
+      "name": "dry_run_preview",
+      "args": {
+        "image_id": "private/123",
+        "regions": [
+          "us-east"
+        ],
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /images/private%2F123": {
+          "capabilities": [],
+          "created": "",
+          "created_by": "",
+          "deprecated": false,
+          "description": "",
+          "eol": null,
+          "expiry": null,
+          "id": "",
+          "is_public": false,
+          "label": "",
+          "size": 0,
+          "status": "",
+          "tags": [],
+          "type": "",
+          "vendor": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_replicate",
+        "would_execute": {
+          "method": "POST",
+          "path": "/images/private%2F123/regions",
+          "body": {
+            "regions": [
+              "us-east"
+            ]
+          }
+        },
+        "current_state": {
+          "capabilities": [],
+          "created": "",
+          "created_by": "",
+          "deprecated": false,
+          "description": "",
+          "eol": null,
+          "expiry": null,
+          "id": "",
+          "is_public": false,
+          "label": "",
+          "size": 0,
+          "status": "",
+          "tags": [],
+          "type": "",
+          "vendor": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Image 'private/123' will be replicated to us-east."
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "replicates to regions",
-      "args": { "image_id": "private/123", "regions": ["us-east"], "confirm": true },
+      "args": {
+        "image_id": "private/123",
+        "regions": [
+          "us-east"
+        ],
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/images/private%2F123/regions", "body": { "regions": ["us-east"] } }
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/private%2F123/regions",
+        "body": {
+          "regions": [
+            "us-east"
+          ]
+        }
+      }
     },
     {
       "name": "requires confirm",
-      "args": {"image_id": "private/123", "regions": ["us-east"]},
+      "args": {
+        "image_id": "private/123",
+        "regions": [
+          "us-east"
+        ]
+      },
       "expect_error": "This replicates an image to the requested regions. Set confirm=true to proceed."
     }
   ]

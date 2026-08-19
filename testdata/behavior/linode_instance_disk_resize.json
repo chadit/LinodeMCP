@@ -1,16 +1,21 @@
 {
   "tool": "linode_instance_disk_resize",
-  "description": "Pins the shared missing-linode_id and missing-disk_id rejections and the disk-resize POST body. size rejection text diverges (see report).",
+  "description": "Pins the id and size rules, the disk-resize POST body, the new_size_mb echo the size argument fills through its alias, and the preview that reads the disk being resized.",
   "cases": [
     {
       "name": "rejects missing linode_id",
       "args": { "confirm": true },
-      "expect_error": "linode_id is required"
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "rejects missing disk_id",
       "args": { "linode_id": 123, "confirm": true },
-      "expect_error": "disk_id is required"
+      "expect_error": "disk_id must be a positive integer"
+    },
+    {
+      "name": "rejects a size below one",
+      "args": { "linode_id": 123, "disk_id": 5, "size": 0, "confirm": true },
+      "expect_error": "size is required and must be greater than 0"
     },
     {
       "name": "resizes a disk",
@@ -26,6 +31,42 @@
       "name": "requires confirm",
       "args": {"linode_id": 123, "disk_id": 5, "size": 2048},
       "expect_error": "This resizes the disk. The instance must be powered off. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "linode_id": 123, "disk_id": 5, "size": 2048, "dry_run": true },
+      "api_responses": {
+        "GET /linode/instances/123/disks/5": {
+          "created": "",
+          "filesystem": "ext4",
+          "id": 5,
+          "label": "boot-disk",
+          "size": 1024,
+          "status": "ready",
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_disk_resize",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/disks/5/resize",
+          "body": { "size": 2048 }
+        },
+        "current_state": {
+          "created": "",
+          "filesystem": "ext4",
+          "id": 5,
+          "label": "boot-disk",
+          "size": 1024,
+          "status": "ready",
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": ["Disk resizes from 1024 MB to 2048 MB."],
+        "warnings": ["The instance must be powered off to resize a disk."]
+      }
     }
   ]
 }

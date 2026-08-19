@@ -3,10 +3,34 @@
   "description": "Pins the service GET. The service_type rejection text diverges (Go slug/required/string messages vs Python single message; Go also rejects uppercase and underscore that Python allows), so only the success capture is fixtured (see report).",
   "cases": [
     {
+      "name": "requires service_type",
+      "args": {},
+      "expect_error": "service_type is required"
+    },
+    {
+      "name": "rejects a non-string service_type",
+      "args": {
+        "service_type": 1
+      },
+      "expect_error": "service_type must be a string"
+    },
+    {
+      "name": "rejects a service_type that escapes its segment",
+      "args": {
+        "service_type": "db/aas"
+      },
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
       "name": "gets the monitor service",
-      "args": { "service_type": "dbaas" },
+      "args": {
+        "service_type": "dbaas"
+      },
       "api_response": {},
-      "expect_request": { "method": "GET", "path": "/monitor/services/dbaas" }
+      "expect_request": {
+        "method": "GET",
+        "path": "/monitor/services/dbaas"
+      }
     }
   ]
 }

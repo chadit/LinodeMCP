@@ -5,8 +5,17 @@
     {
       "name": "lists versions",
       "args": {},
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/lke/versions" }
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/lke/versions",
+        "api_surface": "v4"
+      }
     }
   ]
 }

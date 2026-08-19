@@ -1,0 +1,103 @@
+{
+  "tool": "linode_iam_delegation_child_account_user_update",
+  "description": "Replaces the delegate users on one child account. The call replaces rather than merges, so the empty-list case is a real request: it is how every delegation into that account is withdrawn, and it must reach the wire as an empty array rather than as an omitted body.",
+  "cases": [
+    {
+      "name": "rejects a blank euuid",
+      "args": { "euuid": "   ", "users": ["jsmith"], "confirm": true },
+      "expect_error": "euuid is required"
+    },
+    {
+      "name": "rejects a blank username entry",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "users": ["jsmith", "  "],
+        "confirm": true
+      },
+      "expect_error": "users entries must be non-empty usernames"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "users": ["jsmith"]
+      },
+      "expect_error": "This replaces the delegate users on a child account. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts the replacement delegate list",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "users": ["jsmith", "adevi"],
+        "confirm": true
+      },
+      "api_response": {
+        "data": ["jsmith", "adevi"],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/iam/delegation/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/users",
+        "body": { "users": ["jsmith", "adevi"] }
+      }
+    },
+    {
+      "name": "withdraws every delegation with an empty list",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "users": [],
+        "confirm": true
+      },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/iam/delegation/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/users",
+        "body": { "users": [] }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "users": ["jsmith"],
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "users": ["jsmith"],
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the delegate replacement",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "users": ["jsmith"],
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_delegation_child_account_user_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/iam/delegation/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/users",
+          "body": { "users": ["jsmith"] }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

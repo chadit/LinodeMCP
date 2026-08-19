@@ -4,7 +4,7 @@
   "cases": [
     {
       "name": "requires username",
-      "args": {},
+      "args": { "confirm": true },
       "expect_error": "username is required"
     },
     {

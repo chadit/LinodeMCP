@@ -4,33 +4,87 @@
   "cases": [
     {
       "name": "requires region",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "region is required"
     },
     {
       "name": "requires label",
-      "args": { "region": "us-east", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "confirm": true
+      },
       "expect_error": "label is required"
     },
     {
       "name": "applies bucket access",
-      "args": { "region": "us-east", "label": "my-bucket", "acl": "public-read", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "acl": "public-read",
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/object-storage/buckets/us-east/my-bucket/access",
-        "body": { "acl": "public-read" }
+        "body": {
+          "acl": "public-read"
+        }
       }
     },
     {
       "name": "rejects an invalid acl",
-      "args": { "region": "us-east", "label": "my-bucket", "acl": "bogus", "confirm": true },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "acl": "bogus",
+        "confirm": true
+      },
       "expect_error": "acl must be one of: private, public-read, authenticated-read, public-read-write"
     },
     {
       "name": "requires confirm",
-      "args": {"region": "us-east", "label": "my-bucket", "acl": "public-read"},
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "acl": "public-read"
+      },
       "expect_error": "This operation changes bucket access controls. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "acl": "public-read",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /object-storage/buckets/us-east/my-bucket/access": {
+          "acl": "private",
+          "cors_enabled": true
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_bucket_access_allow",
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/my-bucket/access",
+          "body": {
+            "acl": "public-read"
+          }
+        },
+        "current_state": {
+          "acl": "private",
+          "cors_enabled": true
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

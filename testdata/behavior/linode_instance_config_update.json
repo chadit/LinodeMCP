@@ -1,11 +1,21 @@
 {
   "tool": "linode_instance_config_update",
-  "description": "Pins the shared config_id positive-int rejection and the config-update PUT body. linode_id and no-fields rejection text diverges (see report).",
+  "description": "Pins the id, label and enum rules, the at-least-one-field sentence both languages now answer, the config-update PUT body, and the preview that reads the profile being changed.",
   "cases": [
     {
       "name": "rejects non-positive config_id",
-      "args": { "linode_id": 123, "config_id": 0 },
+      "args": { "linode_id": 123, "config_id": 0, "confirm": true },
       "expect_error": "config_id must be a positive integer"
+    },
+    {
+      "name": "rejects non-positive linode_id",
+      "args": { "linode_id": 0, "config_id": 7, "confirm": true },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a call naming no field to change",
+      "args": { "linode_id": 123, "config_id": 7, "confirm": true },
+      "expect_error": "at least one configuration field must be provided"
     },
     {
       "name": "updates a config profile label",
@@ -33,9 +43,65 @@
       "expect_error": "virt_mode must be one of: paravirt, fullvirt"
     },
     {
+      "name": "rejects a whitespace-padded label",
+      "args": { "linode_id": 123, "config_id": 7, "label": " boot ", "confirm": true },
+      "expect_error": "label must not include leading or trailing whitespace"
+    },
+    {
       "name": "rejects an invalid device slot",
       "args": { "linode_id": 123, "config_id": 7, "devices": { "sdz": { "disk_id": 111 } }, "confirm": true },
       "expect_error": "device slot sdz must be one of sda through sdh"
+    },
+    {
+      "name": "rejects an empty devices object",
+      "args": { "linode_id": 123, "config_id": 7, "devices": {}, "confirm": true },
+      "expect_error": "devices must include at least one device slot"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "linode_id": 123, "config_id": 7, "label": "new-label", "dry_run": true },
+      "api_responses": {
+        "GET /linode/instances/123/configs/7": {
+          "id": 7,
+          "label": "boot-config",
+          "kernel": "linode/latest-64bit",
+          "comments": "primary",
+          "memory_limit": 2048,
+          "root_device": "/dev/sda",
+          "run_level": "default",
+          "virt_mode": "paravirt",
+          "created": "2024-01-01T00:00:00",
+          "updated": "2024-01-02T00:00:00",
+          "devices": { "sda": { "disk_id": 111 } }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_config_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/linode/instances/123/configs/7",
+          "body": { "label": "new-label" }
+        },
+        "current_state": {
+          "id": 7,
+          "label": "boot-config",
+          "kernel": "linode/latest-64bit",
+          "comments": "primary",
+          "memory_limit": 2048,
+          "root_device": "/dev/sda",
+          "run_level": "default",
+          "virt_mode": "paravirt",
+          "created": "2024-01-01T00:00:00",
+          "updated": "2024-01-02T00:00:00",
+          "devices": { "sda": { "disk_id": 111 } }
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Configuration profile 7 on Linode 123 will be updated."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -4,17 +4,29 @@
   "cases": [
     {
       "name": "requires linode_id",
-      "args": {},
-      "expect_error": "linode_id is required"
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "requires image",
-      "args": { "linode_id": 5 },
+      "args": {
+        "linode_id": 5,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "expect_error": "image is required"
     },
     {
       "name": "requires root_pass",
-      "args": { "linode_id": 5, "image": "linode/ubuntu22.04" },
+      "args": {
+        "linode_id": 5,
+        "image": "linode/ubuntu22.04",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "expect_error": "root_pass is required"
     },
     {
@@ -40,8 +52,74 @@
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances/5/rebuild",
-        "body": { "image": "linode/ubuntu22.04", "root_pass": "SecurePass123" }
+        "body": {
+          "image": "linode/ubuntu22.04",
+          "root_pass": "SecurePass123"
+        }
       }
+    },
+    {
+      "name": "sends the stackscript, metadata, encryption, policy, and plan members",
+      "args": {
+        "linode_id": 5,
+        "image": "linode/ubuntu24.04",
+        "root_pass": "Rebuild1234pass",
+        "stackscript_id": 7,
+        "stackscript_data": {
+          "hostname": "web-01"
+        },
+        "metadata": {
+          "user_data": "I2Nsb3VkLWNvbmZpZw=="
+        },
+        "disk_encryption": "enabled",
+        "maintenance_policy": "linode/power_off_on",
+        "type": "g6-standard-2",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/rebuild",
+        "body": {
+          "image": "linode/ubuntu24.04",
+          "root_pass": "Rebuild1234pass",
+          "stackscript_id": 7,
+          "stackscript_data": {
+            "hostname": "web-01"
+          },
+          "metadata": {
+            "user_data": "I2Nsb3VkLWNvbmZpZw=="
+          },
+          "disk_encryption": "enabled",
+          "maintenance_policy": "linode/power_off_on",
+          "type": "g6-standard-2"
+        }
+      }
+    },
+    {
+      "name": "rejects a maintenance policy the route does not offer",
+      "args": {
+        "linode_id": 5,
+        "image": "linode/ubuntu24.04",
+        "root_pass": "Rebuild1234pass",
+        "maintenance_policy": "linode/reboot",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    },
+    {
+      "name": "rejects a stackscript_id below one",
+      "args": {
+        "linode_id": 5,
+        "image": "linode/ubuntu24.04",
+        "root_pass": "Rebuild1234pass",
+        "stackscript_id": 0,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "stackscript_id must be a positive integer"
     },
     {
       "name": "dry_run_preview",
@@ -111,7 +189,13 @@
         "tool": "linode_instance_rebuild",
         "would_execute": {
           "method": "POST",
-          "path": "/linode/instances/5/rebuild"
+          "path": "/linode/instances/5/rebuild",
+          "body": {
+            "image": "linode/ubuntu22.04",
+            "root_pass": {
+              "redacted": true
+            }
+          }
         },
         "current_state": {
           "alerts": {

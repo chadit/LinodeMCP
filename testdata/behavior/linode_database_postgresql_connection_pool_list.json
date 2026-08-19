@@ -1,0 +1,42 @@
+{
+  "tool": "linode_database_postgresql_connection_pool_list",
+  "description": "PostgreSQL connection pool list. The route publishes no page controls, so the tool advertises none and the envelope is what both languages have to decode.",
+  "cases": [
+    {
+      "name": "rejects a non-positive instance_id",
+      "args": { "instance_id": 0 },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "lists connection pools",
+      "args": { "instance_id": 890 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/databases/postgresql/instances/890/connection-pools"
+      }
+    },
+    {
+      "name": "lists a populated connection pool",
+      "args": { "instance_id": 890 },
+      "api_response": {
+        "data": [
+          {
+            "database": "PostgreSQL-DB-video-streaming-data",
+            "label": "Connection-Pool-01",
+            "mode": "session",
+            "size": 10,
+            "username": "john-doe"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/databases/postgresql/instances/890/connection-pools"
+      }
+    }
+  ]
+}

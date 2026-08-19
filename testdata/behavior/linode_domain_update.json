@@ -1,13 +1,22 @@
 {
   "tool": "linode_domain_update",
-  "description": "Domain update requires domain_id (with confirm), then PUTs only the fields that were set.",
+  "description": "Domain update requires a positive domain_id (with confirm), then PUTs the fields the caller supplied, an explicitly emptied one included.",
   "cases": [
     {
-      "name": "requires domain_id",
+      "name": "requires a positive domain_id",
       "args": {
         "confirm": true
       },
-      "expect_error": "domain_id is required"
+      "expect_error": "domain_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative domain_id",
+      "args": {
+        "confirm": true,
+        "domain_id": -5,
+        "description": "updated desc"
+      },
+      "expect_error": "domain_id must be a positive integer"
     },
     {
       "name": "updates the domain description",
@@ -22,6 +31,24 @@
         "path": "/domains/5",
         "body": {
           "description": "updated desc"
+        }
+      }
+    },
+    {
+      "name": "sends an explicitly emptied description and a zero ttl",
+      "args": {
+        "confirm": true,
+        "domain_id": 5,
+        "description": "",
+        "ttl_sec": 0
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/domains/5",
+        "body": {
+          "description": "",
+          "ttl_sec": 0
         }
       }
     },
@@ -115,6 +142,25 @@
           "refresh_sec": 14400,
           "retry_sec": 3600,
           "type": "slave"
+        }
+      }
+    },
+    {
+      "name": "sends the deprecated display group",
+      "args": {
+        "domain_id": 42,
+        "group": "legacy-zones",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 42,
+        "domain": "example.com"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/domains/42",
+        "body": {
+          "group": "legacy-zones"
         }
       }
     },

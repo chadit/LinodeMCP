@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_create",
-  "description": "Firewall create gates on confirm then requires a label, then POSTs the label plus a rules object. Both languages always send rules (the API requires it): a caller-supplied rules object wins key by key over the flat inbound_policy/outbound_policy arguments, which fill in the rest. devices rides through verbatim. A response that is not a JSON object must fail rather than yield a zeroed firewall.",
+  "description": "Firewall create gates on confirm then requires a label, then POSTs the label plus a rules object. Both languages always send rules (the API requires it): a caller-supplied rules object wins key by key over the flat inbound_policy/outbound_policy arguments, which fill in the rest. devices rides through verbatim. rules and devices are read as native objects only; the JSON-string form the hand handlers decoded is refused. A response that is not a JSON object must fail rather than yield a zeroed firewall.",
   "cases": [
     {
       "name": "requires confirm before creating",
@@ -277,52 +277,22 @@
       "expect_error": "devices must be an object"
     },
     {
-      "name": "accepts the JSON-string form of rules some clients still send",
+      "name": "rejects the JSON-string form of rules",
       "args": {
         "confirm": true,
         "label": "web-fw",
         "rules": "{\"inbound_policy\": \"DROP\"}"
       },
-      "api_response": {
-        "id": 100,
-        "label": "web-fw",
-        "status": "enabled"
-      },
-      "expect_request": {
-        "method": "POST",
-        "path": "/networking/firewalls",
-        "body": {
-          "label": "web-fw",
-          "rules": {
-            "inbound_policy": "DROP",
-            "outbound_policy": "ACCEPT"
-          }
-        }
-      }
+      "expect_error": "rules must be an object"
     },
     {
-      "name": "treats a blank rules string as absent",
+      "name": "rejects a blank rules string",
       "args": {
         "confirm": true,
         "label": "web-fw",
         "rules": "   "
       },
-      "api_response": {
-        "id": 100,
-        "label": "web-fw",
-        "status": "enabled"
-      },
-      "expect_request": {
-        "method": "POST",
-        "path": "/networking/firewalls",
-        "body": {
-          "label": "web-fw",
-          "rules": {
-            "inbound_policy": "ACCEPT",
-            "outbound_policy": "ACCEPT"
-          }
-        }
-      }
+      "expect_error": "rules must be an object"
     },
     {
       "name": "rejects a rules string that is not valid JSON",
@@ -332,6 +302,43 @@
         "rules": "{oops"
       },
       "expect_error": "rules must be an object"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "confirm": true,
+        "label": "  "
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "label": "web-fw",
+        "inbound_policy": "DROP",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/firewalls",
+          "body": {
+            "label": "web-fw",
+            "rules": {
+              "inbound_policy": "DROP",
+              "outbound_policy": "ACCEPT"
+            }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new Cloud Firewall \"web-fw\" will be created with inbound policy DROP and outbound policy ACCEPT."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

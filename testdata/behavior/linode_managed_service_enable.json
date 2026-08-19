@@ -4,24 +4,89 @@
   "cases": [
     {
       "name": "rejects non-positive service_id",
-      "args": { "service_id": 0 },
+      "args": {
+        "service_id": 0,
+        "confirm": true
+      },
       "expect_error": "service_id must be a positive integer"
     },
     {
       "name": "requires confirm before enabling",
-      "args": { "service_id": 4 },
+      "args": {
+        "service_id": 4
+      },
       "expect_error": "This enables a Managed service monitor. Set confirm=true to proceed."
     },
     {
       "name": "enables a managed service",
-      "args": { "service_id": 4, "confirm": true },
+      "args": {
+        "service_id": 4,
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/managed/services/4/enable" }
+      "expect_request": {
+        "method": "POST",
+        "path": "/managed/services/4/enable"
+      }
     },
     {
       "name": "requires confirm",
-      "args": {"service_id": 4},
+      "args": {
+        "service_id": 4
+      },
       "expect_error": "This enables a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "service_id": 4,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /managed/services/4": {
+          "body": null,
+          "region": null,
+          "notes": null,
+          "status": "ok",
+          "address": "https://ex.com",
+          "consultation_group": "",
+          "created": "",
+          "service_type": "url",
+          "label": "web",
+          "updated": "",
+          "credentials": null,
+          "id": 4,
+          "timeout": 30
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_managed_service_enable",
+        "would_execute": {
+          "method": "POST",
+          "path": "/managed/services/4/enable"
+        },
+        "current_state": {
+          "body": null,
+          "region": null,
+          "notes": null,
+          "status": "ok",
+          "address": "https://ex.com",
+          "consultation_group": "",
+          "created": "",
+          "service_type": "url",
+          "label": "web",
+          "updated": "",
+          "credentials": null,
+          "id": 4,
+          "timeout": 30
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Managed service monitor 4 will be enabled."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

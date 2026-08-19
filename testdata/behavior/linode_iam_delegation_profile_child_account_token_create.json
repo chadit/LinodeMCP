@@ -1,0 +1,65 @@
+{
+  "tool": "linode_iam_delegation_profile_child_account_token_create",
+  "description": "Mints a delegate user token for one child account. The child account named in the path is the whole request, so no body travels, and the answer carries a secret the API returns once.",
+  "cases": [
+    {
+      "name": "rejects a blank euuid",
+      "args": { "euuid": "   ", "confirm": true },
+      "expect_error": "euuid is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890" },
+      "expect_error": "This creates a delegate user token for a child account. Set confirm=true to proceed."
+    },
+    {
+      "name": "creates a delegate user token",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890", "confirm": true },
+      "api_response": {
+        "id": 918,
+        "label": "parent1_1234_2026-01-02T03:04:05",
+        "scopes": "*",
+        "created": "2026-01-02T03:04:05",
+        "expiry": "2026-01-02T03:19:05",
+        "token": "shh"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/iam/delegation/profile/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/token"
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890", "confirm": true },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890", "confirm": true },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the delegate token request",
+      "args": {
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_delegation_profile_child_account_token_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/iam/delegation/profile/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/token",
+          "body": {}
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

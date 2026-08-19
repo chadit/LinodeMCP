@@ -87,7 +87,13 @@
             "addresses": [
               {
                 "address": "10.0.0.5",
-                "primary": false
+                "primary": false,
+                "nat_1_1_address": "192.0.2.20"
+              }
+            ],
+            "ranges": [
+              {
+                "range": "10.0.0.16/28"
               }
             ]
           }
@@ -206,7 +212,13 @@
             "addresses": [
               {
                 "address": "10.0.0.5",
-                "primary": false
+                "primary": false,
+                "nat_1_1_address": "192.0.2.20"
+              }
+            ],
+            "ranges": [
+              {
+                "range": "10.0.0.16/28"
               }
             ]
           }

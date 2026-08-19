@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.MonitorAlertChannelAlertListResponse",
+  "description": "linode_monitor_alert_channel_alert_list envelope: count and the alert entries using one channel. The route publishes no filter param, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "alerts": [
+      {
+        "id": 20000,
+        "label": "High CPU",
+        "type": "user",
+        "service_type": "dbaas",
+        "url": "/monitor/services/dbaas/alert-definitions/20000"
+      },
+      {
+        "id": 20001,
+        "label": "High Memory",
+        "type": "system",
+        "service_type": "linode",
+        "url": "/monitor/services/linode/alert-definitions/20001"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "alerts": [
+      {
+        "id": 20000,
+        "label": "High CPU",
+        "type": "user",
+        "service_type": "dbaas",
+        "url": "/monitor/services/dbaas/alert-definitions/20000"
+      },
+      {
+        "id": 20001,
+        "label": "High Memory",
+        "type": "system",
+        "service_type": "linode",
+        "url": "/monitor/services/linode/alert-definitions/20001"
+      }
+    ]
+  }
+}

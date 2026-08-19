@@ -4,7 +4,10 @@
   "cases": [
     {
       "name": "rejects missing sharegroup_id",
-      "args": {},
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
       "expect_error": "sharegroup_id is required"
     },
     {

@@ -3,6 +3,13 @@
   "description": "Account payment method get: missing and non-integer id agree; success pins the GET path.",
   "cases": [
     {
+      "name": "rejects a non-positive payment_method_id",
+      "args": {
+        "payment_method_id": 0
+      },
+      "expect_error": "payment_method_id must be a positive integer"
+    },
+    {
       "name": "requires payment_method_id",
       "args": {},
       "expect_error": "payment_method_id is required"

@@ -1,0 +1,102 @@
+{
+  "tool": "linode_iam_idp_config_certificate_delete",
+  "description": "Destroy tool addressed by two UUID strings. The preview case is what proves the collection-sibling state fetch: the API publishes no GET on this route, so both languages read the parent collection through linode_iam_idp_config_certificate_list and report the element whose id the trailing path segment names. The page carries two certificates and the preview shows one, which is the selection.",
+  "cases": [
+    {
+      "name": "rejects a blank idp_config_id",
+      "args": {
+        "idp_config_id": "   ",
+        "certificate_id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "idp_config_id is required"
+    },
+    {
+      "name": "rejects a blank certificate_id",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate_id": "   ",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "certificate_id is required"
+    },
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate_id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+        "confirm": true
+      },
+      "expect_error": "linode_iam_idp_config_certificate_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the IDP certificate",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate_id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates/1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+        "api_surface": "v4beta"
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate_id": "9a8b7c6d-5e4f-4321-8098-7f6e5d4c3b2a",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates": {
+          "data": [
+            {
+              "certificate": "MIIDexampleCertificateData",
+              "created": "2026-03-04T12:00:00",
+              "created_by": "jsmith",
+              "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+              "not_after": "2027-03-04T12:00:00",
+              "not_before": "2026-03-04T12:00:00"
+            },
+            {
+              "certificate": "MIIDsecondCertificateData",
+              "created": "2026-05-19T08:15:00",
+              "created_by": "arivera",
+              "id": "9a8b7c6d-5e4f-4321-8098-7f6e5d4c3b2a",
+              "not_after": "2027-05-19T08:15:00",
+              "not_before": "2026-05-19T08:15:00"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 2
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_idp_config_certificate_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/v4beta/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates/9a8b7c6d-5e4f-4321-8098-7f6e5d4c3b2a"
+        },
+        "current_state": {
+          "certificate": "MIIDsecondCertificateData",
+          "created": "2026-05-19T08:15:00",
+          "created_by": "arivera",
+          "id": "9a8b7c6d-5e4f-4321-8098-7f6e5d4c3b2a",
+          "not_after": "2027-05-19T08:15:00",
+          "not_before": "2026-05-19T08:15:00"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

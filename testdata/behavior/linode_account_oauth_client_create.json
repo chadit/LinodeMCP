@@ -1,16 +1,19 @@
 {
   "tool": "linode_account_oauth_client_create",
-  "description": "OAuth client create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report). A successful response must be a decodable JSON object. public is a documented required body field, so both clients always send it; omitting it sends the documented default of false.",
+  "description": "OAuth client create: required-field rejections and the POST body once confirmed. The confirm gate runs first, so every rejection case confirms. Confirm-gate text diverges (see report). A successful response must be a decodable JSON object. public is a documented required body field, so both clients always send it; omitting it sends the documented default of false.",
   "cases": [
     {
       "name": "requires label",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "label is required"
     },
     {
       "name": "requires redirect_uri",
       "args": {
-        "label": "my-app"
+        "label": "my-app",
+        "confirm": true
       },
       "expect_error": "redirect_uri is required"
     },

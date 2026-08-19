@@ -1,0 +1,23 @@
+{
+  "tool": "linode_iam_delegation_profile_child_account_get",
+  "description": "Gets one child account the caller is delegated into. This route replaces the deprecated GET /account/child-accounts/{euuid}, and answers with the company and euuid alone rather than the whole account.",
+  "cases": [
+    {
+      "name": "rejects a blank euuid",
+      "args": { "euuid": "   " },
+      "expect_error": "euuid is required"
+    },
+    {
+      "name": "gets one delegated child account",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890" },
+      "api_response": {
+        "company": "Wayfarer Media",
+        "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/iam/delegation/profile/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890"
+      }
+    }
+  ]
+}

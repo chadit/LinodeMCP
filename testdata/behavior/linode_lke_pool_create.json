@@ -1,18 +1,49 @@
 {
   "tool": "linode_lke_pool_create",
-  "description": "Pins the cluster_id/type-required rejections (checked in order) and the confirmed POST body. The count-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned. A response that is not a JSON object must fail rather than yield a zeroed pool.",
+  "description": "Pins the contract checks (path id, then type, then count) that run after the confirm gate, the confirmed POST body including the typed disks items, and the dry-run preview. A response that is not a JSON object must fail rather than yield a zeroed pool.",
   "cases": [
     {
       "name": "rejects missing cluster_id",
-      "args": {},
-      "expect_error": "cluster_id is required"
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "cluster_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative cluster_id",
+      "args": {
+        "cluster_id": -1,
+        "confirm": true
+      },
+      "expect_error": "cluster_id must be a positive integer"
     },
     {
       "name": "rejects missing type",
       "args": {
-        "cluster_id": 12345
+        "cluster_id": 12345,
+        "confirm": true
       },
       "expect_error": "type is required"
+    },
+    {
+      "name": "rejects a whitespace-only type",
+      "args": {
+        "cluster_id": 12345,
+        "type": "   ",
+        "count": 3,
+        "confirm": true
+      },
+      "expect_error": "type is required"
+    },
+    {
+      "name": "rejects a negative count",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": -3,
+        "confirm": true
+      },
+      "expect_error": "count is required and must be at least 1"
     },
     {
       "name": "creates a node pool",
@@ -24,6 +55,7 @@
       },
       "api_response": {
         "id": 7,
+        "cluster_id": 12345,
         "type": "g6-standard-1",
         "count": 3
       },
@@ -190,6 +222,54 @@
       "expect_error": "disks must be an array of objects"
     },
     {
+      "name": "rejects a disk item missing a required member",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "disks": [
+          {
+            "type": "ext4"
+          }
+        ]
+      },
+      "expect_error": "disks[0].size is required"
+    },
+    {
+      "name": "rejects a wrong-typed disk item member",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "disks": [
+          {
+            "size": "big",
+            "type": "ext4"
+          }
+        ]
+      },
+      "expect_error": "disks[0].size must be an integer"
+    },
+    {
+      "name": "rejects an unknown disk item key",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "disks": [
+          {
+            "size": 4096,
+            "type": "ext4",
+            "mount": "/data"
+          }
+        ]
+      },
+      "expect_error": "disks[0] has no field \"mount\""
+    },
+    {
       "name": "rejects an unknown disk_encryption",
       "args": {
         "cluster_id": 12345,
@@ -210,6 +290,58 @@
         "update_strategy": "asap"
       },
       "expect_error": "update_strategy must be one of: on_recycle, rolling_update"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345": {
+          "id": 12345,
+          "label": "before",
+          "region": "us-east",
+          "k8s_version": "1.30",
+          "status": "ready",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-02T00:00:00",
+          "tags": [],
+          "control_plane": {
+            "high_availability": false
+          }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_pool_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/lke/clusters/12345/pools",
+          "body": {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        },
+        "current_state": {
+          "id": 12345,
+          "label": "before",
+          "region": "us-east",
+          "k8s_version": "1.30",
+          "status": "ready",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-02T00:00:00",
+          "tags": [],
+          "control_plane": {
+            "high_availability": false
+          }
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

@@ -1,31 +1,311 @@
 {
   "tool": "linode_instance_update",
-  "description": "Pins instance_id-required, the no-fields rejection, and the PUT body. Confirm passed so Go clears its confirm gate; the confirm-message text itself diverges (see report).",
+  "description": "Pins the positive-integer id rule, the extended at-least-one sentence, the reader sentences each editable field answers, the backups and ipv4 wire shapes, and the preview that reads the instance being changed.",
   "cases": [
     {
-      "name": "requires instance_id",
-      "args": { "confirm": true },
-      "expect_error": "instance_id is required"
+      "name": "rejects a missing instance_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "rejects an instance_id below one",
+      "args": {
+        "instance_id": -1,
+        "label": "x",
+        "confirm": true
+      },
+      "expect_error": "instance_id must be a positive integer"
     },
     {
       "name": "requires at least one update field",
-      "args": { "instance_id": 5, "confirm": true },
-      "expect_error": "at least one update field is required: label, group, tags, alerts, maintenance_policy, or watchdog_enabled"
+      "args": {
+        "instance_id": 5,
+        "confirm": true
+      },
+      "expect_error": "at least one update field is required: label, group, tags, alerts, maintenance_policy, watchdog_enabled, backups, or ipv4"
     },
     {
       "name": "updates the label",
-      "args": { "instance_id": 5, "confirm": true, "label": "updated-label" },
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "label": "updated-label"
+      },
       "api_response": {},
       "expect_request": {
         "method": "PUT",
         "path": "/linode/instances/5",
-        "body": { "label": "updated-label" }
+        "body": {
+          "label": "updated-label"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"instance_id": 5, "label": "updated-label"},
+      "args": {
+        "instance_id": 5,
+        "label": "updated-label"
+      },
       "expect_error": "This updates a Linode instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects an unknown maintenance policy",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "maintenance_policy": "linode/nope"
+      },
+      "expect_error": "maintenance_policy must be one of: linode/migrate, linode/power_off_on"
+    },
+    {
+      "name": "rejects alerts that are not an object",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "alerts": 5
+      },
+      "expect_error": "alerts must be an object"
+    },
+    {
+      "name": "rejects tags that are not a string array",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "tags": 5
+      },
+      "expect_error": "tags must be a JSON string array"
+    },
+    {
+      "name": "rejects a blank tag entry",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "tags": [
+          "web",
+          ""
+        ]
+      },
+      "expect_error": "tags entries must be non-empty strings"
+    },
+    {
+      "name": "rejects a label that is not a string",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "label": 7
+      },
+      "expect_error": "label must be a string"
+    },
+    {
+      "name": "rejects watchdog_enabled that is not a boolean",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "watchdog_enabled": "yes"
+      },
+      "expect_error": "watchdog_enabled must be a boolean"
+    },
+    {
+      "name": "rejects a backups member the message does not declare",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "backups": {
+          "nope": 1
+        }
+      },
+      "expect_error": "backups has no field \"nope\""
+    },
+    {
+      "name": "rejects a backups.enabled that is not a boolean",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "backups": {
+          "enabled": "yes"
+        }
+      },
+      "expect_error": "backups.enabled must be a boolean"
+    },
+    {
+      "name": "rejects a backups.schedule.day that is not a string",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "backups": {
+          "schedule": {
+            "day": 6
+          }
+        }
+      },
+      "expect_error": "backups.schedule.day must be a string"
+    },
+    {
+      "name": "rejects ipv4 that is not a string array",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "ipv4": "203.0.113.5"
+      },
+      "expect_error": "ipv4 must be an array of strings"
+    },
+    {
+      "name": "sends every editable field the route takes",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "label": "web-1",
+        "group": "prod",
+        "tags": [
+          "web"
+        ],
+        "alerts": {
+          "cpu": 90
+        },
+        "maintenance_policy": "linode/migrate",
+        "watchdog_enabled": false,
+        "backups": {
+          "enabled": true,
+          "schedule": {
+            "day": "Saturday",
+            "window": "W22"
+          }
+        },
+        "ipv4": [
+          "203.0.113.5"
+        ]
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/5",
+        "body": {
+          "label": "web-1",
+          "group": "prod",
+          "tags": [
+            "web"
+          ],
+          "alerts": {
+            "cpu": 90
+          },
+          "maintenance_policy": "linode/migrate",
+          "watchdog_enabled": false,
+          "backups": {
+            "enabled": true,
+            "schedule": {
+              "day": "Saturday",
+              "window": "W22"
+            }
+          },
+          "ipv4": [
+            "203.0.113.5"
+          ]
+        }
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "instance_id": 5,
+        "label": "updated-label",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/5": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/linode/instances/5",
+          "body": {
+            "label": "updated-label"
+          }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

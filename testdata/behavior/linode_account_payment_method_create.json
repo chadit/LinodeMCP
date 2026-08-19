@@ -1,47 +1,108 @@
 {
   "tool": "linode_account_payment_method_create",
-  "description": "Account payment method create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report). A successful response must be a decodable JSON object.",
+  "description": "Account payment method create: required-field rejections and the POST body once confirmed. Rejections carry confirm because the gate runs before the rules. A successful response must be a decodable JSON object, and a dry run must never echo the card details back.",
   "cases": [
     {
       "name": "requires type",
-      "args": {},
+      "args": {
+        "confirm": true
+      },
       "expect_error": "type is required"
     },
     {
       "name": "requires data",
-      "args": { "type": "credit_card" },
+      "args": {
+        "type": "credit_card",
+        "confirm": true
+      },
       "expect_error": "data is required"
     },
     {
       "name": "requires is_default boolean",
-      "args": { "type": "credit_card", "data": { "card_token": "tok_123" } },
+      "args": {
+        "type": "credit_card",
+        "data": {
+          "card_token": "tok_123"
+        },
+        "confirm": true
+      },
       "expect_error": "is_default must be a boolean"
     },
     {
       "name": "rejects non-credit_card type",
-      "args": { "type": "paypal", "data": { "card_token": "tok_123" }, "is_default": false },
+      "args": {
+        "type": "paypal",
+        "data": {
+          "card_token": "tok_123"
+        },
+        "is_default": false,
+        "confirm": true
+      },
       "expect_error": "type must be credit_card"
     },
     {
       "name": "creates a payment method",
-      "args": { "type": "credit_card", "data": { "card_token": "tok_123" }, "is_default": false, "confirm": true },
-      "api_response": { "id": 123, "type": "credit_card", "is_default": false, "data": {} },
+      "args": {
+        "type": "credit_card",
+        "data": {
+          "card_token": "tok_123"
+        },
+        "is_default": false,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "type": "credit_card",
+        "is_default": false,
+        "data": {}
+      },
       "expect_request": {
         "method": "POST",
         "path": "/account/payment-methods",
-        "body": { "type": "credit_card", "data": { "card_token": "tok_123" }, "is_default": false }
+        "body": {
+          "type": "credit_card",
+          "data": {
+            "card_token": "tok_123"
+          },
+          "is_default": false
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"type": "credit_card", "data": {"card_token": "tok_123"}, "is_default": false},
+      "args": {
+        "type": "credit_card",
+        "data": {
+          "card_token": "tok_123"
+        },
+        "is_default": false
+      },
       "expect_error": "This creates a payment method. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "type": "credit_card", "data": { "card_token": "tok_123" }, "is_default": false, "confirm": true },
+      "args": {
+        "type": "credit_card",
+        "data": {
+          "card_token": "tok_123"
+        },
+        "is_default": false,
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a payment method type the route does not offer",
+      "args": {
+        "type": "paypal",
+        "data": {
+          "card_token": "tok_123"
+        },
+        "is_default": false,
+        "confirm": true
+      },
+      "expect_error": "type must be credit_card"
     }
   ]
 }

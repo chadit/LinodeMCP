@@ -1,0 +1,123 @@
+{
+  "tool": "linode_object_storage_object_download",
+  "cases": [
+    {
+      "name": "rejects a missing region",
+      "args": {
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "/tmp/app.tar.gz"
+      },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects a missing label",
+      "args": {
+        "region": "us-east",
+        "name": "releases/app.tar.gz",
+        "dest_path": "/tmp/app.tar.gz"
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a missing object key",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "dest_path": "/tmp/app.tar.gz"
+      },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "rejects a missing destination path",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz"
+      },
+      "expect_error": "dest_path is required"
+    },
+    {
+      "name": "rejects a destination path of spaces alone",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "   "
+      },
+      "expect_error": "dest_path is required"
+    },
+    {
+      "name": "rejects a relative destination path",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "app.tar.gz"
+      },
+      "expect_error": "dest_path must be a local, absolute path"
+    },
+    {
+      "name": "rejects an expires_in outside the signing window",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "/tmp/app.tar.gz",
+        "expires_in": 604801
+      },
+      "expect_error": "expires_in must be between 1 and 604800 seconds (7 days)"
+    },
+    {
+      "name": "downloads an object and reports what landed",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "{{file_dir}}/landed.bin"
+      },
+      "api_responses": {
+        "POST /object-storage/buckets/us-east/artifacts/object-url": {
+          "url": "{{api_base}}/artifacts/releases/app.tar.gz?sig=fixture"
+        },
+        "GET /artifacts/releases/app.tar.gz": "hello object storage"
+      },
+      "api_response_headers": {
+        "GET /artifacts/releases/app.tar.gz": {
+          "ETag": "\"5eb63bbbe01eeed093cb22bb8f5acdc3\""
+        }
+      },
+      "expect_result": {
+        "message": "Object 'releases/app.tar.gz' downloaded from bucket 'artifacts'",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "size_bytes": 22,
+        "etag": "5eb63bbbe01eeed093cb22bb8f5acdc3"
+      }
+    },
+    {
+      "name": "refuses an existing destination without overwrite and makes no call",
+      "files": {
+        "occupied.bin": { "content": "already here" }
+      },
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "{{file:occupied.bin}}"
+      },
+      "expect_error": "Failed to download 'releases/app.tar.gz' from bucket 'artifacts': dest_path already exists and overwrite is false: {{file:occupied.bin}}"
+    },
+    {
+      "name": "rejects a presign response that is not an object",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "{{file_dir}}/landed.bin"
+      },
+      "api_response_raw": "[]",
+      "expect_api_error": "object storage object download"
+    }
+  ]
+}

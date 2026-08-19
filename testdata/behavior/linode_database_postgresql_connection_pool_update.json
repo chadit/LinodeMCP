@@ -1,0 +1,159 @@
+{
+  "tool": "linode_database_postgresql_connection_pool_update",
+  "description": "PostgreSQL connection pool update. pool_name addresses the pool as a path segment, so the path-safety sentences guard it, and the rename case pins that a label differing from pool_name is what renames the pool.",
+  "cases": [
+    {
+      "name": "rejects a non-positive instance_id",
+      "args": {
+        "instance_id": 0,
+        "pool_name": "Connection-Pool-01",
+        "label": "Connection-Pool-01",
+        "confirm": true
+      },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "rejects a blank pool_name",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "   ",
+        "label": "Connection-Pool-01",
+        "confirm": true
+      },
+      "expect_error": "pool_name must be a non-empty string"
+    },
+    {
+      "name": "rejects a pool_name with a path separator",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "pools/../secrets",
+        "label": "Connection-Pool-01",
+        "confirm": true
+      },
+      "expect_error": "pool_name must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "rejects a missing label",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects an unknown mode",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "label": "Connection-Pool-01",
+        "mode": "batch",
+        "confirm": true
+      },
+      "expect_error": "mode must be one of: session, statement, transaction"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "label": "Connection-Pool-01"
+      },
+      "expect_error": "This updates a PostgreSQL connection pool and can close its in-use connections. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts the update body",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "database": "PostgreSQL-DB-video-streaming-data-legacy",
+        "label": "Connection-Pool-02",
+        "mode": "statement",
+        "size": 25,
+        "username": "john-doe",
+        "confirm": true
+      },
+      "api_response": {
+        "database": "PostgreSQL-DB-video-streaming-data-legacy",
+        "label": "Connection-Pool-02",
+        "mode": "statement",
+        "size": 25,
+        "username": "john-doe"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/databases/postgresql/instances/890/connection-pools/Connection-Pool-01",
+        "body": {
+          "database": "PostgreSQL-DB-video-streaming-data-legacy",
+          "label": "Connection-Pool-02",
+          "mode": "statement",
+          "size": 25,
+          "username": "john-doe"
+        }
+      }
+    },
+    {
+      "name": "sends an explicit null username",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "label": "Connection-Pool-01",
+        "username": null,
+        "confirm": true
+      },
+      "api_response": {
+        "database": "defaultdb",
+        "label": "Connection-Pool-01",
+        "mode": "transaction",
+        "size": 10,
+        "username": null
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/databases/postgresql/instances/890/connection-pools/Connection-Pool-01",
+        "body": {
+          "label": "Connection-Pool-01",
+          "username": null
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "label": "Connection-Pool-01",
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the connection pool update request",
+      "args": {
+        "instance_id": 890,
+        "pool_name": "Connection-Pool-01",
+        "label": "Connection-Pool-01",
+        "size": 25,
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_postgresql_connection_pool_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/databases/postgresql/instances/890/connection-pools/Connection-Pool-01",
+          "body": {
+            "label": "Connection-Pool-01",
+            "size": 25
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

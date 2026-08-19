@@ -1,16 +1,26 @@
 {
   "tool": "linode_instance_disk_get",
-  "description": "Pins the shared missing-linode_id and missing-disk_id rejections and the disk-get GET.",
+  "description": "Pins the shared linode_id and disk_id positivity rejections and the disk-get GET.",
   "cases": [
     {
       "name": "rejects missing linode_id",
       "args": {},
-      "expect_error": "linode_id is required"
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative linode_id",
+      "args": { "linode_id": -1, "disk_id": 5 },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "rejects missing disk_id",
       "args": { "linode_id": 123 },
-      "expect_error": "disk_id is required"
+      "expect_error": "disk_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative disk_id",
+      "args": { "linode_id": 123, "disk_id": -1 },
+      "expect_error": "disk_id must be a positive integer"
     },
     {
       "name": "gets a disk",

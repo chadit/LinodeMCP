@@ -58,6 +58,52 @@
       "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "weight": 100, "confirm": true },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "node_id": 9,
+        "weight": 100,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5/configs/7/nodes/9": {
+          "id": 9,
+          "address": "192.168.1.5:80",
+          "label": "web-1",
+          "status": "UP",
+          "weight": 50,
+          "mode": "accept",
+          "nodebalancer_id": 5,
+          "config_id": 7
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_config_node_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/nodebalancers/5/configs/7/nodes/9",
+          "body": {
+            "weight": 100
+          }
+        },
+        "current_state": {
+          "id": 9,
+          "address": "192.168.1.5:80",
+          "label": "web-1",
+          "status": "UP",
+          "weight": 50,
+          "mode": "accept",
+          "nodebalancer_id": 5,
+          "config_id": 7
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

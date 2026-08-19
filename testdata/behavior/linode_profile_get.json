@@ -1,12 +1,62 @@
 {
   "tool": "linode_profile_get",
-  "description": "Pins the bare profile GET path both languages issue.",
+  "description": "Pins the bare profile GET path both languages issue, and the full documented answer behind it. The populated case is the guard on the six members the Profile message used to drop (authentication_type, authorized_keys, ip_whitelist_enabled, lish_auth_method, referrals, verified_phone_number): a narrowing would show up here as members missing from the result.",
   "cases": [
     {
       "name": "gets the authenticated profile",
       "args": {},
       "api_response": {},
       "expect_request": { "method": "GET", "path": "/profile" }
+    },
+    {
+      "name": "returns every documented member",
+      "args": {},
+      "api_response": {
+        "username": "exampleuser",
+        "email": "user@example.com",
+        "timezone": "US/Eastern",
+        "uid": 1234,
+        "email_notifications": true,
+        "restricted": false,
+        "two_factor_auth": true,
+        "scopes": "*",
+        "authentication_type": "password",
+        "authorized_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example"],
+        "ip_whitelist_enabled": false,
+        "lish_auth_method": "keys_only",
+        "referrals": {
+          "code": "abc123",
+          "completed": 2,
+          "credit": 40,
+          "pending": 1,
+          "total": 3,
+          "url": "https://www.linode.com/?r=abc123"
+        },
+        "verified_phone_number": "+15558675309"
+      },
+      "expect_result": {
+        "username": "exampleuser",
+        "email": "user@example.com",
+        "timezone": "US/Eastern",
+        "uid": 1234,
+        "email_notifications": true,
+        "restricted": false,
+        "two_factor_auth": true,
+        "scopes": "*",
+        "authentication_type": "password",
+        "authorized_keys": ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 lish-example"],
+        "ip_whitelist_enabled": false,
+        "lish_auth_method": "keys_only",
+        "referrals": {
+          "code": "abc123",
+          "completed": 2,
+          "credit": 40,
+          "pending": 1,
+          "total": 3,
+          "url": "https://www.linode.com/?r=abc123"
+        },
+        "verified_phone_number": "+15558675309"
+      }
     }
   ]
 }

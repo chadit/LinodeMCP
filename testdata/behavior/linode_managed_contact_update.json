@@ -1,20 +1,30 @@
 {
   "tool": "linode_managed_contact_update",
-  "description": "Contact update: shared id rejection, empty email/name rejections (ported to Go, strictest-wins), confirm gate, and the PUT body once confirmed. A successful response must be a decodable JSON object.",
+  "description": "Contact update: the id rule, the empty email/name rejections, the read-only refusal, the at-least-one refusal, the three states an explicit-null group travels in, the confirm gate, the PUT body, and the dry-run preview. A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "rejects missing contact_id",
-      "args": {},
-      "expect_error": "contact_id is required"
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "contact_id must be a positive integer"
     },
     {
       "name": "rejects an empty email",
-      "args": { "contact_id": 7, "email": "" },
+      "args": {
+        "contact_id": 7,
+        "email": "",
+        "confirm": true
+      },
       "expect_error": "email must be a non-empty string"
     },
     {
       "name": "rejects an empty name",
-      "args": { "contact_id": 7, "name": "" },
+      "args": {
+        "contact_id": 7,
+        "name": "",
+        "confirm": true
+      },
       "expect_error": "name must be a non-empty string"
     },
     {
@@ -54,9 +64,158 @@
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "contact_id": 7, "name": "NewName", "confirm": true },
+      "args": {
+        "contact_id": 7,
+        "name": "NewName",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "rejects a call that changes nothing",
+      "args": {
+        "contact_id": 7,
+        "confirm": true
+      },
+      "expect_error": "at least one mutable contact field is required"
+    },
+    {
+      "name": "rejects read-only fields",
+      "args": {
+        "contact_id": 7,
+        "id": 7,
+        "name": "NewName",
+        "confirm": true
+      },
+      "expect_error": "Read-only fields are not accepted: id"
+    },
+    {
+      "name": "clears the group with an explicit null",
+      "args": {
+        "contact_id": 7,
+        "group": null,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "group": ""
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/contacts/7",
+        "body": {
+          "group": null
+        }
+      }
+    },
+    {
+      "name": "sends a supplied group as itself",
+      "args": {
+        "contact_id": 7,
+        "group": "ops",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "group": "ops"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/contacts/7",
+        "body": {
+          "group": "ops"
+        }
+      }
+    },
+    {
+      "name": "leaves an absent group off the wire",
+      "args": {
+        "contact_id": 7,
+        "name": "NewName",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "name": "NewName"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/contacts/7",
+        "body": {
+          "name": "NewName"
+        }
+      }
+    },
+    {
+      "name": "rejects a phone member the API does not publish",
+      "args": {
+        "contact_id": 7,
+        "phone": {
+          "mobile": "5551234"
+        },
+        "confirm": true
+      },
+      "expect_error": "phone has unknown fields: mobile"
+    },
+    {
+      "name": "rejects a blank phone number",
+      "args": {
+        "contact_id": 7,
+        "phone": {
+          "secondary": "  "
+        },
+        "confirm": true
+      },
+      "expect_error": "phone.secondary must be a non-empty string or null"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "contact_id": 7,
+        "name": "NewName",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /managed/contacts/7": {
+          "email": "ops@example.com",
+          "group": "",
+          "id": 7,
+          "name": "Ops",
+          "phone": {
+            "primary": null,
+            "secondary": null
+          },
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_managed_contact_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/managed/contacts/7",
+          "body": {
+            "name": "NewName"
+          }
+        },
+        "current_state": {
+          "email": "ops@example.com",
+          "group": "",
+          "id": 7,
+          "name": "Ops",
+          "phone": {
+            "primary": null,
+            "secondary": null
+          },
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Managed contact 7 will be updated."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

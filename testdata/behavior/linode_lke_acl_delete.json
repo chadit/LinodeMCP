@@ -1,6 +1,6 @@
 {
   "tool": "linode_lke_acl_delete",
-  "description": "Destroy-capability but Go uses a plain confirm gate (no bypass gate); Python enforces the dispatch bypass gate. Only the agreed cases are pinned: cluster_id-required and the confirmed+bypassed DELETE. The confirm-alone gate diverges (see report).",
+  "description": "Destroy-capability but Go uses a plain confirm gate (no bypass gate); Python enforces the dispatch bypass gate. Only the agreed cases are pinned: cluster_id-required and the confirmed+bypassed DELETE. The confirm-alone gate diverges (see report), and the declared failure sentence the destroy tier now serves over its shared one.",
   "cases": [
     {
       "name": "confirm alone is blocked by the destroy gate",
@@ -30,6 +30,17 @@
         "method": "DELETE",
         "path": "/lke/clusters/12345/control_plane_acl"
       }
+    },
+    {
+      "name": "a failed removal answers the declared sentence",
+      "args": {
+        "cluster_id": 123,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_status": 500,
+      "api_response": {},
+      "expect_api_error": "Failed to remove control plane ACL for cluster 123"
     },
     {
       "name": "dry_run_preview",

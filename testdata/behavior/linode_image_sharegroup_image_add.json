@@ -1,13 +1,164 @@
 {
   "tool": "linode_image_sharegroup_image_add",
-  "description": "With confirm set both languages reach the sharegroup_id check. Success POSTs the images array.",
+  "description": "Both languages read the path id and the images array from the declared rules and the typed item reader, one sentence per failure. Success POSTs the images array.",
   "cases": [
     {
       "name": "rejects missing sharegroup_id",
       "args": {
         "confirm": true
       },
-      "expect_error": "sharegroup_id is required"
+      "expect_error": "sharegroup_id must be a positive integer"
+    },
+    {
+      "name": "rejects a negative sharegroup_id",
+      "args": {
+        "sharegroup_id": -1,
+        "images": [
+          {
+            "id": "private/123"
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id must be a positive integer"
+    },
+    {
+      "name": "rejects absent images",
+      "args": {
+        "sharegroup_id": 5,
+        "confirm": true
+      },
+      "expect_error": "images must contain at least one image"
+    },
+    {
+      "name": "rejects an empty images array",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [],
+        "confirm": true
+      },
+      "expect_error": "images must contain at least one image"
+    },
+    {
+      "name": "rejects images that are not a list",
+      "args": {
+        "sharegroup_id": 5,
+        "images": "private/123",
+        "confirm": true
+      },
+      "expect_error": "images must be an array of objects"
+    },
+    {
+      "name": "rejects an item without an image id",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "label": "first"
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images entries must carry an image id"
+    },
+    {
+      "name": "rejects an item whose description is not a string",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "id": "private/123",
+            "description": 5
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images[0].description must be a string"
+    },
+    {
+      "name": "rejects an item key the message does not declare",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "id": "private/123",
+            "bogus": true
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images[0] has no field \"bogus\""
+    },
+    {
+      "name": "rejects a blank item id",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "id": "   "
+          }
+        ],
+        "confirm": true
+      },
+      "expect_error": "images entries must carry an image id"
+    },
+    {
+      "name": "previews the add without sending it",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "id": "private/123"
+          }
+        ],
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /images/sharegroups/5": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 5,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "my-group",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_sharegroup_image_add",
+        "would_execute": {
+          "method": "POST",
+          "path": "/images/sharegroups/5/images",
+          "body": {
+            "images": [
+              {
+                "id": "private/123"
+              }
+            ]
+          }
+        },
+        "current_state": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 5,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "my-group",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Images will be added to the image share group."
+        ],
+        "warnings": []
+      }
     },
     {
       "name": "adds an image to the group",
@@ -28,6 +179,40 @@
           "images": [
             {
               "id": "private/123"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "adds several images with their overrides",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "id": "private/123",
+            "label": "first",
+            "description": "the first"
+          },
+          {
+            "id": "private/124"
+          }
+        ],
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups/5/images",
+        "body": {
+          "images": [
+            {
+              "id": "private/123",
+              "label": "first",
+              "description": "the first"
+            },
+            {
+              "id": "private/124"
             }
           ]
         }

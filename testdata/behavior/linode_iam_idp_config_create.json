@@ -1,0 +1,285 @@
+{
+  "tool": "linode_iam_idp_config_create",
+  "description": "IDP configuration create. The SAML object travels as a typed nested message with a certificate list of its own, so the rejections pin each member sentence the contract declares rather than letting a half-built object reach the API.",
+  "cases": [
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "label": "   ",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        },
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a missing saml",
+      "args": {
+        "label": "okta-prod",
+        "confirm": true
+      },
+      "expect_error": "saml is required"
+    },
+    {
+      "name": "rejects a blank saml entity_id",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "  ",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        },
+        "confirm": true
+      },
+      "expect_error": "saml.entity_id is required"
+    },
+    {
+      "name": "rejects an unknown identity_element",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "EMAIL",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        },
+        "confirm": true
+      },
+      "expect_error": "saml.identity_element must be one of: NAME_ID, USER_ID_ATTRIBUTE"
+    },
+    {
+      "name": "rejects an attribute identity_element with no attribute name",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "USER_ID_ATTRIBUTE",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        },
+        "confirm": true
+      },
+      "expect_error": "saml.user_id_attribute is required when saml.identity_element is USER_ID_ATTRIBUTE"
+    },
+    {
+      "name": "rejects an empty certificate list",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": []
+        },
+        "confirm": true
+      },
+      "expect_error": "saml.public_certificates must include at least one certificate"
+    },
+    {
+      "name": "rejects a blank certificate entry",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "   "
+            }
+          ]
+        },
+        "confirm": true
+      },
+      "expect_error": "saml.public_certificates entries must carry certificate data"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        }
+      },
+      "expect_error": "This creates the account's single sign-on configuration. Set confirm=true to proceed."
+    },
+    {
+      "name": "posts the create body",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "USER_ID_ATTRIBUTE",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ],
+          "user_id_attribute": "email"
+        },
+        "enabled": true,
+        "enforce": false,
+        "confirm": true
+      },
+      "api_response": {
+        "created": "2026-03-04T12:00:00",
+        "created_by": "jsmith",
+        "enabled": true,
+        "enforce": false,
+        "excluded_users_count": 0,
+        "id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "included_users_count": 0,
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "USER_ID_ATTRIBUTE",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData",
+              "created": "2026-03-04T12:00:00",
+              "created_by": "jsmith",
+              "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+              "not_after": "2027-03-04T12:00:00",
+              "not_before": "2026-03-04T12:00:00"
+            }
+          ],
+          "user_id_attribute": "email"
+        },
+        "updated": null,
+        "updated_by": null
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/iam/idp-configs",
+        "api_surface": "v4beta",
+        "body": {
+          "label": "okta-prod",
+          "saml": {
+            "entity_id": "https://idp.example.com/saml/metadata",
+            "identity_element": "USER_ID_ATTRIBUTE",
+            "idp_url": "https://idp.example.com/sso/saml",
+            "public_certificates": [
+              {
+                "certificate": "MIIDexampleCertificateData"
+              }
+            ],
+            "user_id_attribute": "email"
+          },
+          "enabled": true,
+          "enforce": false
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        },
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        },
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the IDP configuration create request",
+      "args": {
+        "label": "okta-prod",
+        "saml": {
+          "entity_id": "https://idp.example.com/saml/metadata",
+          "identity_element": "NAME_ID",
+          "idp_url": "https://idp.example.com/sso/saml",
+          "public_certificates": [
+            {
+              "certificate": "MIIDexampleCertificateData"
+            }
+          ]
+        },
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_idp_config_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/v4beta/iam/idp-configs",
+          "body": {
+            "label": "okta-prod",
+            "saml": {
+              "entity_id": "https://idp.example.com/saml/metadata",
+              "identity_element": "NAME_ID",
+              "idp_url": "https://idp.example.com/sso/saml",
+              "public_certificates": [
+                {
+                  "certificate": "MIIDexampleCertificateData"
+                }
+              ]
+            }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

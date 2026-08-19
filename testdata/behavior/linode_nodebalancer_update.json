@@ -7,7 +7,7 @@
       "args": {
         "confirm": true
       },
-      "expect_error": "nodebalancer_id is required"
+      "expect_error": "nodebalancer_id must be a positive integer"
     },
     {
       "name": "puts the update body",
@@ -97,6 +97,69 @@
         ]
       },
       "expect_error": "tags entries must be non-empty strings"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 789,
+        "label": "newlabel",
+        "client_conn_throttle": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/789": {
+          "id": 789,
+          "label": "lb-1",
+          "region": "us-east",
+          "hostname": "nb-789.linode.com",
+          "ipv4": "",
+          "ipv6": "",
+          "client_conn_throttle": 0,
+          "transfer": {
+            "in": 0,
+            "out": 0,
+            "total": 0
+          },
+          "tags": [],
+          "created": "",
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/nodebalancers/789",
+          "body": {
+            "label": "newlabel",
+            "client_conn_throttle": 5
+          }
+        },
+        "current_state": {
+          "id": 789,
+          "label": "lb-1",
+          "region": "us-east",
+          "hostname": "nb-789.linode.com",
+          "ipv4": "",
+          "ipv6": "",
+          "client_conn_throttle": 0,
+          "transfer": {
+            "in": 0,
+            "out": 0,
+            "total": 0
+          },
+          "tags": [],
+          "created": "",
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Label changes from \"lb-1\" to \"newlabel\".",
+          "Connection throttle is set to 5 connections per second per client IP."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

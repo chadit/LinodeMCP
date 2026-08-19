@@ -1,22 +1,107 @@
 {
   "tool": "linode_image_sharegroup_token_create",
-  "description": "Pins the token-create POST body. uuid-missing/format and confirm-message rejections diverge (see report).",
+  "description": "Pins the token-create POST body. The UUID both hand clients accepted is the lenient stdlib form, so the check is a hook rather than a rule. Go answered 'is required' for a blank uuid and now answers Python's 'must be a non-empty string', which is what the rest of this family says; Go also gains Python's label check, which it never made.",
   "cases": [
     {
       "name": "creates a share group token",
-      "args": { "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000", "confirm": true },
+      "args": {
+        "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000",
+        "confirm": true
+      },
       "api_response": {},
-      "expect_request": { "method": "POST", "path": "/images/sharegroups/tokens", "body": { "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000" } }
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups/tokens",
+        "body": {
+          "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000"
+        }
+      }
+    },
+    {
+      "name": "trims the uuid and the label before sending them",
+      "args": {
+        "valid_for_sharegroup_uuid": "  123e4567-e89b-12d3-a456-426614174000  ",
+        "label": "  ci  ",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups/tokens",
+        "body": {
+          "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000",
+          "label": "ci"
+        }
+      }
+    },
+    {
+      "name": "accepts the 32-hex uuid form both hand clients read",
+      "args": {
+        "valid_for_sharegroup_uuid": "123e4567e89b12d3a456426614174000",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups/tokens",
+        "body": {
+          "valid_for_sharegroup_uuid": "123e4567e89b12d3a456426614174000"
+        }
+      }
+    },
+    {
+      "name": "rejects a blank valid_for_sharegroup_uuid",
+      "args": {
+        "valid_for_sharegroup_uuid": "   ",
+        "confirm": true
+      },
+      "expect_error": "valid_for_sharegroup_uuid must be a non-empty string"
     },
     {
       "name": "rejects a non-uuid valid_for_sharegroup_uuid",
-      "args": { "valid_for_sharegroup_uuid": "not-a-uuid", "confirm": true },
+      "args": {
+        "valid_for_sharegroup_uuid": "not-a-uuid",
+        "confirm": true
+      },
       "expect_error": "valid_for_sharegroup_uuid must be a valid UUID"
     },
     {
+      "name": "rejects a blank label",
+      "args": {
+        "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000",
+        "label": "   ",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string when provided"
+    },
+    {
       "name": "requires confirm",
-      "args": {"valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000"},
+      "args": {
+        "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000"
+      },
       "expect_error": "This creates single-use image share group token material. Set confirm=true to proceed."
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_sharegroup_token_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/images/sharegroups/tokens",
+          "body": {
+            "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

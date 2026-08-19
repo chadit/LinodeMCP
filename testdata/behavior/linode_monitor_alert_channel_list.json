@@ -1,16 +1,36 @@
 {
   "tool": "linode_monitor_alert_channel_list",
-  "description": "Pins the non-integer page rejection both languages share and the unpaginated alert-channels list GET.",
+  "description": "Monitor alert-channel list. The route publishes no page controls, so the tool advertises none and the empty and populated envelopes are what both languages have to decode.",
   "cases": [
-    {
-      "name": "rejects non-integer page",
-      "args": { "page": "1" },
-      "expect_error": "page must be an integer"
-    },
     {
       "name": "lists monitor alert channels",
       "args": {},
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/monitor/alert-channels" }
+    },
+    {
+      "name": "lists a populated alert channel",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "id": 7,
+            "label": "ops on call",
+            "type": "user",
+            "channel_type": "email",
+            "content": { "email": { "email_addresses": ["ops@example.com"] } },
+            "details": { "email": { "recipient_type": "user", "usernames": ["opsuser"] } },
+            "alerts": {
+              "alert_count": 2,
+              "type": "alert-definitions",
+              "url": "/monitor/alert-channels/7/alerts"
+            }
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
       "expect_request": { "method": "GET", "path": "/monitor/alert-channels" }
     }
   ]

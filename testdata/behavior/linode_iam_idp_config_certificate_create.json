@@ -1,0 +1,100 @@
+{
+  "tool": "linode_iam_idp_config_certificate_create",
+  "description": "IDP certificate add. The call sends only the certificate data and the answer carries the validity window the API read out of it, which is why the response is decoded rather than assembled from the request.",
+  "cases": [
+    {
+      "name": "rejects a blank idp_config_id",
+      "args": {
+        "idp_config_id": "  ",
+        "certificate": "MIIDexampleCertificateData",
+        "confirm": true
+      },
+      "expect_error": "idp_config_id is required"
+    },
+    {
+      "name": "rejects a blank certificate",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate": "   ",
+        "confirm": true
+      },
+      "expect_error": "certificate is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate": "MIIDexampleCertificateData"
+      },
+      "expect_error": "This adds a signing certificate to the single sign-on configuration. Set confirm=true to proceed."
+    },
+    {
+      "name": "posts the certificate body",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate": "MIIDexampleCertificateData",
+        "confirm": true
+      },
+      "api_response": {
+        "certificate": "MIIDexampleCertificateData",
+        "created": "2026-03-04T12:00:00",
+        "created_by": "jsmith",
+        "id": "1f2e3d4c-5b6a-4798-9c0d-2e3f4a5b6c7d",
+        "not_after": "2027-03-04T12:00:00",
+        "not_before": "2026-03-04T12:00:00"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates",
+        "api_surface": "v4beta",
+        "body": {
+          "certificate": "MIIDexampleCertificateData"
+        }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate": "MIIDexampleCertificateData",
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate": "MIIDexampleCertificateData",
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the certificate add request",
+      "args": {
+        "idp_config_id": "b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b",
+        "certificate": "MIIDexampleCertificateData",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_idp_config_certificate_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/v4beta/iam/idp-configs/b7f5c1e2-0a3d-4f9b-8c21-5d6e7f809a1b/certificates",
+          "body": {
+            "certificate": "MIIDexampleCertificateData"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

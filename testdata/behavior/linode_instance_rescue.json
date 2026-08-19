@@ -1,11 +1,13 @@
 {
   "tool": "linode_instance_rescue",
-  "description": "Pins the linode_id-required rejection and the rescue POST. Both languages omit devices when the caller does not supply them (Go now omits the empty map, matching Python), so a minimal call sends an empty body. A supplied devices map is sent verbatim.",
+  "description": "Pins the linode_id rejection, the devices reader's object-only sentence, and the rescue POST. Both languages omit devices when the caller does not supply them, so a minimal call sends an empty body. A supplied devices map is sent verbatim. The preview reads the instance so a running one is warned about.",
   "cases": [
     {
       "name": "requires linode_id",
-      "args": { "confirm": true },
-      "expect_error": "linode_id is required"
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "linode_id must be a positive integer"
     },
     {
       "name": "boots into rescue mode with the API default devices",
@@ -24,20 +26,160 @@
       "name": "boots into rescue mode with explicit devices",
       "args": {
         "linode_id": 5,
-        "devices": { "sda": { "disk_id": 123 } },
+        "devices": {
+          "sda": {
+            "disk_id": 123
+          }
+        },
         "confirm": true
       },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances/5/rescue",
-        "body": { "devices": { "sda": { "disk_id": 123 } } }
+        "body": {
+          "devices": {
+            "sda": {
+              "disk_id": 123
+            }
+          }
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 5, "devices": {"sda": {"disk_id": 123}}},
+      "args": {
+        "linode_id": 5,
+        "devices": {
+          "sda": {
+            "disk_id": 123
+          }
+        }
+      },
       "expect_error": "This reboots the instance into rescue mode. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a devices argument that is not an object",
+      "args": {
+        "linode_id": 5,
+        "devices": "{\"sda\":{\"disk_id\":123}}",
+        "confirm": true
+      },
+      "expect_error": "devices must be an object"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 5,
+        "devices": {
+          "sda": {
+            "disk_id": 123
+          }
+        },
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/5": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_rescue",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/5/rescue",
+          "body": {
+            "devices": {
+              "sda": {
+                "disk_id": 123
+              }
+            }
+          }
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-1",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-1",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "The instance reboots into rescue mode; its normal boot configuration is bypassed until you reboot out of rescue mode."
+        ],
+        "warnings": [
+          "Instance is currently running; entering rescue mode reboots it, causing downtime."
+        ]
+      }
     }
   ]
 }

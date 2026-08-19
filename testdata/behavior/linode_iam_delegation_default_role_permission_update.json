@@ -1,0 +1,107 @@
+{
+  "tool": "linode_iam_delegation_default_role_permission_update",
+  "description": "Replaces the default delegate assignment. The call replaces rather than merges, so the empty-lists case is a real request: it is how the default stops granting anything, and it must reach the wire as two empty arrays.",
+  "cases": [
+    {
+      "name": "rejects an entity_access entry with no id",
+      "args": {
+        "entity_access": [{ "type": "linode", "roles": ["linode_contributor"] }],
+        "confirm": true
+      },
+      "expect_error": "entity_access entries must carry an entity id, a type, and at least one role"
+    },
+    {
+      "name": "rejects an entity_access entry with no roles",
+      "args": {
+        "entity_access": [{ "id": 1, "type": "linode", "roles": [] }],
+        "confirm": true
+      },
+      "expect_error": "entity_access entries must carry an entity id, a type, and at least one role"
+    },
+    {
+      "name": "rejects an entity_access entry with a blank type",
+      "args": {
+        "entity_access": [{ "id": 1, "type": "  ", "roles": ["linode_contributor"] }],
+        "confirm": true
+      },
+      "expect_error": "entity_access entries must carry an entity id, a type, and at least one role"
+    },
+    {
+      "name": "requires confirm",
+      "args": { "account_access": ["account_linode_creator"] },
+      "expect_error": "This replaces the default role assignment for every delegate user. Set confirm=true to proceed."
+    },
+    {
+      "name": "puts the replacement default assignment",
+      "args": {
+        "account_access": ["account_linode_creator", "account_firewall_creator"],
+        "entity_access": [
+          { "id": 1, "type": "linode", "roles": ["linode_contributor"] },
+          { "id": 4, "type": "firewall", "roles": ["firewall_admin"] }
+        ],
+        "confirm": true
+      },
+      "api_response": {
+        "account_access": ["account_linode_creator", "account_firewall_creator"],
+        "entity_access": [
+          { "id": 1, "type": "linode", "roles": ["linode_contributor"] },
+          { "id": 4, "type": "firewall", "roles": ["firewall_admin"] }
+        ]
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/iam/delegation/default-role-permissions",
+        "body": {
+          "account_access": ["account_linode_creator", "account_firewall_creator"],
+          "entity_access": [
+            { "id": 1, "roles": ["linode_contributor"], "type": "linode" },
+            { "id": 4, "roles": ["firewall_admin"], "type": "firewall" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "grants nothing by default with empty lists",
+      "args": { "account_access": [], "entity_access": [], "confirm": true },
+      "api_response": { "account_access": [], "entity_access": [] },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/iam/delegation/default-role-permissions",
+        "body": { "account_access": [], "entity_access": [] }
+      }
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "account_access": ["account_linode_creator"], "confirm": true },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "account_access": ["account_linode_creator"], "confirm": true },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the default assignment replacement",
+      "args": {
+        "account_access": ["account_linode_creator"],
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_iam_delegation_default_role_permission_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/iam/delegation/default-role-permissions",
+          "body": { "account_access": ["account_linode_creator"] }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

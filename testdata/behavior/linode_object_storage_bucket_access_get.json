@@ -1,10 +1,15 @@
 {
   "tool": "linode_object_storage_bucket_access_get",
-  "description": "Pins the region/label-required rejections both languages share and the bucket access GET.",
+  "description": "Pins the region/label-required rejections both languages share, the wrong-typed slug reading as absent rather than as a path segment, and the bucket access GET.",
   "cases": [
     {
       "name": "requires region",
       "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "reads a numeric region as no region at all",
+      "args": { "region": 5, "label": "my-bucket" },
       "expect_error": "region is required"
     },
     {

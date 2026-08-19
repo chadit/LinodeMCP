@@ -11,9 +11,11 @@
       "expect_error": "linode_database_postgresql_instance_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
     },
     {
-      "name": "rejects non-positive instance_id",
+      "name": "rejects a non-positive instance_id",
       "args": {
-        "instance_id": 0
+        "instance_id": 0,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
       },
       "expect_error": "instance_id must be a positive integer"
     },
