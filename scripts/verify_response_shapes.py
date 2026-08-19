@@ -30,17 +30,18 @@ assert nothing about shape and are skipped. Pre-request expect_error cases
 deliberately serve a rejected body) are also skipped. Routes absent from the
 snapshot are skipped too (the spec lags TechDocs, so absence is not a signal).
 
-Known gaps live in docs/contracts/response-shape-baseline.txt, a ratchet: fix
-the fixture in a shape-correct way (and every language along with it) and
-remove its line; never add a line by hand (regenerate with --update-baseline,
-then attach the required acceptance annotation).
+This is a HARD gate: any fixture body whose shape contradicts the spec fails by
+name. There is no baseline file and no acceptance path, because an accepted
+wrong shape is the one state worse than no fixture at all: every language is
+proven to conform to a contract the API never had, and they agree with each
+other all the way to the wire.
 
 Stdlib plus scripts/_toolroutes.py, which reads the declared routes from the
 generated descriptors (through python/.venv/bin/python when the running
 interpreter cannot import them). Run via `make response-shapes` (in
 `make check`, and so the pre-push hook and the CI gate on every branch).
 
-Usage: verify_response_shapes.py [--update-baseline]
+Usage: verify_response_shapes.py
 """
 
 from __future__ import annotations
@@ -48,29 +49,16 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
-import _baselines
+import _hardgate
 import _toolroutes
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SNAPSHOT = _REPO_ROOT / "docs" / "contracts" / "api-response-shapes-baseline.txt"
-_BASELINE = _REPO_ROOT / "docs" / "contracts" / "response-shape-baseline.txt"
 _FIXTURES = _REPO_ROOT / "testdata" / "behavior"
 
 _ENVELOPE_KEYS = {"data", "page", "pages", "results"}
-
-_BASELINE_HEADER = (
-    "# Fixture cases whose served body shape diverges from the route's spec\n"
-    "# response shape. Ratchet: correct the fixture body (and every language\n"
-    "# implementation that depended on the wrong shape) and remove its line;\n"
-    "# never add a line by hand (regenerate instead, then attach the required\n"
-    "# annotation).\n"
-    "# Regenerate with:\n"
-    "#   python3 scripts/verify_response_shapes.py --update-baseline\n"
-    "# Spec side comes from docs/contracts/api-response-shapes-baseline.txt\n"
-    "# (scripts/verify_sync_response_shapes.py owns that snapshot).\n"
-)
 
 
 def snapshot_shapes(path: Path) -> dict[tuple[str, str], str]:
@@ -107,6 +95,25 @@ def _segments_match(left: str, right: str) -> bool:
     return left == right
 
 
+def _segment_score(path_part: str, template_part: str) -> int:
+    """How well two matching segments line up.
+
+    Two literals are the strongest match, and two placeholders are the next:
+    a declared route's own {p} against a snapshot's {imageId} is the same slot,
+    where {p} against the literal "sharegroups" is a different operation the
+    placeholder merely tolerates. Without the middle rank those two tie and the
+    winner is whichever the snapshot happened to list first, which is how
+    /images/{p} resolved to /images/sharegroups.
+    """
+    path_slot = path_part.startswith("{")
+    template_slot = template_part.startswith("{")
+    if not path_slot and not template_slot:
+        return 2
+    if path_slot and template_slot:
+        return 1
+    return 0
+
+
 def match_template(
     path: str, method: str, shapes: dict[tuple[str, str], str]
 ) -> tuple[str, str] | None:
@@ -129,8 +136,7 @@ def match_template(
             if not _segments_match(path_part, template_part):
                 score = -1
                 break
-            if not template_part.startswith("{") and not path_part.startswith("{"):
-                score += 1
+            score += _segment_score(path_part, template_part)
         if score > best_score:
             best = key
             best_score = score
@@ -190,11 +196,26 @@ def _case_bodies(
     return entries
 
 
-def current_violations() -> list[str]:
+class Judged(NamedTuple):
+    """The divergences found, and how many case bodies were judged at all.
+
+    judged is the gate's reach: case bodies whose route resolved into the
+    snapshot and whose shape said something. It is reported because a fixture
+    tree that moved, a snapshot that stopped parsing, or a contract that
+    stopped declaring routes would each leave nothing to judge, and nothing to
+    judge reads exactly like nothing wrong.
+    """
+
+    violations: list[str]
+    judged: int
+
+
+def current_violations() -> Judged:
     """One entry per fixture case body whose shape diverges from the spec."""
     shapes = snapshot_shapes(_SNAPSHOT)
     routes = tool_routes()
 
+    judged = 0
     violations: set[str] = set()
     for fixture in sorted(_FIXTURES.glob("*.json")):
         doc = json.loads(fixture.read_text(encoding="utf-8"))
@@ -210,53 +231,38 @@ def current_violations() -> list[str]:
                 if key is None:
                     continue
                 spec_shape = shapes[key]
-                if spec_shape in {"none", "unknown", fixture_shape}:
+                if spec_shape in {"none", "unknown"}:
+                    continue
+                judged += 1
+                if spec_shape == fixture_shape:
                     continue
                 violations.add(
                     f"{tool}: {key[0]} {key[1]}"
                     f" fixture={fixture_shape} spec={spec_shape}"
                 )
-    return sorted(violations)
+    return Judged(sorted(violations), judged)
 
 
 def main(argv: list[str]) -> int:
-    violations = current_violations()
+    del argv  # no options: a hard gate has nothing to record
 
-    if "--update-baseline" in argv:
-        _baselines.write_baseline(
-            _BASELINE, _BASELINE_HEADER, violations, _baselines.read_baseline(_BASELINE)
-        )
-        print(f"wrote {len(violations)} response-shape gap(s)", file=sys.stderr)
-        return 0
+    result = current_violations()
 
-    baseline = _baselines.read_entries(_BASELINE)
-    new = [entry for entry in violations if entry not in baseline]
-    fixed = sorted(baseline - set(violations))
+    _hardgate.measured("the fixture-body shape comparison", result.judged)
 
-    if new:
+    if result.violations:
         print("fixture bodies diverging from the spec response shape:", file=sys.stderr)
-        for entry in new:
+        for entry in result.violations:
             print(f"  {entry}", file=sys.stderr)
         print(
             "\nServe the shape the spec documents (docs/contracts/"
-            "api-response-shapes-baseline.txt), fix every language that"
-            " depended on the wrong shape, or regenerate the baseline and"
-            " annotate the accepted gap.",
+            "api-response-shapes-baseline.txt) and fix every language that"
+            " depended on the wrong shape.",
             file=sys.stderr,
         )
-    if fixed:
-        print(
-            "response-shape gaps fixed; remove their baseline lines:", file=sys.stderr
-        )
-        for entry in fixed:
-            print(f"  {entry}", file=sys.stderr)
-    if new or fixed:
         return 1
 
-    print(
-        f"response-shape gate OK: {len(violations)} accepted gap(s),"
-        f" no drift vs {_BASELINE.name}"
-    )
+    print(f"response-shape gate OK: {result.judged} fixture body(s) match the spec")
     return 0
 
 

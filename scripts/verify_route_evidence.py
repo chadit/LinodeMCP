@@ -31,9 +31,13 @@ coverage belongs to verify_tool_parity.py, and the two disagree on purpose: Go
 has a GetReservedIP client method with no tool in front of it, which counts as
 evidence here and stays a parity gap there.
 
-Known gaps live in docs/contracts/route-evidence-baseline.txt, a ratchet: build
-the route and remove its line; never add a line by hand (regenerate with
---update-baseline, then attach the required acceptance annotation).
+This is a HARD gate: a contracted route a language cannot build, or a request
+call site its scanner cannot follow, fails by name. There is no baseline file
+and no acceptance path. A route in the contract with no code behind it is a
+tool that raises the first time someone calls it, and an unresolved call site
+is the gate losing its own reading of that language, so neither is a state to
+sit in. A tool a language has not caught up on yet is recorded once, as an
+annotated absence in docs/contracts/tool-parity-baseline.txt.
 
 Stdlib plus scripts/_toolroutes.py, which reads the declared routes from the
 generated descriptors (through python/.venv/bin/python when the running
@@ -41,7 +45,7 @@ interpreter cannot import them); the Go scanner needs the Go toolchain. Run via
 `make route-evidence` (in `make check`, and so in the pre-push hook and the CI
 gate on every branch).
 
-Usage: verify_route_evidence.py [--update-baseline] [--go-routes PATH]
+Usage: verify_route_evidence.py [--go-routes PATH]
 """
 
 from __future__ import annotations
@@ -53,7 +57,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import _baselines
+import _hardgate
 import _routescan
 import _toolroutes
 
@@ -66,16 +70,6 @@ if TYPE_CHECKING:
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _LANGUAGES = _REPO_ROOT / "docs" / "contracts" / "languages.txt"
-_BASELINE = _REPO_ROOT / "docs" / "contracts" / "route-evidence-baseline.txt"
-
-_BASELINE_HEADER = (
-    "# Contracted routes no client builds, and request call sites a scanner\n"
-    "# could not follow. Ratchet: build the route (or teach the scanner the\n"
-    "# shape) and remove its line; never add a line by hand (regenerate\n"
-    "# instead, then attach the required annotation).\n"
-    "# Regenerate with:\n"
-    "#   python3 scripts/verify_route_evidence.py --update-baseline\n"
-)
 
 
 def contract_routes() -> dict[str, str]:
@@ -228,45 +222,40 @@ def language_gaps(
     return gaps
 
 
-def current_gaps(go_routes: str | None = None) -> list[str]:
-    """Every route gap across every registered language."""
-    routes = contract_routes()
+def current_gaps(
+    go_routes: str | None = None, routes: dict[str, str] | None = None
+) -> list[str]:
+    """Every route gap across every registered language.
+
+    routes is the declared contract, read here when a caller does not supply
+    it. main passes the set it already read, since reading it means going back
+    to the generated descriptors.
+
+    Each language's resolved route surface has to be non-empty: a scanner that
+    resolves nothing would otherwise report the whole contract as missing in
+    that language, which is a wall of findings pointing at the scanner rather
+    than at the code. It fails as the one thing it is.
+    """
+    if routes is None:
+        routes = contract_routes()
     scanners = coverage(go_routes)
+
+    _hardgate.measured("the proto contract's route declarations", len(routes))
 
     gaps: list[str] = []
     for name, workdir in registered_languages(_LANGUAGES):
         scanner = scanners.get(name)
         if scanner is None:
             continue
-        gaps.extend(language_gaps(name, routes, scanner(workdir)))
+        evidence = scanner(workdir)
+        _hardgate.measured(f"the {name} route scan of {workdir}", len(evidence.routes))
+        gaps.extend(language_gaps(name, routes, evidence))
 
     return sorted(gaps)
 
 
-def _report(new: list[str], fixed: list[str]) -> None:
-    """Print what changed against the baseline, in the gate's own vocabulary."""
-    if new:
-        print("routes with no client evidence:", file=sys.stderr)
-        for entry in new:
-            print(f"  {entry}", file=sys.stderr)
-        print(
-            "\nEither the route is unimplemented in that language, or it is"
-            " built in a shape the scanner cannot follow. An unresolved entry"
-            " names the call site to teach it.",
-            file=sys.stderr,
-        )
-
-    if fixed:
-        print(
-            "route-evidence baseline entries are fixed; remove them: "
-            f"{', '.join(fixed)}",
-            file=sys.stderr,
-        )
-
-
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--update-baseline", action="store_true")
     parser.add_argument(
         "--go-routes",
         help="read Go's route surface from a recorded cmd/route-dump JSON file",
@@ -283,25 +272,25 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    gaps = current_gaps(args.go_routes)
+    declared = contract_routes()
+    gaps = current_gaps(args.go_routes, declared)
 
-    if args.update_baseline:
-        _baselines.write_baseline(
-            _BASELINE, _BASELINE_HEADER, gaps, _baselines.read_baseline(_BASELINE)
+    if gaps:
+        print("routes with no client evidence:", file=sys.stderr)
+        for entry in gaps:
+            print(f"  {entry}", file=sys.stderr)
+        print(
+            "\nEither the route is unimplemented in that language, or it is"
+            " built in a shape the scanner cannot follow. An unresolved entry"
+            " names the call site to teach it.",
+            file=sys.stderr,
         )
-        print(f"wrote {len(gaps)} route-evidence gap(s)", file=sys.stderr)
-        return 0
-
-    baseline = _baselines.read_entries(_BASELINE)
-    new = [entry for entry in gaps if entry not in baseline]
-    fixed = sorted(baseline - set(gaps))
-
-    _report(new, fixed)
-
-    if new or fixed:
         return 1
 
-    print(f"route-evidence guard OK: {len(gaps)} accepted gap(s)")
+    print(
+        f"route-evidence guard OK: every declared route ({len(declared)})"
+        " resolves in every scanned language"
+    )
     return 0
 
 

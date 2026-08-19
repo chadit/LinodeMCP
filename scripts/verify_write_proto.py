@@ -5,8 +5,8 @@ The conformance corpus proves a proto MESSAGE round-trips Go==Python. It does
 NOT prove any HANDLER returns that message. So a Go write handler can emit a
 proto envelope while its Python twin hand-builds a dict, and both pass. This
 gate closes that hole: it statically classifies every MUTATING tool (capability
-Write/Destroy/Admin) on BOTH sides as proto-routed or legacy, then ratchets the
-straggler set down so a handler cannot stay or go legacy unnoticed.
+Write/Destroy/Admin) on BOTH sides as proto-routed or legacy, so a handler
+cannot stay or go legacy unnoticed.
 
 Two independent classifiers do the static analysis (no handler is executed):
 
@@ -19,15 +19,15 @@ Two independent classifiers do the static analysis (no handler is executed):
           legacy = it builds a curated dict with no serialize call.
 
 A tool is a STRAGGLER when either side is not proto (minus the allowlist of
-intentionally-bare tools). The gate passes iff the current straggler set is a
-subset of docs/contracts/write-proto-baseline.txt: a NEW straggler fails, and a
-straggler that got fixed (removed from both classifiers) must be dropped from
-the baseline (the file only shrinks). Regenerate with --update-baseline.
+intentionally-bare tools). This is a HARD gate: any straggler fails by name.
+There is no baseline file and no acceptance path, because the conversion is
+finished and a tool is born proto-routed now that the emitter writes every
+handler from the contract. A straggler means someone hand-wrote a success path,
+which is the thing to fix rather than to record.
 
-A second check ratchets conformance fixtures: every *WriteResponse proto in
-proto/linode/mcp/v1 should have a fixture registered in the Go conformance
-corpus. Missing ones are pinned in docs/contracts/write-proto-fixture-baseline.txt and
-ratchet the same way.
+A second check holds conformance fixtures the same way: every *WriteResponse
+proto in proto/linode/mcp/v1 must have a fixture registered in the Go
+conformance corpus, or the gate fails naming the message.
 
 Run directly, via `make write-proto` (root Makefile), or as a pre-commit hook.
 The Go dumper needs the Go toolchain; the Python classifier is imported under
@@ -42,7 +42,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import _baselines
+import _hardgate
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _GO_DIR = _REPO_ROOT / "go"
@@ -50,11 +50,6 @@ _PY_SRC = _REPO_ROOT / "python" / "src"
 _PROTO_DIR = _REPO_ROOT / "proto" / "linode" / "mcp" / "v1"
 _CORPUS_TEST = (
     _REPO_ROOT / "go" / "internal" / "tools" / "proto_conformance_corpus_test.go"
-)
-
-_STRAGGLER_BASELINE = _REPO_ROOT / "docs" / "contracts" / "write-proto-baseline.txt"
-_FIXTURE_BASELINE = (
-    _REPO_ROOT / "docs" / "contracts" / "write-proto-fixture-baseline.txt"
 )
 
 # Tools whose success body is intentionally not a proto message. monitor's token
@@ -88,15 +83,16 @@ def _dump_python() -> dict[str, str]:
 
     from linodemcp.tools._write_proto_classifier import classify  # noqa: PLC0415
 
-    return classify()
+    parsed: dict[str, str] = classify()
+    return parsed
 
 
 def _stragglers(go: dict[str, str], py: dict[str, str]) -> list[str]:
     """Return sorted "tool\tgo_status\tpy_status" lines for every straggler.
 
     A straggler is any tool (outside the allowlist) that is not proto-routed on
-    both sides. The line carries both statuses so the baseline documents which
-    side needs work and a status flip (legacy -> review, say) is a new line.
+    both sides. The line carries both statuses so the finding says which side
+    needs work rather than only that the two disagree.
     """
     lines: list[str] = []
 
@@ -137,104 +133,42 @@ def _registered_write_response_protos() -> set[str]:
     return set(pattern.findall(text))
 
 
-def _missing_fixtures() -> list[str]:
+def _missing_fixtures(declared: set[str]) -> list[str]:
     """Return sorted *WriteResponse protos that lack a conformance fixture."""
-    return sorted(_write_response_protos() - _registered_write_response_protos())
-
-
-def _load_baseline(path: Path) -> set[str]:
-    """Read the baseline's entries with "  # accepted ..." annotations stripped."""
-    return _baselines.read_entries(path)
-
-
-def _write_baseline(path: Path, header: str, entries: list[str]) -> None:
-    """Overwrite a baseline with the sorted current entries.
-
-    Annotations ("  # accepted ...") on surviving entries are preserved so a
-    regeneration cannot silently drop the audit trail the baseline guard
-    checks.
-    """
-    _baselines.write_baseline(path, header, entries, _baselines.read_baseline(path))
-
-
-_STRAGGLER_HEADER = (
-    "# Handler-level write-proto stragglers: mutating tools not yet proto-routed\n"
-    "# on both sides. One line per straggler: <tool>\\t<go_status>\\t<py_status>.\n"
-    "# Ratchet: convert a handler to proto on both sides, then remove its line;\n"
-    "# never add a line by hand. Regenerate:\n"
-    "#   python scripts/verify_write_proto.py --update-baseline\n"
-)
-
-_FIXTURE_HEADER = (
-    "# *WriteResponse protos still missing a conformance fixture in the Go corpus\n"
-    "# (go/internal/tools/proto_conformance_corpus_test.go). Ratchet: add a\n"
-    "# testdata fixture and register the message, then remove its line.\n"
-    "# Regenerate: python scripts/verify_write_proto.py --update-baseline\n"
-)
-
-
-def _update_baselines(stragglers: list[str], missing: list[str]) -> int:
-    """Rewrite both baselines to the current sets and report the counts."""
-    _write_baseline(_STRAGGLER_BASELINE, _STRAGGLER_HEADER, stragglers)
-    _write_baseline(_FIXTURE_BASELINE, _FIXTURE_HEADER, missing)
-    print(
-        f"baselines updated: {len(stragglers)} straggler(s), "
-        f"{len(missing)} missing fixture(s)"
-    )
-    return 0
-
-
-def _report_drift(
-    label: str, current: set[str], baseline: set[str], fix_hint: str
-) -> bool:
-    """Print new/fixed drift for one ratchet. Return True when it is clean."""
-    new = sorted(current - baseline)
-    fixed = sorted(baseline - current)
-
-    if not new and not fixed:
-        print(f"{label} OK: {len(baseline)} known, unchanged")
-        return True
-
-    if new:
-        print(f"NEW {label} ({len(new)}):")
-        for line in new:
-            print(f"  {line}")
-
-    if fixed:
-        print(f"\nFIXED {label} ({len(fixed)}) - remove these lines:")
-        for line in fixed:
-            print(f"  {line}")
-        print(f"\nRun: {fix_hint}")
-
-    return False
+    return sorted(declared - _registered_write_response_protos())
 
 
 def main() -> int:
     go = _dump_go()
     py = _dump_python()
+    declared = _write_response_protos()
 
-    stragglers = _stragglers(go, py)
-    missing = _missing_fixtures()
+    _hardgate.measured("the Go write-surface classifier", len(go))
+    _hardgate.measured("the Python write-surface classifier", len(py))
+    _hardgate.measured("the *WriteResponse proto scan", len(declared))
 
-    if "--update-baseline" in sys.argv:
-        return _update_baselines(stragglers, missing)
-
-    fix_hint = "python scripts/verify_write_proto.py --update-baseline"
-
-    straggler_ok = _report_drift(
-        "write-proto stragglers",
-        set(stragglers),
-        _load_baseline(_STRAGGLER_BASELINE),
-        fix_hint,
+    straggler_code = _hardgate.report(
+        "mutating handlers not proto-routed on both sides",
+        _stragglers(go, py),
+        "Route the handler's success path through its proto message in every"
+        " language. A generated tool gets that from the contract, so a straggler"
+        " is hand-written code standing where generated code belongs.",
     )
-    fixture_ok = _report_drift(
-        "write-proto fixtures",
-        set(missing),
-        _load_baseline(_FIXTURE_BASELINE),
-        fix_hint,
+    fixture_code = _hardgate.report(
+        "*WriteResponse protos with no conformance fixture",
+        _missing_fixtures(declared),
+        "Add a testdata fixture and register the message in"
+        " go/internal/tools/proto_conformance_corpus_test.go, so the corpus"
+        " proves the message round-trips Go==Python.",
     )
 
-    return 0 if straggler_ok and fixture_ok else 1
+    if straggler_code == 0 and fixture_code == 0:
+        _hardgate.say(
+            f"write-proto OK: {len(go)} Go and {len(py)} Python mutating handlers"
+            " proto-routed, every *WriteResponse fixtured"
+        )
+
+    return straggler_code or fixture_code
 
 
 if __name__ == "__main__":

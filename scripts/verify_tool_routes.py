@@ -51,6 +51,15 @@ _MANIFEST = _surface.REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"
 
 _META = "Meta"
 
+# The ApiSurface values that mean "v4", which an unannotated tool already gets.
+# Writing either one out is the redundant second spelling the gate refuses.
+_DEFAULT_SURFACES = frozenset({"API_SURFACE_UNSPECIFIED", "API_SURFACE_V4"})
+
+# Argument names a tool input may never declare. The surface a tool answers on
+# is a property of the tool, and an argument by any of these names would let a
+# caller, or a model reading the schema, move a call to another API surface.
+_RESERVED_ARGUMENTS = frozenset({"api_version", "api_surface", "surface", "beta"})
+
 # A path template: rooted, and every parameter segment is a snake_case name in
 # braces. Names come from the Linode API documentation for the operation.
 _PATH = re.compile(r"^(?:/(?:\{[a-z][a-z0-9_]*\}|[A-Za-z0-9._-]+))+$")
@@ -117,6 +126,59 @@ def annotation_violations(
     return missing, unwanted, malformed
 
 
+def surface_violations(declared: list[_toolroutes.ToolDeclaration]) -> list[str]:
+    """Every tool_api_surface option that does not name a real, non-default surface.
+
+    Two shapes are refused. A surface on a message with no route has nothing to
+    apply to, since a meta tool reaches no Linode API. A surface written out as
+    the default gives v4 a second spelling, and the emitter relies on there being
+    one: an unannotated tool and a v4-annotated one must generate the same bytes.
+    """
+    violations: list[str] = []
+    for entry in sorted(declared):
+        if not entry.api_surface:
+            continue
+        if not entry.route_tool:
+            violations.append(
+                f"{entry.message}: declares {entry.api_surface} but no tool_route"
+            )
+            continue
+        if entry.api_surface in _DEFAULT_SURFACES:
+            violations.append(
+                f"{entry.message}: declares {entry.api_surface}, which is the"
+                " default an unannotated tool already gets"
+            )
+    return violations
+
+
+def argument_violations(declared: list[_toolroutes.ToolDeclaration]) -> list[str]:
+    """Every tool input that declares an argument naming the API surface.
+
+    The surface is a per-tool declaration, never an argument. An input carrying
+    one of these names would advertise it in the tool's JSON schema, and any
+    caller reading that schema (a person, another service, a model handed the
+    tool list) could then ask for a call on a surface the contract did not
+    declare. Refusing the name is the structural half of that guarantee; the
+    other half is that no emitter reads a surface from a request.
+
+    Scoped to messages that declare a tool, which is what makes it safe:
+    linode.mcp.v1.VersionResponse legitimately carries an api_version field, and
+    it is a response, not anything a caller fills.
+    """
+    violations: list[str] = []
+    for entry in sorted(declared):
+        # Meta tools take arguments too, so the guard covers every message that
+        # names a tool rather than only the routed ones.
+        if not (entry.route_tool or entry.meta_tool):
+            continue
+        violations.extend(
+            f"{entry.message}: declares argument {argument!r}, and the API"
+            " surface is a per-tool declaration rather than an argument"
+            for argument in sorted(set(entry.arguments) & _RESERVED_ARGUMENTS)
+        )
+    return violations
+
+
 def _repeated_params(path: str) -> list[str]:
     """Parameter names a template uses more than once, in first-use order.
 
@@ -140,6 +202,9 @@ def main() -> int:
     missing, unwanted, malformed = annotation_violations(
         declared, capabilities, read_manifest(), _surface.tool_input_messages()
     )
+    declarations = _toolroutes.declarations()
+    surfaces = surface_violations(declarations)
+    arguments = argument_violations(declarations)
 
     if missing:
         print("tools whose proto input declares no route:", file=sys.stderr)
@@ -169,7 +234,29 @@ def main() -> int:
             " parameters are distinct snake_case names)",
             file=sys.stderr,
         )
-    if missing or unwanted or malformed:
+    if surfaces:
+        print(
+            "tool_api_surface options that do not name a real surface:", file=sys.stderr
+        )
+        for entry in surfaces:
+            print(f"  {entry}", file=sys.stderr)
+        print(
+            "  (declare it only on a routed tool, and only when the surface is"
+            " not v4; an unannotated tool already answers on v4)",
+            file=sys.stderr,
+        )
+    if arguments:
+        print(
+            "tool inputs that declare the API surface as an argument:", file=sys.stderr
+        )
+        for entry in arguments:
+            print(f"  {entry}", file=sys.stderr)
+        print(
+            "  (rename the field; the surface is declared by tool_api_surface"
+            " and must never be something a caller can pass)",
+            file=sys.stderr,
+        )
+    if missing or unwanted or malformed or surfaces or arguments:
         return 1
 
     print(f"tool-routes gate OK: {len(declared)} tool(s) declare their route")

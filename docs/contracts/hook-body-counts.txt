@@ -1,0 +1,129 @@
+# Hook-body counts: how many of each tool-handler step each registered
+# language still writes by hand, per kind, rather than deriving it from
+# the tool's *Input message.
+# Owner: scripts/verify_hook_bodies.py (`make hook-bodies`, inside
+# `make check`).
+#
+# Direction: counts only FALL. A count above its line fails (a step went
+# back to being hand-written, or new surface wrote one instead of
+# declaring it). A count below its line fails too, asking for the line to
+# be lowered in the same change, so this file keeps stating the real
+# remaining work rather than an old high-water mark.
+#
+# One line per registered language per declared kind:
+#   <language> <kind> <hand-written bodies>
+# A registered language with no line fails by name, a declared kind with
+# no line fails by name, and a line naming neither a registered language
+# nor a declared kind fails by name, so this file, the registry and the
+# contract cannot drift apart. A kind whose cohort is fully retired stops
+# being declared, so its lines come out in that same change.
+#
+# `validate` has no line here on purpose: it is the whole subject of
+# hand-validator-counts.txt, at zero in both languages, and one population
+# under two gates is two numbers that can disagree.
+#
+# WHY THESE REMAIN. Each kind below was measured against a declaration
+# that would have replaced it, and kept for a reason the contract cannot
+# carry. Per-tool detail is in the B2, B3 and B4 correction sections of
+# the hook-body inventory written during the migration.
+#
+#   normalize   What is left after named transforms took the rest: the
+#               rewrites no transform spells, such as folding one
+#               argument spelling into another.
+#
+#   fetch_state What is left after the projected state landed: the reads
+#               that are not one GET the contract can name. A list scan
+#               with a match predicate (the VLAN delete), a two-call
+#               composite over a chosen field subset (the instance
+#               resize), and a page whose envelope, results total
+#               included, is itself the state (the tag delete). Each
+#               needs something a route name cannot say.
+#
+#               The rows blocked by shape are gone: a declared fetch
+#               reports the body the API sent keyed to the read's own
+#               message, so a null it sent survives at any depth and a
+#               key it never sent is not invented. So are the rows
+#               blocked by spelling: a state route fills the read's
+#               slots from the removal's path arguments by name, and
+#               the three instance action routes that spell one id
+#               linode_id where their read spells it instance_id say so
+#               in the declaration instead of writing the read out.
+#
+#   dependency_walk
+#               A walk says what else a removal touches, which no
+#               descriptor carries: the members a group detaches, the
+#               Linodes a subnet drops, the pools a cluster destroys.
+#               Reading the state is no longer what keeps them here. A
+#               walk paired with a declared fetch takes the projected
+#               state as its own type, so a mismatched pair fails to
+#               compile rather than reporting an empty walk.
+#
+#   preview     Both halves are declarable now. The sentence half was
+#               declared first; the fetch half followed, since a preview
+#               reads its resource through the same state route a removal
+#               does, with the read's slots filled from the tool's own
+#               path arguments.
+#
+#               Every declarable fetch has landed, so what remains is one
+#               of four things. A call with nothing to read: a create, or
+#               a preview whose reported body is rebuilt rather than
+#               echoed, such as the redacted security answers and the
+#               upload that sizes a local file. A sentence computed from
+#               the fetched state rather than interpolated from an
+#               argument, which the hook still owns because the declared
+#               preview hands its prose no state to read. A wording the
+#               rule cannot say: a bool or a float, which the two
+#               languages do not spell the same way; a constant
+#               substituted for an absent argument, which is a default
+#               rather than an alternative wording; and a line per element
+#               of a repeated argument, or one joining it, where a
+#               placeholder reports a single value. Two shapes have left
+#               this list: a whole line that vanishes, since a declared
+#               line none of whose wordings can be filled is now dropped
+#               rather than reported with a gap in it, and a bool, since a
+#               flag can select a wording without being spelled into one.
+#               And a read that is not one GET the contract can name,
+#               which is the fetch_state wall above reached from this
+#               kind: a page of a collection. The object ACL has left that
+#               one too, since a state route now fills a read's query
+#               parameters as well as its path slots, and refuses to build
+#               when a required one has nothing to fill it.
+#
+#   execute     Each owns a transport that is not the JSON request the
+#               emitter derives: multipart framing from a local file, a
+#               raw PNG body, a presigned transfer. The presign pair looks
+#               like one flow and is not; the two diverge at the guard,
+#               the transfer fields and the answer shape, so a shared
+#               option would need a verb, a URL field, a local-path
+#               argument, a guard kind and a per-direction constant set to
+#               cover two tools.
+#
+#   answer      Each forwards to local state no data option describes: a
+#               log on disk, the live catalog, an in-memory registry.
+#               Dispatching straight to the implementation instead would
+#               delete the forwarders and no logic, and it needs a module
+#               name Python cannot derive, since eight implementations
+#               share modules organized by concern. It would also make
+#               this one kind resolve outside the hooks module, which the
+#               two-way hook-completeness tests in both languages and the
+#               language-onboarding rule all state as uniform.
+#
+# Deliberately not named *-baseline.txt: files under that glob hold one
+# accepted divergence per line, each carrying a dated tracking-issue
+# annotation. A line here is a measurement, not an acceptance, so there
+# is no promise for an annotation to record.
+#
+# Regenerate with:
+#   python3 scripts/verify_hook_bodies.py --update-baseline
+go answer 16
+go dependency_walk 17
+go execute 5
+go fetch_state 3
+go normalize 5
+go preview 34
+python answer 16
+python dependency_walk 17
+python execute 5
+python fetch_state 3
+python normalize 5
+python preview 34

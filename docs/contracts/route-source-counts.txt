@@ -26,5 +26,5 @@
 #
 # Regenerate with:
 #   python3 scripts/verify_route_source.py --update-baseline
-go 6
-python 7
+go 0
+python 0

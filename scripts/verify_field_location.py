@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline gate: every routed input field declares where it goes in the request.
+"""Offline gate: every tool input field declares where it goes in the request.
 
 `tool_route` says which Linode operation a tool calls. On its own that is not
 enough to build the call: a field could be a path segment, a query entry, or a
@@ -14,8 +14,15 @@ tool_route declares one of:
     FIELD_LOCATION_QUERY   appended to the query string when set
     FIELD_LOCATION_BODY    carried in the JSON body
     FIELD_LOCATION_LOCAL   consumed by the MCP layer, never sent
+    FIELD_LOCATION_TOOL    the tool's own argument, reaching no request at all
 
-Three things are checked, and each one is a way the annotation could look
+The last one is what a meta tool's arguments carry: those tools answer from
+local state, so nothing about them is a request part, and reusing LOCAL there
+would break the bidirectional lock below. A routed message may declare one too,
+but only when its execute hook owns the call and reads it: an upload's
+source_path names bytes the request never carries.
+
+Four things are checked, and each one is a way the annotation could look
 complete while being useless:
 
 - an unannotated field reads back as FIELD_LOCATION_UNSPECIFIED, so a request
@@ -23,6 +30,8 @@ complete while being useless:
 - a path template naming a parameter no field declares as PATH cannot be
   filled, and a PATH field absent from the template would never be consumed.
   Both directions fail, because either one leaves a route that cannot be built;
+- TOOL on a routed message needs an execute hook to read it, or the value is
+  advertised in the schema and dropped before the call;
 - LOCAL must agree exactly with the trailing `// system param` marker that
   scripts/verify_system_params.py pins. Two records of the same fact drift, and
   the direction that matters is a field losing its marker and going on the wire:
@@ -52,6 +61,11 @@ _PARAM = re.compile(r"\{([a-z][a-z0-9_]*)\}")
 _UNSPECIFIED = "FIELD_LOCATION_UNSPECIFIED"
 _PATH = "FIELD_LOCATION_PATH"
 _LOCAL = "FIELD_LOCATION_LOCAL"
+_TOOL = "FIELD_LOCATION_TOOL"
+
+# The hook kind that owns a tool's whole call, which is what gives a routed
+# message somewhere to read a TOOL argument from.
+_HOOK_EXECUTE = "execute"
 
 # Descriptor full names are package-qualified; proto sources name the message
 # alone. Everything under proto/linode/mcp/v1/ shares this package.
@@ -111,6 +125,37 @@ def local_mismatches(located: dict[str, dict[str, str]]) -> list[str]:
     return found
 
 
+def tool_argument_mismatches(located: dict[str, dict[str, str]]) -> list[str]:
+    """Routed messages declaring a TOOL argument with no hook to read it.
+
+    TOOL is the location for an argument that reaches no request part. A meta
+    tool's whole input carries it, and so does the local file path a byte-moving
+    tool hands its execute hook. Anywhere else the value would be advertised in
+    the schema and then dropped before the call, which reads to a caller as an
+    argument the tool ignores. The emitter refuses the declaration for every
+    language.
+    """
+    routed = {
+        declared.message: declared
+        for declared in _toolroutes.declarations()
+        if declared.route_tool
+    }
+
+    found: list[str] = []
+    for message, fields in sorted(located.items()):
+        declared = routed.get(message)
+        if declared is None or _HOOK_EXECUTE in declared.hooks:
+            continue
+
+        short = message.removeprefix(_PACKAGE)
+        found.extend(
+            f"{short}.{name}: TOOL on a routed message with no execute hook"
+            for name, value in sorted(fields.items())
+            if value == _TOOL
+        )
+    return found
+
+
 def _report(header: str, entries: list[str], remedy: str) -> None:
     """Print one violation group to stderr."""
     print(header, file=sys.stderr)
@@ -127,10 +172,11 @@ def main() -> int:
     missing = unannotated(located)
     paths = path_mismatches(routes, located)
     locals_ = local_mismatches(located)
+    domain = tool_argument_mismatches(located)
 
     if missing:
         _report(
-            "routed input fields that declare no location:",
+            "tool input fields that declare no location:",
             missing,
             "add `[(linode.mcp.v1.field_location) = FIELD_LOCATION_...]`"
             " to the field, then run `make proto`",
@@ -149,13 +195,21 @@ def main() -> int:
             "a system param is LOCAL and carries the marker; anything else is"
             " PATH, QUERY, or BODY. See docs/contracts/system-params.txt",
         )
-    if missing or paths or locals_:
+    if domain:
+        _report(
+            "FIELD_LOCATION_TOOL on a routed message with nothing to read it:",
+            domain,
+            "TOOL is for an argument that reaches no request part: a meta"
+            " tool's input, or the local path a byte-moving tool's execute hook"
+            " reads. Declare the hook, or give the field a request location",
+        )
+    if missing or paths or locals_ or domain:
         return 1
 
     total = sum(len(fields) for fields in located.values())
     print(
         f"field-location gate OK: {total} field(s) across {len(located)}"
-        " routed message(s) declare where they go"
+        " tool input message(s) declare where they go"
     )
     return 0
 

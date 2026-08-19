@@ -16,7 +16,7 @@ braces instead of pattern-matching to the first closing brace, so messages
 containing nested blocks still parse.
 
 Factories come from two trees now: the hand-written one and the gitignored one
-scripts/toolgen_py.py emits. Reading only the committed tree would have left a
+go/cmd/toolgen emits. Reading only the committed tree would have left a
 generated tool out of every gate that consults this, and a gate that measures
 less than it did still prints OK, so the cohort file (which is committed) is
 what holds the generated half to being present.
@@ -29,7 +29,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CAPABILITIES = REPO_ROOT / "docs" / "contracts" / "tools-capabilities.txt"
-GENERATED_TOOLS = REPO_ROOT / "docs" / "contracts" / "generated-tools.txt"
+MANIFEST = REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"
+HANDWRITTEN_TOOLS = REPO_ROOT / "docs" / "contracts" / "handwritten-tools.txt"
 PY_TOOLS = REPO_ROOT / "python" / "src" / "linodemcp" / "tools"
 PY_GENTOOLS = REPO_ROOT / "python" / "src" / "linodemcp" / "gentools"
 PROTO_DIR = REPO_ROOT / "proto" / "linode" / "mcp" / "v1"
@@ -60,10 +61,11 @@ def tool_input_messages(tools_dir: Path | None = None) -> dict[str, str]:
 
     Called with nothing, it reads this repo's whole factory surface: the
     hand-written tree and the generated one beside it, then holds the result to
-    naming every tool docs/contracts/generated-tools.txt lists. Without that
-    check a checkout where `make proto` has not run would answer with a map
-    missing the generated tools, and every gate reading it would pass while
-    checking less than it did.
+    naming every generated tool, which is every tool the manifest lists that
+    docs/contracts/handwritten-tools.txt does not claim. Without that check a
+    checkout where `make proto` has not run would answer with a map missing the
+    generated tools, and every gate reading it would pass while checking less
+    than it did.
 
     Called with a directory, it reads that directory and nothing else, which is
     what the tests of the matcher itself need: a tree of their own is not this
@@ -96,8 +98,21 @@ def _factories(dirs: list[Path]) -> dict[str, str]:
     return dict(_FACTORY_RE.findall(source))
 
 
-def generated_tools(path: Path = GENERATED_TOOLS) -> list[str]:
-    """The tools whose factories the emitters write, in file order."""
+def generated_tools(
+    manifest: Path = MANIFEST, handwritten: Path = HANDWRITTEN_TOOLS
+) -> list[str]:
+    """The tools whose factories the emitter writes, in manifest order.
+
+    Derived rather than listed, because generated is the default: a tool is
+    generated unless the hand-written list still claims it, which is what lets
+    new surface reach both languages without a line in any registry.
+    """
+    claimed = set(_names(handwritten))
+    return [tool for tool in _names(manifest) if tool not in claimed]
+
+
+def _names(path: Path) -> list[str]:
+    """One name per line, comments and blanks dropped, in file order."""
     return [
         line.strip()
         for line in path.read_text(encoding="utf-8").splitlines()

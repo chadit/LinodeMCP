@@ -25,14 +25,14 @@ the idiom cannot occur in it. A language registered without an entry there
 fails the gate by name, so registering one forces the decision instead of
 silently leaving the surface unguarded.
 
-Known gaps live in docs/contracts/list-envelope-baseline.txt, a ratchet: fix the
-handler and remove its line; never add a line by hand (regenerate with
---update-baseline, then attach the required acceptance annotation).
+This is a HARD gate: any collapse fails by name. There is no baseline file and
+no acceptance path, because the collapse has no correct use in a list response,
+and the fix is one call site: reach for serialize_keyed_list_response.
 
 Stdlib only, so no venv is needed. Run via `make list-envelope` (in `make
 check`, and so the pre-push hook and the CI gate on every branch).
 
-Usage: verify_list_envelope.py [--update-baseline]
+Usage: verify_list_envelope.py
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import _baselines
+import _hardgate
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -51,22 +51,15 @@ if TYPE_CHECKING:
     # violation entries, each prefixed with the repo-relative file path.
     Scanner = Callable[[Path], list[str]]
 
+    # A source lister takes the same working dir and returns the files its
+    # scanner reads, which is how the gate proves it had something to read.
+    Lister = Callable[[Path], list[Path]]
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _LANGUAGES = _REPO_ROOT / "docs" / "contracts" / "languages.txt"
-_BASELINE = _REPO_ROOT / "docs" / "contracts" / "list-envelope-baseline.txt"
 
 LIST_SERIALIZERS = frozenset(
     {"serialize_list_response", "serialize_keyed_list_response"}
-)
-
-_BASELINE_HEADER = (
-    "# Functions that build a list response and still collapse falsey values\n"
-    "# with `or []`, hiding a malformed API response as an empty list. Ratchet:\n"
-    "# switch the handler to serialize_keyed_list_response and remove its line;\n"
-    "# never add a line by hand (regenerate instead, then attach the required\n"
-    "# annotation).\n"
-    "# Regenerate with:\n"
-    "#   python3 scripts/verify_list_envelope.py --update-baseline\n"
 )
 
 _FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -149,13 +142,19 @@ def _display_path(path: Path, root: Path) -> str:
         return path.relative_to(root).as_posix()
 
 
+def python_sources(root: Path) -> list[Path]:
+    """Every .py under root, skipping dot-directories (venvs, tool caches)."""
+    return [
+        path
+        for path in sorted(root.rglob("*.py"))
+        if not any(part.startswith(".") for part in path.relative_to(root).parts)
+    ]
+
+
 def python_violations(root: Path) -> list[str]:
-    """Scan every .py under root, skipping dot-directories (venvs, tool caches)."""
+    """Scan every source file under root for the collapse."""
     violations: list[str] = []
-    for path in sorted(root.rglob("*.py")):
-        relative = path.relative_to(root)
-        if any(part.startswith(".") for part in relative.parts):
-            continue
+    for path in python_sources(root):
         violations.extend(
             module_violations(
                 path.read_text(encoding="utf-8"), _display_path(path, root)
@@ -174,6 +173,11 @@ COVERAGE: dict[str, Scanner | str] = {
         "single listProtoElementsKeyed helper rather than unwrapping per handler"
     ),
 }
+
+# What each scanned language's scanner reads. A hard gate reports a tree it
+# could not find the same way it reports a clean one, so every scanner declares
+# its files and an empty list fails.
+SOURCES: dict[str, Lister] = {"python": python_sources}
 
 
 def registered_languages(path: Path) -> list[tuple[str, Path]]:
@@ -199,6 +203,23 @@ def undeclared_languages(languages: list[tuple[str, Path]]) -> list[str]:
     return sorted(name for name, _ in languages if name not in COVERAGE)
 
 
+def scanned_files() -> int:
+    """How many source files the scanned languages' scanners will read.
+
+    Zero is a failure rather than a clean run: a moved working dir or a
+    renamed suffix would otherwise read as a tree with no collapse in it.
+    """
+    total = 0
+    for name, workdir in registered_languages(_LANGUAGES):
+        lister = SOURCES.get(name)
+        if lister is None:
+            continue
+        found = lister(workdir)
+        _hardgate.measured(f"the {name} list-envelope scan of {workdir}", len(found))
+        total += len(found)
+    return total
+
+
 def current_violations() -> list[str]:
     """Every list-building function that collapses with `or []`, across languages."""
     violations: list[str] = []
@@ -213,6 +234,8 @@ def current_violations() -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    del argv  # no options: a hard gate has nothing to record
+
     languages = registered_languages(_LANGUAGES)
     undeclared = undeclared_languages(languages)
     if undeclared:
@@ -225,22 +248,12 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
+    scanned = scanned_files()
     violations = current_violations()
 
-    if "--update-baseline" in argv:
-        _baselines.write_baseline(
-            _BASELINE, _BASELINE_HEADER, violations, _baselines.read_baseline(_BASELINE)
-        )
-        print(f"wrote {len(violations)} list-envelope gap(s)", file=sys.stderr)
-        return 0
-
-    baseline = _baselines.read_entries(_BASELINE)
-    new = [entry for entry in violations if entry not in baseline]
-    fixed = sorted(baseline - set(violations))
-
-    if new:
+    if violations:
         print("list responses built from a falsey-collapsed member:", file=sys.stderr)
-        for entry in new:
+        for entry in violations:
             print(f"  {entry}", file=sys.stderr)
         print(
             '\n`or []` turns {}, "", 0, and false into an empty list; Go and'
@@ -248,17 +261,9 @@ def main(argv: list[str]) -> int:
             " serialize_keyed_list_response instead.",
             file=sys.stderr,
         )
-    if fixed:
-        print(
-            "list-envelope baseline entries are fixed; remove them: "
-            f"{', '.join(fixed)}",
-            file=sys.stderr,
-        )
-
-    if new or fixed:
         return 1
 
-    print(f"list-envelope guard OK: {len(violations)} accepted gap(s)")
+    print(f"list-envelope guard OK: no collapse in {scanned} scanned source file(s)")
     return 0
 
 

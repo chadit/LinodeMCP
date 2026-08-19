@@ -27,9 +27,10 @@ GoBlock = tuple[int, int, int, int]
 
 # Hand-written-code scope for the Go side, shared by both gates: the
 # generated genpb tree is never hand-edited (same exclusion fmt and gosec
-# apply), and cmd/ holds the entrypoint mains plus one-shot gate dump
+# apply); gentools is generated too, enforced by the behavior gate instead;
+# and cmd/ holds the entrypoint mains plus one-shot gate dump
 # tools, the Go mirror of the python coverage omit for main.py.
-GO_EXCLUDED_PREFIXES = ("go/internal/genpb/", "go/cmd/")
+GO_EXCLUDED_PREFIXES = ("go/internal/genpb/", "go/internal/gentools/", "go/cmd/")
 
 
 def go_excluded(path: str) -> bool:

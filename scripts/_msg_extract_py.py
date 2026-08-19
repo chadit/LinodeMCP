@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Extract tool -> confirm-gate message from Python handler files.
 
+The first argument is a comma-separated list of directories. Every confirm gate
+on the surface is emitted now, so the generated tree is the one that carries
+them; the hand-written tree is still read for whatever has not migrated yet.
+
 For each handle_<tool> function, find the first confirm-check line and capture
 the message string(s) emitted by the following error return. Strips a leading
 "Error: " so the result compares against Go's bare messages.
@@ -107,10 +111,10 @@ def collect_message(lines: list[str], start: int) -> str | None:
 
 
 def main() -> int:
-    tools_dir = Path(sys.argv[1])
+    trees = [Path(arg) for arg in sys.argv[1].split(",")]
     declared = proto_confirm_messages()
     result: dict[str, str] = {}
-    for f in sorted(tools_dir.glob("linode_*.py")):
+    for f in sorted(f for tree in trees for f in tree.glob("*.py")):
         lines = f.read_text().split("\n")
         cur = None
         i = 0

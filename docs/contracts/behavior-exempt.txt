@@ -20,12 +20,5 @@ linode_audit_recent	reads local audit log, output is runtime data
 linode_audit_report	reads local audit log, output is runtime data
 linode_audit_summary	reads local audit log, output is runtime data
 linode_profile_can_run	local profile evaluation, no HTTP
-linode_profile_draft_add_tools	stateful local draft registry, no HTTP
-linode_profile_draft_discard	stateful local draft registry, no HTTP
-linode_profile_draft_new	stateful local draft registry, no HTTP
-linode_profile_draft_remove_tools	stateful local draft registry, no HTTP
-linode_profile_draft_save	writes local config file, no HTTP
-linode_profile_draft_set	stateful local draft registry, no HTTP
-linode_profile_draft_show	stateful local draft registry, no HTTP
 linode_profile_list_categories	local catalog data, output pinned by meta-proto gate
 linode_profile_list_tools	local catalog data, output pinned by meta-proto gate

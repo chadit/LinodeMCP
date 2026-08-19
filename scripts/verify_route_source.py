@@ -4,9 +4,11 @@
 Each tool's route is declared once, as a `linode.mcp.v1.tool_route` option on
 its proto input message, and each client now has request primitives that
 resolve the method and path from that declaration: Go's makeRouteRequest,
-makeRouteRequestQuery and makeRouteRequestContentType, Python's
-make_route_request. A call site that reaches one of those names its tool and
-passes the path values, so the URL exists in the proto and nowhere else.
+makeRouteRequestQuery and makeRouteRequestContentType plus the generic
+routedGet helper, Python's make_route_request and
+make_route_request_content_type. A call
+site that reaches one of those names its tool and passes the path values, so
+the URL exists in the proto and nowhere else.
 
 Every other call site still spells the route out again in its own language.
 That is the duplication tool_route was added to remove, and it is the reason
@@ -33,11 +35,14 @@ What each failure means:
   finished migration. It fails instead.
 
 Only the primitives that put a request on the wire are counted. A wrapper that
-takes an endpoint from its caller and forwards it (Go's proto_list.go list
-helpers, Python's get_raw/post_raw/put_raw) is counted once, at its own
+takes an endpoint from its caller and forwards it is counted once, at its own
 primitive call, rather than once per caller, so the wrapper set does not have
-to be maintained here to keep the count honest. Zero still means done: at zero,
-nothing reaches a primitive with an endpoint built anywhere but the proto.
+to be maintained here to keep the count honest. A name in a client's plumbing
+tuple (Go's fetchList) is not counted even once: its endpoints are already
+contract-resolved, arriving only from the routed list fetchers, and the gate
+targets sites that spell routes out again, which fetchList never does. Zero
+still means done: at zero, nothing reaches a primitive with an endpoint built
+anywhere but the proto.
 
 Which trees are scanned comes from docs/contracts/languages.txt rather than a
 path written here, and each language's client shape is one entry in _CLIENTS.
@@ -107,7 +112,8 @@ class Client:
     function declaration and captures its name, which is what lets a primitive
     calling another primitive be told apart from a call site. handbuilt names
     the primitives that take a method and an endpoint, routed the ones that
-    take a tool.
+    take a tool, and plumbing the wrappers whose endpoints only ever arrive
+    contract-resolved, so their bodies are skipped the way a primitive's is.
 
     Both are plural because a language grows variants of each: a routed
     primitive that also carries a query string still reaches the hand-built one
@@ -120,6 +126,7 @@ class Client:
     declaration: Pattern[str]
     handbuilt: tuple[str, ...]
     routed: tuple[str, ...]
+    plumbing: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -131,28 +138,40 @@ class Counts:
     undeclared: tuple[str, ...]
 
 
-# Python's client.request is httpx's own method, reached directly by the two
-# thumbnail calls that send raw image bytes instead of JSON. It is a hand-built
-# endpoint like any other, so leaving it out would let zero mean "done" while
-# two URLs were still assembled by hand.
+# Python's client.request is httpx's own method. The primitives reach it as
+# plumbing, and naming it here keeps any future call site that hands httpx a
+# hand-assembled URL counted as the debt it would be.
 _CLIENTS: dict[str, Client] = {
     "go": Client(
         suffix=".go",
         comment="//",
-        declaration=re.compile(r"^func\s+(?:\([^)]*\)\s*)?(\w+)\s*\("),
+        declaration=re.compile(
+            r"^func\s+(?:\([^)]*\)\s*)?(\w+)\s*(?:\[[^\]]*\])?\s*\("
+        ),
         handbuilt=("makeRequest", "makeRequestWithContentType"),
         routed=(
             "makeRouteRequest",
             "makeRouteRequestQuery",
             "makeRouteRequestContentType",
+            # The generic typed helper resolves its route from the proto
+            # before touching makeRequest, so its body is plumbing and its
+            # call sites are proto-resolved.
+            "routedGet",
         ),
+        # The shared list transport: every endpoint it forwards was resolved
+        # from the proto by a routed list fetcher, so its one request call is
+        # the transport handing work to the transport. It keeps taking an
+        # endpoint instead of a tool because cmd/route-dump discovers the
+        # routed fetchers structurally through this endpoint-carrying hop,
+        # and removing it would leave their routes without evidence.
+        plumbing=("fetchList",),
     ),
     "python": Client(
         suffix=".py",
         comment="#",
         declaration=re.compile(r"^\s*(?:async\s+)?def\s+(\w+)\s*\("),
-        handbuilt=("make_request", "make_file_request", "client.request"),
-        routed=("make_route_request",),
+        handbuilt=("make_request", "client.request"),
+        routed=("make_route_request", "make_route_request_content_type"),
     ),
 }
 
@@ -167,7 +186,12 @@ def call_pattern(names: Iterable[str]) -> Pattern[str]:
     """
     alternatives = "|".join(re.escape(name) for name in names)
 
-    return re.compile(rf"\.(?:{alternatives})\(")
+    # The undotted branch is for Go's generic helpers, reached as plain
+    # functions with a type argument (routedGet[Domain](...)); requiring the
+    # bracket keeps every other undotted mention out of the count.
+    return re.compile(
+        rf"(?:\.(?:{alternatives})|(?<![.\w])(?:{alternatives})\[[^\]]*\])\("
+    )
 
 
 def is_test_path(relative: Path) -> bool:
@@ -203,7 +227,7 @@ def undeclared_primitives(client: Client, declared: set[str]) -> tuple[str, ...]
     client.request) is declared in that library, so there is nothing to find
     here and it is left out of the check.
     """
-    expected = {*client.handbuilt, *client.routed}
+    expected = {*client.handbuilt, *client.routed, *client.plumbing}
 
     return tuple(sorted(name for name in expected - declared if "." not in name))
 
@@ -219,7 +243,11 @@ def scan(client: Client, workdir: Path) -> Counts:
     """
     handbuilt = call_pattern(client.handbuilt)
     routed = call_pattern(client.routed)
-    primitives = frozenset(client.handbuilt) | frozenset(client.routed)
+    primitives = (
+        frozenset(client.handbuilt)
+        | frozenset(client.routed)
+        | frozenset(client.plumbing)
+    )
 
     hand = 0
     resolved = 0

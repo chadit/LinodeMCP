@@ -12,10 +12,20 @@ tests/unit/test_behavior_conformance.py) with the HTTP transport faked, and
 both must produce the contracted outcome.
 
 The test runners enforce fixture CORRECTNESS; this gate enforces fixture
-COVERAGE. A tool is UNCOVERED when no behavior fixture names it. The gate
-passes iff the uncovered set is a subset of docs/contracts/behavior-baseline.txt: a new
-tool without fixtures fails, and a tool that gained fixtures must be dropped
-from the baseline (the file only shrinks). Regenerate with --update-baseline.
+COVERAGE. A tool is UNCOVERED when no behavior fixture names it. Coverage is a
+HARD rule: every tool in the manifest needs a fixture or a documented line in
+docs/contracts/behavior-exempt.txt, and an uncovered tool fails by name with no
+baseline to record it in. The exempt file stays the one way out, because the
+tools that belong there (local data, no HTTP) are a permanent class rather than
+work someone will come back to.
+
+The malformed-response rule is hard for the same reason: a mutating fixture
+that decodes an API response body must also prove the tool rejects a badly
+shaped one, since decoding is hand-written per language.
+
+One ratchet is left, and it is not empty: docs/contracts/behavior-dryrun-baseline.txt
+holds the fixtured mutators with no pinned dry-run preview case. Regenerate it
+with --update-baseline.
 
 Run directly, via `make behavior` (root Makefile), or as a pre-commit hook.
 """
@@ -28,15 +38,12 @@ from pathlib import Path
 from typing import Any
 
 import _baselines
+import _hardgate
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _BEHAVIOR_DIR = _REPO_ROOT / "testdata" / "behavior"
 _MANIFEST = _REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"
-_BASELINE = _REPO_ROOT / "docs" / "contracts" / "behavior-baseline.txt"
 _DRYRUN_BASELINE = _REPO_ROOT / "docs" / "contracts" / "behavior-dryrun-baseline.txt"
-_SHAPE_BASELINE = (
-    _REPO_ROOT / "docs" / "contracts" / "behavior-response-shape-baseline.txt"
-)
 _EXEMPT = _REPO_ROOT / "docs" / "contracts" / "behavior-exempt.txt"
 _CAPABILITIES = _REPO_ROOT / "docs" / "contracts" / "tools-capabilities.txt"
 
@@ -52,39 +59,16 @@ _CONFIRM_MARK = "confirm=true to proceed"
 # Currently empty; add entries only with a documented reason.
 _CONFIRM_CHECK_SKIP: set[str] = set()
 
-_BASELINE_HEADER = (
-    "# Behavior-conformance coverage: tools with no shared behavior fixture in\n"
-    "# testdata/behavior/. One line per uncovered tool. Ratchet: add a fixture\n"
-    "# file exercising the tool's validation and outgoing request in both\n"
-    "# language runners, then remove its line; never add a line by hand.\n"
-    "# Regenerate:\n"
-    "#   python scripts/verify_behavior.py --update-baseline\n"
-)
-
 _DRYRUN_HEADER = (
     "# Mutating tools (Write/Admin/Destroy) whose behavior fixture lacks a\n"
     "# dry-run preview case: one with dry_run: true in its args and an\n"
-    "# expect_result pinning the preview output in both languages. Previews\n"
-    "# are hand-written per language, so an unpinned preview can drift\n"
-    "# silently while every other gate stays green; this ratchet makes each\n"
-    "# remaining gap visible. Destroy previews are the hard floor: no Destroy\n"
-    "# entry may ever be (re)added here. Ratchet: add the dry-run case\n"
-    "# (reconciling any preview divergence it exposes), then remove the line;\n"
-    "# never add a line by hand. Regenerate:\n"
-    "#   python scripts/verify_behavior.py --update-baseline\n"
-)
-
-_SHAPE_HEADER = (
-    "# Mutating tools (Write/Destroy) whose behavior fixture decodes an API\n"
-    "# response body but never proves the tool rejects a malformed one: no\n"
-    "# case serving a non-object api_response (or an api_response_raw body)\n"
-    "# with an expect_api_error pinning the rejection. Decoding is\n"
-    "# hand-written per language, so one side can accept a wrong-shaped body,\n"
-    "# or fail on it with different text, while the input schema, outgoing\n"
-    "# request and happy-path result all still match and every other gate\n"
-    "# stays green. Ratchet: add the malformed-body case (reconciling any\n"
-    "# divergence it exposes), then remove the line; never add a line by hand.\n"
-    "# Regenerate:\n"
+    "# expect_result pinning the preview output in both languages. A preview\n"
+    "# whose prose the contract does not declare is written per language, so\n"
+    "# an unpinned one can drift silently while every other gate stays green;\n"
+    "# this ratchet makes each remaining gap visible. Destroy previews are the\n"
+    "# hard floor: no Destroy entry may ever be (re)added here. Ratchet: add\n"
+    "# the dry-run case (reconciling any preview divergence it exposes), then\n"
+    "# remove the line; never add a line by hand. Regenerate:\n"
     "#   python scripts/verify_behavior.py --update-baseline\n"
 )
 
@@ -171,8 +155,8 @@ def _has_dryrun_case(cases: list[dict[str, Any]]) -> bool:
 def _missing_dryrun(fixtures: dict[str, list[dict[str, Any]]]) -> set[str]:
     """Return the fixtured mutating tools with no pinned dry-run preview case.
 
-    Scope is fixtured tools only: a tool with no fixture at all is already
-    debt in the coverage baseline. Every mutating tier counts, since every
+    Scope is fixtured tools only: a tool with no fixture at all fails the
+    coverage rule above and is that finding. Every mutating tier counts, since every
     mutator advertises dry_run (scripts/verify_dryrun.py pins that) and an
     advertised preview nobody pins can drift between languages unnoticed.
     Destroy entered with a clean slate and stays the hard floor; Write and
@@ -225,8 +209,8 @@ def _missing_shape_rejection(fixtures: dict[str, list[dict[str, Any]]]) -> set[s
     nothing to catch it: the input schema, the outgoing request and the
     happy-path result all still match. Scope is Write and Destroy fixtures
     that actually decode a body, since a fixture pinning validation alone has
-    no decode path to attack, and a tool with no fixture is already debt in
-    the coverage baseline.
+    no decode path to attack, and a tool with no fixture fails the coverage
+    rule instead.
     """
     capabilities = _capabilities()
 
@@ -269,39 +253,22 @@ def _exempt_tools() -> set[str]:
     return exempt
 
 
-def _say(line: str) -> None:
-    """Emit one report line on stdout (gate output, not debug logging)."""
-    sys.stdout.write(line + "\n")
-
-
-def _update_baselines(
-    uncovered: set[str], missing_dryrun: set[str], missing_shape: set[str]
-) -> int:
-    """Rewrite every baseline to the current sets and report the counts.
+def _update_baseline(missing_dryrun: set[str]) -> int:
+    """Rewrite the dry-run ratchet to the current set and report the count.
 
     Annotations ("  # accepted ...") on surviving entries are preserved so a
     regeneration cannot silently drop the audit trail the baseline guard
-    checks.
+    checks. Coverage and the malformed-response rule have no baseline to
+    rewrite: both fail outright.
     """
-    _baselines.write_baseline(
-        _BASELINE, _BASELINE_HEADER, uncovered, _baselines.read_baseline(_BASELINE)
-    )
     _baselines.write_baseline(
         _DRYRUN_BASELINE,
         _DRYRUN_HEADER,
         missing_dryrun,
         _baselines.read_baseline(_DRYRUN_BASELINE),
     )
-    _baselines.write_baseline(
-        _SHAPE_BASELINE,
-        _SHAPE_HEADER,
-        missing_shape,
-        _baselines.read_baseline(_SHAPE_BASELINE),
-    )
-    _say(
-        f"baselines updated: {len(uncovered)} uncovered tool(s), "
-        f"{len(missing_dryrun)} without a dry-run preview case, "
-        f"{len(missing_shape)} without a malformed-response case"
+    _hardgate.say(
+        f"baseline updated: {len(missing_dryrun)} without a dry-run preview case"
     )
     return 0
 
@@ -314,19 +281,19 @@ def _report_drift(
     fixed = sorted(baseline - current)
 
     if not new and not fixed:
-        _say(f"{label} OK: {len(baseline)} known, unchanged")
+        _hardgate.say(f"{label} OK: {len(baseline)} known, unchanged")
         return True
 
     if new:
-        _say(f"NEW {label} ({len(new)}) - {fix_hint}:")
+        _hardgate.say(f"NEW {label} ({len(new)}) - {fix_hint}:")
         for line in new:
-            _say(f"  {line}")
+            _hardgate.say(f"  {line}")
 
     if fixed:
-        _say(f"\nFIXED {label} ({len(fixed)}) - remove these lines:")
+        _hardgate.say(f"\nFIXED {label} ({len(fixed)}) - remove these lines:")
         for line in fixed:
-            _say(f"  {line}")
-        _say("\nRun: python scripts/verify_behavior.py --update-baseline")
+            _hardgate.say(f"  {line}")
+        _hardgate.say("\nRun: python scripts/verify_behavior.py --update-baseline")
 
     return False
 
@@ -337,34 +304,41 @@ def main() -> int:
     manifest = _manifest_tools()
     exempt = _exempt_tools()
 
+    _hardgate.measured("the behavior fixture tree", len(fixtures))
+    _hardgate.measured("the tool manifest", len(manifest))
+
     incomplete = _completeness_failures(fixtures)
     if incomplete:
-        _say(f"fixtures missing mandatory safety cases ({len(incomplete)}):")
+        _hardgate.say(f"fixtures missing mandatory safety cases ({len(incomplete)}):")
         for line in incomplete:
-            _say(f"  {line}")
+            _hardgate.say(f"  {line}")
         return 1
 
     unknown = sorted(covered - manifest)
     if unknown:
-        _say(f"fixtures name tools not in the manifest ({len(unknown)}):")
+        _hardgate.say(f"fixtures name tools not in the manifest ({len(unknown)}):")
         for tool in unknown:
-            _say(f"  {tool}")
+            _hardgate.say(f"  {tool}")
         return 1
 
     stale_exempt = sorted(exempt - manifest)
     if stale_exempt:
-        _say(f"exemptions name tools not in the manifest ({len(stale_exempt)}):")
+        _hardgate.say(
+            f"exemptions name tools not in the manifest ({len(stale_exempt)}):"
+        )
         for tool in stale_exempt:
-            _say(f"  {tool}")
+            _hardgate.say(f"  {tool}")
         return 1
 
     # A fixtured tool must not stay exempt: the exemption would mask a
     # future fixture regression.
     fixtured_exempt = sorted(exempt & covered)
     if fixtured_exempt:
-        _say(f"exempt tools with fixtures ({len(fixtured_exempt)}) - drop exemption:")
+        _hardgate.say(
+            f"exempt tools with fixtures ({len(fixtured_exempt)}) - drop exemption:"
+        )
         for tool in fixtured_exempt:
-            _say(f"  {tool}")
+            _hardgate.say(f"  {tool}")
         return 1
 
     uncovered = manifest - covered - exempt
@@ -372,13 +346,22 @@ def main() -> int:
     missing_shape = _missing_shape_rejection(fixtures)
 
     if "--update-baseline" in sys.argv:
-        return _update_baselines(uncovered, missing_dryrun, missing_shape)
+        return _update_baseline(missing_dryrun)
 
-    coverage_ok = _report_drift(
-        "uncovered tools",
-        "add behavior fixtures",
-        uncovered,
-        _baselines.read_entries(_BASELINE),
+    coverage_code = _hardgate.report(
+        "manifest tools with no behavior fixture",
+        sorted(uncovered),
+        "Add a fixture under testdata/behavior/ exercising the tool's"
+        " validation and outgoing request, so every language runner is judged"
+        " against the same case. A tool that reaches no API belongs in"
+        " docs/contracts/behavior-exempt.txt with its reason instead.",
+    )
+    shape_code = _hardgate.report(
+        "mutating tools with no malformed-response case",
+        sorted(missing_shape),
+        "Add a case serving a non-object api_response (or an api_response_raw"
+        " body) with an expect_api_error pinning the rejection, since decoding"
+        " is hand-written per language.",
     )
     dryrun_ok = _report_drift(
         "mutating tools without a dry-run preview case",
@@ -386,17 +369,13 @@ def main() -> int:
         missing_dryrun,
         _baselines.read_entries(_DRYRUN_BASELINE),
     )
-    shape_ok = _report_drift(
-        "mutating tools without a malformed-response case",
-        "add a non-object api_response (or api_response_raw) case with"
-        " expect_api_error",
-        missing_shape,
-        _baselines.read_entries(_SHAPE_BASELINE),
-    )
 
-    ok = coverage_ok and dryrun_ok and shape_ok
+    ok = coverage_code == 0 and shape_code == 0 and dryrun_ok
     if ok:
-        _say(f"behavior exemptions: {len(exempt)} (docs/contracts/behavior-exempt.txt)")
+        _hardgate.say(
+            f"behavior coverage OK: {len(covered)} fixtured tool(s),"
+            f" {len(exempt)} exemption(s) (docs/contracts/behavior-exempt.txt)"
+        )
 
     return 0 if ok else 1
 

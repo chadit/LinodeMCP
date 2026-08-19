@@ -1,0 +1,25 @@
+# Hand-written tools: the tools each language still serves from a factory it
+# wrote out by hand, rather than from the tree the emitter writes for it out of
+# the proto contract.
+# Owner: this file is the cohort, inverted. go/cmd/toolgen generates every tool
+# the descriptors declare EXCEPT the ones named here, in every language
+# docs/contracts/languages.txt registers, and `make generated-tools` holds it to
+# the truth.
+#
+# Which means the default is generated. A new tool is one proto message plus
+# whatever hooks it declares and its behavior fixtures; it appears in both
+# languages with no line in any registry, because there is no registry left to
+# add it to. The old file listed the generated tools instead, so every new tool
+# needed a line there, which is the drift this inversion removes.
+#
+# Direction: this list only SHRINKS. Removing a name means that tool migrated to
+# the generator, which is the work. Adding one means new surface was written by
+# hand, and the gate refuses it: declare the tool in the proto instead. The
+# per-language counts in docs/contracts/generated-tools-counts.txt are what makes
+# a change of length visible in a diff.
+#
+# Every name here must be a tool the manifest lists AND one that every
+# registered language's hand-written tool tree actually names. An entry naming
+# nothing would quietly exempt a tool from the generator forever.
+#
+# One tool name per line, sorted, blank lines and # comments ignored.

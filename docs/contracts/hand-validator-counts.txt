@@ -1,0 +1,37 @@
+# Hand-validator counts: how many tools each registered language still
+# checks the arguments of in hand-written code, rather than from the
+# buf.validate rules its *Input message declares.
+# Owner: scripts/verify_hand_validators.py (`make hand-validators`,
+# inside `make check`).
+#
+# Direction: counts only FALL. A count above its line fails (a check went
+# back to being hand-written, or new surface wrote one instead of
+# declaring it). A count below its line fails too, asking for the line to
+# be lowered in the same change, so this file keeps stating the real
+# remaining work rather than an old high-water mark.
+#
+# The number is two populations added: the `validate` hooks a language's
+# hook tree defines, plus the argument checks its handler tree still
+# writes out, counted once per definition site. A rule the contract can
+# carry belongs on the message; what is left here is what CEL cannot say.
+#
+# Both populations are empty in both languages. Every argument check the
+# surface makes is now the contract's: a buf.validate rule, a declared
+# argument_reader, or an object_walk over an open map or object list. The
+# file stays because zero is a measurement that has to keep being taken.
+#
+# One line per language registered in languages.txt:
+#   <language> <hand-written validators>
+# A registered language with no line fails by name, and a line naming no
+# registered language fails by name, so this file and the registry cannot
+# drift apart.
+#
+# Deliberately not named *-baseline.txt: files under that glob hold one
+# accepted divergence per line, each carrying a dated tracking-issue
+# annotation. A line here is a measurement, not an acceptance, so there
+# is no promise for an annotation to record.
+#
+# Regenerate with:
+#   python3 scripts/verify_hand_validators.py --update-baseline
+go 0
+python 0

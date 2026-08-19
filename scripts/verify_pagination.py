@@ -8,13 +8,15 @@ each tool whose behavior fixture issues a GET to one of those routes, the
 tool's proto input message must expose page and page_size; a client otherwise
 has no way to reach past the API's default first page.
 
-Known gaps live in docs/contracts/pagination-baseline.txt, a ratchet: fix a
-tool and remove its line; never add a line by hand (regenerate with
---update-baseline, then attach the required acceptance annotation).
+This is a HARD gate: any tool missing pagination for a spec-paginated route
+fails by name. There is no baseline file and no acceptance path, because a
+client that cannot ask for page 2 silently answers a list question with the
+first page and no way to tell. The fix is the proto input, and every language
+picks it up from there.
 
 Stdlib only, so no venv is needed. Run via `make pagination` (in `make check`).
 
-Usage: verify_pagination.py [--update-baseline]
+Usage: verify_pagination.py
 """
 
 from __future__ import annotations
@@ -23,26 +25,15 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
-import _baselines
+import _hardgate
 import _surface
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SNAPSHOT = _REPO_ROOT / "docs" / "contracts" / "api-pagination-baseline.txt"
 _LANGUAGES = _REPO_ROOT / "docs" / "contracts" / "languages.txt"
-_BASELINE = _REPO_ROOT / "docs" / "contracts" / "pagination-baseline.txt"
 _FIXTURES = _REPO_ROOT / "testdata" / "behavior"
-
-_BASELINE_HEADER = (
-    "# Tools whose GET route paginates in the Linode API spec but whose input\n"
-    "# contract has no page/page_size. Ratchet: add pagination to the tool in\n"
-    "# every language (proto first) and remove its line; never add a line by\n"
-    "# hand (regenerate instead, then attach the required annotation).\n"
-    "# Regenerate with:\n"
-    "#   python3 scripts/verify_pagination.py --update-baseline\n"
-    "# Spec side comes from docs/contracts/api-pagination-baseline.txt\n"
-    "# (scripts/verify_sync_pagination.py owns that snapshot).\n"
-)
 
 
 def snapshot_routes(path: Path) -> set[str]:
@@ -114,8 +105,22 @@ def paginated_messages() -> dict[str, bool]:
     }
 
 
-def current_violations() -> tuple[list[str], int]:
-    """Violation entries plus how many snapshot routes have no fixture-mapped tool."""
+class Coverage(NamedTuple):
+    """What the gate judged, and what it could not reach.
+
+    judged is the gate's whole reach: spec-paginated routes that a fixtured
+    tool actually issues a GET to. It is reported rather than inferred from an
+    empty violation list, because a moved fixture tree or a snapshot that
+    stopped parsing would leave nothing to judge and nothing to fail on.
+    """
+
+    violations: list[str]
+    judged: int
+    unmapped: int
+
+
+def current_violations() -> Coverage:
+    """Violation entries, judged routes, and snapshot routes no tool reaches."""
     routes = snapshot_routes(_SNAPSHOT)
     tool_messages = tool_input_messages()
     messages = paginated_messages()
@@ -132,7 +137,7 @@ def current_violations() -> tuple[list[str], int]:
             if message is None or not messages.get(message, False):
                 violations.append(f"{tool}: GET {template} unpaginated")
             break
-    return sorted(set(violations)), len(routes - covered)
+    return Coverage(sorted(set(violations)), len(covered), len(routes - covered))
 
 
 # How each registered language declares the standard page_size bounds. The
@@ -230,6 +235,8 @@ def bound_violations() -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    del argv  # no options: a hard gate has nothing to record
+
     drift = bound_violations()
     if drift:
         print("page_size bounds disagree with the spec snapshot:", file=sys.stderr)
@@ -237,44 +244,31 @@ def main(argv: list[str]) -> int:
             print(f"  {entry}", file=sys.stderr)
         return 1
 
-    violations, unmapped = current_violations()
+    coverage = current_violations()
 
-    if "--update-baseline" in argv:
-        _baselines.write_baseline(
-            _BASELINE, _BASELINE_HEADER, violations, _baselines.read_baseline(_BASELINE)
-        )
-        print(f"wrote {len(violations)} pagination gap(s)", file=sys.stderr)
-        return 0
+    _hardgate.measured("the fixture-to-spec route matching", coverage.judged)
 
-    baseline = _baselines.read_entries(_BASELINE)
-    new = [entry for entry in violations if entry not in baseline]
-    fixed = sorted(baseline - set(violations))
-
-    if unmapped:
+    if coverage.unmapped:
         print(
-            f"note: {unmapped} paginated spec route(s) have no fixture-mapped tool;"
-            " new-route coverage belongs to the api-alignment flow, not this gate."
+            f"note: {coverage.unmapped} paginated spec route(s) have no"
+            " fixture-mapped tool; new-route coverage belongs to the"
+            " api-alignment flow, not this gate."
         )
-    if new:
+
+    if coverage.violations:
         print("tools missing pagination for a spec-paginated route:", file=sys.stderr)
-        for entry in new:
+        for entry in coverage.violations:
             print(f"  {entry}", file=sys.stderr)
         print(
-            "\nExpose page/page_size on the tool's proto input in every language"
-            " (docs/parity.md), or regenerate the baseline and annotate the"
-            " accepted gap.",
+            "\nExpose page/page_size on the tool's proto input, which every"
+            " language reads its schema from (docs/parity.md).",
             file=sys.stderr,
         )
-    if fixed:
-        print("pagination gaps fixed; remove their baseline lines:", file=sys.stderr)
-        for entry in fixed:
-            print(f"  {entry}", file=sys.stderr)
-    if new or fixed:
         return 1
 
     print(
-        f"pagination gate OK: {len(violations)} accepted gap(s),"
-        f" no drift vs {_BASELINE.name}, bounds match the spec snapshot"
+        f"pagination gate OK: {coverage.judged} spec-paginated route(s) reached by a"
+        " tool, all paginated, bounds match the spec snapshot"
     )
     return 0
 

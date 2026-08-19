@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """Per-language parity to-do report, aggregated from the ratchet baselines.
 
-The baselines under docs/ ARE the remaining-work lists; this script only
-makes them legible per language. For every language registered in
-docs/contracts/languages.txt it reports the tools whose absence is accepted (with the
-tracking annotation), the proto-surface conversions still owed, and the
-shared cross-language debts (uncovered behavior fixtures, missing dry-run
-preview cases, confirm-message divergences). A freshly registered language
-starts with every manifest tool in its missing list, so this report doubles
-as the onboarding checklist that docs/adding-a-language.md points at.
+The baselines under docs/contracts/ ARE the remaining-work lists; this script
+only makes them legible per language. For every language registered in
+docs/contracts/languages.txt it reports the tools whose absence is accepted
+(with the tracking annotation) and the shared cross-language debt of mutating
+tools that still have no pinned dry-run preview case. A freshly registered
+language starts with every manifest tool in its missing list, so this report
+doubles as the onboarding checklist that docs/adding-a-language.md points at.
+
+What is NOT here is as much of the answer as what is. The proto surfaces
+(input, read, write, meta), behavior-fixture coverage, malformed-response
+cases, confirm-message parity, pagination, fixture response shapes, the
+list-envelope collapse and route evidence are hard gates with no baseline
+file: their debt is always zero because a finding fails the build. Those gates
+are named below so an empty report cannot be read as an unmeasured one.
 
 Read-only, stdlib plus scripts/_baselines.py; needs no venv. Run directly or
 via `make parity-todo`.
@@ -23,19 +29,23 @@ import _baselines
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CONTRACTS = _REPO_ROOT / "docs" / "contracts"
 
-# The proto-surface classifiers compare exactly two columns today; their
-# lines read "<tool>\t<go status>\t<python status>". A third language means
-# extending those scripts and this mapping (docs/adding-a-language.md tracks
-# that as part of onboarding).
-_PAIRWISE_COLUMNS = ("go", "python")
+# The ratchets this report reads. A missing one is a failure rather than an
+# empty section: the whole point of the report is to say what is owed, and a
+# file that stopped existing subtracts silently.
+_RATCHETS = ("tool-parity-baseline.txt", "behavior-dryrun-baseline.txt")
 
-# gate file -> (label, status a column must reach to stop being a straggler)
-_PROTO_GATES = {
-    "write-proto-baseline.txt": ("write-proto", "proto"),
-    "read-proto-baseline.txt": ("read-proto", "proto"),
-    "meta-proto-baseline.txt": ("meta-proto", "proto"),
-    "input-proto-baseline.txt": ("input-proto", "generated"),
-}
+# The gates that hold their class at zero with no baseline file, named with
+# what each one refuses. Listed here so the report says where that work went
+# rather than leaving it looking unchecked.
+_HARD_GATES = (
+    ("input-proto, read-proto, write-proto, meta-proto", "a hand-written tool surface"),
+    ("behavior", "a tool with no shared behavior fixture"),
+    ("messages", "confirm text that differs between languages"),
+    ("pagination", "a list tool that cannot reach past page one"),
+    ("response-shapes", "a fixture body the spec contradicts"),
+    ("list-envelope", "a list response built from a falsey-collapsed member"),
+    ("route-evidence", "a declared route no client can build"),
+)
 
 
 def _languages() -> list[str]:
@@ -63,42 +73,38 @@ def _tool_absences() -> tuple[dict[str, list[tuple[str, str]]], list[str]]:
     return absences, contract
 
 
-def _proto_stragglers() -> dict[str, list[str]]:
-    """Return per-language proto-conversion debts across the four gates."""
-    owed: dict[str, list[str]] = {}
+def _require_ratchets() -> None:
+    """Fail when a ratchet this report reads is gone.
 
-    for filename, (label, done_status) in sorted(_PROTO_GATES.items()):
-        for entry in sorted(_baselines.read_entries(_CONTRACTS / filename)):
-            columns = entry.split("\t")
-            tool = columns[0]
-            statuses = columns[1:]
-            for language, status in zip(_PAIRWISE_COLUMNS, statuses, strict=False):
-                if status != done_status:
-                    owed.setdefault(language, []).append(f"{tool} ({label}: {status})")
-
-    return owed
+    A missing file reads as zero owed work, which is the one wrong answer this
+    report can give. Deleting a ratchet is a real move (it is how a gate goes
+    hard), so it has to come with the line here that stopped reading it.
+    """
+    missing = [name for name in _RATCHETS if not (_CONTRACTS / name).exists()]
+    if missing:
+        msg = (
+            f"parity-todo reads baselines that are gone: {', '.join(missing)}."
+            " Update _RATCHETS in scripts/parity_todo.py to match what the"
+            " gates still keep."
+        )
+        raise SystemExit(msg)
 
 
 def _shared_counts() -> list[str]:
     """Summarize the language-neutral debts every implementation shares."""
-    uncovered = _baselines.read_baseline(_CONTRACTS / "behavior-baseline.txt")
     dryrun = _baselines.read_entries(_CONTRACTS / "behavior-dryrun-baseline.txt")
-    messages = _baselines.read_entries(_CONTRACTS / "message-parity-baseline.txt")
 
-    lines = [f"behavior fixtures uncovered: {len(uncovered)}"]
-    lines.extend(
-        f"  {tool}  ({annotation or 'no annotation'})"
-        for tool, annotation in sorted(uncovered.items())
-    )
-    lines.append(f"Destroy tools without a dry-run preview case: {len(dryrun)}")
-    lines.append(f"confirm-message divergences: {len(messages)}")
+    lines = [f"mutating tools without a dry-run preview case: {len(dryrun)}"]
+    lines.append("hard gates (no baseline; any finding fails the build):")
+    lines.extend(f"  {gate}: {refuses}" for gate, refuses in _HARD_GATES)
     return lines
 
 
 def main() -> int:
+    _require_ratchets()
+
     languages = _languages()
     absences, contract = _tool_absences()
-    proto_owed = _proto_stragglers()
 
     print(f"languages: {', '.join(languages)} (first is the contract reference)")
 
@@ -108,11 +114,6 @@ def main() -> int:
         print(f"tools missing (accepted, tracked): {len(missing)}")
         for tool, annotation in missing:
             print(f"  {tool}  ({annotation or 'no annotation'})")
-
-        owed = proto_owed.get(language, [])
-        print(f"proto-surface conversions owed: {len(owed)}")
-        for line in owed:
-            print(f"  {line}")
 
     print("\n== shared (every language)")
     if contract:

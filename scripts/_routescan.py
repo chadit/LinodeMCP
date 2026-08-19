@@ -41,16 +41,44 @@ _REQUEST_BUILDER = "request"
 # The client methods that resolve their route from the proto contract, taking
 # the tool name first. Their call sites write no path, so the route is whatever
 # the tool declares, and their own bodies are skipped for the same reason.
-# route_raw exists on both the plain client and the retrying one under the one
-# name.
-_ROUTE_BUILDERS = frozenset({"make_route_request", "route_raw"})
+# route_raw and route_call each exist on both the plain client and the retrying
+# one under the one name. route_call is the destroy tier's primitive: same
+# resolution, no body, and nothing decoded out of the answer.
+# make_route_request_content_type carries a prepared non-JSON body (raw PNG
+# bytes, a multipart form) to the same contract-resolved route.
+_ROUTE_BUILDERS = frozenset(
+    {
+        "make_route_request",
+        "make_route_request_content_type",
+        "route_raw",
+        "route_call",
+    }
+)
 
 # The tool drivers, which are route builders one level up: their bodies name no
 # tool either, so the tool is named at the call site. It arrives as a `tool=`
 # keyword rather than the leading argument, because a driver takes the config
 # and the call's arguments first.
 _TOOL_DRIVERS = frozenset(
-    {"run_get_tool", "run_list_tool", "run_write_tool", "run_destructive_tool"}
+    {
+        "run_get_tool",
+        "run_list_tool",
+        "run_write_tool",
+        "run_destructive_tool",
+        # The acknowledge tier and the body-carrying read name their tool the
+        # same way; their call sites became the only naming sites once the
+        # dead hand-written client methods were removed.
+        "run_acknowledge_tool",
+        "run_body_read_tool",
+        # Not a tier's driver: the sibling read a synthesized state fetch goes
+        # through. It belongs here because it names its tool the same way, by
+        # keyword at the call site.
+        "read_route_state",
+        # The same fetch for a removal whose API publishes no GET on the route
+        # it deletes: the collection one segment up is read instead, named by
+        # keyword at the call site the same way.
+        "read_collection_state",
+    }
 )
 
 # The keyword a driver call names its tool with.
@@ -59,7 +87,7 @@ _TOOL_KEYWORD = "tool"
 # The driver-module helpers that carry a tool down to a route builder. They
 # name no tool either, so they are skipped rather than reported. Renaming one
 # without updating this list fails the gate by name, the safe direction.
-_DRIVER_INTERNALS = frozenset({"_route_write", "_routed_write"})
+_DRIVER_INTERNALS = frozenset({"_route_write", "_routed_write", "_routed_delete"})
 
 # Every function whose body is read for routes it does not name.
 _SKIPPED_BODIES = _ROUTE_BUILDERS | _TOOL_DRIVERS | _DRIVER_INTERNALS

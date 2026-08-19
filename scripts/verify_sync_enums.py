@@ -18,16 +18,15 @@ Two properties the user required:
     newest entry and fails closed when the source predates a release, so a green
     run is never mistaken for fully current.
 
-It also checks the hand-maintained validation lists that cannot be proto enums
-(hyphen/colon values, or map keys) the same way: it reads each hand-list from
-source (Go via cmd/hand-list-dump, Python via ast) and diffs it against the
-same live spec, folding the result into the same baseline.
+It also checks the validation value-sets that cannot be proto enums (hyphen or
+colon values, or map keys) the same way, reading each from the contract and
+diffing it against the same live spec, folding the result into the same
+baseline. None of them is hand-written in a language any more, which is why
+there is no longer a per-language extractor here.
 
-Usage: verify_sync_enums.py [--spec PATH] [--go-lists PATH] [--update-baseline]
+Usage: verify_sync_enums.py [--spec PATH] [--update-baseline]
   --spec PATH        read the spec from a local file instead of fetching
                      (CI/offline test)
-  --go-lists PATH    read the Go hand-lists from a JSON file instead of running
-                     cmd/hand-list-dump (CI/offline test)
   --update-baseline  rewrite docs/contracts/enum-sync-baseline.txt from the current diff
 """
 
@@ -36,7 +35,6 @@ from __future__ import annotations
 import ast
 import json
 import re
-import subprocess
 import sys
 import urllib.request
 from datetime import UTC, date, datetime
@@ -47,7 +45,6 @@ from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROTO_DIR = REPO_ROOT / "proto" / "linode" / "mcp" / "v1"
-GO_DIR = REPO_ROOT / "go"
 BASELINE = REPO_ROOT / "docs" / "contracts" / "enum-sync-baseline.txt"
 
 SPEC_URL = (
@@ -138,6 +135,65 @@ def proto_enums() -> dict[str, set[str]]:
             if values:
                 out[name] = values
     return out
+
+
+# A rule declaring a value set writes it as a CEL alternation, `field in ['a',
+# 'b']`. The members are read out of the .proto text the same way the enum
+# blocks above are, so one contract line is the whole set for every language.
+_CEL_RULE = re.compile(
+    r"option \(buf\.validate\.message\)\.cel = \{(.*?)\n\s*\};", re.DOTALL
+)
+_CEL_ID = re.compile(r'id:\s*"([^"]+)"')
+_CEL_EXPRESSION = re.compile(r'expression:\s*"(.*)"')
+_CEL_ALTERNATION = re.compile(r"in \[([^\]]*)\]")
+_CEL_MEMBER = re.compile(r"'([^']*)'")
+
+
+def proto_cel_values(rule_id: str) -> set[str]:
+    """Return the members of the alternation the named CEL rule declares.
+
+    Raises when the rule is absent or declares no alternation, so a renamed
+    rule trips the gate loudly rather than diffing an empty set.
+    """
+    for path in sorted(PROTO_DIR.glob("*.proto")):
+        for block in _CEL_RULE.findall(path.read_text(encoding="utf-8")):
+            found = _CEL_ID.search(block)
+            if found is None or found.group(1) != rule_id:
+                continue
+            expression = _CEL_EXPRESSION.search(block)
+            alternation = (
+                _CEL_ALTERNATION.search(expression.group(1))
+                if expression is not None
+                else None
+            )
+            if alternation is None:
+                raise ValueError(f"{rule_id}: rule declares no value alternation")
+            return set(_CEL_MEMBER.findall(alternation.group(1)))
+    raise ValueError(f"{rule_id}: no rule declares this id")
+
+
+_WALK_BLOCK = re.compile(
+    r"option \(linode\.mcp\.v1\.object_walk\) = \{(.*?)\n  \};", re.DOTALL
+)
+
+_OPTIONED_FIELD = re.compile(r"\b(\w+)\s*=\s*\d+\s*\[(.*?)\];", re.DOTALL)
+_READER_VALUE = re.compile(r'\(linode\.mcp\.v1\.reader_values\)\s*=\s*"([^"]+)"')
+
+
+def proto_reader_values(field_name: str) -> set[str]:
+    """Return the reader_values vocabulary the named contract field declares.
+
+    Raises when no field declares one, so a renamed field trips the gate
+    loudly rather than diffing an empty set.
+    """
+    for path in sorted(PROTO_DIR.glob("*.proto")):
+        for name, block in _OPTIONED_FIELD.findall(path.read_text(encoding="utf-8")):
+            if name != field_name:
+                continue
+            values = set(_READER_VALUE.findall(block))
+            if values:
+                return values
+    raise ValueError(f"{field_name}: no contract field declares reader_values")
 
 
 def _resolve(doc: dict[str, Any], ref: str) -> Any:
@@ -367,21 +423,19 @@ def read_baseline() -> set[str]:
     }
 
 
-# Hand-maintained validation value-sets that CANNOT become proto enums: their
-# values are not valid proto identifiers (hyphens, colons) or they are map keys
-# rather than a scalar field. They stay as hand-lists in both languages, so this
-# gate reads each hand-list straight from source (Go via cmd/hand-list-dump,
-# Python via ast) and diffs it against the same live spec the enum gate uses.
-# The diffs fold into the same baseline.
+# Validation value-sets that CANNOT become proto enums: their values are not
+# valid proto identifiers (hyphens, colons) or they are map keys rather than a
+# scalar field. Each is declared on the contract, in one of the three forms a
+# non-enum vocabulary can take, and diffed against the same live spec the enum
+# gate uses. The diffs fold into the same baseline.
 #
 # Each entry:
 #   "spec": (mode, field, path_substr)
 #       "field-enum"   -> the request-body enum of <field> (same as proto enums)
 #       "object-props" -> the property NAMES of the object-typed <field>
-#   "spec_exclude": values the API lists but the hand-list intentionally omits
-#   "py": (kind, symbol, rel_path) for the Python hand-list, or None when Python
-#         does not validate this today (a tracked parity gap)
-# The Go side is keyed by the same logical name in cmd/hand-list-dump's output.
+#   "spec_exclude": values the API lists but the contract intentionally omits
+#   one of "cel" (a rule id), "reader_values" (a field name), or "object_walk"
+#   (a walked argument name), naming where the contract carries the vocabulary
 HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
     "bucket_acl": {
         "spec": ("field-enum", "acl", "/object-storage/buckets"),
@@ -393,29 +447,29 @@ HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
         # input, so the gate drops "custom" from the spec side. A genuinely new
         # canned value would still trip the diff.
         "spec_exclude": {"custom"},
-        "py": (
-            "set",
-            "_VALID_ACLS",
-            "python/src/linodemcp/tools/linode_object_storage_write.py",
-        ),
+        # The set moved off both hand-lists and onto the contract when the
+        # bucket-access tools migrated: it is now a CEL alternation every
+        # language reads through the shared rule evaluator, so there is one
+        # place to diff rather than one per language.
+        "cel": "object_storage_bucket_access_allow.acl.known",
     },
     "placement_group_type": {
         "spec": ("field-enum", "placement_group_type", "/placement/groups"),
-        "py": (
-            "set",
-            "_PLACEMENT_GROUP_TYPES",
-            "python/src/linodemcp/tools/linode_placement_groups_write.py",
-        ),
+        # The set moved off both hand-lists and onto the contract when the
+        # create hook retired: it is now the field's reader_values vocabulary,
+        # which both renderer arms read, so there is one place to diff rather than
+        # one per language.
+        "reader_values": "placement_group_type",
     },
     "config_device_slot": {
         # sda-sdh are the property NAMES of the config request's "devices"
-        # object, not a scalar field enum, so proto cannot gate them.
+        # object, not a scalar field enum, so proto cannot gate them as one.
         "spec": ("object-props", "devices", "/configs"),
-        "py": (
-            "set",
-            "_VALID_DEVICE_SLOTS",
-            "python/src/linodemcp/tools/linode_instance_disks.py",
-        ),
+        # The set moved off both hand-lists and onto the contract when the two
+        # config write hooks retired: it is the key vocabulary of the walk over
+        # the devices argument, which both languages read, so there is one place
+        # to diff rather than one per language.
+        "object_walk": "devices",
     },
 }
 
@@ -480,56 +534,82 @@ def _string_members(value: ast.expr) -> set[str]:
     }
 
 
-def python_hand_list(rel_path: str, name: str) -> set[str]:
-    """Extract the string members of a module-level set assigned to `name`.
+def _cel_diffs(key: str, rule_id: str, spec_vals: set[str]) -> list[str]:
+    """Diff one contract-declared value set against the live spec value-set."""
+    try:
+        declared = proto_cel_values(rule_id)
+    except (OSError, ValueError) as exc:
+        return [f"{key}: contract extraction failed: {exc}"]
 
-    Raises when the name is absent or has no string members so a renamed
-    constant trips the gate loudly instead of vanishing into a false green.
+    diffs = []
+    missing = sorted(spec_vals - declared)
+    extra = sorted(declared - spec_vals)
+    if missing:
+        diffs.append(f"{key}: contract rule missing API value(s): {missing}")
+    if extra:
+        diffs.append(f"{key}: contract rule has value(s) not in API: {extra}")
+    return diffs
+
+
+_WALK_FIELD_LINE = re.compile(r'^\s*field:\s*"([^"]+)"', re.MULTILINE)
+_WALK_KEY_LIST = re.compile(r"^\s*key:\s*\[(.*?)\]", re.MULTILINE | re.DOTALL)
+_WALK_KEY_MEMBER = re.compile(r'"([^"]+)"')
+
+
+def proto_walk_keys(argument: str) -> set[str]:
+    """Return the key vocabulary the walk over the named argument declares.
+
+    The first key list inside the walk is the argument's own vocabulary; a list
+    further in belongs to a member one level deeper. Raises when no walk names
+    the argument, so a renamed one trips the gate loudly rather than diffing an
+    empty set.
     """
-    path = REPO_ROOT / rel_path
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            targets, value = node.targets, node.value
-        elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            targets, value = [node.target], node.value
-        else:
-            continue
-        if any(isinstance(t, ast.Name) and t.id == name for t in targets):
-            members = _string_members(value)
-            if not members:
-                raise ValueError(f"{name} in {rel_path}: no string members found")
-            return members
-    raise ValueError(f"{name} not found in {rel_path}")
+    for path in sorted(PROTO_DIR.glob("*.proto")):
+        for block in _WALK_BLOCK.findall(path.read_text(encoding="utf-8")):
+            if argument not in _WALK_FIELD_LINE.findall(block):
+                continue
+            listed = _WALK_KEY_LIST.search(block)
+            if listed:
+                return set(_WALK_KEY_MEMBER.findall(listed.group(1)))
+    raise ValueError(f"{argument}: no object_walk declares a key vocabulary for it")
 
 
-def go_hand_lists(go_lists_path: str | None) -> dict[str, set[str]]:
-    """Return the Go hand-list value-sets, from a JSON file or cmd/hand-list-dump.
+def _object_walk_diffs(key: str, argument: str, spec_vals: set[str]) -> list[str]:
+    """Diff one walked argument's key vocabulary against the live spec."""
+    try:
+        declared = proto_walk_keys(argument)
+    except (OSError, ValueError) as exc:
+        return [f"{key}: contract extraction failed: {exc}"]
 
-    A non-zero exit from the extractor (a renamed or missing symbol) raises, so
-    the gate fails loudly rather than skipping the Go side.
-    """
-    if go_lists_path:
-        raw = json.loads(Path(go_lists_path).read_text(encoding="utf-8"))
-    else:
-        proc = subprocess.run(
-            ["go", "run", "./cmd/hand-list-dump"],
-            cwd=GO_DIR,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"cmd/hand-list-dump failed (exit {proc.returncode}): "
-                f"{proc.stderr.strip()}"
-            )
-        raw = json.loads(proc.stdout)
-    return {str(k): {str(v) for v in vals} for k, vals in raw.items()}
+    diffs = []
+    missing = sorted(spec_vals - declared)
+    extra = sorted(declared - spec_vals)
+    if missing:
+        diffs.append(f"{key}: object_walk missing API key(s): {missing}")
+    if extra:
+        diffs.append(f"{key}: object_walk has key(s) not in API: {extra}")
+    return diffs
 
 
-def hand_list_diffs(doc: dict[str, Any], go_lists: dict[str, set[str]]) -> list[str]:
-    """Diff every hand-list (Go and Python) against the live spec value-set."""
+def _reader_values_diffs(key: str, field_name: str, spec_vals: set[str]) -> list[str]:
+    """Diff one field's declared reader_values against the live spec value-set."""
+    try:
+        declared = proto_reader_values(field_name)
+    except (OSError, ValueError) as exc:
+        return [f"{key}: contract extraction failed: {exc}"]
+
+    diffs = []
+    missing = sorted(spec_vals - declared)
+    extra = sorted(declared - spec_vals)
+    if missing:
+        diffs.append(f"{key}: reader_values missing API value(s): {missing}")
+    if extra:
+        diffs.append(f"{key}: reader_values has value(s) not in API: {extra}")
+    return diffs
+
+
+def hand_list_diffs(doc: dict[str, Any]) -> list[str]:
+    """Diff every non-enum vocabulary against the live spec value-set."""
     diffs: list[str] = []
     for key, spec in HAND_LIST_SPEC_MAP.items():
         mode, field, path_substr = spec["spec"]
@@ -545,53 +625,30 @@ def hand_list_diffs(doc: dict[str, Any], go_lists: dict[str, set[str]]) -> list[
             diffs.append(f"{key}: spec field {field!r} not found under {path_substr!r}")
             continue
 
-        go_vals = go_lists.get(key)
-        if not go_vals:
-            diffs.append(f"{key}: go hand-list empty or missing (renamed symbol?)")
-        else:
-            go_missing = sorted(spec_vals - go_vals)
-            go_extra = sorted(go_vals - spec_vals)
-            if go_missing:
-                diffs.append(f"{key}: go hand-list missing API value(s): {go_missing}")
-            if go_extra:
-                diffs.append(f"{key}: go hand-list has value(s) not in API: {go_extra}")
+        rule_id = spec.get("cel")
+        if rule_id is not None:
+            diffs.extend(_cel_diffs(key, rule_id, spec_vals))
+            continue
 
-        py_spec = spec["py"]
-        if py_spec is None:
-            diffs.append(
-                f"{key}: python has no hand-list "
-                "(known parity gap; Go validates, Python does not)"
-            )
+        values_field = spec.get("reader_values")
+        if values_field is not None:
+            diffs.extend(_reader_values_diffs(key, values_field, spec_vals))
             continue
-        _, py_symbol, py_path = py_spec
-        try:
-            py_vals = python_hand_list(py_path, py_symbol)
-        except (OSError, ValueError) as exc:
-            diffs.append(f"{key}: python extraction failed: {exc}")
+
+        walked = spec.get("object_walk")
+        if walked is not None:
+            diffs.extend(_object_walk_diffs(key, walked, spec_vals))
             continue
-        py_missing = sorted(spec_vals - py_vals)
-        py_extra = sorted(py_vals - spec_vals)
-        if py_missing:
-            diffs.append(f"{key}: python hand-list missing API value(s): {py_missing}")
-        if py_extra:
-            diffs.append(f"{key}: python hand-list has value(s) not in API: {py_extra}")
-        if go_vals and go_vals != py_vals:
-            diffs.append(
-                f"{key}: go and python hand-lists differ "
-                f"(go-only={sorted(go_vals - py_vals)}, "
-                f"py-only={sorted(py_vals - go_vals)})"
-            )
+
+        diffs.append(f"{key}: entry names no place the contract carries its values")
     return diffs
 
 
 def main(argv: list[str]) -> int:
     spec_path = None
-    go_lists_path = None
     update = "--update-baseline" in argv
     if "--spec" in argv:
         spec_path = argv[argv.index("--spec") + 1]
-    if "--go-lists" in argv:
-        go_lists_path = argv[argv.index("--go-lists") + 1]
 
     enums = proto_enums()
     doc = load_spec(spec_path)
@@ -627,12 +684,7 @@ def main(argv: list[str]) -> int:
         for name in mapped - set(enums)
     )
 
-    try:
-        go_lists = go_hand_lists(go_lists_path)
-    except (OSError, RuntimeError, json.JSONDecodeError) as exc:
-        print(f"sync-enums: hand-list extraction failed: {exc}", file=sys.stderr)
-        return 1
-    diffs.extend(hand_list_diffs(doc, go_lists))
+    diffs.extend(hand_list_diffs(doc))
 
     # The changelog fetch is a live-only staleness tripwire; --spec means an
     # offline run (CI/tests), so skip the network call and stay hermetic. Verify

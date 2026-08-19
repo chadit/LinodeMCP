@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Extract a tool_name -> confirm-message map from the Go tools package.
+"""Extract a tool_name -> confirm-message map from the Go tool trees.
+
+The first argument is a comma-separated list of directories. Every confirm gate
+on the surface is emitted now, so the generated tree is the one that carries
+them; the hand-written tree is still read for whatever has not migrated yet.
 
 Heuristic: within each top-level Go func, collect the linode_* tool-name
 literals and the confirm message (RequireConfirm arg, requireDestroyConfirmation
@@ -13,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-TOOLS_DIR = Path(sys.argv[1])
+TOOLS_DIRS = [Path(arg) for arg in sys.argv[1].split(",")]
 MANIFEST = Path(sys.argv[2]) if len(sys.argv) > 2 else None
 VALID_TOOLS: set[str] = set()
 if MANIFEST:
@@ -45,7 +49,7 @@ def resolve_const_value(expr: str) -> str:
 
 def main() -> int:
     consts: dict[str, str] = {}
-    files = sorted(TOOLS_DIR.glob("linode_*.go"))
+    files = sorted(f for tree in TOOLS_DIRS for f in tree.glob("*.go"))
     files = [f for f in files if not f.name.endswith("_test.go")]
 
     # pass 1: const map

@@ -120,20 +120,29 @@ def _read_descriptors() -> list[ToolRoute]:
 
 
 def _read_field_locations() -> dict[str, dict[str, str]]:
-    """Routed message full name to {field name: FieldLocation enum name}.
+    """Tool input message full name to {field name: FieldLocation enum name}.
 
     An unannotated field reads back as the enum's zero value rather than being
     dropped: the gate has to see the gap, and a missing key cannot be told
     apart from a message that failed to load.
+
+    Meta inputs are read alongside the routed ones, because both halves of the
+    gate apply to them: a meta tool's own arguments are FIELD_LOCATION_TOOL and
+    an unannotated one is as unreadable there as anywhere, and the one confirm
+    the meta surface carries is LOCAL, which the `// system param` marker is
+    locked to in both directions.
     """
     found: dict[str, dict[str, str]] = {}
     for options, descriptor in _iter_messages():
-        if not descriptor.GetOptions().HasExtension(options.tool_route):
+        declared = descriptor.GetOptions()
+        if not declared.HasExtension(options.tool_route) and not declared.HasExtension(
+            options.tool_meta
+        ):
             continue
         located: dict[str, str] = {}
         for field in descriptor.fields:
-            declared = field.GetOptions().Extensions[options.field_location]
-            located[field.name] = str(options.FieldLocation.Name(declared))
+            location = field.GetOptions().Extensions[options.field_location]
+            located[field.name] = str(options.FieldLocation.Name(location))
         found[descriptor.full_name] = located
     return found
 
@@ -145,9 +154,17 @@ class ToolDeclaration(NamedTuple):
     reaches the Linode API, `tool_meta` for one that works on local state. Both
     are read here, so the gate can hold a message to naming its tool once.
 
-    The last five say what the tool answers with rather than what it calls.
+    The last eight say what the tool answers with rather than what it calls.
     Each reads back as "" or False when the message does not declare it, which
     is what lets a gate tell "not declared" from a declared empty value.
+
+    hooks names the steps of the tool's handler that are hand-written, which is
+    what the hand-validator ratchet counts and what tells a generated handler
+    which functions to call.
+
+    api_surface is the declared value's enum name, "" when the message declares
+    none. The two readings differ: an absent option means v4, and an option
+    written out as v4 is a redundant second spelling the gate refuses.
     """
 
     message: str
@@ -157,8 +174,16 @@ class ToolDeclaration(NamedTuple):
     response: str = ""
     confirm_message: str = ""
     success_message: str = ""
+    warning_message: str = ""
     resource_type: str = ""
     retry_disabled: bool = False
+    description: str = ""
+    error_message: str = ""
+    hooks: tuple[str, ...] = ()
+    api_surface: str = ""
+    # The message's own field names, which is what holds the surface to being a
+    # declaration rather than something a caller can pass.
+    arguments: tuple[str, ...] = ()
 
 
 def _read_declarations() -> list[ToolDeclaration]:
@@ -182,13 +207,30 @@ def _read_declarations() -> list[ToolDeclaration]:
             response=str(declared.Extensions[options.tool_response]),
             confirm_message=str(declared.Extensions[options.confirm_message]),
             success_message=str(declared.Extensions[options.success_message]),
+            warning_message=str(declared.Extensions[options.warning_message]),
             resource_type=str(declared.Extensions[options.resource_type]),
             retry_disabled=bool(declared.Extensions[options.retry_disabled]),
+            description=str(declared.Extensions[options.tool_description]),
+            error_message=str(declared.Extensions[options.error_message]),
+            hooks=tuple(str(kind) for kind in declared.Extensions[options.tool_hooks]),
+            api_surface=(
+                str(
+                    options.ApiSurface.Name(
+                        declared.Extensions[options.tool_api_surface]
+                    )
+                )
+                if declared.HasExtension(options.tool_api_surface)
+                else ""
+            ),
+            arguments=tuple(str(field.name) for field in descriptor.fields),
         )
+        # A stray surface with nothing beside it still has to reach the gate, or
+        # an annotation on a response message would be invisible.
         if (
             entry.route_tool
             or entry.meta_tool
             or entry.capability != UNSPECIFIED_CAPABILITY
+            or entry.api_surface
         ):
             found.append(entry)
     return sorted(found)
@@ -257,7 +299,7 @@ def _read_through_venv() -> dict[str, Any]:
 
 
 def field_locations() -> dict[str, dict[str, str]]:
-    """Field-location annotations for every routed message.
+    """Field-location annotations for every tool input message.
 
     Empty means the annotations are gone or `make proto` has not run, which
     would let the gate below pass by measuring nothing.
@@ -269,7 +311,7 @@ def field_locations() -> dict[str, dict[str, str]]:
         found = located
 
     if not found:
-        msg = "no routed messages found in the generated descriptors; run `make proto`"
+        msg = "no tool inputs found in the generated descriptors; run `make proto`"
         raise SystemExit(msg)
 
     return found

@@ -1,0 +1,47 @@
+# API surface census: the tools that answer on something other than /v4.
+# Owner: scripts/verify_api_surfaces.py (`make api-surfaces`, inside
+# `make check`).
+#
+# Nearly every Linode route answers under /v4, which is what an unannotated
+# tool gets. A tool listed here declares `linode.mcp.v1.tool_api_surface` on
+# its proto input message and its client picks that base per call, without
+# moving the rest of the surface.
+#
+# Checked in and hand-maintained, unlike the generated registries beside it.
+# The point is that moving a tool between API surfaces is a reviewed diff: it
+# changes which host path callers reach and, for a promotion, silently changes
+# it back. Annotating a tool without listing it here fails, and so does
+# listing one that is not annotated.
+#
+# Direction: this file both grows and shrinks. It grows when Linode ships a
+# family on beta only, and shrinks when Linode promotes one to /v4 and the
+# annotation comes off. It is not a ratchet.
+#
+# One line per tool:
+#   <tool> <surface>
+# The default surface (v4) is never listed; an unannotated tool already
+# answers there, and a second spelling of the default is refused by
+# `make tool-routes`.
+#
+# Empty of tools today. The 33 tools on 19 v4beta-only paths are enumerated in
+# .claude/specs/v4beta-support/design.md and land family by family, each with
+# comparator evidence for that family.
+linode_lock_list v4beta
+linode_lock_get v4beta
+linode_lock_create v4beta
+linode_lock_delete v4beta
+linode_lke_tier_version_list v4beta
+linode_lke_tier_version_get v4beta
+linode_maintenance_policy_list v4beta
+linode_iam_idp_config_list v4beta
+linode_iam_idp_config_get v4beta
+linode_iam_idp_config_create v4beta
+linode_iam_idp_config_update v4beta
+linode_iam_idp_config_delete v4beta
+linode_iam_idp_config_certificate_list v4beta
+linode_iam_idp_config_certificate_create v4beta
+linode_iam_idp_config_certificate_delete v4beta
+linode_iam_idp_config_excluded_user_list v4beta
+linode_iam_idp_config_excluded_user_update v4beta
+linode_iam_idp_config_included_user_list v4beta
+linode_iam_idp_config_included_user_update v4beta

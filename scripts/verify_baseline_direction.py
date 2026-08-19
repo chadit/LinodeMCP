@@ -81,14 +81,29 @@ _ANNOTATED_EXTRAS = ("behavior-exempt.txt", "scope-sync-exempt.txt")
 
 
 def _guarded_baselines(contracts: Path) -> list[Path]:
-    """Files this guard checks: the ratchets minus snapshots, plus the exempt list."""
+    """Files this guard checks: the ratchets minus snapshots, plus the exempt lists.
+
+    The ratchets come from a glob, so one that goes away (a gate turning hard,
+    which is how a baseline stops existing) simply stops being guarded. The
+    extras are named by hand, and a name with no file behind it would guard
+    nothing while still reading as covered, so that fails here.
+    """
     guarded = [
         path
         for path in sorted(contracts.glob("*-baseline.txt"))
         if path.name not in _SNAPSHOT_BASELINES
     ]
-    guarded.extend(contracts / name for name in _ANNOTATED_EXTRAS)
-    return guarded
+
+    extras = [contracts / name for name in _ANNOTATED_EXTRAS]
+    missing = [path.name for path in extras if not path.exists()]
+    if missing:
+        msg = (
+            f"baseline guard names files that do not exist: {', '.join(missing)}."
+            " Update _ANNOTATED_EXTRAS in scripts/verify_baseline_direction.py."
+        )
+        raise SystemExit(msg)
+
+    return guarded + extras
 
 
 def _git_show(rev: str, rel_path: str) -> str | None:

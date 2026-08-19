@@ -76,15 +76,30 @@ _OPEN = "open"
 
 
 def guarded_files(contracts: Path) -> list[Path]:
-    """Every file whose annotations carry a tracking issue."""
+    """Every file whose annotations carry a tracking issue.
+
+    The ratchets come from a glob, so one that goes away (a gate turning hard)
+    stops being read. The extras are named by hand, and a name with no file
+    behind it would leave this reporting on fewer promises than it claims to,
+    so that fails here.
+    """
     guarded = [
         path
         for path in sorted(contracts.glob("*-baseline.txt"))
         if path.name not in _SNAPSHOT_BASELINES
     ]
-    guarded.extend(contracts / name for name in _ANNOTATED_EXTRAS)
 
-    return [path for path in guarded if path.exists()]
+    extras = [contracts / name for name in _ANNOTATED_EXTRAS]
+    missing = [path.name for path in extras if not path.exists()]
+    if missing:
+        msg = (
+            f"tracking-issue gate names files that do not exist:"
+            f" {', '.join(missing)}. Update _ANNOTATED_EXTRAS in"
+            " scripts/verify_tracking_issues.py."
+        )
+        raise SystemExit(msg)
+
+    return guarded + extras
 
 
 def cited_issues(paths: list[Path]) -> dict[str, list[str]]:

@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Ratchet gate: the generator owns its cohort, and the hand tree lets go of it.
+"""Ratchet gate: the generator owns everything the hand-written list does not.
 
-docs/contracts/generated-tools.txt names the tools whose factory and handler the
-emitters write from the proto contract: go/cmd/toolgen into go/internal/gentools,
-scripts/toolgen_py.py into linodemcp.gentools. Both trees are gitignored and
-rewritten whole by `make proto`, and each language's server reads them alongside
-its hand-written tree.
+docs/contracts/handwritten-tools.txt names the tools each language still serves
+from a factory it wrote out by hand. Everything else the proto contract declares
+is written by go/cmd/toolgen, one tree per language: go/internal/gentools and
+linodemcp.gentools. Both trees are gitignored and rewritten whole by
+`make proto`, and each language's server reads them alongside its hand-written
+tree.
+
+The list is the cohort inverted, which is what makes generated the default: a
+new tool is a proto message and nothing else, and it reaches both languages
+without a line in any registry. So the direction here is that the list only
+SHRINKS. A name leaving it is a tool that migrated to the generator, which is
+the work; a name arriving is new surface written by hand, which this refuses.
 
 That arrangement has two ways to go quietly wrong, and this gate closes both.
 
@@ -35,10 +42,13 @@ the same change, so the file always states the real remaining work. New surface
 that is born generated adds nothing to the count, which is exactly what the
 number should say.
 
-Four ways this could pass while measuring nothing are checked first: a cohort
-file with no tools in it, a language whose generated tree holds no tool at all,
-a registered language with no tree arm here, and a manifest tool neither tree
-names, which means the scan cannot see it rather than that nothing serves it.
+Four ways this could pass while measuring nothing are checked first: a
+hand-written list that claims the whole surface and so leaves an empty cohort, a
+language whose generated tree holds no tool at all, a registered language with
+no tree arm here, and a manifest tool neither tree names, which means the scan
+cannot see it rather than that nothing serves it. A listed name no language's
+hand tree holds fails too: it would exempt a tool from the generator forever
+while naming nothing.
 
 Which trees are scanned comes from docs/contracts/languages.txt rather than a
 path written here, and each language's trees are one entry in _TREES.
@@ -66,7 +76,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CONTRACTS = _REPO_ROOT / "docs" / "contracts"
 _LANGUAGES = _CONTRACTS / "languages.txt"
 _MANIFEST = _CONTRACTS / "tools-manifest.txt"
-_COHORT = _CONTRACTS / "generated-tools.txt"
+_HANDWRITTEN = _CONTRACTS / "handwritten-tools.txt"
 _COUNTS = _CONTRACTS / "generated-tools-counts.txt"
 
 _COUNTS_HEADER = (
@@ -82,9 +92,11 @@ _COUNTS_HEADER = (
     "# be lowered in the same change, so this file keeps stating the real\n"
     "# remaining work rather than an old high-water mark.\n"
     "#\n"
-    "# New surface that is born generated does not move these numbers, which\n"
-    "# is the point: it adds no debt, so there is nothing for the ratchet to\n"
-    "# record.\n"
+    "# The number is the length of docs/contracts/handwritten-tools.txt as each\n"
+    "# language's tool tree actually measures it, so it is what makes a change\n"
+    "# of that list's length visible in a diff. New surface that is born\n"
+    "# generated does not move it, which is the point: it adds no debt, so\n"
+    "# there is nothing for the ratchet to record.\n"
     "#\n"
     "# One line per language registered in languages.txt:\n"
     "#   <language> <hand-written tools>\n"
@@ -107,6 +119,10 @@ _COUNTS_HEADER = (
 # needs a closing quote, a +, and an opening quote.
 _GO_CONCATENATION = re.compile(r'"\s*\+\s*"')
 
+# The prefix all but two tools carry. A name holding it can appear in source for
+# no reason other than naming its tool; the two without it are ordinary words.
+_TOOL_PREFIX = "linode_"
+
 
 @dataclass(frozen=True)
 class Trees:
@@ -123,6 +139,10 @@ class Trees:
     generated: str
     suffix: str
     joins: re.Pattern[str] | None
+    # How this language spells the name argument a factory declares. A tool
+    # whose name is an ordinary word is read only through this, so a tuple of
+    # field names holding "version" is not mistaken for a declaration.
+    names: str
 
 
 _TREES: dict[str, Trees] = {
@@ -131,12 +151,14 @@ _TREES: dict[str, Trees] = {
         generated="go/internal/gentools",
         suffix=".go",
         joins=_GO_CONCATENATION,
+        names="",
     ),
     "python": Trees(
         hand="python/src/linodemcp/tools",
         generated="python/src/linodemcp/gentools",
         suffix=".py",
         joins=None,
+        names="name=",
     ),
 }
 
@@ -202,6 +224,14 @@ def named_tools(root: Path, tree: Trees, manifest: list[str]) -> frozenset[str]:
     would otherwise read as the tool still being declared there. Either quote
     style counts, since a scan tied to one of them would answer differently
     after a formatter changed its mind.
+
+    A name carrying the project prefix cannot appear for any other reason, so
+    for those the literal alone settles it. The two that do not carry it are
+    ordinary words, and both are spelled elsewhere as argument names: "version"
+    is a path parameter of four LKE and database routes. Those tools are
+    therefore read only where the literal stands alone as a declaration, so
+    migrating one is not refused by a scan that found its name in an unrelated
+    accessor.
     """
     source = "".join(
         path.read_text(encoding="utf-8") for path in source_files(root, tree.suffix)
@@ -209,9 +239,27 @@ def named_tools(root: Path, tree: Trees, manifest: list[str]) -> frozenset[str]:
     if tree.joins is not None:
         source = tree.joins.sub("", source)
 
-    return frozenset(
-        tool for tool in manifest if f'"{tool}"' in source or f"'{tool}'" in source
-    )
+    return frozenset(tool for tool in manifest if _names_tool(source, tree, tool))
+
+
+def _names_tool(source: str, tree: Trees, tool: str) -> bool:
+    """Whether one tree's source declares tool."""
+    if not tool.startswith(_TOOL_PREFIX):
+        return bool(re.search(_declaration(tree, tool), source, re.MULTILINE))
+
+    return f'"{tool}"' in source or f"'{tool}'" in source
+
+
+def _declaration(tree: Trees, tool: str) -> str:
+    """The pattern a tool name matches only where it is being declared.
+
+    Every tool tree writes the name as an argument on a line of its own, bare
+    in Go and keyed as name= in Python, so an accessor spelling the same word
+    alongside a default value does not match. Python is held to the keyword
+    because a bare literal on its own line is also how it writes a tuple of
+    field names, and one of those fields is spelled "version".
+    """
+    return r"^\s*" + tree.names + r"[\"']" + re.escape(tool) + r"[\"'],?\s*$"
 
 
 def scan(language: str, tree: Trees, manifest: list[str]) -> Scan:
@@ -278,22 +326,21 @@ def leftovers(cohort: list[str], measured: dict[str, Scan]) -> list[str]:
     ]
 
 
-def unlocatable(
-    cohort: list[str], manifest: list[str], measured: dict[str, Scan]
-) -> list[str]:
-    """Hand-written manifest tools neither of a language's trees names.
+def unlocatable(handwritten: list[str], measured: dict[str, Scan]) -> list[str]:
+    """Listed hand-written tools neither of a language's trees names.
 
     The tool is served (the parity gate says so), which makes this a scan that
-    cannot see its factory rather than a tool nobody implements. Left
-    unreported it would quietly lower the hand-written count by one and read as
-    progress.
+    cannot see its factory rather than a tool nobody implements. Left unreported
+    it would quietly lower the hand-written count by one and read as progress.
 
-    Cohort tools are left out because the cohort check already covers them, and
-    it says the useful thing: a cohort tool no tree names is one the generator
-    did not write, not one spelled in a way the scan cannot follow.
+    It is also what holds every entry on the list to naming a real hand-written
+    tool. An entry naming nothing exempts that name from the generator forever
+    while looking like remaining work.
+
+    Cohort tools are not checked here because the cohort check already covers
+    them, and it says the useful thing: a cohort tool no tree names is one the
+    generator did not write, not one spelled in a way the scan cannot follow.
     """
-    handwritten = [tool for tool in manifest if tool not in set(cohort)]
-
     return [
         f"{name} names {tool} in neither {_TREES[name].hand}"
         f" nor {_TREES[name].generated}"
@@ -404,9 +451,9 @@ def _preflight(languages: list[str], cohort: list[str]) -> int:
     if not cohort:
         _report(
             "the generated-tools cohort is empty:",
-            [f"{_COHORT.name} names no tool"],
-            "every check here is scoped to the cohort, so an empty file would"
-            " pass while proving nothing",
+            [f"{_HANDWRITTEN.name} claims every tool the manifest lists"],
+            "every check here is scoped to the cohort, so a list that swallowed"
+            " the whole surface would pass while proving nothing",
         )
         return 1
 
@@ -414,7 +461,7 @@ def _preflight(languages: list[str], cohort: list[str]) -> int:
 
 
 def _coverage_problems(
-    cohort: list[str], manifest: list[str], measured: dict[str, Scan]
+    cohort: list[str], handwritten: list[str], measured: dict[str, Scan]
 ) -> int:
     """Report a cohort a language does not fully generate, or a leftover factory."""
     empty = empty_scans(measured)
@@ -432,18 +479,19 @@ def _coverage_problems(
         _report(
             "the cohort and the generated tree(s) disagree:",
             problems,
-            f"every language generates every tool {_COHORT.name} lists;"
-            " run `make proto` after changing it",
+            f"every language generates every tool {_HANDWRITTEN.name} leaves"
+            " to it; run `make proto` after changing the list or the proto",
         )
         return 1
 
-    hidden = unlocatable(cohort, manifest, measured)
+    hidden = unlocatable(handwritten, measured)
     if hidden:
         _report(
-            "hand-written manifest tool(s) no tree names:",
+            f"tool(s) {_HANDWRITTEN.name} lists that no tree names:",
             hidden,
             "a factory names its tool as a string literal; a tool spelled some"
-            " other way is invisible here and silently lowers the count",
+            " other way is invisible here and silently lowers the count, and a"
+            " name no factory holds exempts nothing while looking like work",
         )
         return 1
 
@@ -479,8 +527,9 @@ def _count_problems(languages: list[str], measured: dict[str, Scan]) -> int:
         _report(
             "hand-written tools have grown:",
             grew,
-            "declare the new tool in the proto and add it to"
-            f" {_COHORT.name} rather than raising the recorded count",
+            "declare the new tool in the proto and leave it off"
+            f" {_HANDWRITTEN.name}, which generates it, rather than raising"
+            " the recorded count",
         )
     if shrank:
         _report(
@@ -501,8 +550,9 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     languages = registered_languages(_LANGUAGES)
-    cohort = read_names(_COHORT)
     manifest = read_names(_MANIFEST)
+    handwritten = read_names(_HANDWRITTEN)
+    cohort = [tool for tool in manifest if tool not in set(handwritten)]
 
     failed = _preflight(languages, cohort)
     if failed:
@@ -510,7 +560,7 @@ def main(argv: list[str]) -> int:
 
     measured = {name: scan(name, _TREES[name], manifest) for name in languages}
 
-    failed = _coverage_problems(cohort, manifest, measured)
+    failed = _coverage_problems(cohort, handwritten, measured)
     if failed:
         return failed
 
