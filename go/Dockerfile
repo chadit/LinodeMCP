@@ -10,7 +10,7 @@
 #
 # digest-pin: skip the version tag tracks Go toolchain patches; the
 # image rebuilds on every release tag, which is the patch cadence.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 
 WORKDIR /src
 
