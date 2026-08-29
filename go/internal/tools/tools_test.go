@@ -500,8 +500,8 @@ func TestLinodeInstanceGetToolDefinition(t *testing.T) {
 	cfg := &config.Config{}
 	tool, _, handler := gentools.NewLinodeInstanceGetTool(cfg)
 
-	if tool.Name != "linode_instance_get" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_get")
+	if tool.Name != toolInstanceGet {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolInstanceGet)
 	}
 
 	if tool.Description == "" {
@@ -5835,7 +5835,7 @@ func TestLinodeAccountOAuthClientGetToolSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
-			keySupportTicketID: oauthClientID, keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, "status": statusActive, keySecret: "server-secret",
+			keySupportTicketID: oauthClientID, keyLabel: oauthClientLabel, keyRedirectURI: oauthClientRedirectURI, keyStatus: statusActive, keySecret: "server-secret",
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

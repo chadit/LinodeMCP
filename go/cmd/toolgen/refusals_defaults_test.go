@@ -55,7 +55,7 @@ func defaultProbe(message, sentence string) func(t *testing.T) *toolgen.ProbeRun
 		t.Helper()
 
 		return goProbe(probeMessage(t, message,
-			metaOptions(withHooks(), withResponse(probeWriteBody), withSuccessMessage(sentence)),
+			metaOptions(withResponse(probeWriteBody), withSuccessMessage(sentence)),
 			toolString(probeToolArg, 1), toolInt(probeCountArg, 2)))
 	}
 }

@@ -108,6 +108,62 @@
       },
       "api_response": 7,
       "expect_api_error": "record"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "domain_id": 5,
+        "record_id": 55,
+        "name": "mail",
+        "target": "9.9.9.9",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /domains/5/records/55": {
+          "id": 55,
+          "type": "A",
+          "name": "www",
+          "target": "8.8.8.8",
+          "priority": 0,
+          "weight": 0,
+          "port": 0,
+          "service": null,
+          "protocol": null,
+          "ttl_sec": 0,
+          "tag": null,
+          "created": "",
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_domain_record_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/domains/5/records/55"
+        },
+        "current_state": {
+          "id": 55,
+          "type": "A",
+          "name": "www",
+          "target": "8.8.8.8",
+          "priority": 0,
+          "weight": 0,
+          "port": 0,
+          "service": null,
+          "protocol": null,
+          "ttl_sec": 0,
+          "tag": null,
+          "created": "",
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Record name changes from \"www\" to \"mail\".",
+          "Record target changes from \"8.8.8.8\" to \"9.9.9.9\"."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

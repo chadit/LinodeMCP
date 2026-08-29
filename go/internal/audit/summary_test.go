@@ -79,7 +79,7 @@ func TestValidateGroupByRejectsUnknown(t *testing.T) {
 func TestSummarizeCountsByGroup(t *testing.T) {
 	t.Parallel()
 
-	events := []audit.Event{
+	events := []*audit.Event{
 		makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, day(20, 8)),
 		makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, day(20, 9)),
 		makeTestEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusError, day(20, 10)),
@@ -118,7 +118,7 @@ func TestSummarizeCountsByGroup(t *testing.T) {
 func TestLoadWindowJSONLAndSQLiteAgree(t *testing.T) {
 	t.Parallel()
 
-	events := []audit.Event{
+	events := []*audit.Event{
 		makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, day(20, 8)),
 		makeTestEvent("linode_audit_recent", audit.CapabilityMeta, audit.StatusSuccess, day(20, 9)),
 		makeTestEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusError, day(20, 10)),
@@ -144,7 +144,7 @@ func TestLoadWindowJSONLAndSQLiteAgree(t *testing.T) {
 	}
 
 	for idx := range events {
-		sink.Write(t.Context(), &events[idx])
+		sink.Write(t.Context(), events[idx])
 	}
 
 	if closeErr := sink.Close(); closeErr != nil {
@@ -174,7 +174,7 @@ func TestLoadWindowJSONLAndSQLiteAgree(t *testing.T) {
 func TestLoadWindowExcludesMetaByDefault(t *testing.T) {
 	t.Parallel()
 
-	events := []audit.Event{
+	events := []*audit.Event{
 		makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, day(20, 8)),
 		makeTestEvent("linode_audit_recent", audit.CapabilityMeta, audit.StatusSuccess, day(20, 9)),
 	}
@@ -210,5 +210,89 @@ func TestLoadWindowMissingDirReturnsEmpty(t *testing.T) {
 
 	if len(got) != 0 {
 		t.Errorf("got = %v, want empty", got)
+	}
+}
+
+// SummaryOver is the whole operation the summary tool reaches: the window read
+// through whichever store answers, counted into the buckets it was handed. The
+// cases above measure the pieces; these measure the operation.
+
+// TestSummaryOverCountsTheWindowItRead covers the ordinary path, where the log
+// is the only store there is.
+func TestSummaryOverCountsTheWindowItRead(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []*audit.Event{
+		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
+		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 9)),
+		makeTestEvent("tool_other", audit.CapabilityRead, audit.StatusError, day(19, 10)),
+	})
+
+	answer, err := audit.SummaryOver(t.Context(), "", dir, time.Time{},
+		[]string{colTool}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if answer.TotalEvents != 3 {
+		t.Errorf("answer.TotalEvents = %v, want %v", answer.TotalEvents, 3)
+	}
+
+	if len(answer.Rows) != 2 {
+		t.Fatalf("answer.Rows = %v, want one bucket per tool", answer.Rows)
+	}
+
+	if answer.Rows[0].Groups[colTool] != toolOK || answer.Rows[0].Count != 2 {
+		t.Errorf("answer.Rows[0] = %v, want the busiest tool first", answer.Rows[0])
+	}
+
+	if len(answer.Warnings) != 0 {
+		t.Errorf("answer.Warnings = %v, want none", answer.Warnings)
+	}
+}
+
+// TestSummaryOverDegradesToTheLogBehindAWarning is the store's degrade rule
+// through the window reader rather than the health one.
+func TestSummaryOverDegradesToTheLogBehindAWarning(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []*audit.Event{
+		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
+	})
+
+	dbPath := filepath.Join(dir, "audit.db")
+	if err := os.WriteFile(dbPath, []byte(notADatabase), 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	answer, err := audit.SummaryOver(t.Context(), dbPath, dir, time.Time{},
+		[]string{colTool}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if answer.TotalEvents != 1 {
+		t.Errorf("answer.TotalEvents = %v, want the log's own count", answer.TotalEvents)
+	}
+
+	if len(answer.Warnings) != 1 {
+		t.Fatalf("answer.Warnings = %v, want one line naming the store", answer.Warnings)
+	}
+}
+
+// TestSummaryOverReportsADirectoryItCannotRead is the one condition it answers.
+func TestSummaryOverReportsADirectoryItCannotRead(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sealDirectory(t, dir)
+
+	_, err := audit.SummaryOver(t.Context(), "", dir, time.Time{}, []string{colTool}, false)
+	if err == nil {
+		t.Error("err = nil, want the unreadable directory reported")
 	}
 }

@@ -10,10 +10,11 @@ watch the copies for drift.
 
 So they are emitted here instead, by `make proto`, into the same gitignored
 category the generated code is in. Adding a tool means adding its proto message;
-nothing else. The gates that read these files keep reading them, and the gate
-that compared them against the proto now compares a file against the thing it
-was generated from, which passes by construction and stays as the check that
-this emitter ran.
+nothing else. The gates that read these files keep reading them. The comparison
+gate itself is retired: a file rewritten from the descriptors on every regen
+cannot drift from them, staleness is what the proto stamp governs, and the
+per-language registry tests still pin that each client serves what the files
+say.
 
 The formats are unchanged, headers apart, because roughly twenty consumers parse
 them: the manifest and capability tests in each language, the offline gates, and
@@ -40,10 +41,9 @@ _CONTRACTS = _REPO_ROOT / "docs" / "contracts"
 _DEFAULT_MANIFEST = _CONTRACTS / "tools-manifest.txt"
 _DEFAULT_CAPABILITIES = _CONTRACTS / "tools-capabilities.txt"
 
-# Proto enum value to the spelling the capability manifest uses. The same table
-# scripts/verify_tool_capability.py carries, and for the same reason: the two
-# vocabularies are independent, so deriving one from the other would mistranslate
-# the first tier whose name takes more than one word.
+# Proto enum value to the spelling the capability manifest uses. Mapped
+# explicitly because the two vocabularies are independent: deriving one from the
+# other would mistranslate the first tier whose name takes more than one word.
 _TIERS = {
     "TOOL_CAPABILITY_READ": "Read",
     "TOOL_CAPABILITY_WRITE": "Write",

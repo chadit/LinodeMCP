@@ -27,9 +27,9 @@ func TestLinodeDomainCreateContract(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
-	wantScopes := []profiles.Scope{profiles.ScopeDomainsReadWrite}
-	if got := profiles.RequiredScopes(tool.Name, capability); !reflect.DeepEqual(got, wantScopes) {
-		t.Errorf("RequiredScopes() = %v, want %v", got, wantScopes)
+	wantScopes := []string{"domains:read_write"}
+	if got := gentools.ScopesFor(tool.Name); !reflect.DeepEqual(got, wantScopes) {
+		t.Errorf("ScopesFor() = %v, want %v", got, wantScopes)
 	}
 
 	var schema struct {

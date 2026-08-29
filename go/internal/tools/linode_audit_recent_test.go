@@ -36,7 +36,7 @@ func TestLinodeAuditRecentReturnsEvents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
+	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []*audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
 		auditEvent("linode_audit_recent", audit.CapabilityMeta, audit.StatusSuccess, 2),
 		auditEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusError, 3),
@@ -71,7 +71,7 @@ func TestLinodeAuditRecentReturnsEvents(t *testing.T) {
 	}
 
 	for i := range decoded.Events {
-		if decoded.Events[i].ToolCapability == audit.CapabilityMeta {
+		if decoded.Events[i].ToolCapability == string(audit.CapabilityMeta) {
 			t.Errorf("decoded.Events[i].ToolCapability = %v, do not want %v", decoded.Events[i].ToolCapability, audit.CapabilityMeta)
 		}
 	}
@@ -110,21 +110,24 @@ func TestLinodeAuditRecentInvalidSince(t *testing.T) {
 // auditEvent builds an event at second `seq` of a fixed minute, so a
 // caller passing increasing seq values gets events whose timestamps
 // match their write order.
-func auditEvent(tool string, capability audit.Capability, status audit.Status, seq int) audit.Event {
+func auditEvent(tool string, capability audit.Capability, status audit.Status, seq int) *audit.Event {
 	ts := time.Date(2026, time.May, 20, 0, 0, seq, 0, time.UTC)
 
-	return audit.Event{
-		TS:             ts,
-		TSUnixNS:       ts.UnixNano(),
-		EventID:        "evt_" + tool,
+	return &audit.Event{
+		Ts:             audit.EventTimestamp(ts),
+		TsUnixNs:       ts.UnixNano(),
+		EventId:        "evt_" + tool,
 		Tool:           tool,
-		ToolCapability: capability,
-		Status:         status,
+		ToolCapability: string(capability),
+		Status:         string(status),
 	}
 }
 
-// writeAuditLog writes events as one JSON line each, in slice order.
-func writeAuditLog(t *testing.T, path string, events []audit.Event) {
+// writeAuditLog writes events as one record per line, in slice order.
+//
+// It goes through the audit package's own NDJSON encoder rather than through a
+// second spelling, so a fixture log carries the format the sink writes.
+func writeAuditLog(t *testing.T, path string, events []*audit.Event) {
 	t.Helper()
 
 	file, err := os.Create(path)
@@ -134,11 +137,8 @@ func writeAuditLog(t *testing.T, path string, events []audit.Event) {
 
 	defer func() { _ = file.Close() }()
 
-	encoder := json.NewEncoder(file)
-	for i := range events {
-		if err := encoder.Encode(&events[i]); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+	if err := audit.EncodeEvents(file, events, audit.ExportFormatNDJSON); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -158,4 +158,44 @@ func decodeAuditResult(t *testing.T, result *mcp.CallToolResult) auditRecentResu
 	}
 
 	return decoded
+}
+
+// TestLinodeAuditRecentHonorsAValidSince covers the reader's other answer: a
+// bound it can read narrows the window rather than refusing it. The refusal
+// beside it is pinned above, so this is the half that proves the parse lands.
+func TestLinodeAuditRecentHonorsAValidSince(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+
+	auditDir := filepath.Join(stateHome, "linodemcp")
+	if err := os.MkdirAll(auditDir, 0o750); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []*audit.Event{
+		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
+		auditEvent(canRunDestroyTool, audit.CapabilityDestroy, audit.StatusError, 3),
+	})
+
+	_, _, handler := gentools.NewLinodeAuditRecentTool(&config.Config{})
+
+	since := auditEvent("", audit.CapabilityRead, audit.StatusSuccess, 3).Ts
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keySince: since}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("result.IsError = true, want false (%s)", behaviorText(t, result))
+	}
+
+	decoded := decodeAuditResult(t, result)
+	if decoded.Count != 1 {
+		t.Fatalf("decoded.Count = %d, want %d", decoded.Count, 1)
+	}
+
+	if decoded.Events[0].Tool != canRunDestroyTool {
+		t.Errorf("decoded.Events[0].Tool = %v, want %v", decoded.Events[0].Tool, canRunDestroyTool)
+	}
 }

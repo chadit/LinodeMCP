@@ -35,7 +35,7 @@ func TestLinodeAuditHealthReportsJSONL(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []audit.Event{
+	writeAuditLog(t, filepath.Join(auditDir, "audit.log"), []*audit.Event{
 		auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, 1),
 	})
 

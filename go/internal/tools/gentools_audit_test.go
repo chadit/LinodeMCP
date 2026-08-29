@@ -24,7 +24,7 @@ type auditToolFactory func(*config.Config) (mcp.Tool, profiles.Capability, tools
 
 // TestGeneratedAuditToolDefinitions pins each audit tool's identity and the
 // parameters its schema advertises. The answers themselves are the hooks', and
-// go/internal/toolhooks tests those; what is pinned here is what the contract
+// the audit tests in this package cover those; what is pinned here is what the contract
 // puts in front of a client.
 func TestGeneratedAuditToolDefinitions(t *testing.T) {
 	t.Parallel()
@@ -47,7 +47,7 @@ func TestGeneratedAuditToolDefinitions(t *testing.T) {
 			name:    "linode_audit_recent",
 			factory: gentools.NewLinodeAuditRecentTool,
 			params: []string{
-				"limit", keySince, "until", canRunKeyTool, "capability", "status", keyIncludeMeta,
+				"limit", keySince, "until", canRunKeyTool, summaryColumnCapability, keyStatus, keyIncludeMeta,
 			},
 		},
 		{

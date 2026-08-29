@@ -536,18 +536,21 @@
             ]
           }
         },
-        "current_state": [
-          {
-            "id": 9,
-            "label": "edge",
-            "status": "enabled",
-            "tags": [
-              "prod"
-            ],
-            "created": "2024-05-01T00:01:01",
-            "updated": "2024-05-02T00:01:01"
-          }
-        ],
+        "current_state": {
+          "data": [
+            {
+              "id": 9,
+              "label": "edge",
+              "status": "enabled",
+              "tags": [
+                "prod"
+              ],
+              "created": "2024-05-01T00:01:01",
+              "updated": "2024-05-02T00:01:01"
+            }
+          ],
+          "results": 1
+        },
         "dependencies": [],
         "side_effects": [],
         "warnings": []

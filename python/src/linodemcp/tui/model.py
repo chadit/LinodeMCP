@@ -23,8 +23,8 @@ from linodemcp.cli._shared import (
     required_args,
     schema_properties,
 )
+from linodemcp.gentools import categories_for
 from linodemcp.profiles import Capability
-from linodemcp.profiles.builtin import categories
 from linodemcp.server import get_tool_registry
 
 if TYPE_CHECKING:
@@ -65,16 +65,16 @@ class CatalogEntry:
         return self.capability == Capability.Destroy
 
 
-def _primary_category(tool_name: str) -> str:
-    """Return a tool's primary category for grouping, or ``UNCATEGORIZED``.
+def _display_categories(tool_name: str) -> list[str]:
+    """Return every category node a tool appears under, or the fallback.
 
-    Uses the public ``categories`` helper (the same category mapping the
-    profile builder uses) and takes the first match, since the catalog groups
-    each tool under one node. A tool that matches no category falls into the
+    Mirrors the Go catalog: a tool declares its categories in the proto
+    contract and appears under each one, so a two-category tool stays
+    browsable from both. A tool declaring none falls into the
     ``uncategorized`` bucket rather than vanishing.
     """
-    cats = categories(tool_name)
-    return cats[0] if cats else UNCATEGORIZED
+    cats = categories_for(tool_name)
+    return cats or [UNCATEGORIZED]
 
 
 def build_catalog(*, allowed: frozenset[str] | None) -> list[CatalogEntry]:
@@ -82,20 +82,21 @@ def build_catalog(*, allowed: frozenset[str] | None) -> list[CatalogEntry]:
 
     With ``allowed`` set, only tools in that set are included (the active
     profile's surface). With ``allowed`` None, the full registry is returned
-    (the "preview full surface" toggle). Entries are sorted by category then
-    name so the grouped view is stable.
+    (the "preview full surface" toggle). A tool appears once per category it
+    declares. Entries are sorted by category then name so the grouped view is
+    stable.
     """
     entries: list[CatalogEntry] = []
     for tool_entry in get_tool_registry():
         if allowed is not None and tool_entry.name not in allowed:
             continue
-        category = _primary_category(tool_entry.name)
-        entries.append(
+        entries.extend(
             CatalogEntry(
                 name=tool_entry.name,
                 capability=tool_entry.capability,
                 category=category,
             )
+            for category in _display_categories(tool_entry.name)
         )
     entries.sort(key=lambda e: (e.category, e.name))
     return entries

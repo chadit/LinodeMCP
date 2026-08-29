@@ -52,6 +52,8 @@ message AccountEventGetInput {
     path: "/account/events/{event_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_EVENTS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEvent";
   option (linode.mcp.v1.tool_description) = "Gets one account event by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve account event {event_id}: {error}";
@@ -73,6 +75,8 @@ message AccountEventListInput {
     path: "/account/events"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_EVENTS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEventListResponse";
   option (linode.mcp.v1.tool_description) = "Lists events that represent actions taken on the account over the last 90 days.";
 
@@ -92,6 +96,8 @@ message AccountEventSeenInput {
     path: "/account/events/{event_id}/seen"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_EVENTS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEventSeenResponse";
   option (linode.mcp.v1.tool_description) = "Marks one account event as seen by ID.";
   option (linode.mcp.v1.error_message) = "Failed to mark account event {event_id} seen: {error}";

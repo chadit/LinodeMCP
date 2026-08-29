@@ -19,7 +19,7 @@ die() {
 
 [[ -d /src ]] || die "expected the repository mounted read-only at /src (make check-container does this)"
 
-info "copying repository into a clean work tree (host venv, generated code, and caches excluded)"
+info "copying repository into a clean work tree (host venv, local agent state, generated code, and caches excluded)"
 archive="$(mktemp)"
 trap 'rm -f "$archive"' EXIT
 # tar exits 1 ("file changed as we read it") when the host mutates a file
@@ -29,6 +29,7 @@ trap 'rm -f "$archive"' EXIT
 tar_status=0
 tar -C /src \
 	--exclude=./.git \
+	--exclude=./.claude \
 	--exclude=./.make \
 	--exclude=./python/.venv \
 	--exclude=./go/internal/genpb \

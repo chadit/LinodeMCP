@@ -33,8 +33,6 @@ from linodemcp.profiles import (
 )
 from linodemcp.server import Server
 from linodemcp.tools import helpers as tool_helpers
-from linodemcp.tools.linode_audit_report import set_audit_reports
-from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 from linodemcp.tools.version import version_response_dict
 from linodemcp.tui import run_tui
 from linodemcp.version import get_version_info
@@ -121,7 +119,7 @@ async def _run_scope_validation(
             "active token is missing scopes the profile requires; refusing to start",
             profile=active.name,
             token_kind=result.kind.name,
-            missing=[s.value for s in result.comparison.missing],
+            missing=list(result.comparison.missing),
         )
         return False
 
@@ -131,7 +129,7 @@ async def _run_scope_validation(
             "(least-privilege violated)",
             profile=active.name,
             token_kind=result.kind.name,
-            excess=[s.value for s in result.comparison.excess],
+            excess=list(result.comparison.excess),
         )
 
     log.info(
@@ -177,8 +175,6 @@ def _start_audit(
     server.set_audit_sink(audit_sink)
     server.set_audit_redact_pii(cfg.audit.redact_pii)
 
-    set_audit_reports(cfg.audit.reports)
-
     # Phase 2b/3a: sweep rotated JSONL logs older than the retention
     # window. Phase 3c: hourly retention sweep over the SQLite rows.
     # Both come from audit.retention_days config (0 = never delete).
@@ -223,9 +219,6 @@ def _open_sqlite_sink(
         return None
 
     log.info("audit SQLite sink open", path=db_path)
-
-    # Phase 3d: let the summary query tool read the same database.
-    set_audit_sqlite_path(db_path)
 
     return sink
 

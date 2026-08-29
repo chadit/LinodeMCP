@@ -151,18 +151,6 @@ func TestRefusesADeclarationTheReaderLeavesUnread(t *testing.T) {
 				withReader(linodev1.ArgumentReader_ARGUMENT_READER_PRESENT_TEXT),
 				withReaderMessage(&linodev1.ReaderMessage{Refused: "label was refused"}))),
 		},
-		{
-			name:    "reader beside the hook that owns the whole check",
-			refusal: "errReaderWithValidate",
-			build: func(t *testing.T) *toolgen.ProbeRun {
-				t.Helper()
-
-				return goProbe(probeMessage(t, "ProbeReaderWithValidateInput",
-					writeOptions(withHooks("validate")),
-					bodyString(probeBodyArg, 3,
-						withReader(linodev1.ArgumentReader_ARGUMENT_READER_PRESENT_TEXT))))
-			},
-		},
 	})
 }
 

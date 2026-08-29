@@ -7,13 +7,16 @@ path is given and falling back to the JSONL scan otherwise.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from linodemcp.audit.event import Capability, Event, Mode, Status
+from linodemcp.audit.event import Capability, Event, Mode, event_timestamp
 from linodemcp.audit.reader import scan_events
+from linodemcp.audit.store import read_with_fallback
+from linodemcp.genlocal import AuditSummaryResponse, AuditSummaryRow
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,14 +37,6 @@ class SummaryQuery:
     include_meta: bool = False
 
 
-@dataclass
-class SummaryRow:
-    """One aggregated bucket: grouped column values and the count."""
-
-    groups: dict[str, str]
-    count: int
-
-
 def _column_accessor(name: str) -> Callable[[Event], str] | None:
     """Return the field extractor for a groupable column, or None if the
     name is not in the allowlist.
@@ -50,9 +45,9 @@ def _column_accessor(name: str) -> Callable[[Event], str] | None:
         case "tool":
             return lambda e: e.tool
         case "status":
-            return lambda e: e.status.value
+            return lambda e: e.status
         case "capability":
-            return lambda e: e.tool_capability.value
+            return lambda e: e.tool_capability
         case "profile":
             return lambda e: e.profile
         case "environment":
@@ -73,13 +68,15 @@ def validate_group_by(group_by: list[str] | None) -> list[str]:
 
     for name in group_by:
         if _column_accessor(name) is None:
-            msg = f"unknown group_by column: {name!r}"
+            # Go's wording verbatim, quoted its way: both languages answer the
+            # same sentence for the same typo.
+            msg = f"audit: unknown group_by column: {json.dumps(name)}"
             raise UnknownGroupByColumnError(msg)
 
     return group_by
 
 
-def summarize(events: list[Event], group_by: list[str]) -> list[SummaryRow]:
+def summarize(events: list[Event], group_by: list[str]) -> list[AuditSummaryRow]:
     """Aggregate events into per-bucket counts grouped by the given
     columns. ``group_by`` must already be validated. Rows are sorted by
     count descending, then by grouped values, for reproducible output.
@@ -101,12 +98,39 @@ def summarize(events: list[Event], group_by: list[str]) -> list[SummaryRow]:
         groups_by_key.setdefault(key, groups)
 
     rows = [
-        SummaryRow(groups=groups_by_key[key], count=count)
+        AuditSummaryRow(groups=groups_by_key[key], count=count)
         for key, count in counts.items()
     ]
     rows.sort(key=lambda row: tuple(row.groups[name] for name in group_by))
     rows.sort(key=lambda row: row.count, reverse=True)
     return rows
+
+
+def summary_over(
+    sqlite_path: str,
+    jsonl_dir: str,
+    since: datetime | None,
+    group_by: list[str],
+    include_meta: bool,
+) -> AuditSummaryResponse:
+    """Count a window of events into the buckets ``group_by`` names, read
+    through the configured database where one answers and through the JSONL log
+    otherwise.
+
+    ``group_by`` must already be validated, because an unusable column is the
+    caller's own condition rather than a failed read. A configured database that
+    will not open leaves the log standing behind a warning.
+    """
+    events, warnings = read_with_fallback(
+        sqlite_path,
+        lambda store: load_window(store, jsonl_dir, since, include_meta),
+    )
+
+    return AuditSummaryResponse(
+        total_events=len(events),
+        rows=summarize(events, group_by),
+        warnings=warnings,
+    )
 
 
 def load_window(
@@ -144,11 +168,10 @@ def _load_window_sqlite(
 
     events: list[Event] = []
     for tool, capability, status, profile, environment, ts_unix_ns in rows:
-        cap = Capability(capability)
-        if not include_meta and cap == Capability.META:
+        if not include_meta and capability == Capability.META:
             continue
         events.append(
-            _event_from_row(tool, cap, status, profile, environment, ts_unix_ns)
+            _event_from_row(tool, capability, status, profile, environment, ts_unix_ns)
         )
 
     return events
@@ -156,7 +179,7 @@ def _load_window_sqlite(
 
 def _event_from_row(
     tool: str,
-    capability: Capability,
+    capability: str,
     status: str,
     profile: str,
     environment: str,
@@ -167,18 +190,18 @@ def _event_from_row(
     ignores them.
     """
     return Event(
-        ts=datetime.fromtimestamp(ts_unix_ns / 1_000_000_000, UTC),
+        ts=event_timestamp(datetime.fromtimestamp(ts_unix_ns / 1_000_000_000, UTC)),
         ts_unix_ns=ts_unix_ns,
         event_id="",
         tool=tool,
         tool_capability=capability,
         environment=environment,
         profile=profile,
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
-        status=Status(status),
+        status=status,
         latency_ms=0,
         result_summary="",
         error=None,

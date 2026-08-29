@@ -15,9 +15,10 @@ import "linode/mcp/v1/options.proto";
 message OAuthClientThumbnail {
   string client_id = 1;
   // LOCAL because nothing decodes it: the API sends the image itself, and the
-  // read's execute hook is what turns those bytes into this text. Not redacted,
-  // unlike the update's argument of the same name: an avatar is what the caller
-  // asked this tool for, so standing in for it would leave nothing to report.
+  // read's declared transport is what turns those bytes into this text. Not
+  // redacted, unlike the update's argument of the same name: an avatar is what
+  // the caller asked this tool for, so standing in for it would leave nothing
+  // to report.
   string thumbnail_png_base64 = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
 }
 
@@ -30,12 +31,20 @@ message AccountOAuthClientThumbnailGetInput {
     path: "/account/oauth-clients/{client_id}/thumbnail"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientThumbnail";
   option (linode.mcp.v1.tool_description) = "Gets one account OAuth client's thumbnail by ID. Returns base64-encoded PNG image data.";
   option (linode.mcp.v1.error_message) = "Failed to get account OAuth client thumbnail '{client_id}': {error}";
-  // execute owns the live call alone: this route answers with raw PNG bytes
-  // under image/png, not the JSON body every other read decodes.
-  option (linode.mcp.v1.tool_hooks) = "execute";
+  // This route answers with raw PNG bytes under image/png, not the JSON body
+  // every other read decodes, so the image itself is the body.
+  option (linode.mcp.v1.execute_transport) = {
+    raw_body {
+      direction: TRANSFER_DIRECTION_DOWN
+      content_type: "image/png"
+      answer_field: "thumbnail_png_base64"
+    }
+  };
 
   // The client id fills a route segment here as it does on the update and the
   // delete, so it is checked the same way.
@@ -70,6 +79,8 @@ message AccountOAuthClientThumbnailUpdateInput {
     path: "/account/oauth-clients/{client_id}/thumbnail"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientIDResponse";
   option (linode.mcp.v1.tool_description) = "Updates one account OAuth client's thumbnail by ID.";
   option (linode.mcp.v1.error_message) = "Failed to update account OAuth client thumbnail: {error}";
@@ -87,7 +98,15 @@ message AccountOAuthClientThumbnailUpdateInput {
     template: "The account OAuth client's thumbnail is updated."
     line: PREVIEW_LINE_SIDE_EFFECT
   };
-  option (linode.mcp.v1.tool_hooks) = "execute";
+  // The route consumes the raw PNG bytes under image/png, so the derived JSON
+  // body advertises the image without ever being what travels.
+  option (linode.mcp.v1.execute_transport) = {
+    raw_body {
+      direction: TRANSFER_DIRECTION_UP
+      content_type: "image/png"
+      source_argument: "thumbnail_png_base64"
+    }
+  };
 
   // The client id is a route segment here as it is on the delete, so it is
   // checked the same way.
@@ -106,8 +125,8 @@ message AccountOAuthClientThumbnailUpdateInput {
     message: "client_id must not contain path separators, query separators, or traversal segments"
     expression: "!this.client_id.contains('/') && !this.client_id.contains('?') && !this.client_id.contains('..') && this.client_id.matches('(?s)^\\\\S(.*\\\\S)?$')"
   };
-  // Standard base64 with its padding, which is the encoding the execute hook
-  // decodes. It holds its peace on a blank image so the argument's own reader
+  // Standard base64 with its padding, which is the encoding the declared
+  // transport decodes. It holds its peace on a blank image so the argument's own reader
   // answers that, in the words a caller has always read.
   option (buf.validate.message).cel = {
     id: "account_oauth_client_thumbnail_update.thumbnail_png_base64.base64"

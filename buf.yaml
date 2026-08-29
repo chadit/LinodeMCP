@@ -4,6 +4,11 @@ modules:
 lint:
   use:
     - STANDARD
+  # Buf's own validate.proto, vendored so the contract's rules resolve offline.
+  # Upstream owns its package name, so linting it here would only ever report a
+  # finding nobody in this repo can fix. Lint-only: generation still reads it.
+  ignore:
+    - proto/buf
   # Enum values are named as the exact lowercase Linode API wire strings on
   # purpose: protojson serializes an enum by its value NAME, so the name IS the
   # API string (no map/transform). That is the core of the enum-to-proto design,

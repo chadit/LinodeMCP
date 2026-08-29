@@ -28,7 +28,7 @@ func TestLinodeInstanceResizeToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 func TestLinodeInstanceResizeToolDryRunPreviewWithoutResizing(t *testing.T) {
 	t.Parallel()
 
-	cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123, Type: "g6-nanode-1"})
+	cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123, Type: typeG6Nanode1})
 	_, _, handler := gentools.NewLinodeInstanceResizeTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

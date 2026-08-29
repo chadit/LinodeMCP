@@ -22,7 +22,10 @@ import (
 // hand-written code does.
 type pyRenderer struct {
 	outDir string
-	ruff   string
+	// answersDir is where the answer shapes land, which the formatter needs for
+	// the same reason outDir is needed.
+	answersDir string
+	ruff       string
 }
 
 func (pyRenderer) owns(name string) bool {
@@ -50,13 +53,13 @@ func (pyRenderer) acts() []optionClaim {
 	emitted := []protoreflect.Name{
 		"argument_reader", "body_comma_list", "body_constant", "body_fold",
 		"body_name", "body_nullable", "body_root", "echo_argument",
-		"field_location", "list_envelope", "list_filter", "normalize_fields",
+		"field_location", "list_envelope", "list_filter", "local_answer", "local_operation", "local_record", "normalize_fields", "normalize_fold", "state_composite", "dependency_walk", "billing_delta",
 		"object_walk", "preview_omits_body", "preview_redact",
-		"preview_sentence", "reader_message", "reader_values",
+		"preview_sentence", "preview_stand_in", "preview_unchanged", "reader_message", "reader_values",
 		"refuse_arguments", "refuse_unknown_arguments", "require_any_of",
-		"response_body_fields", "state_route", "tool_api_surface",
-		"tool_capability", "tool_description", "tool_hooks", "tool_meta",
-		"tool_response", "tool_route",
+		"execute_transport", "response_body_fields", "state_route", "tool_api_surface",
+		"tool_capability", "tool_categories", "tool_description",
+		"tool_meta", "tool_response", "tool_route", "tool_scopes",
 	}
 
 	served := map[protoreflect.Name]string{
@@ -100,6 +103,57 @@ func (p pyRenderer) renderGroup(group string, tools []*contract) (emittedFile, e
 	}
 
 	return emittedFile{Name: name, Text: finished}, nil
+}
+
+// renderAnswers writes the dataclass each declared answer shape fills, the
+// projection that turns one into its plain body, and the surface every
+// generated operation's subsystem is reached through.
+func (p pyRenderer) renderAnswers(
+	shapes []answerShape, operations []localOperation,
+) (emittedFile, error) {
+	text, err := renderPyAnswers(shapes, operations)
+	if err != nil {
+		return emittedFile{}, err
+	}
+
+	finished, err := p.finishIn(p.answersDir, text, pyAnswersModule)
+	if err != nil {
+		return emittedFile{}, err
+	}
+
+	return emittedFile{Name: pyAnswersModule, Text: finished}, nil
+}
+
+// renderOperations writes the arm behind every generated operation, and beside
+// it the walk that holds each subsystem to the surface its arm calls.
+func (p pyRenderer) renderOperations(operations []localOperation) ([]emittedFile, error) {
+	if len(operations) == 0 {
+		return nil, nil
+	}
+
+	arms, err := renderPyOperations(operations)
+	if err != nil {
+		return nil, err
+	}
+
+	written := make([]emittedFile, 0, 2)
+
+	for _, module := range []struct {
+		name string
+		text []string
+	}{
+		{name: pyOperationsFile, text: arms},
+		{name: pyConformanceContentFile, text: renderPyConformance(operations)},
+	} {
+		finished, finishErr := p.finish(strings.Join(module.text, "\n")+"\n", module.name)
+		if finishErr != nil {
+			return nil, finishErr
+		}
+
+		written = append(written, emittedFile{Name: module.name, Text: finished})
+	}
+
+	return written, nil
 }
 
 func (p pyRenderer) renderRegistry(contracts []contract) (emittedFile, error) {
@@ -170,6 +224,31 @@ func pyRegistrySource(contracts []contract) string {
 			pyPackage, module, strings.Join(indented, ",\n")))
 	}
 
+	lines = append(lines, "", "_TOOL_SCOPES: dict[str, tuple[str, ...]] = {")
+
+	for _, entry := range scopedContracts(contracts) {
+		lines = append(lines, fmt.Sprintf("    %q: (%s,),", entry.Name, quotedStrings(entry.Scopes)))
+	}
+
+	lines = append(lines, "}", "", "",
+		"def scopes_for(tool_name: str) -> list[str]:",
+		`    """Declared OAuth scope strings for one tool, [] for a declared none."""`,
+		"    return list(_TOOL_SCOPES.get(tool_name, ()))",
+		"", "",
+		"_TOOL_CATEGORIES: dict[str, tuple[str, ...]] = {")
+
+	for _, entry := range categorizedContracts(contracts) {
+		lines = append(lines, fmt.Sprintf("    %q: (%s,),", entry.Name, quotedStrings(entry.Categories)))
+	}
+
+	lines = append(lines, "}", "", "",
+		"def categories_for(tool_name: str) -> list[str]:",
+		`    """Declared profile categories for one tool, first its primary`,
+		`    grouping, [] for a declared none."""`,
+		"    return list(_TOOL_CATEGORIES.get(tool_name, ()))",
+	)
+
+	exported = append(exported, "scopes_for", "categories_for")
 	sort.Strings(exported)
 
 	listed := make([]string, 0, len(exported))
@@ -294,7 +373,7 @@ func pyTypeChecking(tools []*pyTool) []string {
 	}
 
 	if slices.ContainsFunc(staged, func(tool *pyTool) bool {
-		return tool.hook(hookKindDependencyWalk) != ""
+		return len(tool.c.DepWalks) > 0
 	}) {
 		return append(lines, "    from linodemcp.tools.helpers import DryRunDetails")
 	}
@@ -318,7 +397,7 @@ func pyFactory(tool *pyTool) ([]string, error) {
 	)
 	lines = append(lines, pyRouteDoc(tool, pyDocIndent)...)
 	lines = append(lines,
-		`    """`,
+		pyDocClose,
 		"    return Tool(",
 		"        name="+pyQuote(tool.c.Name)+",",
 		"        description=(",
@@ -357,7 +436,13 @@ func pyRouteDoc(tool *pyTool, indent int) []string {
 // Prose is what ruff cannot rewrap, so a line still over the budget after
 // formatting is a sentence too long to render and fails by name.
 func (p pyRenderer) finish(text, name string) (string, error) {
-	path := filepath.Join(p.outDir, name)
+	return p.finishIn(p.outDir, text, name)
+}
+
+// finishIn is finish against one named tree, which the answers arm needs
+// because its files land beside the tool tree rather than in it.
+func (p pyRenderer) finishIn(dir, text, name string) (string, error) {
+	path := filepath.Join(dir, name)
 
 	formatted, err := p.formatted(text, path)
 	if err != nil {
@@ -428,7 +513,7 @@ const (
 // pyModuleImports is the first-party imports the rendered module takes: only
 // what the tiers present actually use, so an unused import cannot reach the
 // emitted tree. Sorted before returning because ruff format leaves import order
-// alone and linodemcp.toolhooks sorts ahead of linodemcp.tools.
+// alone.
 func pyModuleImports(tools []*pyTool) ([]string, error) {
 	drivers, err := pyDriverImports(tools)
 	if err != nil {
@@ -437,11 +522,10 @@ func pyModuleImports(tools []*pyTool) ([]string, error) {
 
 	lines := []string{"from linodemcp.profiles import Capability"}
 
-	// Only where a declared fetch feeds a walk: the reader refuses any other
-	// state, so a module whose walks all pair with hand-written fetches never
-	// names it.
+	// Only where a declared walk reads it: the reader refuses any other state,
+	// so a module with no walk never names it.
 	if slices.ContainsFunc(tools, func(tool *pyTool) bool {
-		return tool.c.StateRead.declared() && tool.hook(hookKindDependencyWalk) != ""
+		return len(tool.c.DepWalks) > 0
 	}) {
 		lines = append(lines, "from linodemcp.tools.declared_state import declared_state_of")
 	}
@@ -489,9 +573,15 @@ func pyModuleImports(tools []*pyTool) ([]string, error) {
 
 	lines = append(lines, "from linodemcp.tools.toolschemas import schema")
 
-	if hooks := pyHookImports(tools); hooks != "" {
-		lines = append(lines, "from "+pyHooksModule+" import "+hooks)
+	if walks := pyWalkImports(tools); walks != "" {
+		lines = append(lines, "from linodemcp.tools.walk_spec import "+walks)
 	}
+
+	if transports := pyTransportImports(tools); transports != "" {
+		lines = append(lines, "from linodemcp.tools.transport import "+transports)
+	}
+
+	lines = append(lines, pyLocalAnswerImports(tools)...)
 
 	sort.Strings(lines)
 
@@ -536,12 +626,17 @@ func pyDriverImports(tools []*pyTool) ([]string, error) {
 		named["MatchMode"] = true
 	}
 
+	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return len(tool.c.PreviewStandIns) > 0 }) {
+		named["PreviewStandIn"] = true
+	}
+
 	if slices.ContainsFunc(tools, (*pyTool).forwardedQuery) {
 		named["with_query_arguments"] = true
 	}
 
 	if slices.ContainsFunc(tools, func(tool *pyTool) bool {
-		return tool.c.StateRead.declared() && !tool.c.StateRead.collection()
+		return tool.c.StateRead.declared() && !tool.c.StateRead.collection() &&
+			!tool.c.StateRead.scan() && !tool.c.StateRead.Envelope
 	}) {
 		named["read_route_state"] = true
 	}
@@ -550,25 +645,24 @@ func pyDriverImports(tools []*pyTool) ([]string, error) {
 		named["read_collection_state"] = true
 	}
 
+	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return tool.c.StateRead.scan() }) {
+		named["read_collection_scan"] = true
+	}
+
+	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return tool.c.StateRead.Envelope }) {
+		named["read_envelope_state"] = true
+	}
+
+	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return len(tool.c.Composite) > 0 }) {
+		named["read_composite_state"] = true
+		named["CompositeCall"] = true
+	}
+
 	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return len(tool.c.StateRead.Query) > 0 }) {
 		named["state_read_query"] = true
 	}
 
 	return pySortedKeys(named), nil
-}
-
-// pyHookImports is the hook functions a rendered module calls, named directly
-// so a missing one fails at import rather than on a tool call.
-func pyHookImports(tools []*pyTool) string {
-	named := make(map[string]bool, len(tools))
-
-	for _, tool := range tools {
-		for _, name := range tool.hookNames() {
-			named[name] = true
-		}
-	}
-
-	return strings.Join(pySortedKeys(named), ", ")
 }
 
 // pySortedKeys is a name set in sorted order.
@@ -616,10 +710,11 @@ func pyPreviewImports(tools []*pyTool) string {
 
 	named = append(named, pyPreviewChoiceImports(tools)...)
 	named = append(named, pyPreviewReaders(tools)...)
+	named = append(named, pyPreviewGuardImports(tools)...)
 
-	sort.Strings(named)
+	slices.Sort(named)
 
-	return strings.Join(named, ", ")
+	return strings.Join(slices.Compact(named), ", ")
 }
 
 // pyPreviewChoiceImports is what a module takes for the lines a flag selects:
@@ -645,6 +740,134 @@ func pyPreviewChoiceImports(tools []*pyTool) []string {
 	return named
 }
 
+// pyPreviewListReader is the support call a line written over a list reports
+// through: one per entry, or one naming them all.
+func pyPreviewListReader(list *previewElements) string {
+	if list.Join == "" {
+		return "preview_per_element"
+	}
+
+	return "preview_joined"
+}
+
+// pyPreviewSentenceImports is what one declared line takes from the support
+// layer: the call that selects its wording, and the reads its guard asks.
+func pyPreviewSentenceImports(tool *contract, sentence *previewSentence) []string {
+	named := make([]string, 0, 4)
+
+	if list := sentence.Elements; list != nil {
+		named = append(named, pyPreviewListReader(list))
+	}
+
+	if sentence.Match != nil {
+		named = append(named, "preview_matched")
+
+		if sentence.Match.State != "" {
+			named = append(named, "preview_folded")
+		}
+
+		named = append(named, pyPreviewReadersFor(tool, sentence.Match.Argument)...)
+	}
+
+	if sentence.Changed != nil {
+		named = append(named, "preview_differs", "preview_guarded")
+	}
+
+	if len(sentence.Present) == 0 {
+		return named
+	}
+
+	named = append(named, "preview_guarded")
+
+	for _, name := range sentence.Present {
+		if previewGuardsOnText(tool.previewArgument(name)) {
+			named = append(named, "preview_text")
+
+			continue
+		}
+
+		named = append(named, "preview_carried")
+	}
+
+	return named
+}
+
+// pyPreviewReadersFor is every reader one placeholder's value is read through.
+//
+// A state reading held against an argument reads twice, once for the member and
+// once for the value it is compared with, so both names travel.
+func pyPreviewReadersFor(tool *contract, name string) []string {
+	// A transport measurement is read off the closure's argument, through no
+	// support reader at all.
+	if strings.HasPrefix(name, previewTransportPrefix) {
+		return nil
+	}
+
+	if path, reads := strings.CutPrefix(name, previewStatePrefix); reads {
+		_, reader := tool.previewStateReader(path)
+		readers := []string{reader}
+
+		if held := tool.previewUnchangedFor(name); held != "" {
+			readers = append(readers, pyPreviewArgumentReader(tool, held))
+		}
+
+		return readers
+	}
+
+	readers := []string{pyPreviewArgumentReader(tool, name)}
+
+	// The fallback the emitted read wraps a folded argument in.
+	if tool.foldDefault(name) != "" {
+		readers = append(readers, "preview_or")
+	}
+
+	return readers
+}
+
+// pyPreviewArgumentReader is the reader one argument's value is read through,
+// which is the carried reader for a number every line reading it guards on.
+func pyPreviewArgumentReader(tool *contract, name string) string {
+	if tool.previewCarriedNumber(name) {
+		return "preview_carried_number"
+	}
+
+	return pyPreviewValueReader(tool, name)
+}
+
+// pyPreviewGuardImports is what a module takes for the lines a guard reports
+// under and the readings a wording only names when they changed.
+func pyPreviewGuardImports(tools []*pyTool) []string {
+	named := make([]string, 0, 4)
+
+	add := func(name string) {
+		if !slices.Contains(named, name) {
+			named = append(named, name)
+		}
+	}
+
+	for _, tool := range tools {
+		if len(tool.c.PreviewUnchanged) > 0 {
+			add("preview_changed")
+		}
+
+		for _, name := range tool.c.previewValueArguments() {
+			if tool.c.previewCarriedNumber(name) {
+				add("preview_carried_number")
+			}
+		}
+
+		for i := range tool.c.PreviewSentences {
+			for _, name := range pyPreviewSentenceImports(tool.c, &tool.c.PreviewSentences[i]) {
+				add(name)
+			}
+		}
+	}
+
+	sort.Strings(named)
+
+	return named
+}
+
 // pyPreviewReaders is the argument readers a module's declared wordings use,
 // sorted so the import line reads the way ruff leaves it.
 func pyPreviewReaders(tools []*pyTool) []string {
@@ -652,9 +875,10 @@ func pyPreviewReaders(tools []*pyTool) []string {
 
 	for _, tool := range tools {
 		for _, name := range tool.c.previewValueArguments() {
-			reader := pyPreviewReader(tool.c.previewArgument(name))
-			if !slices.Contains(named, reader) {
-				named = append(named, reader)
+			for _, reader := range pyPreviewReadersFor(tool.c, name) {
+				if !slices.Contains(named, reader) {
+					named = append(named, reader)
+				}
 			}
 		}
 	}

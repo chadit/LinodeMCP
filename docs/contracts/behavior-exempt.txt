@@ -1,5 +1,5 @@
 # Tools exempt from behavior-fixture coverage, one per line with a reason.
-# Exemption is for tools the behavior harness structurally cannot pin: they
+# Exemption is for tools the behavior runner structurally cannot pin: they
 # make no HTTP request (nothing to capture) and their outputs are either
 # language/environment-specific by design or stateful local data. Their
 # cross-language contract is enforced elsewhere: input schemas by the
@@ -13,12 +13,8 @@
 # exemption is permanent coverage loss and deserves a dated commitment;
 # verify_behavior reads only the tab-split tool name, so the annotation
 # never changes what the gate exempts.
-hello	local greeting, no HTTP, output pinned by meta-proto gate
-version	local build info, values legitimately differ per language/build
-linode_audit_health	reads local audit sink state, output is runtime data
-linode_audit_recent	reads local audit log, output is runtime data
-linode_audit_report	reads local audit log, output is runtime data
-linode_audit_summary	reads local audit log, output is runtime data
-linode_profile_can_run	local profile evaluation, no HTTP
-linode_profile_list_categories	local catalog data, output pinned by meta-proto gate
-linode_profile_list_tools	local catalog data, output pinned by meta-proto gate
+# REMOVING an entry needs no annotation: it hands coverage back, which is the
+# direction this file is supposed to move. Drop the line in the same change
+# that lands the tool's fixture, since verify_behavior fails an exempt tool
+# that has one (an exemption over a fixture would mask the fixture).
+# The list is empty today: every tool in the manifest carries a fixture.

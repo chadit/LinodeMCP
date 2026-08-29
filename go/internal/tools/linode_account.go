@@ -25,7 +25,7 @@ const MaxJSONSafeID = 9007199254740991
 // OAuthClientThumbnailPNG decodes the base64 image the thumbnail update carries
 // and answers the sentence a caller gets for each way the argument can be
 // unusable. Exported because the generated tool reaches it through its validate
-// hook, and its execute hook needs the bytes the rules only saw as text.
+// hook; the transport decodes the same text again when it sends the bytes.
 func OAuthClientThumbnailPNG(request *mcp.CallToolRequest) ([]byte, string) {
 	raw, exists := request.GetArguments()[oauthClientThumbnailPNGParam]
 	if !exists {

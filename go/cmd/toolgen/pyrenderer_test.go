@@ -35,8 +35,9 @@ func runPythonGenInto(t *testing.T, out string) string {
 
 	cmd := exec.CommandContext(t.Context(), "go", "run", ".",
 		"-languages", writeLanguages(t, "python"),
-		"-handwritten", handwrittenFile, "-schemas", schemaDir,
-		"-python-out", out, "-ruff", pythonRuff)
+		"-handwritten", handwrittenFile,
+		"-schemas", schemaDir, "-python-out", out,
+		"-python-answers-out", t.TempDir(), "-ruff", pythonRuff)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("toolgen failed: %v\n%s", err, output)
@@ -156,30 +157,30 @@ func TestPythonRegistryNamesBothHalvesOfEveryEmittedTool(t *testing.T) {
 	}
 }
 
-// A hook the contract declares is imported and called, or it is neither. An
-// import with no call is a declaration read and dropped, and a call with no
-// import fails at server start rather than at build.
-func TestEveryPythonHookImportIsCalled(t *testing.T) {
+// No tool names a hand-written body any more, so the generated tree reaches
+// none, and an import that comes back is held to a call the way it always was. The population this counts is the modules rather than the
+// imports, because the imports are meant to be none and a guard on an empty
+// set would fail on the state the migration was for.
+func TestThePythonTreeReachesNoHandWrittenBody(t *testing.T) {
 	t.Parallel()
 
 	dir := runPythonGen(t)
+	modules := pythonModules(t, dir)
 
-	var imported int
-
-	for _, name := range pythonModules(t, dir) {
+	for _, name := range modules {
 		source := readGenerated(t, dir, name)
 
-		for _, hook := range pythonHookImports(source) {
-			imported++
+		for _, body := range pythonHandWrittenImports(source) {
+			t.Errorf("%s imports the hand-written %s", name, body)
 
-			if strings.Count(source, hook) < 2 {
-				t.Errorf("%s imports %s and never calls it", name, hook)
+			if strings.Count(source, body) < 2 {
+				t.Errorf("%s imports %s and never calls it", name, body)
 			}
 		}
 	}
 
-	if imported == 0 {
-		t.Fatal("found no hook imports, so this measured nothing")
+	if len(modules) == 0 {
+		t.Fatal("found no emitted modules, so this measured nothing")
 	}
 }
 
@@ -257,6 +258,31 @@ func TestEmitsThePythonDestroyConfiguration(t *testing.T) {
 	}
 }
 
+// The shapes ruff 0.16.4 refuses when rendered any other way: a lone-slot
+// guard folds instead of nesting, a split wording in a collection carries
+// parentheses, an unread closure parameter carries the underscore, and a
+// from-import lists constants first. Pinned here so a regression names the
+// shape that moved rather than surfacing as a lint failure gates away.
+func TestEmitsThePythonShapesTheLinterHoldsTo(t *testing.T) {
+	t.Parallel()
+
+	dir := runPythonGen(t)
+
+	for name, want := range map[string]string{
+		"vpc.py":       `    if not message and not arguments.get("vpc_id"):`,
+		"placement.py": "    if not error and group_id_error:",
+		"instance.py":  "    async def dependency_walk(_client: RetryableClient, state: Any)",
+		"volume.py":    "    def preview_cautions(_state: Any) -> tuple[str, ...]:",
+		"firewall.py":  "from linodemcp.tools.body import ITEM_STR, FoldMember, WriteBody",
+		"account.py": "        warnings=(\n            (\n" +
+			`                "Account cancellation is permanent`,
+	} {
+		if !strings.Contains(readGenerated(t, dir, name), want) {
+			t.Errorf("%s is missing the linted shape %q", name, want)
+		}
+	}
+}
+
 // pythonFiles is every Python file a tree holds, sorted, the interpreter's
 // caches left out.
 func pythonFiles(t *testing.T, dir string) []string {
@@ -314,25 +340,21 @@ func pythonToolNames(source string) []string {
 	return found
 }
 
-// pythonHookImports is the hook functions one emitted module imports. ruff
-// wraps the list in parentheses once it outgrows a line, so both spellings are
-// read: reading only the first line would measure nothing on most modules.
-func pythonHookImports(source string) []string {
-	_, rest, found := strings.Cut(source, "from linodemcp.toolhooks import ")
-	if !found {
-		return nil
-	}
+// pythonHandWrittenImports is the per-tool bodies one emitted module imports.
+// Each would be spelled `from linodemcp.tools.<tool> import <tool>_answer` on a
+// line of its own, since such a body lived beside the tool it served.
+func pythonHandWrittenImports(source string) []string {
+	imports := make([]string, 0)
 
-	named, _, _ := strings.Cut(rest, "\n")
-	if strings.HasPrefix(named, "(") {
-		named, _, _ = strings.Cut(rest, ")")
-	}
+	for line := range strings.SplitSeq(source, "\n") {
+		rest, found := strings.CutPrefix(line, "from linodemcp.tools.")
+		if !found {
+			continue
+		}
 
-	imports := make([]string, 0, strings.Count(named, ",")+1)
-
-	for name := range strings.SplitSeq(strings.Trim(named, "()\n"), ",") {
-		if trimmed := strings.TrimSpace(name); trimmed != "" {
-			imports = append(imports, trimmed)
+		module, name, imported := strings.Cut(rest, " import ")
+		if imported && strings.TrimSpace(name) == module+"_answer" {
+			imports = append(imports, strings.TrimSpace(name))
 		}
 	}
 

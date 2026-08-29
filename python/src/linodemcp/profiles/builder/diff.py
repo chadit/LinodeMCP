@@ -3,10 +3,10 @@
 Mirrors ``go/internal/profiles/builder/diff.go``. The save handler
 constructs a draft-as-UserProfileConfig, looks up the existing entry
 in ``cfg.profiles`` (if any), and calls :func:`compute_diff` to
-build the response payload.
+build the change set.
 
-JSON shape per :class:`Diff` matches the Go side so cross-language
-tooling produces identical save responses for the same input.
+The wire shape is the contract's, projected from the declared response
+rather than written here, so both languages answer one member set.
 """
 
 from __future__ import annotations
@@ -26,10 +26,6 @@ class FieldDiff:
     old: Any
     new: Any
 
-    def to_payload(self) -> dict[str, Any]:
-        """Serialize to ``{"old": ..., "new": ...}``."""
-        return {"old": self.old, "new": self.new}
-
 
 @dataclass
 class Diff:
@@ -46,18 +42,6 @@ class Diff:
     added_tools: list[str] = field(default_factory=list[str])
     removed_tools: list[str] = field(default_factory=list[str])
     changed_fields: dict[str, FieldDiff] = field(default_factory=dict[str, FieldDiff])
-
-    def to_payload(self) -> dict[str, Any]:
-        """Serialize to the wire shape consumed by the save tool response."""
-        return {
-            "name": self.name,
-            "is_new": self.is_new,
-            "added_tools": list(self.added_tools),
-            "removed_tools": list(self.removed_tools),
-            "changed_fields": {
-                key: change.to_payload() for key, change in self.changed_fields.items()
-            },
-        }
 
 
 def draft_as_user_profile(draft: Draft) -> UserProfileConfig:

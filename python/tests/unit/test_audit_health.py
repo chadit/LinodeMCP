@@ -1,4 +1,4 @@
-"""Audit health collector tests.
+"""Audit health tests.
 
 Mirrors ``go/internal/audit/health_test.go``. Covers the JSONL portion
 (active-log detection, rotated count and oldest date, disk usage), the
@@ -9,7 +9,7 @@ case reporting zeros rather than erroring.
 from __future__ import annotations
 
 import gzip
-import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -19,8 +19,10 @@ from linodemcp.audit import (
     Mode,
     SQLiteSink,
     Status,
-    collect_health,
+    event_timestamp,
+    health,
 )
+from linodemcp.genlocal import record_audit_event
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -30,18 +32,18 @@ def _event(tool: str, second: int) -> Event:
     """Build an event at a distinct second in 2026-05-20."""
     ts = datetime(2026, 5, 20, 0, 0, second, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id=f"evt_{second}",
         tool=tool,
-        tool_capability=Capability.READ,
+        tool_capability=Capability.READ.value,
         environment="prod",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
-        status=Status.SUCCESS,
+        status=Status.SUCCESS.value,
         latency_ms=0,
         result_summary="",
         error=None,
@@ -51,19 +53,19 @@ def _event(tool: str, second: int) -> Event:
     )
 
 
-def test_collect_health_jsonl(tmp_path: Path) -> None:
+def test_health_reads_the_jsonl_half(tmp_path: Path) -> None:
     """JSONL footprint: active log, one rotated file, oldest date, size."""
     active = tmp_path / "audit.log"
     active.write_text(
-        json.dumps(_event("tool_a", 1).to_dict()) + "\n",
+        record_audit_event(_event("tool_a", 1), "", "") + "\n",
         encoding="utf-8",
     )
 
     rotated = tmp_path / "audit-2026-05-18.log.gz"
     with gzip.open(rotated, "wt", encoding="utf-8") as handle:
-        handle.write(json.dumps(_event("tool_b", 2).to_dict()) + "\n")
+        handle.write(record_audit_event(_event("tool_b", 2), "", "") + "\n")
 
-    report = collect_health("", str(tmp_path))
+    report = health("", str(tmp_path))
 
     assert report.jsonl_path == str(active)
     assert report.active_log_exists is True
@@ -74,19 +76,18 @@ def test_collect_health_jsonl(tmp_path: Path) -> None:
     assert report.sqlite is None
 
 
-def test_collect_health_sqlite(tmp_path: Path) -> None:
+def test_health_reads_the_configured_store(tmp_path: Path) -> None:
     """SQLite portion: row count, oldest timestamp, non-zero DB size."""
     db_path = tmp_path / "audit.db"
     sink = SQLiteSink(str(db_path), 5000)
 
     oldest = _event("tool_x", 1)
-    newer = _event("tool_x", 5)
-    newer.event_id = "evt_newer"
+    newer = replace(_event("tool_x", 5), event_id="evt_newer")
     sink.write(oldest)
     sink.write(newer)
     sink.close()
 
-    report = collect_health(str(db_path), str(tmp_path / "empty"))
+    report = health(str(db_path), str(tmp_path / "empty"))
 
     assert report.sqlite is not None
     assert report.sqlite.event_count == 2
@@ -95,9 +96,9 @@ def test_collect_health_sqlite(tmp_path: Path) -> None:
     assert report.sqlite.path == str(db_path)
 
 
-def test_collect_health_missing_dir_is_empty(tmp_path: Path) -> None:
+def test_health_reads_a_missing_directory_as_empty(tmp_path: Path) -> None:
     """An absent JSONL directory reports zeros, not an error."""
-    report = collect_health("", str(tmp_path / "no-audit-yet"))
+    report = health("", str(tmp_path / "no-audit-yet"))
 
     assert report.active_log_exists is False
     assert report.rotated_file_count == 0

@@ -58,7 +58,10 @@ async def test_rebuild_plan_then_apply(
         assert plan_id
         # The rebuild walk runs at plan time, so the body reads like a preview.
         assert body["warnings"]
-        assert _named_tools(mock_linode_client) == ["linode_instance_get"]
+        assert _named_tools(mock_linode_client) == [
+            "linode_instance_get",
+            "linode_instance_disk_list",
+        ]
 
         result = await handle_linode_instance_rebuild(
             {**rebuild_args, "mode": "apply", "plan_id": plan_id}, sample_config
@@ -73,10 +76,14 @@ async def test_rebuild_plan_then_apply(
 async def test_resize_plan_then_apply_opted_in(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {"id": 123, "type": "g6-nanode-1"}
-    )
-    mock_linode_client.list_instance_disks.return_value = []
+    # The composite reads the instance and its disks through the routed
+    # primitive, one call per declared member.
+    async def _routed(tool: str, *_values: object, **_kwargs: object) -> object:
+        if tool == "linode_instance_get":
+            return {"id": 123, "type": "g6-nanode-1"}
+        return {"data": [], "page": 1, "pages": 1, "results": 0}
+
+    mock_linode_client.route_raw.side_effect = _routed
     sample_config.two_stage = TwoStageConfig(opt_in={"linode_instance_resize": True})
 
     resize_args: dict[str, Any] = {"instance_id": 123, "type": "g6-standard-1"}
@@ -94,7 +101,11 @@ async def test_resize_plan_then_apply_opted_in(
         effect = body["side_effects"][0]
         assert "g6-nanode-1" in effect
         assert "g6-standard-1" in effect
-        mock_linode_client.route_raw.assert_not_awaited()
+        # The composite's plan-time calls are reads; nothing carries a body.
+        assert all(
+            "body" not in awaited.kwargs
+            for awaited in mock_linode_client.route_raw.await_args_list
+        )
 
         result = await handle_linode_instance_resize(
             {**resize_args, "mode": "apply", "plan_id": plan_id}, sample_config
@@ -108,9 +119,14 @@ async def test_resize_plan_then_apply_opted_in(
         )
         assert apply_body["instance_id"] == 123
         assert apply_body["new_type"] == "g6-standard-1"
-        mock_linode_client.route_raw.assert_awaited_once_with(
-            "linode_instance_resize", 123, body={"type": "g6-standard-1"}
-        )
+        writes = [
+            awaited
+            for awaited in mock_linode_client.route_raw.await_args_list
+            if "body" in awaited.kwargs
+        ]
+        assert len(writes) == 1
+        assert writes[0].args == ("linode_instance_resize", 123)
+        assert writes[0].kwargs == {"body": {"type": "g6-standard-1"}}
         assert await store.length() == 0
     finally:
         reset_plan_store(token)

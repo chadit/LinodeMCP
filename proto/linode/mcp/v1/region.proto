@@ -40,6 +40,8 @@ message RegionGetInput {
     path: "/regions/{region_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Region";
   option (linode.mcp.v1.tool_description) = "Gets one Linode region by region ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve region {region_id}: {error}";
@@ -62,6 +64,8 @@ message RegionListInput {
     path: "/regions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.RegionListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all available Linode regions (datacenters) with optional filtering by country or capabilities";
 
@@ -93,6 +97,8 @@ message RegionAvailabilityListInput {
     path: "/regions/availability"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.RegionAvailabilityListResponse";
   option (linode.mcp.v1.tool_description) = "Lists compute instance type availability across Linode regions";
 
@@ -109,6 +115,8 @@ message RegionAvailabilityGetInput {
     path: "/regions/{region_id}/availability"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.RegionAvailabilityListResponse";
   option (linode.mcp.v1.tool_description) = "Lists compute instance type availability for a Linode region";
   option (linode.mcp.v1.list_envelope) = {shape: SHAPE_BARE};

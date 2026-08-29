@@ -437,10 +437,12 @@ func pyHelperFacts(tools []*pyTool) pyHelperState {
 
 		state.readPaths(tool)
 
-		// A meta tool with no hook builds the message its contract names, which
-		// is the one answer nothing at runtime assembles for it.
+		// A meta tool answering its declared sentence builds the message its
+		// contract names, the one answer nothing at runtime assembles. A local
+		// answer projects what its operation brought back instead, through the
+		// engine's own helper.
 		state.sentences = state.sentences ||
-			(tool.c.Tier == tierMeta && tool.hook(hookKindAnswer) == "")
+			(tool.c.Tier == tierMeta && !tool.c.answersLocally())
 
 		state.readsReader = state.readsReader || pyReadsReader(tool)
 		state.refuses = state.refuses ||
@@ -590,6 +592,10 @@ func pyNormalizeHelpers(tools []*pyTool) []string {
 	for _, tool := range tools {
 		for _, rewrite := range tool.c.Normalizes {
 			named[rendering[rewrite.Transform].Python] = true
+		}
+
+		if tool.c.Fold != nil {
+			named["fold_int_list"] = true
 		}
 	}
 

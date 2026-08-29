@@ -1,0 +1,247 @@
+{
+  "tool": "linode_audit_recent",
+  "description": "CapMeta audit log reader (no Linode API call). The seeded audit_store is what makes the answer reproducible: three events in one day, read back newest first, with the tool filter and the projection onto the AuditEvent message both pinned.",
+  "cases": [
+    {
+      "name": "answers the seeded events newest first",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {},
+      "expect_result": {
+        "count": 3,
+        "events": [
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "filters by tool glob",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "tool": "linode_instance_b*"
+      },
+      "expect_result": {
+        "count": 1,
+        "events": [
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -17,7 +17,7 @@ func callBuilderTool(
 ) map[string]any {
 	t.Helper()
 
-	isError, text := callServerTool(t, srv, tool, args)
+	isError, text := callServerTool(t, srv, nil, tool, args)
 	if isError {
 		t.Fatalf("%s refused: %s", tool, text)
 	}

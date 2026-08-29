@@ -1,0 +1,319 @@
+{
+  "tool": "linode_audit_summary",
+  "description": "CapMeta audit aggregator (no Linode API call). The seeded audit_store fixes the window, so the bucket rows and their counts are a shared contract; group_by drives which columns the rows carry. The status case puts two events in one bucket, which is what makes the counting itself observable: a bucket every event lands in alone cannot tell a count from a constant. The SQLite case seeds only the database, so the same rows coming back prove the aggregator read the store the config named rather than the log beside it. The refusal case names a column the vocabulary does not carry: its whole sentence is declared on AuditSummaryInput, so one contract edit moves both languages and this case is what notices.",
+  "cases": [
+    {
+      "name": "buckets the seeded events by capability",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "group_by": [
+          "capability"
+        ]
+      },
+      "expect_result": {
+        "total_events": 3,
+        "rows": [
+          {
+            "groups": {
+              "capability": "destroy"
+            },
+            "count": 1
+          },
+          {
+            "groups": {
+              "capability": "read"
+            },
+            "count": 1
+          },
+          {
+            "groups": {
+              "capability": "write"
+            },
+            "count": 1
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "counts two events into one status bucket",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "group_by": [
+          "status"
+        ]
+      },
+      "expect_result": {
+        "total_events": 3,
+        "rows": [
+          {
+            "groups": {
+              "status": "success"
+            },
+            "count": 2
+          },
+          {
+            "groups": {
+              "status": "error"
+            },
+            "count": 1
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "buckets the same events read from the sqlite store",
+      "audit_store": {
+        "backend": "sqlite",
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "group_by": [
+          "capability"
+        ]
+      },
+      "expect_result": {
+        "total_events": 3,
+        "rows": [
+          {
+            "groups": {
+              "capability": "destroy"
+            },
+            "count": 1
+          },
+          {
+            "groups": {
+              "capability": "read"
+            },
+            "count": 1
+          },
+          {
+            "groups": {
+              "capability": "write"
+            },
+            "count": 1
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "refuses a group_by column the vocabulary does not carry",
+      "audit_store": {
+        "events": []
+      },
+      "args": {
+        "group_by": [
+          "nonsense"
+        ]
+      },
+      "expect_error": "invalid group_by: audit: unknown group_by column: \"nonsense\""
+    }
+  ]
+}

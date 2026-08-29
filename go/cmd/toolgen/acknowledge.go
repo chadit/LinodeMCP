@@ -113,7 +113,7 @@ func emitAcknowledgeHandler(out *source, tool *contract) error {
 
 // emitAssembledAnswer writes the tail shared by every tier whose answer is put
 // together rather than decoded: the declared sentence, the warning, the
-// arguments the call echoes back, and the members a hook filled.
+// arguments the call echoes back, and the members a transport filled.
 //
 // One copy because the acknowledge tier and the body-read tier answer the same
 // shape for the same reason. They differ in how the call is made, not in what
@@ -138,7 +138,12 @@ func emitAssembledAnswer(out *source, tool *contract, success formatted) error {
 		out.writef("\t\t%s: %s,", echo.GoName, value)
 	}
 
-	emitAssembledMembers(out, tool)
+	if tool.transported() {
+		if err := emitTransportMembers(out, tool); err != nil {
+			return err
+		}
+	}
+
 	out.writef("\t})")
 	out.writef("}")
 	out.writef("")
@@ -150,28 +155,14 @@ func emitAssembledAnswer(out *source, tool *contract, success formatted) error {
 // sends none, which is what both hand-written clients put on the wire for these
 // routes: an empty JSON object is a body, and adding one would change the call.
 //
-// A declared execute hook stands in for the whole line: the route it addresses
+// A declared transport stands in for the whole line: the route it addresses
 // takes something other than a JSON body, and the arguments are the ones the
 // derived call would have been given, so the two are read side by side.
 func emitAcknowledgeCall(out *source, tool *contract, ordered []field) {
 	values := pathValuesLiteral(ordered)
 
-	if tool.Hooks.Execute != "" {
-		out.need(importToolhooks)
-
-		// A hook filling response members answers the message carrying them; one
-		// filling none answers the error alone, so the attachment's call keeps
-		// the shape it has rather than returning a value nothing reads.
-		if len(tool.Assembled) > 0 {
-			out.writef("\t%s, err := toolhooks.%s(ctx, client, request, %s, %s)",
-				assembledLocal, tool.Hooks.Execute, values, executeBody(tool))
-			out.writef("\tif err != nil {")
-
-			return
-		}
-
-		out.writef("\tif err := toolhooks.%s(ctx, client, request, %s, %s); err != nil {",
-			tool.Hooks.Execute, values, executeBody(tool))
+	if tool.transported() {
+		emitTransportCall(out, tool, values)
 
 		return
 	}
@@ -187,10 +178,10 @@ func emitAcknowledgeCall(out *source, tool *contract, ordered []field) {
 		goStringLiteral(tool.Name), values)
 }
 
-// executeBody is the body an execute hook is handed: the one the shared builder
-// assembled, or nothing when the tool declares no body field. The hook is what
-// turns it into the request, so it reads the built body rather than the
-// arguments and the two branches stay one build apart.
+// executeBody is the body a declared transport is handed: the one the shared
+// builder assembled, or nothing when the tool declares no body field. The
+// transport is what turns it into the request, so it reads the built body
+// rather than the arguments and the two branches stay one build apart.
 func executeBody(tool *contract) string {
 	if len(tool.Body) == 0 {
 		return nilLiteral
@@ -214,20 +205,10 @@ func emitAcknowledgeChecks(out *source, tool *contract, ordered []field, echoes 
 	emitNormalize(out, tool)
 	emitConstraintCheck(out, tool)
 
-	if tool.Hooks.Validate != "" {
-		emitValidateHook(out, tool.Hooks.Validate)
-	}
-
-	if tool.Hooks.Validate == "" {
-		for _, entry := range ordered {
-			if err := emitRequiredPathArg(out, tool, &entry); err != nil {
-				return err
-			}
+	for _, entry := range ordered {
+		if err := emitRequiredPathArg(out, tool, &entry); err != nil {
+			return err
 		}
-	}
-
-	if tool.Hooks.Validate != "" && len(ordered) > 0 {
-		emitPathArgReads(out, ordered)
 	}
 
 	// Body presence runs after the path checks and before the body is built,
@@ -474,18 +455,8 @@ func emitAcknowledgePreview(out *source, tool *contract) error {
 		return nil
 	}
 
-	if tool.Hooks.Preview == "" {
-		out.writef("\treturn tools.RunDryRunPreviewWithBody(ctx, request, cfg, %s, %s, %s, %s, nil)",
-			goStringLiteral(tool.Name), goStringLiteral(tool.Method), path, body)
-		out.writef("}")
-		out.writef("")
-
-		return nil
-	}
-
-	out.need(importToolhooks)
-	out.writef("\treturn toolhooks.%s(ctx, request, cfg, %s, %s, %s)",
-		tool.Hooks.Preview, goStringLiteral(tool.Method), path, body)
+	out.writef("\treturn tools.RunDryRunPreviewWithBody(ctx, request, cfg, %s, %s, %s, %s, nil)",
+		goStringLiteral(tool.Name), goStringLiteral(tool.Method), path, body)
 	out.writef("}")
 	out.writef("")
 

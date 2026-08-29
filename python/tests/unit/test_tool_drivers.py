@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from mcp.types import TextContent
 
 from linodemcp.linode import APIError
 from linodemcp.linode.routes import (
@@ -32,6 +31,7 @@ from linodemcp.tools.drivers import (
     DriverError,
     ListFilter,
     MatchMode,
+    PreviewStandIn,
     read_collection_state,
     read_route_state,
     resolve_payload_field,
@@ -43,8 +43,12 @@ from linodemcp.tools.drivers import (
     run_list_tool,
     run_write_tool,
 )
+from linodemcp.tools.preview import preview_sentence
+from linodemcp.tools.transport import MultipartUpload, PresignTransfer, RawBody
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
@@ -1137,28 +1141,24 @@ async def test_body_read_driver_assembles_the_envelope_its_response_declares(
     }
 
 
-async def test_assembled_read_driver_places_what_its_hook_brought_back(
+async def test_assembled_read_driver_places_what_its_transport_brought_back(
     sample_config: Config,
 ) -> None:
     """A read whose route answers with bytes builds its whole answer.
 
-    Nothing decodes: the hook owns the transport and the encoding, and the ids
-    the call was addressed by are placed here beside what it returned.
+    Nothing decodes: the declared transport owns the transfer and the encoding,
+    and the ids the call was addressed by are placed here beside what it
+    returned.
     """
-
-    async def execute(
-        _client: RetryableClient, values: tuple[object, ...]
-    ) -> dict[str, Any]:
-        assert values == ("abc123",)
-        return {"thumbnail_png_base64": "UE5HREFUQQ=="}
-
     client = _client()
+    client.route_raw_body_read.return_value = b"PNGDATA"
+
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await run_assembled_read_tool(
             sample_config,
             {"client_id": "abc123"},
             tool="linode_account_oauth_client_thumbnail_get",
-            execute=execute,
+            transport=_thumbnail_transport(),
             assembled=("thumbnail_png_base64",),
             echo_members={"client_id": "abc123"},
             path_values={"client_id": "abc123"},
@@ -1168,32 +1168,34 @@ async def test_assembled_read_driver_places_what_its_hook_brought_back(
         "client_id": "abc123",
         "thumbnail_png_base64": "UE5HREFUQQ==",
     }
+    client.route_raw_body_read.assert_awaited_once_with(
+        "linode_account_oauth_client_thumbnail_get",
+        "abc123",
+        accept="image/png",
+        retry=True,
+    )
     client.route_raw.assert_not_awaited()
 
 
-async def test_assembled_read_driver_refuses_a_hook_answering_the_wrong_members(
+async def test_assembled_read_driver_refuses_a_transport_filling_other_members(
     sample_config: Config,
 ) -> None:
-    """A hook that forgets a declared member, or invents one, is a defect.
+    """A transport that fills a member the response does not assemble is a defect.
 
-    Go reads these off a typed response message, so its compiler catches both.
-    Nothing types a dict, so a forgotten member would serialize as a zero the
-    caller reads as real and an invented one would vanish; the driver says so
-    instead.
+    Go reads these off a typed response message, so its compiler catches both
+    halves. Nothing types a dict, so a forgotten member would serialize as a
+    zero the caller reads as real and an invented one would vanish; the driver
+    says so instead.
     """
-
-    async def execute(
-        _client: RetryableClient, _values: tuple[object, ...]
-    ) -> dict[str, Any]:
-        return {"client_id": "abc123"}
-
     client = _client()
+    client.route_raw_body_read.return_value = b"PNGDATA"
+
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await run_assembled_read_tool(
             sample_config,
             {"client_id": "abc123"},
             tool="linode_account_oauth_client_thumbnail_get",
-            execute=execute,
+            transport=RawBody(content_type="image/png", answer_field="client_id"),
             assembled=("thumbnail_png_base64",),
             path_values={"client_id": "abc123"},
         )
@@ -1207,19 +1209,15 @@ async def test_assembled_read_driver_reports_the_declared_failure_prose(
     sample_config: Config,
 ) -> None:
     """A failed fetch answers the sentence error_message declares, naming the id."""
-
-    async def execute(
-        _client: RetryableClient, _values: tuple[object, ...]
-    ) -> dict[str, Any]:
-        raise APIError(404, "Not Found")
-
     client = _client()
+    client.route_raw_body_read.side_effect = APIError(404, "Not Found")
+
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await run_assembled_read_tool(
             sample_config,
             {"client_id": "abc123"},
             tool="linode_account_oauth_client_thumbnail_get",
-            execute=execute,
+            transport=_thumbnail_transport(),
             assembled=("thumbnail_png_base64",),
             echo_members={"client_id": "abc123"},
             path_values={"client_id": "abc123"},
@@ -1229,6 +1227,11 @@ async def test_assembled_read_driver_reports_the_declared_failure_prose(
         "Failed to get account OAuth client thumbnail 'abc123':"
         " Linode API error (status 404): Not Found"
     )
+
+
+def _thumbnail_transport() -> RawBody:
+    """The arm the thumbnail read declares: bytes down, base64 into one member."""
+    return RawBody(content_type="image/png", answer_field="thumbnail_png_base64")
 
 
 async def test_body_read_driver_reports_the_declared_failure_prose(
@@ -1304,44 +1307,6 @@ async def test_get_driver_fills_a_placeholder_from_the_arguments(
     assert result[0].text.startswith("Failed to retrieve domain 5 of type master: ")
 
 
-async def test_write_driver_hands_a_hand_written_preview_the_resolved_call(
-    sample_config: Config,
-) -> None:
-    """A preview hook gets the call the driver resolved, not one of its own.
-
-    Re-spelling the route in a hook is how a renamed path ends up previewed as
-    the old one while the live call goes somewhere else.
-    """
-    seen: dict[str, Any] = {}
-
-    async def preview(
-        _cfg: Config,
-        arguments: dict[str, Any],
-        method: str,
-        path: str,
-        body: dict[str, Any],
-    ) -> list[TextContent]:
-        seen.update(
-            {"arguments": arguments, "method": method, "path": path, "body": body}
-        )
-        return [TextContent(type="text", text="previewed")]
-
-    result = await run_write_tool(
-        sample_config,
-        {"dry_run": True, "domain_id": 5},
-        tool="linode_domain_update",
-        error_action="",
-        body={"description": "x"},
-        path_values={"domain_id": 5},
-        preview=preview,
-    )
-
-    assert result[0].text == "previewed"
-    assert seen["method"] == "PUT"
-    assert seen["path"] == "/domains/5"
-    assert seen["body"] == {"description": "x"}
-
-
 async def test_write_driver_previews_the_request_alone_without_a_state_fetch(
     sample_config: Config,
 ) -> None:
@@ -1397,6 +1362,38 @@ async def test_write_driver_previews_against_fetched_state(
     assert preview["side_effects"] == ["The DNS domain is updated."]
     assert preview["warnings"] == ["Records under the domain keep their old values."]
     assert "body" not in preview["would_execute"]
+
+
+async def test_write_driver_carries_the_estimate_past_a_state_read(
+    sample_config: Config,
+) -> None:
+    """A declared estimate reaches the report whether or not the tool reads
+    state first.
+
+    Go carries it through one path for both, so the fetched arm has to answer
+    the same way the fetchless one does or the two languages report a different
+    dry run for one declaration.
+    """
+
+    async def fetch(_client: RetryableClient) -> Any:
+        return {"description": "old"}
+
+    estimate = {"monthly_change_usd": "unknown", "note": "Pricing varies by region."}
+
+    client = _client(route_raw={})
+    with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
+        result = await run_write_tool(
+            sample_config,
+            {"dry_run": True, "domain_id": 5},
+            tool="linode_domain_update",
+            error_action="",
+            body={"description": "new"},
+            path_values={"domain_id": 5},
+            state_fetch=fetch,
+            billing_delta=estimate,
+        )
+
+    assert json.loads(result[0].text)["billing_delta"] == estimate
 
 
 async def test_write_driver_reports_the_declared_failure_sentence(
@@ -1816,6 +1813,88 @@ async def test_acknowledge_driver_previews_the_request_when_no_hook_owns_it(
     client.route_call.assert_not_called()
 
 
+async def test_acknowledge_driver_stands_in_for_one_member_of_each_entry(
+    sample_config: Config,
+) -> None:
+    """The entries keep their order and every other member.
+
+    The twin lives in go/internal/tools/gentools_body_test.go: both languages
+    report the same stand-in so one fixture covers the pair.
+    """
+    body = {
+        "security_questions": [
+            {"question_id": 1, "response": "first answer"},
+            {"question_id": 7, "response": "second answer"},
+        ]
+    }
+
+    result = await run_acknowledge_tool(
+        sample_config,
+        {"dry_run": True},
+        tool="linode_profile_security_question_answer",
+        echo_args={},
+        body=body,
+        stand_in_preview=(
+            PreviewStandIn("security_questions", "response", "[redacted]"),
+        ),
+    )
+
+    reported = json.loads(result[0].text)["would_execute"]["body"]
+    assert reported == {
+        "security_questions": [
+            {"question_id": 1, "response": "[redacted]"},
+            {"question_id": 7, "response": "[redacted]"},
+        ]
+    }
+    assert body["security_questions"][0]["response"] == "first answer"
+
+
+async def test_acknowledge_driver_stands_in_for_nothing_it_cannot_reach(
+    sample_config: Config,
+) -> None:
+    """A member carrying no entries is reported as the body built it.
+
+    Neither shape survives the checks a declared stand-in runs behind, so this
+    is about the report never inventing what it was not given.
+    """
+    result = await run_acknowledge_tool(
+        sample_config,
+        {"dry_run": True},
+        tool="linode_profile_security_question_answer",
+        echo_args={},
+        body={"security_questions": "not a list", "note": "kept"},
+        stand_in_preview=(
+            PreviewStandIn("security_questions", "response", "[redacted]"),
+            PreviewStandIn("nobody", "response", "[redacted]"),
+        ),
+    )
+
+    reported = json.loads(result[0].text)["would_execute"]["body"]
+    assert reported == {"security_questions": "not a list", "note": "kept"}
+
+
+async def test_acknowledge_driver_leaves_an_entry_it_cannot_reach_alone(
+    sample_config: Config,
+) -> None:
+    """A member the caller left out is not one the report invents.
+
+    The twin is TestWriteBodyStandingInLeavesAnEntryWithoutTheMemberAlone.
+    """
+    result = await run_acknowledge_tool(
+        sample_config,
+        {"dry_run": True},
+        tool="linode_profile_security_question_answer",
+        echo_args={},
+        body={"security_questions": [{"question_id": 9}, "not an object"]},
+        stand_in_preview=(
+            PreviewStandIn("security_questions", "response", "[redacted]"),
+        ),
+    )
+
+    reported = json.loads(result[0].text)["would_execute"]["body"]
+    assert reported == {"security_questions": [{"question_id": 9}, "not an object"]}
+
+
 async def test_acknowledge_driver_sends_no_body_when_it_was_given_none(
     sample_config: Config,
 ) -> None:
@@ -1861,25 +1940,16 @@ async def test_acknowledge_driver_sends_the_body_it_was_given(
     }
 
 
-async def test_acknowledge_driver_hands_the_live_call_to_a_declared_execute_hook(
+async def test_acknowledge_driver_hands_the_live_call_to_a_declared_transport(
     sample_config: Config,
 ) -> None:
-    """The hook makes the call and the driver still assembles the answer.
+    """The transport makes the call and the driver still assembles the answer.
 
     The routes needing this send something other than a JSON body, so the
     routed request has to be replaced rather than adjusted. Everything around
     it stays the driver's: the gate, the prose, the echo.
     """
     client = _client()
-    seen: list[tuple[dict[str, Any], tuple[object, ...], dict[str, Any] | None]] = []
-
-    async def _execute(
-        _client: RetryableClient,
-        arguments: dict[str, Any],
-        values: tuple[object, ...],
-        body: dict[str, Any] | None,
-    ) -> None:
-        seen.append((arguments, values, body))
 
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await run_acknowledge_tool(
@@ -1888,10 +1958,10 @@ async def test_acknowledge_driver_hands_the_live_call_to_a_declared_execute_hook
             tool="linode_volume_detach",
             echo_args={"volume_id": 7},
             path_values={"volume_id": 7},
-            execute=_execute,
+            transport=_probe_transport(),
         )
 
-    assert seen == [({"confirm": True, "volume_id": 7}, (7,), None)]
+    client.route_multipart.assert_awaited_once()
     client.route_call.assert_not_called()
     client.route_raw.assert_not_called()
     assert json.loads(result[0].text) == {
@@ -1900,21 +1970,11 @@ async def test_acknowledge_driver_hands_the_live_call_to_a_declared_execute_hook
     }
 
 
-async def test_acknowledge_driver_keeps_an_execute_hook_out_of_the_dry_run(
+async def test_acknowledge_driver_keeps_a_transport_out_of_the_dry_run(
     sample_config: Config,
 ) -> None:
-    """A preview makes no call, so it never reaches the hook that makes one."""
+    """A preview makes no call, so it never reaches the transport that makes one."""
     client = _client()
-    called = False
-
-    async def _execute(
-        _client: RetryableClient,
-        _arguments: dict[str, Any],
-        _values: tuple[object, ...],
-        _body: dict[str, Any] | None,
-    ) -> None:
-        nonlocal called
-        called = True
 
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await run_acknowledge_tool(
@@ -1923,31 +1983,21 @@ async def test_acknowledge_driver_keeps_an_execute_hook_out_of_the_dry_run(
             tool="linode_volume_detach",
             echo_args={"volume_id": 7},
             path_values={"volume_id": 7},
-            execute=_execute,
+            transport=_probe_transport(),
         )
 
-    assert not called
+    client.route_multipart.assert_not_called()
     assert json.loads(result[0].text)["would_execute"] == {
         "method": "POST",
         "path": "/volumes/7/detach",
     }
 
 
-async def test_acknowledge_driver_gates_an_execute_hook_behind_confirm(
+async def test_acknowledge_driver_gates_a_transport_behind_confirm(
     sample_config: Config,
 ) -> None:
-    """The hook is the call, so it waits behind the same gate the call does."""
+    """The transport is the call, so it waits behind the same gate the call does."""
     client = _client()
-    called = False
-
-    async def _execute(
-        _client: RetryableClient,
-        _arguments: dict[str, Any],
-        _values: tuple[object, ...],
-        _body: dict[str, Any] | None,
-    ) -> None:
-        nonlocal called
-        called = True
 
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await run_acknowledge_tool(
@@ -1956,11 +2006,18 @@ async def test_acknowledge_driver_gates_an_execute_hook_behind_confirm(
             tool="linode_volume_detach",
             echo_args={"volume_id": 7},
             path_values={"volume_id": 7},
-            execute=_execute,
+            transport=_probe_transport(),
         )
 
-    assert not called
+    client.route_multipart.assert_not_called()
     assert "Set confirm=true to proceed." in result[0].text
+
+
+def _probe_transport() -> MultipartUpload:
+    """The cheapest arm to stand in for a live call: it reads one argument and
+    fills no response member, so a case about the driver says nothing about the
+    transfer."""
+    return MultipartUpload(file_argument="file", part_name="file")
 
 
 async def test_acknowledge_driver_echoes_a_member_the_call_carried(
@@ -2095,42 +2152,6 @@ async def test_gated_read_reports_its_preview_verdict_before_the_preview(
         )
 
     assert result[0].text == "Error: domain_id is required"
-
-
-async def test_gated_read_hands_a_declared_preview_the_resolved_call(
-    sample_config: Config,
-) -> None:
-    """A hand-written preview receives the route this driver resolved.
-
-    It never re-spells a path, and it is handed no body, because a read sends
-    none.
-    """
-    seen: dict[str, Any] = {}
-
-    async def preview(
-        _cfg: Config,
-        _arguments: dict[str, Any],
-        method: str,
-        endpoint: str,
-        body: dict[str, Any] | None,
-    ) -> list[TextContent]:
-        seen.update(method=method, endpoint=endpoint, body=body)
-        return [TextContent(type="text", text="previewed")]
-
-    with patch(
-        "linodemcp.tools.drivers.contract_for", return_value=_gated("linode_domain_get")
-    ):
-        result = await run_get_tool(
-            sample_config,
-            {"dry_run": True},
-            tool="linode_domain_get",
-            path_values={"domain_id": 5},
-            gated=True,
-            preview=preview,
-        )
-
-    assert seen == {"method": "GET", "endpoint": "/domains/5", "body": None}
-    assert result[0].text == "previewed"
 
 
 async def test_gated_read_holds_the_fetch_behind_the_confirm_gate(
@@ -2497,3 +2518,96 @@ async def test_read_route_state_reports_the_nulls_the_api_sent() -> None:
     )
 
     assert state.fields == {"address": "203.0.113.10", "gateway": None, "rdns": None}
+
+
+# The presigned upload's dry run through the acknowledge driver: the guard's
+# measurement reaches the lines that word it, and a refused source is a warning.
+UPLOAD_TRANSPORT = PresignTransfer(
+    url_field="url",
+    local_path_argument="source_path",
+    up=True,
+    content_type_argument="content_type",
+    size_field="size_bytes",
+    etag_field="etag",
+    constants={"upload_mode": "single"},
+)
+UPLOAD_SIZE_WORDING = "{transport:size_bytes} bytes will be uploaded to '{name}'."
+
+
+def _upload_effects(transfer: Any) -> tuple[str, ...]:
+    """Word the one declared line against what the guard measured."""
+    return (
+        preview_sentence(
+            {"transport:size_bytes": transfer.size_bytes, "name": "k"},
+            UPLOAD_SIZE_WORDING,
+        ),
+    )
+
+
+async def _upload_preview(
+    sample_config: Config, source_path: str, transport: Any = UPLOAD_TRANSPORT
+) -> dict[str, Any]:
+    result = await run_acknowledge_tool(
+        sample_config,
+        {
+            "dry_run": True,
+            "region": "us-east",
+            "label": "artifacts",
+            "name": "k",
+            "source_path": source_path,
+        },
+        tool="linode_object_storage_object_upload",
+        echo_args={"label": "artifacts", "name": "k"},
+        body={"name": "k"},
+        path_values={"region": "us-east", "label": "artifacts"},
+        side_effects=_upload_effects,
+        transport=transport,
+        preview_transfer=True,
+    )
+    decoded: dict[str, Any] = json.loads(result[0].text)
+    return decoded
+
+
+async def test_acknowledge_driver_words_the_preview_against_the_measured_transfer(
+    sample_config: Config, tmp_path: Path
+) -> None:
+    """The size line reads what the guard measured, and the presign body is
+    filled the way the live call fills it."""
+    source = tmp_path / "small.bin"
+    source.write_text("hello object storage")
+
+    answer = await _upload_preview(sample_config, str(source))
+
+    assert answer["side_effects"] == ["20 bytes will be uploaded to 'k'."]
+    assert answer["warnings"] == []
+    assert answer["would_execute"]["body"] == {
+        "name": "k",
+        "content_type": "application/octet-stream",
+        "expires_in": 3600,
+    }
+
+
+async def test_acknowledge_driver_warns_about_a_transfer_the_guard_refuses(
+    sample_config: Config, tmp_path: Path
+) -> None:
+    """The refusal is reported and the size line, reading nothing, is dropped."""
+    answer = await _upload_preview(sample_config, str(tmp_path / "absent.bin"))
+
+    assert answer["side_effects"] == []
+    assert len(answer["warnings"]) == 1
+    assert "no readable file" in answer["warnings"][0]
+
+
+async def test_acknowledge_driver_refuses_a_transfer_preview_it_cannot_measure(
+    sample_config: Config, tmp_path: Path
+) -> None:
+    """Only a presigned upload has a source to measure; anything else reaching
+    the flag is a contract defect, named as one."""
+    download = replace(UPLOAD_TRANSPORT, up=False, content_type_argument="")
+
+    for transport in (
+        download,
+        MultipartUpload(file_argument="file", part_name="file"),
+    ):
+        with pytest.raises(TypeError, match="does not declare as a presigned upload"):
+            await _upload_preview(sample_config, str(tmp_path / "small.bin"), transport)

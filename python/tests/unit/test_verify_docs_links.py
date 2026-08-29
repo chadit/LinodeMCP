@@ -1,8 +1,9 @@
 """Offline tests for the docs link gate.
 
-verify_docs_links.py walks internal link targets in README.md and docs/.
-These tests pin the target classification (external skipped, anchor
-stripped, relative resolution from the linking file) and the live tree.
+verify_docs_links.py walks internal link targets in README.md, docs/, and
+the prose tool projects ship under tools/. These tests pin the target
+classification (external skipped, anchor stripped, relative resolution
+from the linking file), the walked scope, and the live tree.
 """
 
 from __future__ import annotations
@@ -55,6 +56,22 @@ def test_broken_and_healthy_links_classified(
         "README.md: docs/gone.md",
         "docs/real.md: nested/nowhere.md",
     ]
+
+
+def test_tool_project_prose_is_walked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tool project's own wiki is in scope, chapter cross-links included."""
+    (tmp_path / "README.md").write_text("no links here\n", encoding="utf-8")
+    wiki = tmp_path / "tools" / "proofer" / "docs"
+    wiki.mkdir(parents=True)
+    (wiki / "README.md").write_text("[ch1](01-first.md)\n", encoding="utf-8")
+    (wiki / "01-first.md").write_text(
+        "[back](README.md) [moved](02-second.md)\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
+
+    assert gate.broken_links() == ["tools/proofer/docs/01-first.md: 02-second.md"]
 
 
 def test_live_docs_have_no_dead_internal_links() -> None:

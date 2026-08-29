@@ -1,11 +1,281 @@
 {
   "tool": "linode_audit_export",
-  "description": "CapMeta local export tool (no Linode API call). Pins the invalid-format rejection: format is validated against the AuditExportFormat proto enum and both languages return the same Error:-prefixed message before touching any store.",
+  "description": "CapMeta local export tool (no Linode API call). Pins the invalid-format rejection, and the success path for two formats. The written file lands in the OS temp directory under a name each language's own temp-file helper picks, so path is declared host-decided and pinned by pattern: the pattern carries the prefix and the extension, which is the half of the name the two languages derive differently.",
   "cases": [
     {
       "name": "rejects an invalid format",
-      "args": { "format": "xml" },
+      "args": {
+        "format": "xml"
+      },
       "expect_error": "format must be one of: json, csv, ndjson"
+    },
+    {
+      "name": "exports the seeded events as json",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "format": "json"
+      },
+      "host_decided": [
+        {
+          "path": "path",
+          "type": "string",
+          "pattern": "^.+[/\\\\]linode-audit-export-[^/\\\\]+\\.json$",
+          "reason": "the OS temp directory plus the unique suffix each language's own temp-file helper picks"
+        }
+      ],
+      "expect_result": {
+        "format": "json",
+        "record_count": 3,
+        "warnings": []
+      }
+    },
+    {
+      "name": "exports the seeded events as csv",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "format": "csv"
+      },
+      "host_decided": [
+        {
+          "path": "path",
+          "type": "string",
+          "pattern": "^.+[/\\\\]linode-audit-export-[^/\\\\]+\\.csv$",
+          "reason": "the OS temp directory plus the unique suffix each language's own temp-file helper picks"
+        }
+      ],
+      "expect_result": {
+        "format": "csv",
+        "record_count": 3,
+        "warnings": []
+      }
+    },
+    {
+      "name": "exports the same events read from the sqlite store",
+      "audit_store": {
+        "backend": "sqlite",
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "format": "json"
+      },
+      "host_decided": [
+        {
+          "path": "path",
+          "type": "string",
+          "pattern": "^.+[/\\\\]linode-audit-export-[^/\\\\]+\\.json$",
+          "reason": "the OS temp directory plus the unique suffix each language's own temp-file helper picks"
+        }
+      ],
+      "expect_result": {
+        "format": "json",
+        "record_count": 3,
+        "warnings": []
+      }
     }
   ]
 }

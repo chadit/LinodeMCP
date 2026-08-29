@@ -68,6 +68,8 @@ message DatabaseConnectionPoolListInput {
     path: "/databases/postgresql/instances/{instance_id}/connection-pools"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the PGBouncer connection pools on one PostgreSQL Managed Database, by instance_id.";
   option (linode.mcp.v1.error_message) = "Failed to list PostgreSQL connection pools: {error}";
@@ -94,6 +96,8 @@ message DatabaseConnectionPoolGetInput {
     path: "/databases/postgresql/instances/{instance_id}/connection-pools/{pool_name}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPool";
   option (linode.mcp.v1.tool_description) = "Gets one PGBouncer connection pool on a PostgreSQL Managed Database, by instance_id and pool_name.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve PostgreSQL connection pool {pool_name}: {error}";
@@ -132,6 +136,8 @@ message DatabaseConnectionPoolCreateInput {
     path: "/databases/postgresql/instances/{instance_id}/connection-pools"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a PGBouncer connection pool on a PostgreSQL Managed Database. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a PostgreSQL connection pool. Set confirm=true to proceed.";
@@ -201,6 +207,8 @@ message DatabaseConnectionPoolUpdateInput {
     path: "/databases/postgresql/instances/{instance_id}/connection-pools/{pool_name}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates one PGBouncer connection pool on a PostgreSQL Managed Database, by instance_id and pool_name. This can close connections the pool is currently serving. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This updates a PostgreSQL connection pool and can close its in-use connections. Set confirm=true to proceed.";
@@ -273,9 +281,9 @@ message DatabaseConnectionPoolUpdateInput {
 // DatabaseConnectionPoolDeleteInput is the input contract for
 // linode_database_postgresql_connection_pool_delete.
 //
-// It declares no fetch_state hook: the get above reads the same route, so the
-// preview and the plan hash read the pool through that rather than through a
-// hand-written step per removal.
+// It declares state_route rather than leaving the read undeclared: the get
+// above reads the same route, so the preview and the plan hash read the pool
+// through that.
 message DatabaseConnectionPoolDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_connection_pool_delete"
@@ -283,6 +291,8 @@ message DatabaseConnectionPoolDeleteInput {
     path: "/databases/postgresql/instances/{instance_id}/connection-pools/{pool_name}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseConnectionPoolDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one PGBouncer connection pool on a PostgreSQL Managed Database, by instance_id and pool_name. This closes the connections the pool is currently serving. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes a PostgreSQL connection pool and closes its in-use connections. Set confirm=true to proceed.";

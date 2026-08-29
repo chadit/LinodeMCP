@@ -7,7 +7,6 @@ JSONL window sources agree.
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -20,9 +19,13 @@ from linodemcp.audit import (
     SQLiteSink,
     Status,
     UnknownGroupByColumnError,
+    event_timestamp,
     load_window,
     summarize,
     validate_group_by,
+)
+from linodemcp.genlocal import (
+    record_audit_event,
 )
 
 if TYPE_CHECKING:
@@ -33,14 +36,14 @@ def _event(tool: str, capability: Capability, status: Status, hour: int) -> Even
     """Build an event with the fields summary aggregation reads."""
     ts = datetime(2026, 5, 20, hour, 0, 0, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id=f"evt_{tool}_{hour}",
         tool=tool,
         tool_capability=capability,
         environment="prod",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
@@ -87,7 +90,7 @@ def test_summarize_counts_by_group() -> None:
 
 
 def _write_jsonl(path: Path, events: list[Event]) -> None:
-    body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
+    body = "".join(record_audit_event(event, "", "") + "\n" for event in events)
     path.write_text(body, encoding="utf-8")
 
 

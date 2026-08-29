@@ -76,6 +76,7 @@ def install_fixtures() -> Iterator[Registry]:
             drafts=registry,
             catalog=list,
             active_profile=_no_profile,
+            config=Config(),
         )
     )
 
@@ -242,7 +243,11 @@ async def test_save_refuses_unknown_draft(
 
 @pytest.mark.asyncio
 async def test_save_refuses_missing_name() -> None:
-    """An absent name answers the shared refusal."""
+    """An absent name answers the shared refusal.
+
+    The contract's own name rule answers first here, so this pins the sentence
+    a caller reads rather than which check produced it.
+    """
     response = await handle_linode_profile_draft_save({"confirm": True}, Config())
 
     assert response[0].text == _NAME_MISSING
@@ -290,9 +295,7 @@ async def test_save_reports_write_failure(
     def refuse_write(*_args: object, **_kwargs: object) -> None:
         raise OSError(errno.EACCES, "permission denied")
 
-    monkeypatch.setattr(
-        "linodemcp.tools.linode_profile_draft_save.write_atomic", refuse_write
-    )
+    monkeypatch.setattr("linodemcp.tools.builderstate.write_atomic", refuse_write)
 
     response = await handle_linode_profile_draft_save(
         {"name": _SAVE_DRAFT_NAME, "confirm": True}, Config()

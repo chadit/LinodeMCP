@@ -731,24 +731,52 @@ func TestHelloToolHandlerDispatch(t *testing.T) {
 	}
 }
 
+// requireDescriptor asserts the catalog lists a tool at the expected
+// capability. Name and capability are compared alone: the descriptor also
+// carries the declared scopes, which the parity gates pin.
+func requireDescriptor(
+	t *testing.T, descriptors []profiles.ToolDescriptor, name string, capability profiles.Capability,
+) {
+	t.Helper()
+
+	found := slices.ContainsFunc(descriptors, func(descriptor profiles.ToolDescriptor) bool {
+		return descriptor.Name == name && descriptor.Capability == capability
+	})
+
+	if !found {
+		t.Errorf("descriptors does not contain %s at %v", name, capability)
+	}
+}
+
 func TestToolDescriptorsIncludesNodeBalancerConfigList(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_list", Capability: profiles.CapRead})
+	requireDescriptor(t, descriptors, "linode_nodebalancer_config_list", profiles.CapRead)
+
+	requireDescriptor(t, descriptors, "linode_nodebalancer_firewall_list", profiles.CapRead)
+
+	requireDescriptor(t, descriptors, "linode_nodebalancer_vpc_config_list", profiles.CapRead)
+
+	requireDescriptor(t, descriptors, tcLinodeNodebalancerConfigGet, profiles.CapRead)
+}
+
+// The entity list is the IAM helper (GET /entities), so its descriptor files
+// it under iam for list_tools, list_categories, and profile resolution.
+func TestToolDescriptorsFileEntityListUnderIam(t *testing.T) {
+	t.Parallel()
+
+	descriptors := server.ToolDescriptors(&config.Config{})
+
+	index := slices.IndexFunc(descriptors, func(descriptor profiles.ToolDescriptor) bool {
+		return descriptor.Name == "linode_entity_list"
+	})
+	if index < 0 {
+		t.Fatal("descriptors do not contain linode_entity_list")
 	}
 
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_firewall_list", Capability: profiles.CapRead})
-	}
-
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_config_list", Capability: profiles.CapRead}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_vpc_config_list", Capability: profiles.CapRead})
-	}
-
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigGet, Capability: profiles.CapRead}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigGet, Capability: profiles.CapRead})
+	if got := descriptors[index].Categories; !slices.Equal(got, []string{"iam"}) {
+		t.Errorf("linode_entity_list categories = %v, want [iam]", got)
 	}
 }
 
@@ -756,72 +784,56 @@ func TestToolDescriptorsIncludesNodeBalancerConfigNodesList(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_list", Capability: profiles.CapRead}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_list", Capability: profiles.CapRead})
-	}
+	requireDescriptor(t, descriptors, "linode_nodebalancer_config_node_list", profiles.CapRead)
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigNodeGet(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_get", Capability: profiles.CapRead}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_get", Capability: profiles.CapRead})
-	}
+	requireDescriptor(t, descriptors, "linode_nodebalancer_config_node_get", profiles.CapRead)
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigCreate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_create", Capability: profiles.CapWrite}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_create", Capability: profiles.CapWrite})
-	}
+	requireDescriptor(t, descriptors, "linode_nodebalancer_config_create", profiles.CapWrite)
 }
 
 func TestToolDescriptorsIncludesNodeBalancerNodeCreate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_create", Capability: profiles.CapWrite}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_node_create", Capability: profiles.CapWrite})
-	}
+	requireDescriptor(t, descriptors, "linode_nodebalancer_config_node_create", profiles.CapWrite)
 }
 
 func TestToolDescriptorsIncludesNodeBalancerNodeDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigNodeDel, Capability: profiles.CapDestroy}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigNodeDel, Capability: profiles.CapDestroy})
-	}
+	requireDescriptor(t, descriptors, tcLinodeNodebalancerConfigNodeDel, profiles.CapDestroy)
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigUpdate(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: "linode_nodebalancer_config_update", Capability: profiles.CapWrite}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: "linode_nodebalancer_config_update", Capability: profiles.CapWrite})
-	}
+	requireDescriptor(t, descriptors, "linode_nodebalancer_config_update", profiles.CapWrite)
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigRebuild(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigRebuild, Capability: profiles.CapWrite}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigRebuild, Capability: profiles.CapWrite})
-	}
+	requireDescriptor(t, descriptors, tcLinodeNodebalancerConfigRebuild, profiles.CapWrite)
 }
 
 func TestToolDescriptorsIncludesNodeBalancerConfigDelete(t *testing.T) {
 	t.Parallel()
 
 	descriptors := server.ToolDescriptors(&config.Config{})
-	if !slices.Contains(descriptors, profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigDelete, Capability: profiles.CapDestroy}) {
-		t.Errorf("descriptors does not contain %v", profiles.ToolDescriptor{Name: tcLinodeNodebalancerConfigDelete, Capability: profiles.CapDestroy})
-	}
+	requireDescriptor(t, descriptors, tcLinodeNodebalancerConfigDelete, profiles.CapDestroy)
 }
 
 // A base the surface swap cannot re-point is used exactly as configured, which

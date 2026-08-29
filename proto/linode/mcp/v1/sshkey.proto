@@ -48,6 +48,8 @@ message SSHKeyGetInput {
     path: "/profile/sshkeys/{ssh_key_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_SECURITY};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKey";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a single SSH key by its ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve SSH key: {error}";
@@ -74,6 +76,8 @@ message SSHKeyListInput {
     path: "/profile/sshkeys"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_SECURITY};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all SSH keys associated with your Linode profile. Can filter by label.";
 
@@ -95,6 +99,8 @@ message SSHKeyCreateInput {
     path: "/profile/sshkeys"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_SECURITY};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new SSH key in your Linode profile. The key can then be used when deploying new Linode instances. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.error_message) = "Failed to create SSH key: {error}";
@@ -159,6 +165,8 @@ message SSHKeyUpdateInput {
     path: "/profile/sshkeys/{ssh_key_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_SECURITY};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the label for an SSH key in your Linode profile. Pass dry_run=true to preview without updating.";
   // Go and Python worded this failure differently before the contract carried
@@ -168,8 +176,22 @@ message SSHKeyUpdateInput {
   option (linode.mcp.v1.error_message) = "Failed to update SSH key {ssh_key_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates an SSH key in your Linode profile. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "SSH key '{label}' (ID: {id}) updated successfully";
-  // The preview reads the key so it can say which label is being replaced.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the key, whose label the request alone does not carry.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_sshkey_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Label changes from \"{state:label}\" to \"{label}\"."
+    template: "Label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "label"
+    argument: "label"
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -203,6 +225,8 @@ message SSHKeyDeleteInput {
     path: "/profile/sshkeys/{ssh_key_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_SECURITY};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes an SSH key from your Linode profile. This will not affect any instances already using this key. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This removes an SSH key from your Linode profile. Set confirm=true to proceed.";

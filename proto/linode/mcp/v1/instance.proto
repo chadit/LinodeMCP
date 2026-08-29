@@ -251,6 +251,8 @@ message InstanceInterfaceSettingsGetInput {
     path: "/linode/instances/{linode_id}/interfaces/settings"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceSettings";
   option (linode.mcp.v1.tool_description) = "Retrieves interface settings for a specific Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve interface settings for instance {linode_id}: {error}";
@@ -273,6 +275,8 @@ message InstanceInterfaceGetInput {
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterface";
   option (linode.mcp.v1.tool_description) = "Retrieves a specific interface assigned to a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve interface {interface_id} for instance {linode_id}: {error}";
@@ -415,6 +419,11 @@ message InstanceBackupGetInput {
     path: "/linode/instances/{linode_id}/backups/{backup_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackup";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a specific backup for a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve backup {backup_id} for instance {linode_id}: {error}";
@@ -447,6 +456,8 @@ message InstanceConfigInterfaceGetInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceResponse";
   option (linode.mcp.v1.tool_description) = "Retrieves a network interface from a Linode configuration profile.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve configuration profile interface {interface_id} from config {config_id} for instance {linode_id}: {error}";
@@ -662,6 +673,8 @@ message InstanceGetInput {
     path: "/linode/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Instance";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a single Linode instance by its ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Linode instance: {error}";
@@ -684,6 +697,8 @@ message InstanceListInput {
     path: "/linode/instances"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Linode instances with optional filtering by status";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Linode instances: {error}";
@@ -707,6 +722,8 @@ message InstanceBootInput {
     path: "/linode/instances/{instance_id}/boot"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
   option (linode.mcp.v1.tool_description) = "Boots a Linode instance that is currently offline. If the instance is already running, this has no effect.";
   option (linode.mcp.v1.error_message) = "Failed to boot instance {instance_id}: {error}";
@@ -752,6 +769,8 @@ message InstanceRebootInput {
     path: "/linode/instances/{instance_id}/reboot"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
   option (linode.mcp.v1.tool_description) = "Reboots a running Linode instance. This is equivalent to pressing the reset button on a physical computer.";
   option (linode.mcp.v1.error_message) = "Failed to reboot instance {instance_id}: {error}";
@@ -797,6 +816,8 @@ message InstanceShutdownInput {
     path: "/linode/instances/{instance_id}/shutdown"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
   option (linode.mcp.v1.tool_description) = "Gracefully shuts down a running Linode instance. The instance will attempt to shut down cleanly.";
   option (linode.mcp.v1.error_message) = "Failed to shutdown instance {instance_id}: {error}";
@@ -871,15 +892,25 @@ message InstanceCreateInput {
     path: "/linode/instances"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewall_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create.";
   option (linode.mcp.v1.error_message) = "Failed to create instance: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Instance '{label}' (ID: {id}) created successfully in {region}";
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview describes the instance the call would create and warns about
-  // billing; the instance does not exist yet, so there is no state to read.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The instance does not exist yet, so there is no state to read: the wordings
+  // name the image only when the caller chose one.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new {type} instance will be created in region {region} from image {image}."
+    template: "A new {type} instance will be created in region {region}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Billing for the instance starts immediately on creation."
+    line: PREVIEW_LINE_WARNING
+  };
   // Every instance this tool makes runs on the current Interfaces generation,
   // which is what the synthesized interfaces element below describes.
   option (linode.mcp.v1.body_constant) = {
@@ -1089,6 +1120,8 @@ message InstanceUpdateInput {
     path: "/linode/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates editable fields on a Linode instance. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.error_message) = "instance {instance_id} update failed: {error}";
@@ -1159,6 +1192,8 @@ message InstanceDeleteInput {
     path: "/linode/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. Set confirm=true to proceed.";
@@ -1173,7 +1208,58 @@ message InstanceDeleteInput {
   // The walk reaches past the instance record for what the delete takes with
   // it: attached volumes, released IPs, firewall attachments, and the billing
   // change, none of which a descriptor describes.
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // Four walks in emission order (volumes detach, public addresses release,
+  // firewall attachments drop, then the running warning), and the billing
+  // estimate beside them.
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_instance_volume_list"
+    slot_arguments: { read_slot: "linode_id", argument: "instance_id" }
+    emit: {
+      kind: "volume"
+      id_field: "id"
+      label_field: "label"
+      action: "detached"
+      note: "{size}GB volume stays; billing continues."
+    }
+    list_error_warning: "Could not list attached volumes: {error}"
+  };
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_instance_ip_list"
+    list_member: "ipv4.public"
+    slot_arguments: { read_slot: "linode_id", argument: "instance_id" }
+    emit: {
+      kind: "public_ip"
+      label_field: "address"
+      action: "released"
+    }
+    list_error_warning: "Could not list IP addresses: {error}"
+  };
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_instance_firewall_list"
+    slot_arguments: { read_slot: "linode_id", argument: "instance_id" }
+    emit: {
+      kind: "firewall"
+      id_field: "id"
+      label_field: "label"
+      action: "removed"
+      note: "Firewall stays; this instance is removed from its device list."
+    }
+    list_error_warning: "Could not list firewalls: {error}"
+  };
+  option (linode.mcp.v1.dependency_walk) = {
+    warnings: {
+      template: "Instance is currently running. Delete will not pause for a graceful shutdown."
+      when_field: "status"
+      when_equals: "running"
+    }
+  };
+  option (linode.mcp.v1.billing_delta) = {
+    price_tool: "linode_type_get"
+    type_field: "type"
+    amount: "-{monthly:.2f}"
+    sentence: "Instance billing stops. Attached volume billing continues."
+    unknown_sentence: "Could not fetch type pricing for the estimate."
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -1202,6 +1288,8 @@ message InstanceCloneInput {
     path: "/linode/instances/{linode_id}/clone"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Clones a Linode instance. WARNING: This creates a billable resource.";
   option (linode.mcp.v1.error_message) = "Failed to clone instance {linode_id}: {error}";
@@ -1289,6 +1377,8 @@ message InstanceMigrateInput {
     path: "/linode/instances/{linode_id}/migrate"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceMigrateWriteResponse";
   option (linode.mcp.v1.tool_description) = "Migrates a Linode instance to a new region. If no region is specified, Linode picks the destination.";
   option (linode.mcp.v1.error_message) = "Failed to migrate instance {linode_id}: {error}";
@@ -1296,8 +1386,23 @@ message InstanceMigrateInput {
   // The destination is reported by the region member beside this sentence
   // rather than inside it, since one template cannot say it two ways.
   option (linode.mcp.v1.success_message) = "Migration initiated for instance {linode_id}";
-  // The preview reads the Linode whose region the migration would change.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The preview reads the Linode whose region the migration would change, which
+  // the action route spells linode_id and the read spells instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  // An omitted region is Linode picking the destination, and a read answering
+  // no region leaves the origin out rather than naming an empty one.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Instance migrates from region {state:region} to {region}; it is unavailable during the migration."
+    template: "Instance migrates to region {region}; it is unavailable during the migration."
+    template: "Instance migrates; it is unavailable during the migration."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   option (buf.validate.message).cel = {
     id: "instance_migrate.linode_id.positive"
@@ -1343,14 +1448,34 @@ message InstanceMutateInput {
     path: "/linode/instances/{linode_id}/mutate"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Upgrades a Linode instance to the latest generation type. WARNING: This changes instance state and may cause downtime.";
   option (linode.mcp.v1.error_message) = "Failed to upgrade instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This upgrades the instance and may cause downtime. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Upgrade initiated for instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview reads the Linode whose type the upgrade would replace.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the Linode whose type the upgrade replaces, which the action
+  // route spells linode_id and the read spells instance_id.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments: {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  // A read answering no type leaves the starting type out rather than naming
+  // an empty one.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Instance type {state:type} upgrades to the latest generation; it reboots during the upgrade."
+    template: "Instance upgrades to the latest generation of its type; it reboots during the upgrade."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The Linode may be unavailable during the upgrade."
+    line: PREVIEW_LINE_WARNING
+  };
 
   option (buf.validate.message).cel = {
     id: "instance_mutate.linode_id.positive"
@@ -1382,6 +1507,8 @@ message InstanceRebuildInput {
     path: "/linode/instances/{linode_id}/rebuild"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Rebuilds a Linode instance with a new image. WARNING: This destroys all existing data on the instance. Pass dry_run=true to preview without rebuilding. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This DESTROYS ALL DATA on the instance and rebuilds it. Set confirm=true to proceed.";
@@ -1399,7 +1526,24 @@ message InstanceRebuildInput {
       argument: "linode_id"
     }
   };
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // Every disk is erased side-effect by side-effect, and the image pair says
+  // one wording: the named replacement or the bare destruction.
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_instance_disk_list"
+    emit: {
+      target: WALK_TARGET_SIDE_EFFECTS
+      note: "Disk \"{label}\" ({size} MB, {filesystem}) is erased and recreated from the new image."
+    }
+    warnings: {
+      template: "Rebuild replaces the current image \"{state:image}\", destroys all data, and resets the root password."
+      when_present: "image"
+    }
+    warnings: {
+      template: "Rebuild destroys all data on the instance and resets the root password."
+      when_absent: "image"
+    }
+    list_error_warning: "Could not list instance disks: {error}"
+  };
 
   // Declared ahead of the body rules so an unaddressed call still hears which
   // instance it failed to name, the order the hand-written handler checked in.
@@ -1513,6 +1657,8 @@ message InstancePasswordResetInput {
     path: "/linode/instances/{linode_id}/password"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resets the root password on a Linode instance. The instance must be powered off. Pass dry_run=true to preview without resetting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This resets the root password on the instance. Set confirm=true to proceed.";
@@ -1527,7 +1673,19 @@ message InstancePasswordResetInput {
       argument: "linode_id"
     }
   };
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // The reboot sentence is constant; the downtime warning reads the fetched
+  // status through a sourceless walk.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The instance is powered down and rebooted to apply the new root password."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.dependency_walk) = {
+    warnings: {
+      template: "Instance is currently running; the reset shuts it down and reboots it, causing downtime."
+      when_field: "status"
+      when_equals: "running"
+    }
+  };
 
   option (buf.validate.message).cel = {
     id: "instance_password_reset.linode_id.positive"
@@ -1591,6 +1749,8 @@ message InstanceResizeInput {
     path: "/linode/instances/{instance_id}/resize"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceResizeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing. Pass dry_run=true to preview without resizing. Supports two-stage writes when enabled in the two_stage config: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation causes downtime and may affect billing. Set confirm=true to proceed.";
@@ -1599,10 +1759,40 @@ message InstanceResizeInput {
   option (linode.mcp.v1.error_message) = "Failed to resize instance {instance_id}: {error}";
   option (linode.mcp.v1.success_message) = "Instance {instance_id} resize to {type} initiated successfully";
   // The preview reads the Linode whose plan the resize replaces; the plan reads
-  // the instance and its disks together, since the resize moves both.
-  option (linode.mcp.v1.tool_hooks) = "preview";
-  option (linode.mcp.v1.tool_hooks) = "fetch_state";
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // the instance and its disks together, since the resize moves both, keeping
+  // only the fields a real change would move so a cosmetic instance field
+  // cannot refuse an apply. The prose reads the instance either way, which is
+  // what lets one wording serve both paths.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+  };
+  option (linode.mcp.v1.state_composite) = {
+    prose_member: "instance"
+    calls: {
+      tool: "linode_instance_get"
+      member: "instance"
+      fields: "type"
+    }
+    calls: {
+      tool: "linode_instance_disk_list"
+      member: "disks"
+      fields: "id"
+      fields: "size"
+      fields: "filesystem"
+      slot_arguments: { read_slot: "linode_id", argument: "instance_id" }
+    }
+  };
+  // The type it leaves is named beside the one it is headed for, and dropped
+  // for a state that carries no type at all.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Instance resizes from type {state:type} to {type}; it reboots and is unavailable during the resize."
+    template: "Instance resizes to type {type}; it reboots and is unavailable during the resize."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Resizing changes the monthly price to match the new type."
+    line: PREVIEW_LINE_WARNING
+  };
 
   option (buf.validate.message).cel = {
     id: "instance_resize.instance_id.positive"
@@ -1657,6 +1847,8 @@ message InstanceRescueInput {
     path: "/linode/instances/{linode_id}/rescue"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Boots a Linode instance into rescue mode for recovery operations.";
   option (linode.mcp.v1.error_message) = "Failed to rescue instance {linode_id}: {error}";
@@ -1664,7 +1856,30 @@ message InstanceRescueInput {
   option (linode.mcp.v1.success_message) = "Instance {linode_id} is booting into rescue mode";
   // The preview reads the instance the reboot would interrupt, so a running one
   // can be warned about before it goes down.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_get"
+    slot_arguments {
+      read_slot: "instance_id"
+      argument: "linode_id"
+    }
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The instance reboots into rescue mode; its normal boot configuration is bypassed until you reboot out of rescue mode."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The downtime is worth weighing only for a Linode that is up, which is a
+  // reading of the resource rather than of the call: a status no arm names
+  // drops the line.
+  option (linode.mcp.v1.preview_sentence) = {
+    matched_by: {
+      state: "status"
+      arm: {
+        equals: "running"
+        wording: "Instance is currently running; entering rescue mode reboots it, causing downtime."
+      }
+    }
+    line: PREVIEW_LINE_WARNING
+  };
 
   option (buf.validate.message).cel = {
     id: "instance_rescue.linode_id.positive"
@@ -1696,6 +1911,8 @@ message InstanceFirewallApplyInput {
     path: "/linode/instances/{linode_id}/firewalls/apply"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Reapplies assigned firewalls to a Linode instance. Use this if firewall assignment was not applied successfully.";
   option (linode.mcp.v1.error_message) = "Failed to apply firewalls for instance {linode_id}: {error}";
@@ -1743,6 +1960,11 @@ message InstanceTransferGetInput {
     path: "/linode/instances/{linode_id}/transfer"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTransfer";
   option (linode.mcp.v1.tool_description) = "Retrieves this month's network transfer statistics for a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Linode instance transfer statistics: {error}";
@@ -1765,6 +1987,11 @@ message InstanceTransferMonthGetInput {
     path: "/linode/instances/{linode_id}/transfer/{year}/{month}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTransferMonth";
   option (linode.mcp.v1.tool_description) = "Retrieves network transfer statistics for a Linode instance for a specific month.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve transfer stats for instance {linode_id} in {year:04}-{month:02}: {error}";
@@ -1818,6 +2045,8 @@ message InstanceConfigGetInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfig";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a specific configuration profile on a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve config {config_id} for instance {linode_id}: {error}";
@@ -1845,6 +2074,8 @@ message InstanceConfigListInput {
     path: "/linode/instances/{linode_id}/configs"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigListResponse";
   option (linode.mcp.v1.tool_description) = "Lists configuration profiles for a Linode instance with optional pagination.";
 
@@ -1874,6 +2105,8 @@ message InstanceConfigCreateInput {
     path: "/linode/instances/{linode_id}/configs"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.";
   option (linode.mcp.v1.error_message) = "Failed to create configuration profile for instance {linode_id}: {error}";
@@ -1935,8 +2168,8 @@ message InstanceConfigCreateInput {
     }
   };
   // Each legacy interface names a purpose. An entry naming none reads the same
-  // as one naming a purpose the API does not publish, which is what both hooks
-  // answered.
+  // as one naming a purpose the API does not publish, which is what both
+  // languages' hand-written bodies answered.
   option (linode.mcp.v1.object_walk) = {
     field: "interfaces"
     element: "interfaces must be an array of objects"
@@ -2035,6 +2268,8 @@ message InstanceConfigUpdateInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.";
   option (linode.mcp.v1.error_message) = "Failed to update configuration profile {config_id} for instance {linode_id}: {error}";
@@ -2202,6 +2437,8 @@ message InstanceConfigDeleteInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a configuration profile from a Linode instance. WARNING: This is irreversible.";
   option (linode.mcp.v1.error_message) = "Failed to remove configuration profile {config_id} from instance {linode_id}: {error}";
@@ -2235,6 +2472,8 @@ message InstanceConfigInterfaceListInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists interfaces assigned to a specific configuration profile on a Linode instance.";
   option (linode.mcp.v1.list_envelope) = {shape: SHAPE_BARE};
@@ -2265,6 +2504,8 @@ message InstanceConfigInterfaceAddInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Adds a network interface to a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.";
   option (linode.mcp.v1.error_message) = "Failed to add configuration profile interface to config {config_id} for instance {linode_id}: {error}";
@@ -2355,6 +2596,8 @@ message InstanceConfigInterfaceUpdateInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a network interface on a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.";
   option (linode.mcp.v1.error_message) = "Failed to update configuration profile interface {interface_id} in config {config_id} for instance {linode_id}: {error}";
@@ -2425,6 +2668,8 @@ message InstanceConfigInterfaceDeleteInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigInterfaceDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a network interface from a Linode configuration profile. WARNING: This changes instance network configuration.";
   option (linode.mcp.v1.error_message) = "Failed to remove configuration profile interface {interface_id} from config {config_id} for instance {linode_id}: {error}";
@@ -2476,6 +2721,8 @@ message InstanceConfigInterfaceReorderInput {
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/order"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigInterfaceReorderResponse";
   option (linode.mcp.v1.tool_description) = "Reorders interfaces on a Linode configuration profile. WARNING: This changes network interface ordering.";
   option (linode.mcp.v1.error_message) = "Failed to reorder interfaces for configuration profile {config_id} on instance {linode_id}: {error}";
@@ -2546,6 +2793,8 @@ message InstanceInterfaceListInput {
     path: "/linode/instances/{linode_id}/interfaces"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists interfaces assigned to a specific Linode instance.";
   option (linode.mcp.v1.list_envelope) = {
@@ -2573,6 +2822,8 @@ message InstanceInterfaceAddInput {
     path: "/linode/instances/{linode_id}/interfaces"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Adds a network interface to a Linode instance. WARNING: This changes instance network configuration.";
   option (linode.mcp.v1.error_message) = "Failed to add interface to instance {linode_id}: {error}";
@@ -2663,6 +2914,8 @@ message InstanceInterfaceDeleteInput {
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes an interface from a Linode instance. WARNING: This changes instance network configuration and is irreversible.";
   option (linode.mcp.v1.error_message) = "Failed to delete interface {interface_id} from instance {linode_id}: {error}";
@@ -2698,6 +2951,8 @@ message InstanceInterfaceUpdateInput {
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a network interface on a Linode instance. WARNING: This changes instance network configuration.";
   option (linode.mcp.v1.error_message) = "Failed to update interface {interface_id} on instance {linode_id}: {error}";
@@ -2796,6 +3051,8 @@ message InstanceInterfaceSettingsUpdateInput {
     path: "/linode/instances/{linode_id}/interfaces/settings"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceSettingsWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates interface settings for a specific Linode instance. Power off the Linode before enabling or disabling Network Helper. WARNING: This changes instance network configuration.";
   option (linode.mcp.v1.error_message) = "Failed to update interface settings for instance {linode_id}: {error}";
@@ -2865,6 +3122,8 @@ message InstanceInterfaceUpgradeInput {
     path: "/linode/instances/{linode_id}/upgrade-interfaces"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceUpgradeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Upgrades a Linode's legacy config interfaces to Linode interfaces. WARNING: This irreversibly changes instance network configuration.";
   option (linode.mcp.v1.error_message) = "Failed to upgrade interfaces for instance {linode_id}: {error}";
@@ -2933,6 +3192,8 @@ message InstanceInterfaceHistoryListInput {
     path: "/linode/instances/{linode_id}/interfaces/history"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceHistoryListResponse";
   option (linode.mcp.v1.tool_description) = "Lists historical network interface versions for a specific Linode instance with optional pagination.";
 
@@ -2958,6 +3219,11 @@ message InstanceBackupListInput {
     path: "/linode/instances/{linode_id}/backups"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupsResponse";
   option (linode.mcp.v1.tool_description) = "Lists all backups for a Linode instance, including automatic backups and manual snapshots.";
   option (linode.mcp.v1.error_message) = "Failed to list backups for instance {linode_id}: {error}";
@@ -2983,6 +3249,11 @@ message InstanceBackupCreateInput {
     path: "/linode/instances/{linode_id}/backups"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a manual snapshot of a Linode instance. WARNING: This overwrites any existing manual snapshot for the instance.";
   option (linode.mcp.v1.error_message) = "Failed to create snapshot for instance {linode_id}: {error}";
@@ -3033,6 +3304,11 @@ message InstanceBackupRestoreInput {
     path: "/linode/instances/{linode_id}/backups/{backup_id}/restore"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupRestoreWriteResponse";
   option (linode.mcp.v1.tool_description) = "Restores a backup to a Linode instance. WARNING: When overwrite is true, this destroys all disks and configs on the target instance.";
   option (linode.mcp.v1.error_message) = "Failed to restore backup {backup_id} to instance {target_linode_id}: {error}";
@@ -3123,6 +3399,11 @@ message InstanceBackupsEnableInput {
     path: "/linode/instances/{linode_id}/backups/enable"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Enables the backup service for a Linode instance. WARNING: This adds a recurring charge to your account based on the instance plan.";
   option (linode.mcp.v1.error_message) = "Failed to enable backups for instance {linode_id}: {error}";
@@ -3166,6 +3447,11 @@ message InstanceBackupsCancelInput {
     path: "/linode/instances/{linode_id}/backups/cancel"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Cancels the backup service for a Linode instance. WARNING: This permanently deletes all existing backups for the instance. Pass dry_run=true to preview without canceling. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This permanently deletes all backups for the instance. Set confirm=true to proceed.";

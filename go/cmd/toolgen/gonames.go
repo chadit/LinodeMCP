@@ -21,6 +21,11 @@ import (
 // breaks silently on a field like id_2 or a message with an underscore, and
 // only shows up when the emitted source stops compiling.
 type goMessage struct {
+	// Descriptor is the message's own descriptor, kept from the lookup that
+	// resolved the type rather than resolved again. A second lookup would be
+	// one more read of the process-global registry, which a parallel caller
+	// cannot take while another goroutine holds it across a range.
+	Descriptor protoreflect.MessageDescriptor
 	// FullName is the proto full name, "linode.mcp.v1.Domain".
 	FullName protoreflect.FullName
 	// TypeName is the Go type name, "Domain".
@@ -57,8 +62,8 @@ type scalarField struct {
 	// local is true when the member declares FIELD_LOCATION_LOCAL, which on a
 	// response says the MCP layer assembles it rather than the API sending it.
 	local bool
-	// kind is the member's declared kind, which is what says whether a hook's
-	// answer can fill it.
+	// kind is the member's declared kind, which is what says whether a declared
+	// transport's answer can fill it.
 	kind protoreflect.Kind
 }
 
@@ -106,11 +111,12 @@ func lookupGoMessage(name protoreflect.FullName) (goMessage, error) {
 	descriptorFields := messageType.Descriptor().Fields()
 
 	found := goMessage{
-		FullName: name,
-		TypeName: structType.Name(),
-		goNames:  make(map[string]string, len(structFields)),
-		kinds:    make(map[string]protoreflect.Kind, len(structFields)),
-		lists:    make(map[string]bool, len(structFields)),
+		Descriptor: messageType.Descriptor(),
+		FullName:   name,
+		TypeName:   structType.Name(),
+		goNames:    make(map[string]string, len(structFields)),
+		kinds:      make(map[string]protoreflect.Kind, len(structFields)),
+		lists:      make(map[string]bool, len(structFields)),
 	}
 
 	for _, structField := range structFields {

@@ -43,9 +43,10 @@ def declared_total() -> int:
     """How many tools the proto contract declares.
 
     A tool names itself in exactly one of the two markers, so the union of the
-    names those markers carry is the surface. `make tool-capability` is what
-    holds a message to naming its tool once, which is why a name read twice here
-    would be counted once rather than reported.
+    names those markers carry is the surface. Each language's contract validator
+    holds a message to naming its tool once (a contradiction fails server
+    startup and both suites), which is why a name read twice here would be
+    counted once rather than reported.
     """
     return len(
         {

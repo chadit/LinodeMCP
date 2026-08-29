@@ -34,6 +34,9 @@ behavior-exempt.txt is guarded too, though it is not a ratchet: an entry
 there removes a tool from behavior-fixture coverage permanently, so a NEW
 exemption needs the same dated annotation as accepted ratchet growth (with
 a free-text reason allowed in place of an issue URL). See _ANNOTATED_EXTRAS.
+Removing an exemption needs no annotation, here or in the file's own header:
+it hands coverage back, and verify_behavior already fails an exempt tool that
+has a fixture, so the line has to go in the change that lands one.
 
 Runs inside `make check` (and so the pre-push hook) against origin/main,
 which is the right base locally and on PRs; an unreachable base rev skips

@@ -11,14 +11,20 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from linodemcp.audit import Capability, Event, Mode, Status
+from linodemcp.audit import (
+    Capability,
+    Event,
+    Mode,
+    Status,
+    event_timestamp,
+)
 from linodemcp.config import Config
+from linodemcp.genlocal import record_audit_event
 from linodemcp.gentools import (
     create_linode_audit_health_tool,
     handle_linode_audit_health,
 )
 from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -30,18 +36,18 @@ def _event(tool: str, second: int) -> Event:
     """Build an event at a distinct second."""
     ts = datetime(2026, 5, 20, 0, 0, second, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id=f"evt_{second}",
         tool=tool,
-        tool_capability=Capability.READ,
+        tool_capability=Capability.READ.value,
         environment="prod",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
-        status=Status.SUCCESS,
+        status=Status.SUCCESS.value,
         latency_ms=0,
         result_summary="",
         error=None,
@@ -66,12 +72,11 @@ async def test_reports_jsonl(
 ) -> None:
     """The handler reports the active JSONL log when SQLite is disabled."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")  # force the JSONL path
 
     audit_dir = tmp_path / "linodemcp"
     audit_dir.mkdir(parents=True)
     (audit_dir / "audit.log").write_text(
-        json.dumps(_event("linode_instance_list", 1).to_dict()) + "\n",
+        record_audit_event(_event("linode_instance_list", 1), "", "") + "\n",
         encoding="utf-8",
     )
 

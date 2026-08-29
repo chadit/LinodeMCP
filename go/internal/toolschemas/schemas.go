@@ -46,7 +46,7 @@ func IsFallback(schema json.RawMessage) bool {
 // which raises FileNotFoundError on the same input: both abort startup rather
 // than register a tool that accepts anything.
 //
-// scripts/verify_input_proto.py does not catch a miss. It statically classifies
+// scripts/verify_generated_form.py does not catch a miss. It statically classifies
 // whether a factory calls this function at all versus hand-building a schema
 // from mcp.With* options; it never executes a factory and never inspects the
 // bytes returned here.

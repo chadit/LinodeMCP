@@ -38,8 +38,6 @@ from linodemcp.config import (
     load_from_file,
 )
 from linodemcp.server import Server
-from linodemcp.tools.linode_audit_report import set_audit_reports
-from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -159,14 +157,13 @@ class OneShotRuntime:
         self._server.set_audit_sink(audit_sink)
         self._server.set_audit_redact_pii(cfg.audit.redact_pii)
 
-        set_audit_reports(cfg.audit.reports)
-
     def _open_sqlite_sink(self, jsonl_sink: JSONLSink) -> SQLiteSink | None:
-        """Open the SQLite sink and point the summary query tool at it.
+        """Open the SQLite sink for this command's writes.
 
-        Returns None on failure; the JSONL sink stays the durable record.
-        Mirrors ``main._open_sqlite_sink`` minus the logging (a one-shot
-        command has no structured logger wired).
+        Returns None on failure; the JSONL sink stays the durable record. The
+        query tools resolve their own read path from config, so nothing is
+        installed here. Mirrors ``main._open_sqlite_sink`` minus the logging
+        (a one-shot command has no structured logger wired).
         """
         cfg = self._config
         db_path = cfg.audit.sqlite.path or str(
@@ -177,7 +174,6 @@ class OneShotRuntime:
         except Exception:
             return None
 
-        set_audit_sqlite_path(db_path)
         return sink
 
 

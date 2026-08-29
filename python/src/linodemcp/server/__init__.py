@@ -18,7 +18,15 @@ from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 import linodemcp.gentools as gentools_module
 import linodemcp.tools as tools_module
 from linodemcp.audit import Capability as AuditCapability
-from linodemcp.audit import Mode, NoopSink, Sink, Status, new_event
+from linodemcp.audit import (
+    Mode,
+    NoopSink,
+    Sink,
+    Status,
+    finalize,
+    new_event,
+    set_mode,
+)
 from linodemcp.linode import RetryableClient
 from linodemcp.linode.metrics import reset_api_recorder, set_api_recorder
 from linodemcp.linode.routes import validate as validate_tool_contract
@@ -26,7 +34,6 @@ from linodemcp.linode.routes import validate_registered
 from linodemcp.profiles import (
     Capability,
     Profile,
-    Scope,
     ScopeValidationResult,
     TokenNotConfiguredError,
     ToolDescriptor,
@@ -304,7 +311,12 @@ class Server:
         # skips everything outside the allow list. A bad config raises out of
         # the resolver; let that propagate.
         self._descriptors = [
-            ToolDescriptor(name=entry.name, capability=entry.capability)
+            ToolDescriptor(
+                name=entry.name,
+                capability=entry.capability,
+                scopes=tuple(gentools_module.scopes_for(entry.name)),
+                categories=tuple(gentools_module.categories_for(entry.name)),
+            )
             for entry in _TOOL_REGISTRY
         ]
         # The proto contract names the whole tool surface, so checking the
@@ -325,6 +337,7 @@ class Server:
             drafts=self._draft_registry,
             catalog=lambda: self._descriptors,
             active_profile=lambda: self._active_profile,
+            config=config,
         )
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
         # _allowed_entries and _config_handlers are declared inside
@@ -392,7 +405,7 @@ class Server:
             linodemcp_version=LINODEMCP_VERSION,
             redact_pii=self._audit_redact_pii,
         )
-        event.set_mode(self._execution_mode(arguments), "")
+        event = set_mode(event, self._execution_mode(arguments), "")
 
         plan_store_token = set_plan_store(self._plan_store)
         builder_state_token = set_builder_state(self._builder_state)
@@ -402,21 +415,22 @@ class Server:
         try:
             result = await self._dispatch_inner(name, arguments)
             elapsed_ms = _elapsed_ms(start_ns)
-            event.finalize(Status.SUCCESS, elapsed_ms, "", "")
-            self._audit_sink.write(event)
+            self._audit_sink.write(finalize(event, Status.SUCCESS, elapsed_ms, "", ""))
             self._metrics.record_tool_call(name, elapsed_ms / 1000.0, error=False)
             return result
         except ValueError as exc:
             # _dispatch_inner raises ValueError for unknown or filtered tool
             # names. The handler never ran, so this audits as refused and
             # records no tool-call metric.
-            event.finalize(Status.REFUSED, _elapsed_ms(start_ns), str(exc), "")
-            self._audit_sink.write(event)
+            self._audit_sink.write(
+                finalize(event, Status.REFUSED, _elapsed_ms(start_ns), str(exc), "")
+            )
             raise
         except Exception as exc:
             elapsed_ms = _elapsed_ms(start_ns)
-            event.finalize(Status.ERROR, elapsed_ms, str(exc), "")
-            self._audit_sink.write(event)
+            self._audit_sink.write(
+                finalize(event, Status.ERROR, elapsed_ms, str(exc), "")
+            )
             self._metrics.record_tool_call(name, elapsed_ms / 1000.0, error=True)
             raise
         finally:
@@ -481,7 +495,10 @@ class Server:
                 "active environment has no Linode token configured"
             )
 
-        required = [Scope(s) for s in self._active_profile.required_token_scopes]
+        # Plain strings, matching Go's untyped conversion: the union names
+        # declared scopes the catalog does not spell, and a user-defined
+        # profile may require anything.
+        required = list(self._active_profile.required_token_scopes)
 
         client = RetryableClient(env.linode.api_url, env.linode.token)
         try:

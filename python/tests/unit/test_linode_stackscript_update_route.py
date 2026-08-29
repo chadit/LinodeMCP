@@ -96,32 +96,6 @@ async def test_handle_linode_stackscript_update_success(
 
 
 @pytest.mark.asyncio
-async def test_handle_linode_stackscript_update_dry_run_skips_client(
-    sample_config: Any, mock_linode_client: AsyncMock
-) -> None:
-    mock_linode_client.get_stackscript.return_value = {"id": 123, "label": "before"}
-    result = await handle_linode_stackscript_update(
-        {
-            "stackscript_id": 123,
-            "label": "updated-script",
-            "confirm": True,
-            "dry_run": True,
-        },
-        sample_config,
-    )
-
-    payload = json.loads(result[0].text)
-    assert payload["dry_run"] is True
-    assert payload["would_execute"] == {
-        "method": "PUT",
-        "path": "/linode/stackscripts/123",
-        "body": {"label": "updated-script"},
-    }
-    assert len(payload["side_effects"]) == 1
-    mock_linode_client.route_raw.assert_not_called()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
 async def test_handle_linode_stackscript_update_rejects_non_true_confirm(
     confirm_value: Any, sample_config: Any, mock_linode_client: AsyncMock

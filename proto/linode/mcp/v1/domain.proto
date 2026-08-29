@@ -97,6 +97,8 @@ message DomainListInput {
     path: "/domains"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all domains managed by your Linode account. Can filter by domain name or type (master/slave).";
 
@@ -120,6 +122,8 @@ message DomainGetInput {
     path: "/domains/{domain_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Domain";
   option (linode.mcp.v1.tool_description) = "Gets detailed information about a specific domain by its ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve domain {domain_id}: {error}";
@@ -138,6 +142,8 @@ message DomainCreateInput {
     path: "/domains"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new DNS domain. Use type 'master' for domains you control, 'slave' for secondary DNS.";
   option (linode.mcp.v1.error_message) = "Failed to create domain: {error}";
@@ -253,15 +259,48 @@ message DomainUpdateInput {
     path: "/domains/{domain_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an existing DNS domain. Can modify SOA email, description, TTL, and status. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.error_message) = "Failed to modify domain {domain_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a DNS domain. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Domain {domain_id} modified successfully";
-  // The preview fetches the zone and diffs against it. The optional type is
-  // checked by its field's membership reader, which reads the raw argument
-  // because a name that is no zone type decodes to the enum's zero.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the zone, so the preview says what changes rather than what was
+  // asked for. The optional type is checked by its field's membership reader,
+  // which reads the raw argument because a name that is no zone type decodes to
+  // the enum's zero.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_domain_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Domain status changes from \"{state:status}\" to \"{status}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "status"
+    argument: "status"
+  };
+  // The wording names only the address being set, so the line rather than the
+  // reading is what a matching value drops.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "SOA email is set to \"{soa_email}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_changed: {
+      state: "soa_email"
+      argument: "soa_email"
+    }
+  };
+  // The description text stays out of the sentence because it is free-form
+  // prose a caller already sent.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The domain description is updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_present: "description"
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
 
   option (buf.validate.message).cel = {
     id: "domain_update.domain_id.positive"
@@ -326,6 +365,8 @@ message DomainCloneInput {
     path: "/domains/{domain_id}/clone"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
   option (linode.mcp.v1.tool_description) = "Clones a DNS domain and all associated records to a new domain name.";
   option (linode.mcp.v1.error_message) = "Failed to clone domain {domain_id}: {error}";
@@ -385,6 +426,8 @@ message DomainImportInput {
     path: "/domains/import"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainWriteResponse";
   option (linode.mcp.v1.tool_description) = "Imports a DNS domain zone from a remote nameserver that allows zone transfers. Pass dry_run=true to preview without importing.";
   option (linode.mcp.v1.error_message) = "Failed to import domain: {error}";
@@ -444,6 +487,8 @@ message DomainDeleteInput {
     path: "/domains/{domain_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a DNS domain and all its records. WARNING: This action is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and deletes all DNS records. Set confirm=true to proceed.";
@@ -452,12 +497,30 @@ message DomainDeleteInput {
   // A replay would report a zone the first attempt already removed as one that
   // never existed.
   option (linode.mcp.v1.retry_disabled) = true;
-  // The walk lists the zone's records to name the NS delegations the delete
-  // destroys, which is an extra call no descriptor describes.
   option (linode.mcp.v1.state_route) = {
     tool: "linode_domain_get"
   };
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // The walk lists the zone's records to name the NS delegations the delete
+  // destroys; the count sentence speaks whenever the zone holds any record.
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_domain_record_list"
+    filter: {
+      field: "type"
+      value: "NS"
+      fold: true
+    }
+    emit: {
+      kind: "ns_record"
+      label_field: "target"
+      action: "cascade_deleted"
+      note: "NS record for {name}"
+    }
+    warnings: {
+      template: "Deleting this domain destroys {total} DNS record(s), including {count} NS record(s)."
+      when_positive: "total"
+    }
+    list_error_warning: "Could not list domain records: {error}"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -520,6 +583,8 @@ message DomainRecordListInput {
     path: "/domains/{domain_id}/records"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecordListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all DNS records for a specific domain. Can filter by record type or name.";
 
@@ -539,16 +604,11 @@ message DomainRecordListInput {
 
 // DomainRecordGetInput is the input contract for linode_domain_record_get.
 //
-// The argument check is hand-written (tool_hooks below) because this tool
-// rejects a non-positive id with different words than the rest of the read
-// surface: the siblings answer "domain_id is required", which is what a
-// required path field derives, and Go's handler for this one answers "domain_id
-// must be a positive integer". Both sentences reach clients today, so making
-// them agree is a deliberate change to the tool's answers rather than something
-// codegen may decide while migrating it. Python's hook keeps the sentence
-// Python has always answered, which is the derived one; the divergence is
-// recorded by testdata/behavior/linode_domain_record_get.json pinning only the
-// success path.
+// This tool refuses a non-positive id in different words from the rest of the
+// read surface, which answers the "{field} is required" a required path field
+// derives. The sentence it does answer is declared per field below through
+// reader_message, so both languages read it from the contract rather than from
+// a hand-written check.
 message DomainRecordGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_domain_record_get"
@@ -556,6 +616,8 @@ message DomainRecordGetInput {
     path: "/domains/{domain_id}/records/{record_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecord";
   option (linode.mcp.v1.tool_description) = "Gets detailed information about a specific DNS record within a domain.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve domain record {record_id} for domain {domain_id}: {error}";
@@ -586,14 +648,24 @@ message DomainRecordCreateInput {
     path: "/domains/{domain_id}/records"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecordWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new DNS record within a domain. Supports A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, and PTR record types.";
   option (linode.mcp.v1.error_message) = "Failed to create domain record: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a DNS record. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "{type} record (ID: {id}) created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview says which record is about to appear in the zone.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // A create has no existing record to read, so the wordings name only what
+  // the call carries: the host and the target each drop out of the sentence
+  // when the caller named none.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new {type} record will be created in domain {domain_id} for host \"{name}\" targeting \"{target}\"."
+    template: "A new {type} record will be created in domain {domain_id} for host \"{name}\"."
+    template: "A new {type} record will be created in domain {domain_id} targeting \"{target}\"."
+    template: "A new {type} record will be created in domain {domain_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   option (buf.validate.message).cel = {
     id: "domain_record_create.domain_id.positive"
@@ -714,16 +786,39 @@ message DomainRecordUpdateInput {
     path: "/domains/{domain_id}/records/{record_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecordWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an existing DNS record. Note: Record type cannot be changed.";
   option (linode.mcp.v1.error_message) = "Failed to modify record {record_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a DNS record. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Record {record_id} modified successfully";
-  // The preview reads the record as it stands so it can say what changes rather
-  // than what was asked for. The CAA tag is checked by its field's membership
-  // reader, because naming no member reaches a rule as the enum's zero, the
-  // same as leaving it out.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the record, so the preview says what changes rather than what
+  // was asked for. The CAA tag is checked by its field's membership reader,
+  // because naming no member reaches a rule as the enum's zero, the same as
+  // leaving it out.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_domain_record_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Record name changes from \"{state:name}\" to \"{name}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "name"
+    argument: "name"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Record target changes from \"{state:target}\" to \"{target}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "target"
+    argument: "target"
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
 
   option (buf.validate.message).cel = {
     id: "domain_record_update.domain_id.positive"
@@ -788,6 +883,8 @@ message DomainRecordDeleteInput {
     path: "/domains/{domain_id}/records/{record_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainRecordDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a DNS record from a domain. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a DNS record and is irreversible. Set confirm=true to proceed.";

@@ -1,14 +1,18 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
+)
 
 // emitMeta writes a tool that reaches no Linode route: the version the binary
 // reports, the audit stores on disk, the profile builder's registry.
 //
 // It shares the opening every other tier has (the cancellation check, then the
 // contract's own rules) and diverges where the others open a client: there is
-// nothing to call, so the answer is either the hook that reads local state or
-// the sentence the contract declares.
+// nothing to call, so the answer is either the declared local operation or the
+// sentence the contract declares.
 func emitMeta(out *source, tool *contract) error {
 	if err := checkMetaShape(tool); err != nil {
 		return err
@@ -38,15 +42,9 @@ func checkMetaShape(tool *contract) error {
 		return fmt.Errorf("%w: %s", errNoConfirmMessage, tool.Name)
 	}
 
-	if tool.Hooks.Preview != "" || tool.Hooks.FetchState != "" || tool.Hooks.DependencyWalk != "" {
-		return fmt.Errorf("%w: %s", errUnservedMetaHook, tool.Name)
-	}
-
-	if tool.Hooks.Answer != "" {
-		if tool.SuccessMessage != "" {
-			return fmt.Errorf("%w: %s", errMetaTwoAnswers, tool.Name)
-		}
-
+	// A local answer beside a success_message is refused a step earlier, by the
+	// local-answer check, so reaching here with one means the answer is settled.
+	if tool.answersLocally() {
 		return nil
 	}
 
@@ -64,12 +62,12 @@ func checkMetaShape(tool *contract) error {
 
 // emitMetaHandler writes the body behind a meta factory.
 //
-// The configuration is taken as a blank where no hook reads it: a sentence
+// The configuration is taken as a blank where nothing reads it: a sentence
 // assembled from the call needs nothing configured, and the signature stays the
 // same one every generated handler has so the factory closure is unchanged.
 func emitMetaHandler(out *source, tool *contract) error {
-	config := "cfg"
-	if tool.Hooks.Answer == "" {
+	config := goConfigLocal
+	if !metaReadsConfig(tool) {
 		config = "_"
 	}
 
@@ -85,10 +83,6 @@ func emitMetaHandler(out *source, tool *contract) error {
 	emitNormalize(out, tool)
 	emitConstraintCheck(out, tool)
 
-	if tool.Hooks.Validate != "" {
-		emitValidateHook(out, tool.Hooks.Validate)
-	}
-
 	// Asked after the rules for the reason a mutation asks it before them: a
 	// gated meta tool changes local state rather than a resource, and its
 	// arguments name a draft the caller already holds, so refusing an unusable
@@ -101,11 +95,8 @@ func emitMetaHandler(out *source, tool *contract) error {
 		out.writef("")
 	}
 
-	if tool.Hooks.Answer != "" {
-		out.need(importToolhooks)
-		out.writef("\treturn toolhooks.%s(ctx, request, cfg)", tool.Hooks.Answer)
-		out.writef("}")
-		out.writef("")
+	if tool.answersLocally() {
+		emitLocalAnswer(out, tool)
 
 		return nil
 	}
@@ -113,8 +104,16 @@ func emitMetaHandler(out *source, tool *contract) error {
 	return emitMetaSentence(out, tool)
 }
 
-// emitMetaSentence writes the answer of a meta tool with no hook: the declared
-// sentence, over the arguments it names.
+// metaReadsConfig is whether anything in the body reads the configuration. A
+// declared sentence is assembled from the call and needs nothing configured,
+// and a local operation takes it only where the operation reads it.
+func metaReadsConfig(tool *contract) bool {
+	return tool.answersLocally() &&
+		tool.LocalAnswer.Arm.reads(linodev1.LocalAmbient_LOCAL_AMBIENT_CONFIG)
+}
+
+// emitMetaSentence writes the answer of a meta tool that declares no local
+// operation: the declared sentence, over the arguments it names.
 func emitMetaSentence(out *source, tool *contract) error {
 	answer, err := tool.formatMessage(tool.SuccessMessage)
 	if err != nil {

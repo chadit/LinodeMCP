@@ -229,6 +229,8 @@ message ReservedIPCreateInput {
     path: "/networking/reserved/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
   option (linode.mcp.v1.tool_description) = "Reserves a public IPv4 address in a region. Pass dry_run=true to preview without reserving or starting billing.";
   option (linode.mcp.v1.confirm_message) = "This reserves a public IPv4 address and starts billing. Set confirm=true to proceed.";
@@ -242,9 +244,16 @@ message ReservedIPCreateInput {
   option (linode.mcp.v1.explicit_null_fields) = "linode_id";
   option (linode.mcp.v1.explicit_null_fields) = "rdns";
   option (linode.mcp.v1.explicit_null_fields) = "vpc_nat_1_1";
-  // The preview carries the billing delta a reservation starts, which no
-  // declared sentence can express.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The preview carries the billing a reservation starts. The estimate is
+  // deliberately unknown: reserved IPv4 has no region price to derive one
+  // from, so the note points at the tool that lists the prices.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Reserved IP billing begins when the address is created."
+    line: PREVIEW_LINE_WARNING
+  };
+  option (linode.mcp.v1.billing_delta) = {
+    absent_type_sentence: "Reserved IPv4 pricing varies by region; see linode_networking_reserved_ip_type_list."
+  };
 
   // An absent region and one the body builder stood an empty string in for
   // answer the same sentence, which is what lets both be one rule.
@@ -280,6 +289,8 @@ message ReservedIPListInput {
     path: "/networking/reserved/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPListResponse";
   option (linode.mcp.v1.tool_description) = "Lists reserved public IPv4 addresses on the account.";
   option (linode.mcp.v1.error_message) = "Failed to list reserved IPv4 addresses: {error}";
@@ -311,6 +322,8 @@ message ReservedIPGetInput {
     path: "/networking/reserved/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_RESERVED_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
   option (linode.mcp.v1.tool_description) = "Gets a reserved public IPv4 address";
   option (linode.mcp.v1.error_message) = "Failed to get reserved IPv4 address: {error}";
@@ -353,6 +366,8 @@ message ReservedIPUpdateInput {
     path: "/networking/reserved/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_RESERVED_IPS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
   option (linode.mcp.v1.tool_description) = "Replaces all tags on a reserved public IPv4 address. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This replaces all tags on the reserved IP. Set confirm=true to proceed.";
@@ -411,6 +426,8 @@ message ReservedIPTypeListInput {
     path: "/networking/reserved/ips/types"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_RESERVED_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPTypeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists reserved public IPv4 pricing information";
 
@@ -427,6 +444,8 @@ message ReservedIPDeleteInput {
     path: "/networking/reserved/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_RESERVED_IPS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Permanently unreserves a public IPv4 address and stops billing. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This permanently unreserves the IP and it cannot be recovered. Set confirm=true to proceed.";
@@ -475,6 +494,8 @@ message IPv6PoolListInput {
     path: "/networking/ipv6/pools"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6PoolListResponse";
   option (linode.mcp.v1.tool_description) = "Lists IPv6 pools on the account with optional pagination.";
 
@@ -494,6 +515,8 @@ message IPv6RangeListInput {
     path: "/networking/ipv6/ranges"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists IPv6 ranges on the account with optional pagination.";
 
@@ -513,6 +536,8 @@ message IPv6RangeGetInput {
     path: "/networking/ipv6/ranges/{range}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6Range";
   option (linode.mcp.v1.tool_description) = "Gets one IPv6 range by CIDR prefix.";
   // Trimmed before the prefix is parsed, which both languages have always
@@ -552,6 +577,11 @@ message IPv6RangeCreateInput {
     path: "/networking/ipv6/ranges"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_IPS_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_WRITE
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates an IPv6 range. WARNING: This changes networking configuration and may affect routing.";
   option (linode.mcp.v1.error_message) = "Failed to create IPv6 range: {error}";
@@ -626,6 +656,8 @@ message IPv6RangeDeleteInput {
     path: "/networking/ipv6/ranges/{range}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes an IPv6 range. WARNING: This changes networking configuration and may affect routing. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes an IPv6 range and changes networking configuration. Set confirm=true to proceed.";
@@ -732,6 +764,8 @@ message IPAddressGetInput {
     path: "/networking/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddress";
   option (linode.mcp.v1.tool_description) = "Gets details for one account-level IP address.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve networking IP {address}: {error}";
@@ -766,6 +800,11 @@ message InstanceIPGetInput {
     path: "/linode/instances/{linode_id}/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddress";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a specific IP address for a Linode instance";
   option (linode.mcp.v1.error_message) = "Failed to get IP {address} for instance {linode_id}: {error}";
@@ -806,6 +845,11 @@ message InstanceIPListInput {
     path: "/linode/instances/{linode_id}/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceIPsResponse";
   option (linode.mcp.v1.tool_description) = "Lists all IP addresses (IPv4 and IPv6) for a Linode instance";
   option (linode.mcp.v1.error_message) = "Failed to list IPs for instance {linode_id}: {error}";
@@ -835,6 +879,11 @@ message InstanceIPAllocateInput {
     path: "/linode/instances/{linode_id}/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
   option (linode.mcp.v1.tool_description) = "Allocates a new IP address for a Linode instance. WARNING: Additional IPs may incur charges.";
   option (linode.mcp.v1.error_message) = "Failed to allocate IP for instance {linode_id}: {error}";
@@ -883,7 +932,7 @@ message InstanceIPAllocateInput {
 // linode_id, address, rdns, and confirm are required. rdns carries proto3
 // `optional` so an explicit null can travel, which drops it out of the
 // advertised required set (recorded in the required-flag-loss log); the
-// validate hook still requires it at runtime.
+// declared ARGUMENT_READER_PRESENT still requires it at runtime.
 message InstanceIPUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_ip_update"
@@ -891,6 +940,11 @@ message InstanceIPUpdateInput {
     path: "/linode/instances/{linode_id}/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the reverse DNS for a specific IP address on a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to assign RDNS for IP {address} on instance {linode_id}: {error}";
@@ -951,6 +1005,11 @@ message InstanceIPDeleteInput {
     path: "/linode/instances/{linode_id}/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceIPDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This permanently removes the IP address and is irreversible. Set confirm=true to proceed.";
@@ -1002,6 +1061,8 @@ message NetworkingIPListInput {
     path: "/networking/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPListResponse";
   option (linode.mcp.v1.tool_description) = "Lists IP addresses on the account. Set skip_ipv6_rdns to true to skip IPv6 reverse DNS lookups.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve items: {error}";
@@ -1024,6 +1085,8 @@ message IPAddressUpdateInput {
     path: "/networking/ips/{address}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates reverse DNS for one account-level IP address.";
   option (linode.mcp.v1.error_message) = "Failed to update networking IP {address} RDNS: {error}";
@@ -1099,6 +1162,8 @@ message IPAddressAllocateInput {
     path: "/networking/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
   option (linode.mcp.v1.tool_description) = "Allocates an account-level IP address. WARNING: Additional IPs may incur charges.";
   option (linode.mcp.v1.error_message) = "Failed to allocate networking IP: {error}";
@@ -1165,6 +1230,11 @@ message NetworkingIPAssignInput {
     path: "/networking/ips/assign"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_IPS_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_WRITE
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPAssignWriteResponse";
   option (linode.mcp.v1.tool_description) = "Assigns IP addresses to Linodes in a region. WARNING: This changes IP ownership assignments.";
   option (linode.mcp.v1.confirm_message) = "This assigns IP addresses to Linodes. Set confirm=true to proceed.";
@@ -1216,6 +1286,11 @@ message NetworkingIPv4AssignInput {
     path: "/networking/ipv4/assign"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_IPS_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_WRITE
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPAssignWriteResponse";
   option (linode.mcp.v1.tool_description) = "Assigns IPv4 addresses to Linodes in a region. WARNING: This changes IP ownership assignments.";
   option (linode.mcp.v1.confirm_message) = "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed.";
@@ -1274,6 +1349,11 @@ message NetworkingIPShareInput {
     path: "/networking/ips/share"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_IPS_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_WRITE
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPShareWriteResponse";
   option (linode.mcp.v1.tool_description) = "Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.";
   option (linode.mcp.v1.confirm_message) = "This changes shared IP assignments. Set confirm=true to proceed.";
@@ -1321,6 +1401,11 @@ message NetworkingIPv4ShareInput {
     path: "/networking/ipv4/share"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_IPS_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_WRITE
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPShareWriteResponse";
   option (linode.mcp.v1.tool_description) = "Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.";
   option (linode.mcp.v1.confirm_message) = "This changes shared IP assignments. Set confirm=true to proceed.";

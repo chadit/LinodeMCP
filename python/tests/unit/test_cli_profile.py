@@ -43,6 +43,7 @@ def test_all_profiles_contains_builtins(sample_config: Config) -> None:
         "network-admin",
         "kubernetes-admin",
         "storage-admin",
+        "iam-admin",
         "full-access",
         "emergency",
     ):

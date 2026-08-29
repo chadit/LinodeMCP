@@ -52,9 +52,15 @@ def fixture_catalog() -> list[ToolDescriptor]:
     filter assertions exercise both inclusion and exclusion paths.
     """
     return [
-        ToolDescriptor(name="linode_instance_boot", capability=Capability.Write),
-        ToolDescriptor(name="linode_domain_get", capability=Capability.Read),
-        ToolDescriptor(name="hello", capability=Capability.Meta),
+        ToolDescriptor(
+            name="linode_instance_boot",
+            capability=Capability.Write,
+            categories=("compute",),
+        ),
+        ToolDescriptor(
+            name="linode_domain_get", capability=Capability.Read, categories=("dns",)
+        ),
+        ToolDescriptor(name="hello", capability=Capability.Meta, categories=("core",)),
     ]
 
 
@@ -70,6 +76,7 @@ def publish_catalog(catalog: Callable[[], list[ToolDescriptor]]) -> None:
             drafts=Registry(),
             catalog=catalog,
             active_profile=_no_profile,
+            config=Config(),
         )
     )
 
@@ -86,6 +93,7 @@ def install_fixture_catalog() -> Iterator[None]:
             drafts=Registry(),
             catalog=fixture_catalog,
             active_profile=_no_profile,
+            config=Config(),
         )
     )
     yield

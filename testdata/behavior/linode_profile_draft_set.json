@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_draft_set",
-  "description": "CapMeta builder tool setting draft fields (no Linode API call). Pins the two refusals: an absent name and a name the registry does not hold.",
+  "description": "CapMeta builder tool setting draft fields (no Linode API call). Pins the two refusals (an absent name and a name the registry does not hold) and the success path: every settable field at once, and the changes map that reports them.",
   "cases": [
     {
       "name": "refuses an absent name",
@@ -16,6 +16,43 @@
         "allow_yolo": true
       },
       "expect_error": "draft not found: no-such-draft"
+    },
+    {
+      "name": "reports every field it set",
+      "setup_calls": [
+        {
+          "tool": "linode_profile_draft_new",
+          "args": {
+            "name": "seam-fixture"
+          }
+        }
+      ],
+      "args": {
+        "name": "seam-fixture",
+        "allowed_environments": [
+          "staging",
+          "prod"
+        ],
+        "required_token_scopes": [
+          "linodes:read_only",
+          "volumes:read_write"
+        ],
+        "allow_yolo": true
+      },
+      "expect_result": {
+        "name": "seam-fixture",
+        "changes": {
+          "allowed_environments": [
+            "staging",
+            "prod"
+          ],
+          "required_token_scopes": [
+            "linodes:read_only",
+            "volumes:read_write"
+          ],
+          "allow_yolo": true
+        }
+      }
     }
   ]
 }

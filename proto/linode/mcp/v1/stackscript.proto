@@ -56,6 +56,8 @@ message StackScriptGetInput {
     path: "/linode/stackscripts/{stackscript_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_STACKSCRIPTS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScript";
   option (linode.mcp.v1.tool_description) = "Gets one StackScript by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve StackScript: {error}";
@@ -95,6 +97,8 @@ message StackScriptListInput {
     path: "/linode/stackscripts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_STACKSCRIPTS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptListResponse";
   option (linode.mcp.v1.tool_description) = "Lists StackScripts. By default returns your own StackScripts. Can filter by public status, ownership, or label.";
 
@@ -124,6 +128,8 @@ message StackScriptCreateInput {
     path: "/linode/stackscripts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_STACKSCRIPTS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new StackScript for automated deployments. The script can be used when creating Linode instances.";
   option (linode.mcp.v1.error_message) = "Failed to create StackScript: {error}";
@@ -202,6 +208,8 @@ message StackScriptUpdateInput {
     path: "/linode/stackscripts/{stackscript_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_STACKSCRIPTS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates editable fields on an existing StackScript.";
   option (linode.mcp.v1.error_message) = "Failed to update StackScript: {error}";
@@ -214,9 +222,30 @@ message StackScriptUpdateInput {
     field: "images"
     transform: NORMALIZE_TRANSFORM_TRIM_LIST_DROP_BLANK
   };
-  // The preview reads the StackScript as it stands so it can say what the
-  // update changes rather than what it was asked for.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the StackScript, so the preview says what changes rather than
+  // what was asked for.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_stackscript_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Label changes from \"{state:label}\" to \"{label}\"."
+    template: "Label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "label"
+    argument: "label"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The StackScript body is replaced."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_present: "script"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The StackScript description is updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_present: "description"
+  };
 
   option (buf.validate.message).cel = {
     id: "stackscript_update.stackscript_id.positive"
@@ -294,6 +323,8 @@ message StackScriptDeleteInput {
     path: "/linode/stackscripts/{stackscript_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_STACKSCRIPTS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a StackScript. WARNING: This permanently removes the StackScript from your account. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";

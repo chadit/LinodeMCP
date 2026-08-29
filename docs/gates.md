@@ -3,8 +3,12 @@
 `make check` is the whole pre-push gate. CI's one job (`ci.yml`) and the push
 hook run exactly that target, so local green, hook green, and CI green are the
 same fact. The order lives in the `CHECK_GATES` variable in the root Makefile:
-the venv install runs first because most gates import it, and the rest is
-ordered cheap-fails-first. Only the network `sync-*` gates sit outside it.
+`proto` runs first, and the venv is a prerequisite of its regen stamp (the
+generators run venv binaries), so a fresh checkout provisions itself in order;
+the rest is ordered cheap-fails-first. Only the network `sync-*` gates sit
+outside it, along with `update-deps`, which is an action target rather than a
+gate: it needs the network and it writes, so nothing `check` resolves reaches
+it (see [dependency-updates.md](./dependency-updates.md)).
 
 Every gate keeps its own make target. A gate named `x-y` runs
 `scripts/verify_x_y.py`; the Makefile says which interpreter (the project venv
@@ -36,14 +40,51 @@ provisioning as the CI job) and runs the full gate against a copy of the tree
 with the host venv, generated code, and caches excluded. Run it when a change
 touches the gate chain or CI.
 
-### fmt-check, scripts-fmt-check, scripts-lint
+### proto
+
+First in `CHECK_GATES` because everything else reads its output: `buf generate`
+writes the typed messages and strict input schemas,
+`scripts/gen_tool_registries.py` writes the tool registries, and
+`go/cmd/toolgen` writes every registered language's tool tree, all from
+`proto/`. Stamp-gated on `.make/proto-generated`, so an unchanged contract
+regenerates nothing; the venv is a prerequisite of the stamp, which is what
+lets a fresh checkout provision itself in order.
+
+### python-install-dev
+
+Installs the Python package and dev tools into `python/.venv` with uv. Sits
+right after `proto` so every later gate that runs a venv binary or imports the
+Python registry finds them (on a fresh checkout the proto stamp's venv
+prerequisite has usually installed them already).
+
+### fmt-check, scripts-fmt-check, scripts-lint, tools-fmt-check, tools-lint
 
 Formatting and lint for Go, Python, and the gate scripts. Read-only on
 purpose: auto-fixing here would hide drift CI still fails on. Generated genpb
 is excluded (Go via `GO_FMT_SRC`, Python via the ruff config), so a fresh
 regen is never format-gated. The `scripts/` pair uses `scripts/ruff.toml`
 (extends `python/pyproject.toml`), which ruff discovers only when run from the
-repo root.
+repo root. The `tools/` pair covers the tool projects that ship with neither
+language package; each carries its own pyproject and ruff discovers it per
+file, so one invocation covers whatever `tools/` grows to hold.
+
+### go-check
+
+`make -C go check`: Go lint (golangci-lint plus the security and convention
+scanners) and the test suite. The test run writes `go/coverage.out`, which
+`coverage-floor` and `diff-coverage` read later in the chain.
+
+### python-check
+
+`make -C python check`: uv lock-check, ruff, mypy, pyright, and pytest with
+coverage. pytest's `--cov-fail-under` enforces the Python floor, and the run
+writes `python/coverage.json` for the diff-aware gates.
+
+### build
+
+Both languages' dev builds into each language's `bin/`, near the end of the
+chain so a cheap gate fails before the slower builds. The hardened Go variant
+is `go-build-prod`.
 
 ### go-build-prod
 
@@ -103,6 +144,15 @@ still listed also fails.
 Every built-in profile serves the same tools in every language, and every tool
 lands in a category some profile can serve; a Write or Destroy tool in no
 category fails. Scope from `docs/contracts/languages.txt`; no baseline.
+
+### scope-spellings
+
+Every language's token-side Scope catalog spells what the toolgen emitter
+spells: each non-wildcard value must be an emitter wire spelling or a
+read_only/read_write sibling of an emitter family, and the catalogs must carry
+one value set across languages. Catches the drift the grants converter would
+otherwise report silently as a missing scope. Scope from
+`docs/contracts/languages.txt`; no baseline.
 
 ### tool-count
 
@@ -164,12 +214,6 @@ Every routed input field declares where it goes. PATH fields must line up with
 the route template both ways, and LOCAL must agree with the `// system param`
 marker, which is what keeps `dry_run` off the wire.
 
-### tool-capability
-
-The proto's `tool_capability` for every tool matches the manifest tier in
-`docs/contracts/tools-capabilities.txt`, plus exactly one of `tool_route` or
-`tool_meta`. A capability value with no manifest tier fails first.
-
 ### tool-response
 
 The proto says what every tool answers with: response message, confirm prose,
@@ -191,18 +235,16 @@ the request primitive, so a path built from a base constant and a format verb
 still counts. Hard; a language not caught up records an annotated absence in
 `tool-parity-baseline.txt` instead.
 
-## Proto-routing gates (venv)
+## Generated-surface gates (venv)
 
-### write-proto, read-proto, meta-proto
+### generated-form
 
-Static classification of every handler by capability: success output must
-route through proto on both sides, and a `*WriteResponse` proto with no
-conformance fixture fails too. Hard, no baseline.
-
-### input-proto
-
-Tool input schemas are proto-generated; a hand-built schema fails, which is
-what keeps every language advertising one contract. Hard, no baseline.
+One classification pass per tool surface, the merge of the former
+`write-proto`, `read-proto`, `meta-proto`, and `input-proto` gates: write,
+read, and meta handler success paths must route through proto on both sides,
+and every tool's advertised input schema must be proto-generated. A
+`*WriteResponse` proto with no conformance fixture fails too. Each surface
+reports its own OK line, so a regression names its slice. Hard, no baseline.
 
 ### behavior
 
@@ -236,17 +278,50 @@ the tool twice. Requires `make proto` because it reads the emitted trees.
 ### hand-validators
 
 Counts hand-written argument checks; a tool whose `*Input` message declares
-buf.validate rules has its check read from the contract by both languages.
-`docs/contracts/hand-validator-counts.txt` only falls.
+buf.validate rules has its check read from the contract by both languages. It
+is the population `hand-code` cannot see, since a check carries no tool name.
+`docs/contracts/hand-validator-counts.txt` only falls, and a count over its line
+names every site that pushed it there.
 
-### hook-bodies
+### hand-code
 
-Counts the handler steps each language still writes by hand, per `tool_hooks`
-kind, against the kinds the contract declares. A body no tool declares and a
-declared kind no tree implements both fail by name.
-`docs/contracts/hook-body-counts.txt` only falls, and its header records why
-each kind stays hand-written. `validate` is left to `hand-validators` so one
-population is not counted twice.
+No hand-coded tool code beside the generated tree. Scans every non-generated
+source tree each registered language owns (the working directory from
+`languages.txt`, less the trees `.gitignore` marks as regenerated, less tests)
+and fails by name on any function named after a tool. There is no allowed set
+and no count: nothing derives a hand-written function name from a tool, so such
+a function is code the contract does not account for, and the fix is a
+declaration on its `*Input` message.
+
+Two limits worth knowing. A tool named by a single ordinary word (`version`,
+`hello`) is not matched, because `version` prefixes six legitimate definitions
+in this tree and an exemption list would be the one thing that could make the
+gate lie. And an argument check is named after what it checks rather than after
+a tool, so this scan cannot see one; `hand-validator-counts.txt` holds that
+population to zero and this gate reads the file.
+
+### hand-arms
+
+No hand-written local-operation arm beside the generated tree. An arm is the
+four steps between a tool handler and a subsystem: read the declared inputs,
+call the subsystem, map whatever it reported onto the declared conditions,
+project the answer. Every one of them is written from the operation's own
+declaration now, in every registered language, so a function named after a
+`LocalCall` member in hand-written source is code the contract does not account
+for. The fix is a subsystem method behind the generated interface.
+
+It scans the same trees `hand-code` does, and reads each language's own arm
+spelling rather than one flattened form: Go's `RunCatalogCanRun` and Python's
+`run_catalog_can_run`. The case matters, because the CLI's own `runAuditRecent`
+subcommand runner would otherwise read as an arm for `LOCAL_CALL_AUDIT_RECENT`.
+Matching the opening of the name rather than the whole of it is what catches
+both sides of a two-sided operation without this gate knowing the direction
+vocabulary.
+
+This gate replaced `docs/contracts/handwritten-arms.txt`, which listed the
+operations each engine still wrote by hand. That list emptied when the last arm
+was generated, and a file whose only legal content is nothing exempts nothing.
+There is no allowed set and no count to raise.
 
 ## Spec-snapshot gates
 
@@ -274,6 +349,86 @@ Gate tooling floats at latest while app deps pin: an offline line scan over
 pyproject's dev group, the Makefiles, `scripts/ci-setup.sh`, and workflow run
 commands. A pinned gate tool fails unless the script's deliberate-pin
 allowlist carries a reasoned entry (only buf today).
+
+### techdocs-proof
+
+`python3 -m techdocs_proof --self-test` from `tools/techdocs-proof/src`: the
+offline arm of the TechDocs-to-proto comparator. The comparator is stdlib
+only, so this needs no venv and no network, which is what lets it sit in a
+chain that stays strictly offline. It replays the comparison over frozen
+descriptor fixtures, and it reads the shipped exclusion ledger
+(`tools/techdocs-proof/data/known-divergences.json`), refusing a duplicate
+key, an uncollapsed route shape, or an entry missing a field. It also holds
+the evidence-placement refusal: a run root inside the repository fails by
+name, so a comparison can never dirty the tree it measures. The scraping half
+needs the network and runs only from `techdocs-drift.yml` or by hand; see
+`tools/techdocs-proof/README.md` and its `docs/` wiki.
+
+### go-analyzers
+
+`scripts/verify_go_analyzers.py`: gopls' analyzer set (modernize and friends)
+over every registered Go tree. gopls releases ahead of the x/tools tags
+golangci-lint depends on, so a finding reaches a developer's editor long
+before any other linter here sees it, and thirty-eight of them piled up
+without turning `check` red. Scope comes from
+[docs/contracts/languages.txt](./contracts/languages.txt): each registered
+language whose working directory carries a go.mod, never a path literal, so a
+renamed or newly registered Go tree stays in scope. Generated trees are
+scanned with the rest, because an emitter that starts writing flagged code is
+the finding, and `go/cmd/toolgen` is the only place it can be fixed. gopls
+exits zero even when it reports, so any output is the failure. Hard
+requirement rather than skip-if-missing, same false-green reason as
+betterleaks; `scripts/ci-setup.sh` installs it.
+
+### tools-typecheck
+
+`scripts/verify_tools_typecheck.py`: mypy over each project under `tools/`.
+`python-check` runs mypy from `python/` across `src/` and `tests/`, so nothing
+type-checked `tools/` at all while `tools-lint` ran ruff there, and a tree that
+is linted but never type-checked reads as covered.
+
+The Python target is read from each project's own `requires-python`, never
+written here and never inherited from the shipped package's `python_version`.
+The comparator declares 3.14 and uses PEP 758 unparenthesized except-tuples;
+mypy aimed at the package's 3.13 stops at that parse error and checks nothing
+in the file. Deriving the target means a project that raises its floor raises
+this with it, and there is no second place to update.
+
+Two silent failures are guarded, and they are not the parse abort: mypy exits
+non-zero there, so it fails loudly. A `tools/` that holds no project (renamed,
+moved) and a run that reports no checked-file count both fail rather than
+reporting a clean run. Findings print before that coverage check, because an
+aborted run covers nothing *and* says why, and answering "scanned nothing"
+would swallow the line naming the file that stopped it.
+
+What it cannot see: a function declared `-> Any` that returns Any is invisible
+to mypy by construction, so a caller misusing its result will never be a
+finding here. Honest `Any` at a JSON boundary is fine; an `Any` standing in for
+a shape nobody wanted to write is not, and no type checker distinguishes them.
+
+### dockerfiles
+
+`scripts/verify_dockerfiles.py`: droast at error severity over every
+Dockerfile git reports as tracked or untracked-and-not-ignored, found by name
+so a new image is in scope the moment its file exists. Nothing in `check`
+read a Dockerfile before, which is how a `curl ... | sh` sat in the CI-mirror
+image through twenty seals. Warnings and info are droast's own lower
+severities and do not fail; the gate prints only what failed, each error
+folded onto its own file and line. Hard requirement; `scripts/ci-setup.sh`
+installs it from the release binary, checksum-verified.
+
+### proto-lint
+
+`scripts/verify_proto_lint.py`: `buf lint` over whatever `buf.yaml`'s modules
+declare, which is why the gate carries no path of its own. `make proto` runs
+`buf generate`, which does not lint, and nothing else ran buf at all, so four
+findings sat in the contract every language is generated from. It stays
+offline: the workspace declares no `deps`, there is no `buf.lock`, and every
+import resolves inside `proto/`. Rule selection and per-path exemptions live
+in `buf.yaml`, so a developer's own `buf lint` reads the same config; the
+vendored `proto/buf/validate/` is exempted there under `lint.ignore`, which
+is lint-only and leaves generation reading it. buf is already a hard
+requirement and already pinned.
 
 ### actionlint
 
@@ -309,6 +464,11 @@ network, which is why they stay out of `check`: the offline gates prove both
 languages agree with each other, these prove that agreement still matches the
 live Linode API spec.
 
+`techdocs-drift.yml` is the same shape for the other upstream: it scrapes
+rendered TechDocs and compares them against the checked-out proto tree,
+uploading the run directory as an artifact. It reads only, never commits, and
+its findings feed the sync batches rather than any gate.
+
 ### sync-enums
 
 Proto enums vs the live spec and changelog. Drift a human has reconciled is
@@ -331,8 +491,9 @@ The live spec's route response shapes vs the snapshot the offline
 
 ### sync-scopes
 
-Per-tool OAuth scopes vs the spec's per-operation security blocks. Needs the
-venv, unlike the other sync gates. Deviations live annotated in
+The contract's declared per-tool OAuth scopes, as Python renders them, vs the
+spec's per-operation security blocks. Needs the venv, unlike the other sync
+gates. Deviations live annotated in
 `docs/contracts/scope-sync-baseline.txt`, structural ones in
 `docs/contracts/scope-sync-exempt.txt`. A route the spec documents no
 operation for is skipped, not failed: the spec lags techdocs, and

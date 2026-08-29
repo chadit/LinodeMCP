@@ -19,8 +19,8 @@ tool_route declares one of:
 The last one is what a meta tool's arguments carry: those tools answer from
 local state, so nothing about them is a request part, and reusing LOCAL there
 would break the bidirectional lock below. A routed message may declare one too,
-but only when its execute hook owns the call and reads it: an upload's
-source_path names bytes the request never carries.
+but only when its declared execute_transport owns the call and reads it: an
+upload's source_path names bytes the request never carries.
 
 Four things are checked, and each one is a way the annotation could look
 complete while being useless:
@@ -30,8 +30,8 @@ complete while being useless:
 - a path template naming a parameter no field declares as PATH cannot be
   filled, and a PATH field absent from the template would never be consumed.
   Both directions fail, because either one leaves a route that cannot be built;
-- TOOL on a routed message needs an execute hook to read it, or the value is
-  advertised in the schema and dropped before the call;
+- TOOL on a routed message needs a declared execute_transport to read it, or
+  the value is advertised in the schema and dropped before the call;
 - LOCAL must agree exactly with the trailing `// system param` marker that
   scripts/verify_system_params.py pins. Two records of the same fact drift, and
   the direction that matters is a field losing its marker and going on the wire:
@@ -62,10 +62,6 @@ _UNSPECIFIED = "FIELD_LOCATION_UNSPECIFIED"
 _PATH = "FIELD_LOCATION_PATH"
 _LOCAL = "FIELD_LOCATION_LOCAL"
 _TOOL = "FIELD_LOCATION_TOOL"
-
-# The hook kind that owns a tool's whole call, which is what gives a routed
-# message somewhere to read a TOOL argument from.
-_HOOK_EXECUTE = "execute"
 
 # Descriptor full names are package-qualified; proto sources name the message
 # alone. Everything under proto/linode/mcp/v1/ shares this package.
@@ -126,13 +122,13 @@ def local_mismatches(located: dict[str, dict[str, str]]) -> list[str]:
 
 
 def tool_argument_mismatches(located: dict[str, dict[str, str]]) -> list[str]:
-    """Routed messages declaring a TOOL argument with no hook to read it.
+    """Routed messages declaring a TOOL argument with no transport to read it.
 
     TOOL is the location for an argument that reaches no request part. A meta
     tool's whole input carries it, and so does the local file path a byte-moving
-    tool hands its execute hook. Anywhere else the value would be advertised in
-    the schema and then dropped before the call, which reads to a caller as an
-    argument the tool ignores. The emitter refuses the declaration for every
+    tool's declared transport reads. Anywhere else the value would be advertised
+    in the schema and then dropped before the call, which reads to a caller as
+    an argument the tool ignores. The emitter refuses the declaration for every
     language.
     """
     routed = {
@@ -144,12 +140,12 @@ def tool_argument_mismatches(located: dict[str, dict[str, str]]) -> list[str]:
     found: list[str] = []
     for message, fields in sorted(located.items()):
         declared = routed.get(message)
-        if declared is None or _HOOK_EXECUTE in declared.hooks:
+        if declared is None or declared.transported:
             continue
 
         short = message.removeprefix(_PACKAGE)
         found.extend(
-            f"{short}.{name}: TOOL on a routed message with no execute hook"
+            f"{short}.{name}: TOOL on a routed message with no execute_transport"
             for name, value in sorted(fields.items())
             if value == _TOOL
         )
@@ -200,8 +196,9 @@ def main() -> int:
             "FIELD_LOCATION_TOOL on a routed message with nothing to read it:",
             domain,
             "TOOL is for an argument that reaches no request part: a meta"
-            " tool's input, or the local path a byte-moving tool's execute hook"
-            " reads. Declare the hook, or give the field a request location",
+            " tool's input, or the local path a byte-moving tool's declared"
+            " transport reads. Declare execute_transport, or give the field a"
+            " request location",
         )
     if missing or paths or locals_ or domain:
         return 1

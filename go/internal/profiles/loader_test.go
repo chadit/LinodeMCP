@@ -15,19 +15,19 @@ import (
 // exact membership without cross-test coupling.
 func loaderCatalog() []profiles.ToolDescriptor {
 	return []profiles.ToolDescriptor{
-		{Name: "hello", Capability: profiles.CapMeta},
-		{Name: "version", Capability: profiles.CapMeta},
-		{Name: toolProfile, Capability: profiles.CapRead},
-		{Name: toolAccount, Capability: profiles.CapRead},
-		{Name: toolInstancesList, Capability: profiles.CapRead},
-		{Name: "linode_instance_get", Capability: profiles.CapRead},
-		{Name: toolInstanceCreate, Capability: profiles.CapWrite},
-		{Name: toolInstanceDelete, Capability: profiles.CapDestroy},
-		{Name: toolVolumesList, Capability: profiles.CapRead},
-		{Name: toolVolumeCreate, Capability: profiles.CapWrite},
-		{Name: toolVolumeClone, Capability: profiles.CapWrite},
-		{Name: toolVolumeDelete, Capability: profiles.CapDestroy},
-		{Name: toolVolumeResize, Capability: profiles.CapWrite},
+		{Name: "hello", Capability: profiles.CapMeta, Categories: []string{categoryCore}},
+		{Name: "version", Capability: profiles.CapMeta, Categories: []string{categoryCore}},
+		{Name: toolProfile, Capability: profiles.CapRead, Categories: []string{categoryCore}},
+		{Name: toolAccount, Capability: profiles.CapRead, Categories: []string{categoryCore}},
+		{Name: toolInstancesList, Capability: profiles.CapRead, Categories: []string{categoryCompute}},
+		{Name: "linode_instance_get", Capability: profiles.CapRead, Categories: []string{categoryCompute}},
+		{Name: toolInstanceCreate, Capability: profiles.CapWrite, Categories: []string{categoryCompute}},
+		{Name: toolInstanceDelete, Capability: profiles.CapDestroy, Categories: []string{categoryCompute}},
+		{Name: toolVolumesList, Capability: profiles.CapRead, Categories: []string{categoryBlockStorage}},
+		{Name: toolVolumeCreate, Capability: profiles.CapWrite, Categories: []string{categoryBlockStorage}},
+		{Name: toolVolumeClone, Capability: profiles.CapWrite, Categories: []string{categoryBlockStorage}},
+		{Name: toolVolumeDelete, Capability: profiles.CapDestroy, Categories: []string{categoryBlockStorage}},
+		{Name: toolVolumeResize, Capability: profiles.CapWrite, Categories: []string{categoryBlockStorage}},
 	}
 }
 

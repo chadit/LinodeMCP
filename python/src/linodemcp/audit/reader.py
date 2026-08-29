@@ -9,19 +9,18 @@ from __future__ import annotations
 
 import fnmatch
 import gzip
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
-from linodemcp.audit.event import Event
 from linodemcp.audit.jsonl import ACTIVE_LOG_FILE_NAME
 from linodemcp.audit.retention import parse_rotated_file_day
+from linodemcp.genlocal import audit_event_from_record
 
 if TYPE_CHECKING:
     from datetime import date, datetime
 
-    from linodemcp.audit.event import Capability, Status
+    from linodemcp.audit.event import Capability, Event, Status
 
 # Default number of events returned when the caller does not specify a
 # limit. Mirrors the Go DefaultRecentLimit.
@@ -115,7 +114,7 @@ def scan_events(
             if not include_meta and event.tool_capability == "meta":
                 continue
 
-            if since is not None and event.ts < since:
+            if event.ts_unix_ns < _since_unix_ns(since):
                 continue
 
             events.append(event)
@@ -127,6 +126,10 @@ def event_matches(query: RecentQuery, event: Event) -> bool:
     """Report whether an event satisfies every set filter. Public so the
     export loader can apply the same predicate to SQLite-reconstructed
     events.
+
+    The two bounds read the record's own nanosecond count rather than parsing
+    its timestamp text, which is the column the SQLite reader already bounds on,
+    so one window means one thing whichever store answered it.
     """
     if not query.include_meta and event.tool_capability == "meta":
         return False
@@ -140,10 +143,23 @@ def event_matches(query: RecentQuery, event: Event) -> bool:
     if query.status and event.status != query.status:
         return False
 
-    if query.since is not None and event.ts < query.since:
+    if event.ts_unix_ns < _since_unix_ns(query.since):
         return False
 
-    return not (query.until is not None and event.ts > query.until)
+    return query.until is None or event.ts_unix_ns <= _until_unix_ns(query.until)
+
+
+def _since_unix_ns(since: datetime | None) -> int:
+    """A lower bound as the nanosecond count a record carries, zero for none."""
+    if since is None:
+        return 0
+
+    return int(since.timestamp()) * 1_000_000_000 + since.microsecond * 1000
+
+
+def _until_unix_ns(until: datetime) -> int:
+    """An upper bound as the nanosecond count a record carries."""
+    return int(until.timestamp()) * 1_000_000_000 + until.microsecond * 1000
 
 
 def _ordered_audit_files(base: Path) -> list[str]:
@@ -203,8 +219,8 @@ def _read_events_from_file(path: Path) -> list[Event]:
             continue
 
         try:
-            events.append(Event.from_dict(json.loads(stripped)))
-        except (ValueError, KeyError):
+            events.append(audit_event_from_record(stripped))
+        except (TypeError, ValueError):
             continue
 
     return events

@@ -3,35 +3,13 @@
 Metrics, tracing, and health endpoints for running LinodeMCP as something you
 monitor rather than something you hope about. Both implementations expose the
 same metric names and the same endpoints. This is the OpenTelemetry layer;
-the [audit log](./audit-log.md) is a separate, more structured stream for
-tool-call accountability, with its own [operations page](./audit-operations.md).
+the [audit log](./audit.md) is a separate, more structured stream for
+tool-call accountability.
 
 ## Configuration
 
-The `observability` block in `~/.config/linodemcp/config.yml`:
-
-```yaml
-observability:
-  metrics:
-    enabled: true
-    prometheus:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8888
-      path: "/metrics"
-  tracing:
-    enabled: false
-    endpoint: "localhost:4317"
-    protocol: "grpc"      # or "http" for OTLP over HTTP
-    insecure: false       # true skips TLS (local collectors)
-    sampleRate: 1.0
-  health:
-    enabled: true
-    host: "127.0.0.1"
-    port: 8889
-    path: "/healthz"
-```
-
+The `observability` block in `~/.config/linodemcp/config.yml` is shown in the
+[root README's configuration example](../README.md#configuration).
 Defaults: metrics on `127.0.0.1:8888/metrics`, health on
 `127.0.0.1:8889/healthz`, tracing off. Everything binds to loopback by
 default; expose it deliberately if a scraper lives elsewhere.
@@ -94,8 +72,7 @@ TLS for local collectors, and `sampleRate` sets the head-sampling fraction
 
 ## Related
 
-- [Audit log](./audit-log.md): the accountability stream layered on top of
-  this; its `mode` field and query tools answer "what did the AI do", which
-  metrics deliberately don't.
-- [Audit operations](./audit-operations.md): sinks and retention for that
-  stream.
+- [Audit](./audit.md): the accountability stream layered on top of this; its
+  `mode` field and query tools answer "what did the AI do", which metrics
+  deliberately don't. Sinks and retention for that stream live on the same
+  page.

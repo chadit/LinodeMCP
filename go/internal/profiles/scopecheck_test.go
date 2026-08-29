@@ -91,6 +91,45 @@ func TestParsePATScopesDedupes(t *testing.T) {
 	}
 }
 
+// TestParsePATScopesKeepsScopesOutsideTheCatalog pins the documented
+// tolerance: a PAT may carry scopes the catalog does not name
+// (child_account:*, the declared per-tool families, future Linode
+// scopes), and the parse keeps them so the comparison can see them.
+func TestParsePATScopesKeepsScopesOutsideTheCatalog(t *testing.T) {
+	t.Parallel()
+
+	got := profiles.ParsePATScopes("linodes:read_only child_account:read_write")
+
+	if !slices.Contains(got, profiles.Scope("child_account:read_write")) {
+		t.Errorf("got = %v, want it to contain child_account:read_write", got)
+	}
+
+	if !slices.Contains(got, profiles.ScopeLinodesReadOnly) {
+		t.Errorf("got = %v, want it to contain %v", got, profiles.ScopeLinodesReadOnly)
+	}
+}
+
+// TestCompareScopesMatchesScopesOutsideTheCatalog pins that a required
+// scope the catalog does not name is satisfied by a token carrying it,
+// which is what a user-defined profile relies on.
+func TestCompareScopesMatchesScopesOutsideTheCatalog(t *testing.T) {
+	t.Parallel()
+
+	custom := profiles.Scope("child_account:read_write")
+	got := profiles.CompareScopes(
+		[]profiles.Scope{custom},
+		profiles.ParsePATScopes("child_account:read_write"),
+	)
+
+	if got.HasMissing() {
+		t.Errorf("got.Missing = %v, want none", got.Missing)
+	}
+
+	if got.HasExcess() {
+		t.Errorf("got.Excess = %v, want none", got.Excess)
+	}
+}
+
 // TestParsePATScopesPreservesWildcard locks in that "*" (the all-access
 // scope marker) parses straight through to ScopeWildcard so the
 // downstream comparison logic can short-circuit on it.
@@ -375,8 +414,8 @@ func TestCompareScopesRequiredWildcardIsNoOp(t *testing.T) {
 }
 
 // TestCompareScopesEmptyRequiredAlwaysPasses pins the no-op case: a
-// profile that declares no required scopes always passes. The
-// best-effort fallback in RequiredScopes lands here for unknown tools.
+// profile that declares no required scopes always passes, which is where
+// a catalog of meta and documented-scopeless tools lands.
 func TestCompareScopesEmptyRequiredAlwaysPasses(t *testing.T) {
 	t.Parallel()
 

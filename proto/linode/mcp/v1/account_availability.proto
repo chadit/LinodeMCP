@@ -32,6 +32,8 @@ message AccountAvailabilityGetInput {
     path: "/account/availability/{region_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountAvailability";
   option (linode.mcp.v1.tool_description) = "Gets services available and unavailable to the account in one region.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve account availability for region {region_id}: {error}";
@@ -54,6 +56,8 @@ message AccountAvailabilityListInput {
     path: "/account/availability"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountAvailabilityListResponse";
   option (linode.mcp.v1.tool_description) = "Lists services available and unavailable to the account in each region.";
 

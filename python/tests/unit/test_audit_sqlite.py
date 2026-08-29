@@ -12,7 +12,14 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from linodemcp.audit import Capability, Event, Mode, SQLiteSink, Status
+from linodemcp.audit import (
+    Capability,
+    Event,
+    Mode,
+    SQLiteSink,
+    Status,
+    event_timestamp,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -36,14 +43,14 @@ def _event(
     """Build an event with the fields the SQLite tests assert on."""
     ts = ts or datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id=event_id,
         tool=tool,
         tool_capability=capability,
         environment="prod",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=plan_id,
         args=args or {},
         args_redacted=redacted or [],

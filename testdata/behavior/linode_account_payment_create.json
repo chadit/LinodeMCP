@@ -28,6 +28,22 @@
       }
     },
     {
+      "name": "an explicit-null payment method is omitted, not sent as zero",
+      "args": {
+        "usd": "10.00",
+        "payment_method_id": null,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/payments",
+        "body": {
+          "usd": "10.00"
+        }
+      }
+    },
+    {
       "name": "requires confirm",
       "args": {
         "usd": "10.00"

@@ -119,6 +119,8 @@ message MonitorStreamListInput {
     path: "/monitor/streams"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the monitoring log streams on the account.";
   option (linode.mcp.v1.error_message) = "Failed to list monitor streams: {error}";
@@ -135,6 +137,8 @@ message MonitorStreamGetInput {
     path: "/monitor/streams/{stream_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStream";
   option (linode.mcp.v1.tool_description) = "Gets one monitoring log stream by stream_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve monitor stream {stream_id}: {error}";
@@ -161,6 +165,8 @@ message MonitorStreamHistoryListInput {
     path: "/monitor/streams/{stream_id}/history"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamHistoryListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the recorded versions of one monitoring log stream, by stream_id.";
   option (linode.mcp.v1.error_message) = "Failed to list history for monitor stream {stream_id}: {error}";
@@ -187,6 +193,8 @@ message MonitorStreamCreateInput {
     path: "/monitor/streams"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a monitoring log stream. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a monitor stream. Set confirm=true to proceed.";
@@ -255,6 +263,8 @@ message MonitorStreamUpdateInput {
     path: "/monitor/streams/{stream_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates one monitoring log stream by stream_id. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This updates a monitor stream. Set confirm=true to proceed.";
@@ -316,9 +326,9 @@ message MonitorStreamUpdateInput {
 // MonitorStreamDeleteInput is the input contract for
 // linode_monitor_stream_delete.
 //
-// It declares no fetch_state hook: the get above reads the same route, so the
-// preview and the plan hash read the stream through that rather than through a
-// hand-written step per removal.
+// It declares state_route rather than leaving the read undeclared: the get
+// above reads the same route, so the preview and the plan hash read the
+// stream through that.
 message MonitorStreamDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_monitor_stream_delete"
@@ -326,6 +336,8 @@ message MonitorStreamDeleteInput {
     path: "/monitor/streams/{stream_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one monitoring log stream by stream_id, which stops its delivery to every destination it names. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes a monitor stream and stops its log delivery. Set confirm=true to proceed.";
@@ -427,6 +439,8 @@ message MonitorStreamDestinationListInput {
     path: "/monitor/streams/destinations"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the logs destinations that monitoring streams can deliver to.";
   option (linode.mcp.v1.error_message) = "Failed to list monitor stream destinations: {error}";
@@ -444,6 +458,8 @@ message MonitorStreamDestinationGetInput {
     path: "/monitor/streams/destinations/{destination_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestination";
   option (linode.mcp.v1.tool_description) = "Gets one logs destination by destination_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve monitor stream destination {destination_id}: {error}";
@@ -470,6 +486,8 @@ message MonitorStreamDestinationHistoryListInput {
     path: "/monitor/streams/destinations/{destination_id}/history"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationHistoryListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the recorded versions of one logs destination, by destination_id.";
   option (linode.mcp.v1.error_message) = "Failed to list history for monitor stream destination {destination_id}: {error}";
@@ -497,6 +515,8 @@ message MonitorStreamDestinationCreateInput {
     path: "/monitor/streams/destinations"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a logs destination that monitoring streams can deliver to. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a monitor stream destination. Set confirm=true to proceed.";
@@ -563,6 +583,8 @@ message MonitorStreamDestinationUpdateInput {
     path: "/monitor/streams/destinations/{destination_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates one logs destination by destination_id. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This updates a monitor stream destination. Set confirm=true to proceed.";
@@ -620,7 +642,8 @@ message MonitorStreamDestinationUpdateInput {
 // MonitorStreamDestinationDeleteInput is the input contract for
 // linode_monitor_stream_destination_delete.
 //
-// It declares no fetch_state hook: the get above reads the same route, so the
+// It declares state_route rather than leaving the read undeclared: the get
+// above reads the same route, so the
 // preview and the plan hash read the destination through that rather than
 // through a hand-written step per removal.
 message MonitorStreamDestinationDeleteInput {
@@ -630,6 +653,8 @@ message MonitorStreamDestinationDeleteInput {
     path: "/monitor/streams/destinations/{destination_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorStreamDestinationDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one logs destination by destination_id. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes a monitor stream destination. Set confirm=true to proceed.";

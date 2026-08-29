@@ -227,7 +227,14 @@ class WriteBody:
         self._set(name, lambda raw: _str_or_null_value(name, raw))
 
     def set_int(self, name: str) -> None:
-        """Write an optional integer field when the caller supplied one."""
+        """Write an optional integer field when the caller supplied one.
+
+        An explicit null reads as "use the default": the key is omitted rather
+        than sent as 0, which is never an id the caller meant. Mirrors Go's
+        SetInt.
+        """
+        if name in self._arguments and self._arguments[name] is None:
+            return
         self._set(name, lambda raw: _int_value(name, raw))
 
     def put_bool(self, name: str) -> None:

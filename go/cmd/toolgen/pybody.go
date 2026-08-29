@@ -532,7 +532,16 @@ func pyBodyImports(tools []*pyTool) ([]string, error) {
 		found = append(found, name)
 	}
 
+	// Constants sort ahead of the rest, which is the member order the
+	// linter's import sort settles a from-import into.
 	sort.Slice(found, func(left, right int) bool {
+		leftConstant := found[left] == strings.ToUpper(found[left])
+		rightConstant := found[right] == strings.ToUpper(found[right])
+
+		if leftConstant != rightConstant {
+			return leftConstant
+		}
+
 		return strings.ToLower(found[left]) < strings.ToLower(found[right])
 	})
 

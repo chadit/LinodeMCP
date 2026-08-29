@@ -38,7 +38,7 @@ _RATCHETS = ("tool-parity-baseline.txt", "behavior-dryrun-baseline.txt")
 # what each one refuses. Listed here so the report says where that work went
 # rather than leaving it looking unchecked.
 _HARD_GATES = (
-    ("input-proto, read-proto, write-proto, meta-proto", "a hand-written tool surface"),
+    ("generated-form", "a hand-written tool surface"),
     ("behavior", "a tool with no shared behavior fixture"),
     ("messages", "confirm text that differs between languages"),
     ("pagination", "a list tool that cannot reach past page one"),

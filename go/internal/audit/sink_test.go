@@ -2,6 +2,7 @@ package audit_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 )
@@ -16,9 +17,9 @@ func TestNoopSinkSatisfiesInterface(t *testing.T) {
 
 	var sink audit.Sink = audit.NoopSink{}
 
-	evt := audit.Event{Tool: "test_tool"}
-	sink.Write(t.Context(), &evt)
-	sink.Write(t.Context(), &evt)
+	evt := &audit.Event{Tool: "test_tool"}
+	sink.Write(t.Context(), evt)
+	sink.Write(t.Context(), evt)
 
 	// The contract is "no observable effect"; the only check we can
 	// make is that the event we passed in is unchanged.
@@ -36,8 +37,8 @@ func TestMultiSinkFansOutToEveryChild(t *testing.T) {
 	second := audit.NewCapturingSink()
 	multi := audit.NewMultiSink(first, second)
 
-	evt := audit.Event{Tool: "fanned_out"}
-	multi.Write(t.Context(), &evt)
+	evt := &audit.Event{Tool: "fanned_out"}
+	multi.Write(t.Context(), evt)
 
 	if first.Len() != 1 {
 		t.Fatalf("first.Len() = %v, want %v", first.Len(), 1)
@@ -62,9 +63,9 @@ func TestMultiSinkEmptyIsNoop(t *testing.T) {
 	t.Parallel()
 
 	multi := audit.NewMultiSink()
-	evt := audit.Event{Tool: "nowhere"}
+	evt := &audit.Event{Tool: "nowhere"}
 
-	func() { multi.Write(t.Context(), &evt) }()
+	func() { multi.Write(t.Context(), evt) }()
 }
 
 // TestCapturingSinkRetainsWriteOrder confirms the test-only sink
@@ -75,13 +76,13 @@ func TestCapturingSinkRetainsWriteOrder(t *testing.T) {
 
 	sink := audit.NewCapturingSink()
 
-	first := audit.Event{Tool: "first"}
-	second := audit.Event{Tool: "second"}
-	third := audit.Event{Tool: "third"}
+	first := &audit.Event{Tool: "first"}
+	second := &audit.Event{Tool: "second"}
+	third := &audit.Event{Tool: "third"}
 
-	sink.Write(t.Context(), &first)
-	sink.Write(t.Context(), &second)
-	sink.Write(t.Context(), &third)
+	sink.Write(t.Context(), first)
+	sink.Write(t.Context(), second)
+	sink.Write(t.Context(), third)
 
 	events := sink.Events()
 	if len(events) != 3 {
@@ -101,21 +102,21 @@ func TestCapturingSinkRetainsWriteOrder(t *testing.T) {
 	}
 }
 
-// TestCapturingSinkCopiesEvent locks the copy-not-share contract.
-// The capture middleware reuses the event variable across
-// invocations; storing the pointer directly would let later
-// mutation overwrite earlier captures.
-func TestCapturingSinkCopiesEvent(t *testing.T) {
+// TestCapturingSinkKeepsWhatTheOutcomeAnswered locks what replaced the
+// copy-not-share contract. Finalize and SetMode answer a NEW record rather than
+// writing into the one they were handed, so a capture cannot be reached by a
+// later outcome the way a shared pointer once could.
+func TestCapturingSinkKeepsWhatTheOutcomeAnswered(t *testing.T) {
 	t.Parallel()
 
 	sink := audit.NewCapturingSink()
-	evt := audit.Event{Tool: "original"}
+	entry := &audit.Event{Tool: "original"}
 
-	sink.Write(t.Context(), &evt)
+	sink.Write(t.Context(), entry)
 
-	// Mutate the source event AFTER write. A copy-based sink keeps
-	// the original; a share-based sink reflects the mutation.
-	evt.Tool = "mutated"
+	// The outcome of the call, answered after the capture. A rebuild leaves the
+	// captured record alone; a write into the old one would reach it.
+	audit.Finalize(entry, audit.StatusError, time.Second, tcBoom, "")
 
 	events := sink.Events()
 	if len(events) != 1 {
@@ -124,6 +125,10 @@ func TestCapturingSinkCopiesEvent(t *testing.T) {
 
 	if events[0].Tool != "original" {
 		t.Errorf("events[0].Tool = %v, want %v", events[0].Tool, "original")
+	}
+
+	if events[0].Status != "" {
+		t.Errorf("events[0].Status = %v, want empty", events[0].Status)
 	}
 }
 
@@ -136,8 +141,8 @@ func TestCapturingSinkLenReportsCount(t *testing.T) {
 		t.Errorf("sink.Len() = %v, want %v", sink.Len(), 0)
 	}
 
-	evt := audit.Event{Tool: "one"}
-	sink.Write(t.Context(), &evt)
+	evt := &audit.Event{Tool: "one"}
+	sink.Write(t.Context(), evt)
 
 	if sink.Len() != 1 {
 		t.Errorf("sink.Len() = %v, want %v", sink.Len(), 1)

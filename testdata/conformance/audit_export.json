@@ -9,6 +9,7 @@
   "canonical": {
     "path": "/tmp/audit-export.csv",
     "format": "csv",
-    "record_count": 42
+    "record_count": 42,
+    "warnings": []
   }
 }

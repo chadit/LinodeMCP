@@ -114,10 +114,10 @@ func (t *pyTool) pathArg(slot string) pyPathArg {
 	reader := t.c.Readers[slot]
 
 	if entry != nil && (entry.Kind() == protoreflect.Int32Kind || entry.Kind() == protoreflect.Int64Kind) {
-		return pyPathArg{absent: "0", coerce: "int", reader: reader, numeric: true}
+		return pyPathArg{absent: "0", coerce: typeWordInt, reader: reader, numeric: true}
 	}
 
-	return pyPathArg{absent: `""`, coerce: "str", reader: reader}
+	return pyPathArg{absent: `""`, coerce: typeWordStr, reader: reader}
 }
 
 // sentences is the wording one field gives its reader's refusals, arm by arm.
@@ -175,8 +175,8 @@ func (t *pyTool) writeEchoes() []string {
 		return nil
 	}
 
-	// An execute-backed read assembles its whole answer: one member is what the
-	// hook brought back and every other one echoes an argument.
+	// A transported read assembles its whole answer: one member is what the
+	// transfer brought back and every other one echoes an argument.
 	if t.c.Tier == tierGet && len(t.c.Assembled) > 0 {
 		return t.assembledEchoes()
 	}
@@ -220,8 +220,8 @@ func (t *pyTool) writeEchoes() []string {
 	return found
 }
 
-// assembledEchoes is every response member an execute-backed read did not fill
-// from its hook, which is the rest of the answer the call already holds.
+// assembledEchoes is every response member a transported read did not fill
+// from its transfer, which is the rest of the answer the call already holds.
 func (t *pyTool) assembledEchoes() []string {
 	filled := make(map[string]bool, len(t.c.Assembled))
 	for _, member := range t.c.Assembled {
@@ -240,8 +240,8 @@ func (t *pyTool) assembledEchoes() []string {
 	return found
 }
 
-// assembledNames is the response members an execute hook fills, in the order
-// the contract resolved them.
+// assembledNames is the response members a transport fills, in the order the
+// contract resolved them.
 func (t *pyTool) assembledNames() []string {
 	found := make([]string, 0, len(t.c.Assembled))
 	for _, member := range t.c.Assembled {
@@ -320,7 +320,7 @@ func (t *pyTool) gatedRead() bool {
 }
 
 // assembledRead reports whether a tool reads through the assembled-read driver.
-// The write tier also fills members from its hook, but it keeps its own driver:
+// The write tier also fills members from its transport, but it keeps its own driver:
 // what separates the two is the message and the confirm gate a mutation
 // carries, not where the values came from.
 func (t *pyTool) assembledRead() bool {
@@ -376,38 +376,6 @@ func (t *pyTool) pathReadSlots() []string {
 	}
 
 	return t.derivedSlots()
-}
-
-// hook is the Python function one tool's hook of a kind lives under, "" when
-// the tool declares no hook of that kind. The name is derived from the tool and
-// the kind, the same pair the Go arm derives its own spelling from, so neither
-// language carries a name the other has to be kept in step with.
-func (t *pyTool) hook(kind string) string {
-	slot, known := (&t.c.Hooks).slot(kind)
-	if !known || *slot == "" {
-		return ""
-	}
-
-	return t.c.Name + "_" + kind
-}
-
-// hookNames is the hook functions one tool declares, in kind order.
-func (t *pyTool) hookNames() []string {
-	declared := []string{
-		t.hook(hookKindNormalize), t.hook(hookKindValidate), t.hook(hookKindPreview),
-		t.hook(hookKindFetchState), t.hook(hookKindDependencyWalk),
-		t.hook(hookKindExecute), t.hook(hookKindAnswer),
-	}
-
-	found := make([]string, 0, len(declared))
-
-	for _, name := range declared {
-		if name != "" {
-			found = append(found, name)
-		}
-	}
-
-	return found
 }
 
 // responseSubject is the call a malformed response is reported against, in

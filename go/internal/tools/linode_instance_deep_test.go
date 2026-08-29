@@ -1137,8 +1137,8 @@ func TestLinodeInstanceDisksListToolDefinition(t *testing.T) {
 
 	t.Parallel()
 
-	if tool.Name != "linode_instance_disk_list" {
-		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_disk_list")
+	if tool.Name != toolInstanceDiskList {
+		t.Errorf("tool.Name = %v, want %v", tool.Name, toolInstanceDiskList)
 	}
 
 	if tool.Description == "" {

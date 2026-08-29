@@ -344,7 +344,7 @@ func TestGeneratedMarkerListReportsAnUnresolvableEnvironment(t *testing.T) {
 	handler := newMarkerSeamTool(t, nil, linode.ListMarkerPage{}, nil)
 
 	args := markerSeamArgs()
-	args[keyEnvironment] = "staging"
+	args[keyEnvironment] = tcStaging
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, args))
 	if err != nil {

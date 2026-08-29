@@ -40,6 +40,8 @@ message LKENodeGetInput {
     path: "/lke/clusters/{cluster_id}/nodes/{node_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENode";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a specific node within an LKE cluster";
   option (linode.mcp.v1.error_message) = "Failed to retrieve node '{node_id}' for cluster {cluster_id}: {error}";
@@ -63,6 +65,8 @@ message LKENodeDeleteInput {
     path: "/lke/clusters/{cluster_id}/nodes/{node_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodeDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a specific node from an LKE cluster. The node will be removed and may be replaced depending on pool settings. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes the specified node. Set confirm=true to proceed.";
@@ -75,8 +79,20 @@ message LKENodeDeleteInput {
     tool: "linode_lke_node_get"
   };
   // The walk names the backing Linode the delete destroys, which the fetched
-  // node carries.
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // node carries; the pool-level sentence goes out even for an unbacked node.
+  option (linode.mcp.v1.dependency_walk) = {
+    state_scalar: "instance_id"
+    emit: {
+      kind: "instance"
+      id_field: "instance_id"
+      label_field: "id"
+      action: "cascade_deleted"
+      note: "Backing Linode for this node."
+    }
+    warnings: {
+      template: "Deleting this node removes it from its pool; the pool node count drops by one and scheduled workloads reschedule."
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -105,6 +121,8 @@ message LKENodeRecycleInput {
     path: "/lke/clusters/{cluster_id}/nodes/{node_id}/recycle"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodeRecycleResponse";
   option (linode.mcp.v1.tool_description) = "Recycles a specific node in an LKE cluster. The node will be drained and replaced with a new one. Pass dry_run=true to preview without recycling.";
   option (linode.mcp.v1.confirm_message) = "This recycles the specified node, replacing it with a new one. Set confirm=true to proceed.";

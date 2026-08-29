@@ -35,6 +35,8 @@ message BetaGetInput {
     path: "/betas/{beta_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.BetaProgram";
   option (linode.mcp.v1.tool_description) = "Gets one available beta program.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve beta program {beta_id}: {error}";
@@ -56,6 +58,8 @@ message BetaListInput {
     path: "/betas"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.BetaProgramListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available beta programs.";
 

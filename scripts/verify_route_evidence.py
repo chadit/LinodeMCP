@@ -2,21 +2,23 @@
 """Route-evidence gate: every declared route is one a client can actually build.
 
 The proto contract records which Linode operation each tool calls, as a
-`tool_route` option on the tool's input message. Nothing checked those
-declarations against the clients. A route could sit in the contract with no code
-behind it in one language, and the catalog scan that goes looking finds nothing
-when the path is assembled rather than written out: no grep for
-"/linode/instances/{id}/interfaces" matches
-fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID). Disproving
-one of those false positives costs a full investigation, and the last one ended
-in a hand-written test pinning a single route by name.
+`tool_route` option on the tool's input message. This gate proves each client
+can build every declared route. All of that evidence is contract-derived now:
+every request call site in both languages names its tool at a generated driver
+primitive and carries no path of its own, so the scanners measure zero
+hand-assembled URLs and zero unresolved sites. The hand-assembly resolution
+stays anyway, as the tripwire: a call site that builds its URL by hand again
+either resolves into evidence or fails the gate as unresolved, rather than
+hiding from a catalog grep the way
+fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID) once hid
+from a scan for "/linode/instances/{id}/interfaces".
 
-This resolves each client's route surface from source instead and checks the
-contract against it. Go resolves through go/cmd/route-dump (AST, no build, no
-imports, so the gitignored genpb tree cannot break it); Python resolves here
-with ast. Both find their request primitives structurally, by the function that
-takes a method and an endpoint and builds an HTTP request out of them, so a new
-wrapper is picked up in either language without an edit.
+Each client's route surface is resolved from source and the contract is checked
+against it. Go resolves through go/cmd/route-dump (AST, no build, no imports,
+so the gitignored genpb tree cannot break it); Python resolves here with ast.
+Both find their request primitives structurally, by the function that takes a
+method and an endpoint and builds an HTTP request out of them, so a new wrapper
+is picked up in either language without an edit.
 
 What gets scanned comes from docs/contracts/languages.txt rather than a path
 written here. COVERAGE says how each registered language is resolved, and a

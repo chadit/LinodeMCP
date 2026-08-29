@@ -16,10 +16,10 @@ import json
 import sys
 from typing import Any
 
+from linodemcp.gentools import categories_for, scopes_for
 from linodemcp.profiles.builtin import (
     ToolDescriptor,
     builtin_catalog_json,
-    categories,
 )
 from linodemcp.profiles.capability import Capability
 
@@ -36,7 +36,17 @@ def read_catalog(raw: str) -> list[ToolDescriptor]:
         if capability is None:
             msg = f"tool {name!r}: unknown capability {tier!r}"
             raise SystemExit(msg)
-        catalog.append(ToolDescriptor(name=name, capability=capability))
+        # Scopes and categories come from this language's generated registry
+        # tables rather than the fixture, so the gate witnesses each
+        # rendering's own tables.
+        catalog.append(
+            ToolDescriptor(
+                name=name,
+                capability=capability,
+                scopes=tuple(scopes_for(name)),
+                categories=tuple(categories_for(name)),
+            )
+        )
 
     return catalog
 
@@ -44,7 +54,7 @@ def read_catalog(raw: str) -> list[ToolDescriptor]:
 def dump(catalog: list[ToolDescriptor]) -> str:
     """Render both halves against one catalog."""
     payload = {
-        "categories": {tool.name: categories(tool.name) for tool in catalog},
+        "categories": {tool.name: list(tool.categories) for tool in catalog},
         "profiles": json.loads(builtin_catalog_json(catalog)),
     }
     return json.dumps(payload, sort_keys=True, indent=2)

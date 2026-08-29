@@ -21,6 +21,9 @@ from linodemcp.gentools import (
     create_linode_profile_draft_discard_tool,
     create_linode_profile_draft_new_tool,
     create_linode_profile_draft_show_tool,
+    handle_linode_profile_draft_discard,
+    handle_linode_profile_draft_new,
+    handle_linode_profile_draft_show,
 )
 from linodemcp.profiles import Capability
 from linodemcp.profiles.builder import Registry
@@ -30,11 +33,6 @@ from linodemcp.tools.builderstate import (
     BuilderState,
     reset_builder_state,
     set_builder_state,
-)
-from linodemcp.tools.linode_profile_draft import (
-    profile_draft_discard_result,
-    profile_draft_new_result,
-    profile_draft_show_result,
 )
 
 if TYPE_CHECKING:
@@ -101,6 +99,7 @@ def install_fixtures() -> Iterator[Registry]:
             drafts=registry,
             catalog=fixture_catalog,
             active_profile=_no_profile,
+            config=fixture_config(),
         )
     )
 
@@ -137,7 +136,9 @@ def test_draft_new_registration() -> None:
 @pytest.mark.asyncio
 async def test_draft_new_creates_empty_draft(install_fixtures: Registry) -> None:
     """No-clone-from happy path: empty draft created and registered."""
-    response = profile_draft_new_result({"name": _DRAFT_FIXTURE_NAME}, fixture_config())
+    response = await handle_linode_profile_draft_new(
+        {"name": _DRAFT_FIXTURE_NAME}, fixture_config()
+    )
 
     payload = _parse_response(response[0].text)
     assert payload["name"] == _DRAFT_FIXTURE_NAME
@@ -155,7 +156,7 @@ async def test_draft_new_creates_empty_draft(install_fixtures: Registry) -> None
 @pytest.mark.asyncio
 async def test_draft_new_clones_from_source() -> None:
     """Clone path: every field on the source profile lands on the draft."""
-    response = profile_draft_new_result(
+    response = await handle_linode_profile_draft_new(
         {"name": _DRAFT_FIXTURE_NAME, "clone_from": _CLONE_SOURCE_NAME},
         fixture_config(),
     )
@@ -173,7 +174,7 @@ async def test_draft_new_clones_from_source() -> None:
 @pytest.mark.asyncio
 async def test_draft_new_refuses_missing_name() -> None:
     """An absent name answers the shared refusal, not a transport failure."""
-    response = profile_draft_new_result({}, fixture_config())
+    response = await handle_linode_profile_draft_new({}, fixture_config())
 
     assert response[0].text == _NAME_MISSING
 
@@ -183,7 +184,7 @@ async def test_draft_new_refuses_unknown_clone_source(
     install_fixtures: Registry,
 ) -> None:
     """An unknown clone_from refuses by name and leaves nothing behind."""
-    response = profile_draft_new_result(
+    response = await handle_linode_profile_draft_new(
         {"name": _DRAFT_FIXTURE_NAME, "clone_from": "nonexistent-profile"},
         fixture_config(),
     )
@@ -199,9 +200,13 @@ async def test_draft_new_refuses_unknown_clone_source(
 @pytest.mark.asyncio
 async def test_draft_new_refuses_duplicate_name() -> None:
     """A second create with the same name refuses rather than overwriting."""
-    profile_draft_new_result({"name": _DRAFT_FIXTURE_NAME}, fixture_config())
+    await handle_linode_profile_draft_new(
+        {"name": _DRAFT_FIXTURE_NAME}, fixture_config()
+    )
 
-    response = profile_draft_new_result({"name": _DRAFT_FIXTURE_NAME}, fixture_config())
+    response = await handle_linode_profile_draft_new(
+        {"name": _DRAFT_FIXTURE_NAME}, fixture_config()
+    )
 
     assert response[0].text == "Error: draft already exists: dns-readall"
 
@@ -226,7 +231,9 @@ async def test_draft_show_returns_live_draft_state(
     """
     install_fixtures.create(_DRAFT_FIXTURE_NAME, fixture_source_profile())
 
-    response = profile_draft_show_result({"name": _DRAFT_FIXTURE_NAME})
+    response = await handle_linode_profile_draft_show(
+        {"name": _DRAFT_FIXTURE_NAME}, Config()
+    )
 
     payload = _parse_response(response[0].text)
     src = fixture_source_profile()
@@ -238,7 +245,9 @@ async def test_draft_show_returns_live_draft_state(
 @pytest.mark.asyncio
 async def test_draft_show_refuses_unknown() -> None:
     """A name no draft carries refuses with the sentence Go answers too."""
-    response = profile_draft_show_result({"name": "nonexistent-draft"})
+    response = await handle_linode_profile_draft_show(
+        {"name": "nonexistent-draft"}, Config()
+    )
 
     assert response[0].text == "Error: draft not found: nonexistent-draft"
 
@@ -246,7 +255,7 @@ async def test_draft_show_refuses_unknown() -> None:
 @pytest.mark.asyncio
 async def test_draft_show_refuses_missing_name() -> None:
     """An absent name answers the shared refusal."""
-    response = profile_draft_show_result({})
+    response = await handle_linode_profile_draft_show({}, Config())
 
     assert response[0].text == _NAME_MISSING
 
@@ -265,7 +274,9 @@ async def test_draft_discard_removes_draft(install_fixtures: Registry) -> None:
     """Happy path: discard returns discarded=True and removes from registry."""
     install_fixtures.create(_DRAFT_FIXTURE_NAME)
 
-    response = profile_draft_discard_result({"name": _DRAFT_FIXTURE_NAME})
+    response = await handle_linode_profile_draft_discard(
+        {"name": _DRAFT_FIXTURE_NAME}, Config()
+    )
 
     payload = _parse_response(response[0].text)
     assert payload["name"] == _DRAFT_FIXTURE_NAME
@@ -280,7 +291,9 @@ async def test_draft_discard_idempotent() -> None:
     Tool handlers should be safe to call on cleanup paths without
     first checking existence.
     """
-    response = profile_draft_discard_result({"name": "nonexistent-draft"})
+    response = await handle_linode_profile_draft_discard(
+        {"name": "nonexistent-draft"}, Config()
+    )
 
     payload = _parse_response(response[0].text)
     assert payload["name"] == "nonexistent-draft"
@@ -290,7 +303,7 @@ async def test_draft_discard_idempotent() -> None:
 @pytest.mark.asyncio
 async def test_draft_discard_refuses_missing_name() -> None:
     """An absent name answers the shared refusal, as _new and _show do."""
-    response = profile_draft_discard_result({})
+    response = await handle_linode_profile_draft_discard({}, Config())
 
     assert response[0].text == _NAME_MISSING
 

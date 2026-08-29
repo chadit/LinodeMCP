@@ -60,6 +60,8 @@ message NodeBalancerConfigNodeGetInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}/nodes/{node_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNode";
   option (linode.mcp.v1.tool_description) = "Gets a backend node for a specific NodeBalancer config.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve node {node_id} for NodeBalancer {nodebalancer_id} config {config_id}: {error}";
@@ -102,6 +104,8 @@ message NodeBalancerConfigNodeListInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}/nodes"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists backend nodes for a specific NodeBalancer config.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve items: {error}";
@@ -134,6 +138,8 @@ message NodeBalancerConfigNodeCreateInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}/nodes"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.error_message) = "Failed to create node for NodeBalancer {nodebalancer_id} config {config_id}: {error}";
@@ -231,6 +237,8 @@ message NodeBalancerConfigNodeUpdateInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}/nodes/{node_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.error_message) = "Failed to update node {node_id} for NodeBalancer {nodebalancer_id} config {config_id}: {error}";
@@ -346,6 +354,8 @@ message NodeBalancerConfigNodeDeleteInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}/nodes/{node_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigNodeDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a backend node from a specific NodeBalancer config. WARNING: This removes the node from load balancing.";
   option (linode.mcp.v1.error_message) = "Failed to delete node {node_id} from NodeBalancer {nodebalancer_id} config {config_id}: {error}";

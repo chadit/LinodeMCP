@@ -6,17 +6,14 @@ The proto contract lives in `proto/linode/mcp/v1`. Go lives in `go/`, Python in 
 
 ## Documentation
 
-- [README](README.md): what the server is, install, quick start, project layout, design decisions
+- [README](README.md): what the server is, install, quick start, design decisions
 - [Docs index](docs/README.md): map of every docs page and machine contract
-- [Profiles](docs/profiles.md): permission model: which tools the AI client can see and call, capability tags, config schema, token-scope validation
-- [Profile recipes](docs/profile-recipes.md): copy-paste profile configs for common postures
+- [Profiles](docs/profiles.md): permission model: which tools the AI client can see and call, capability tags, config schema, token-scope validation, and copy-paste recipes
 - [Dry-run and confirm](docs/dry-run.md): preview any mutator; destructive calls must be previewed or explicitly waived; pre-check and yolo
-- [Two-stage writes](docs/two-stage-writes.md): plan a destructive call, review it, apply by id; refused if the resource drifted
-- [State drift](docs/state-drift.md): what counts as drift and how to read each refusal code
-- [Audit log](docs/audit-log.md): event schema, redaction, the query tools, and investigative patterns
-- [Audit operations](docs/audit-operations.md): sinks, retention, the config block, recovery, and failure modes
-- [Audit reports](docs/audit-reports.md): named audit queries defined in config; the filter grammar
-- [Host integrations](docs/host-integrations/README.md): wiring Claude Code, Claude Desktop, and other MCP hosts
+- [Two-stage writes](docs/two-stage-writes.md): plan a destructive call, review it, apply by id; refused if the resource drifted, plus how to read each refusal code
+- [Audit](docs/audit.md): event schema, redaction, the query tools, sinks, retention, recovery, and the named-report filter grammar
+- [Object Storage data plane](docs/object-storage-data-plane.md): moving object bytes through presigned URLs in both directions
+- [Host integrations](docs/host-integrations/README.md): registering the server with Claude Code, Claude Desktop, Gemini CLI, GitHub Copilot, and other MCP hosts
 - [CLI and server modes](docs/cli.md): bare invocation runs the MCP stdio server; the CLI verbs run and exit
 - [Observability](docs/observability.md): Prometheus metrics, health endpoints, OTLP tracing
 - [Release process](docs/release-process.md): maintainer runbook for cutting a release
@@ -39,5 +36,6 @@ Gate-read files, never hand-edited. Each file's header comment names its rules a
 
 - [Git hooks](docs/git-hooks.md): pre-commit setup for local checks
 - [Deprecated routes](docs/deprecated-routes.md): removed tools and routes with their replacements
-- [Claude Code commands](docs/host-integrations/claude-code/commands/profile.md): slash-command wrappers (profile, audit, two-stage) for Claude Code
-- [Claude Desktop commands](docs/host-integrations/claude-desktop/commands/profile.md): shell wrappers and conversation patterns for Claude Desktop
+- [Host profile wrappers](docs/host-integrations/profiles.md): the `/profile` slash command for Claude Code and shell aliases for Claude Desktop
+- [Host audit wrappers](docs/host-integrations/audit.md): `/audit` slash commands, ask-Claude patterns, and terminal queries per host
+- [Host two-stage wrappers](docs/host-integrations/two-stage.md): `/plan` and `/apply` wrappers and the conversation script per host

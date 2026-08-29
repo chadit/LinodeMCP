@@ -11,15 +11,15 @@ var (
 	errUnexpectedKeyToken = errors.New("unexpected object key token")
 )
 
+// ErrLocalBody reports a plain body that does not fit the message a surface
+// outside MCP prints it through, which only a change to one of the two reaches.
+var ErrLocalBody = errors.New("answer does not fit its message")
+
 // Sentinel errors for image share group validation.
 var (
 	ErrTagsMustBeJSONStringArray = errors.New("tags must be a JSON string array")
 	ErrTagsEntriesNonEmpty       = errors.New("tags entries must be non-empty strings")
 )
-
-// ErrVLANNotFound is returned when a VLAN dry-run cannot find a matching
-// region+label in the VLAN list (VLANs have no single-resource GET).
-var ErrVLANNotFound = errors.New("VLAN not found")
 
 // Sentinel errors for bucket validation.
 var (

@@ -2,7 +2,7 @@
 repos:
   # Go linter (managed - auto-installed by pre-commit)
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.12.2
+    rev: v2.13.2
     hooks:
       - id: golangci-lint
         args: ['--max-issues-per-linter=0', '--max-same-issues=0']
@@ -46,6 +46,32 @@ repos:
         entry: bash -c 'python/.venv/bin/ruff format --check scripts/'
         files: ^scripts/.*\.py$
         types: [python]
+        language: system
+        pass_filenames: false
+
+      # tools/ holds tool projects (the TechDocs comparator today) that ship
+      # with neither language package. Each carries its own pyproject, which
+      # ruff discovers per file.
+      - id: ruff-tools
+        name: ruff (tools)
+        entry: bash -c 'python/.venv/bin/ruff check tools/'
+        files: ^tools/.*\.py$
+        types: [python]
+        language: system
+        pass_filenames: false
+      - id: ruff-format-tools
+        name: ruff format (tools)
+        entry: bash -c 'python/.venv/bin/ruff format --check tools/'
+        files: ^tools/.*\.py$
+        types: [python]
+        language: system
+        pass_filenames: false
+      # The comparator's offline self-test. Its scraping half needs the
+      # network and never runs here.
+      - id: techdocs-proof
+        name: techdocs-proof (comparator self-test)
+        entry: bash -c 'PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof --self-test'
+        files: ^tools/techdocs-proof/
         language: system
         pass_filenames: false
 
@@ -110,47 +136,19 @@ repos:
         language: system
         pass_filenames: false
 
-      # Handler-level write-proto completeness. Statically classifies every
-      # mutating tool's success path (Go: go run ./cmd/write-proto-dump; Python:
-      # the _write_proto_classifier module) and fails on any handler that is not
-      # proto-routed on both sides, plus any *WriteResponse proto with no
-      # conformance fixture. No baseline: the conversion is done, so a straggler
+      # Generated-form gate, the merge of the old write-proto, read-proto,
+      # input-proto, and meta-proto hooks. Statically classifies every tool
+      # surface (Go: go run ./cmd/write-proto-dump -surface <s>; Python: the
+      # _write_proto_classifier module): write/read/meta handler success paths
+      # must be proto-routed on both sides, every advertised input schema must
+      # be proto-generated, and a *WriteResponse proto with no conformance
+      # fixture fails too. No baseline: the conversion is done, so a straggler
       # is hand-written code to fix. language: system because it needs both the
       # Go toolchain and the Python venv. Fires when either implementation's
       # source or the protos change.
-      - id: write-proto
-        name: write-proto (handler proto-routing completeness)
-        entry: bash -c 'python/.venv/bin/python scripts/verify_write_proto.py'
-        files: ^(go|python|proto)/
-        language: system
-        pass_filenames: false
-
-      # Read-surface sibling of write-proto: classifies every Read tool's
-      # handler on both sides and fails on any that is not proto-routed.
-      - id: read-proto
-        name: read-proto (read handler proto-routing completeness)
-        entry: bash -c 'python/.venv/bin/python scripts/verify_read_proto.py'
-        files: ^(go|python|proto)/
-        language: system
-        pass_filenames: false
-
-      # Input-schema sibling of write-proto/read-proto: classifies every tool's
-      # factory on both sides (Go: go run ./cmd/write-proto-dump -surface input;
-      # Python: the _write_proto_classifier module in input mode) as
-      # proto-generated or hand-built, and fails on any hand-built schema.
-      - id: input-proto
-        name: input-proto (tool input-schema proto completeness)
-        entry: bash -c 'python/.venv/bin/python scripts/verify_input_proto.py'
-        files: ^(go|python|proto)/
-        language: system
-        pass_filenames: false
-
-      # Meta-capability sibling of write-proto/read-proto: classifies every
-      # Meta tool's handler on both sides and fails on any that is not
-      # proto-routed.
-      - id: meta-proto
-        name: meta-proto (meta handler proto-routing completeness)
-        entry: bash -c 'python/.venv/bin/python scripts/verify_meta_proto.py'
+      - id: generated-form
+        name: generated-form (tool surfaces proto-generated end to end)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_generated_form.py'
         files: ^(go|python|proto)/
         language: system
         pass_filenames: false

@@ -35,10 +35,36 @@ def test_build_catalog_full_includes_registry() -> None:
     from linodemcp.server import get_tool_registry
 
     entries = model.build_catalog(allowed=None)
-    assert len(entries) == len(get_tool_registry())
     names = {e.name for e in entries}
+    assert names == {e.name for e in get_tool_registry()}
     assert "version" in names
     assert "linode_instance_list" in names
+
+
+def test_build_catalog_lists_a_tool_under_each_of_its_categories() -> None:
+    """A multi-category tool appears under every node it declares.
+
+    Matches the Go catalog: linode_instance_backup_list declares
+    compute_deep and compute, and grouping it under only the first hid it
+    from anyone browsing compute.
+    """
+    entries = model.build_catalog(allowed=None)
+    cats = {e.category for e in entries if e.name == "linode_instance_backup_list"}
+    assert cats == {"compute_deep", "compute"}
+
+
+def test_build_catalog_files_category_less_tools_under_uncategorized() -> None:
+    """A tool declaring no category lands in the fallback bucket, not nowhere."""
+    entries = model.build_catalog(allowed=None)
+    cats = {e.category for e in entries if e.name == "linode_audit_health"}
+    assert cats == {model.UNCATEGORIZED}
+
+
+def test_build_catalog_files_entity_list_under_iam() -> None:
+    """The IAM helper sits under the iam node with its linode_iam_ siblings."""
+    entries = model.build_catalog(allowed=None)
+    cats = {e.category for e in entries if e.name == "linode_entity_list"}
+    assert cats == {"iam"}
 
 
 def test_build_catalog_filtered_is_subset() -> None:

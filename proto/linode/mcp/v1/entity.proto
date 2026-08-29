@@ -36,6 +36,8 @@ message EntityListInput {
     path: "/entities"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.EntityListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the managed objects on the account that IAM roles can grant access over, such as instances and firewalls.";
   option (linode.mcp.v1.error_message) = "Failed to list account entities: {error}";

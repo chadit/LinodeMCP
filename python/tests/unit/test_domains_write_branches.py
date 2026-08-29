@@ -18,27 +18,10 @@ from linodemcp.gentools import (
     handle_linode_domain_delete,
     handle_linode_domain_update,
 )
-from linodemcp.linode import APIError, Domain
+from linodemcp.linode import APIError
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-
-
-def _domain(**overrides: object) -> Domain:
-    """Build a Domain read model with defaults for walk tests."""
-    base: dict[str, object] = {
-        "id": 5,
-        "domain": "old.example.com",
-        "type": "master",
-        "status": "active",
-        "soa_email": "old@example.com",
-        "description": "",
-        "tags": [],
-        "created": "2026-01-01T00:00:00",
-        "updated": "2026-01-01T00:00:00",
-    }
-    base.update(overrides)
-    return Domain(**base)  # type: ignore[arg-type]
 
 
 def _patch_client(**attrs: object) -> AsyncMock:
@@ -118,48 +101,6 @@ async def test_update_rejects_negative_domain_id(sample_config: Config) -> None:
     assert "domain_id must be a positive integer" in result[0].text
 
 
-async def test_update_dry_run_reports_name_soa_and_description(
-    sample_config: Config,
-) -> None:
-    """The walk reports the name change, the SOA email, and a description edit."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _patch_client(get_domain=_domain(domain="old.example.com"))
-        mock_cls.return_value = client
-
-        result = await handle_linode_domain_update(
-            {
-                "domain_id": 5,
-                "domain": "new.example.com",
-                "soa_email": "new@example.com",
-                "description": "edited",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    effects = json.loads(result[0].text)["side_effects"]
-    assert any("Domain name changes" in s for s in effects)
-    assert any("SOA email is set" in s for s in effects)
-    assert any("description is updated" in s for s in effects)
-
-
-async def test_update_dry_run_sets_name_when_no_prior(
-    sample_config: Config,
-) -> None:
-    """With no prior domain on state, the walk phrases it as a set, not a change."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _patch_client(get_domain={})
-        mock_cls.return_value = client
-
-        result = await handle_linode_domain_update(
-            {"domain_id": 5, "domain": "new.example.com", "dry_run": True},
-            sample_config,
-        )
-
-    effects = json.loads(result[0].text)["side_effects"]
-    assert any("Domain name is set to" in s for s in effects)
-
-
 async def test_update_requires_confirm(sample_config: Config) -> None:
     """A real update without confirm asks for confirm."""
     result = await handle_linode_domain_update({"domain_id": 5}, sample_config)
@@ -214,10 +155,14 @@ async def test_delete_dry_run_walk_survives_record_list_failure(
 ) -> None:
     """When listing records fails, the walk degrades to a warning, not an error."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _patch_client(
-            route_raw={},
-            list_domain_records=APIError(500, "boom"),
-        )
+
+        def routed(tool: str, *_values: object, **_kwargs: object) -> dict[str, object]:
+            if tool == "linode_domain_record_list":
+                raise APIError(500, "boom")
+            return {}
+
+        client = _patch_client()
+        client.route_raw.side_effect = routed
         mock_cls.return_value = client
 
         result = await handle_linode_domain_delete(

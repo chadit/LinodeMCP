@@ -40,14 +40,14 @@ func (goRenderer) acts() []optionClaim {
 		"argument_reader", "body_comma_list", "body_constant", "body_fold",
 		"body_name", "body_nullable", "body_root", "confirm_message",
 		"echo_argument", "error_message", "explicit_null_fields",
-		"field_location", "list_envelope", "list_filter", "normalize_fields",
+		"field_location", "list_envelope", "list_filter", "local_answer", "local_operation", "local_record", "normalize_fields", "normalize_fold", "state_composite", "dependency_walk", "billing_delta",
 		"object_walk", "preview_omits_body", "preview_redact",
-		"preview_sentence", "reader_message", "reader_values",
+		"preview_sentence", "preview_stand_in", "preview_unchanged", "reader_message", "reader_values",
 		"refuse_arguments", "refuse_unknown_arguments", "require_any_of",
-		"resource_type", "response_body_fields", "state_route",
+		"resource_type", "response_body_fields", "execute_transport", "state_route",
 		"success_message", "tool_api_surface", "tool_capability",
-		"tool_description", "tool_hooks", "tool_meta", "tool_response",
-		"tool_route", "warning_message",
+		"tool_categories", "tool_description", "tool_meta",
+		"tool_response", "tool_route", "tool_scopes", "warning_message",
 	}
 
 	claims := make([]optionClaim, 0, len(emitted)+1)
@@ -58,6 +58,29 @@ func (goRenderer) acts() []optionClaim {
 	return append(claims, optionClaim{
 		option: "retry_disabled", emitted: false, home: goRoutePolicyFile,
 	})
+}
+
+// renderAnswers writes the value type each declared answer shape fills, the
+// projection that turns one into its plain body, and the surface every
+// generated operation's subsystem is reached through.
+func (goRenderer) renderAnswers(
+	shapes []answerShape, operations []localOperation,
+) (emittedFile, error) {
+	return renderGoAnswers(shapes, operations)
+}
+
+// renderOperations writes the arm behind every generated operation.
+func (goRenderer) renderOperations(operations []localOperation) ([]emittedFile, error) {
+	if len(operations) == 0 {
+		return nil, nil
+	}
+
+	file, err := renderGoOperations(operations)
+	if err != nil {
+		return nil, err
+	}
+
+	return []emittedFile{file}, nil
 }
 
 func (goRenderer) renderGroup(group string, tools []*contract) (emittedFile, error) {
@@ -106,6 +129,36 @@ func (goRenderer) renderRegistry(contracts []contract) (emittedFile, error) {
 	}
 
 	out.writef("\t}")
+	out.writef("}")
+	out.writef("")
+	out.writef("// ScopesFor answers the OAuth scope strings the contract declares for one")
+	out.writef("// tool, nil for a meta tool and for one documented scopeless.")
+	out.writef("func ScopesFor(name string) []string {")
+	out.writef("\treturn toolScopes[name]")
+	out.writef("}")
+	out.writef("")
+	out.writef("// toolScopes is each declaring tool's scope list, declaration order.")
+	out.writef("var toolScopes = map[string][]string{")
+
+	for _, entry := range scopedContracts(contracts) {
+		out.writef("\t%q: {%s},", entry.Name, quotedStrings(entry.Scopes))
+	}
+
+	out.writef("}")
+	out.writef("")
+	out.writef("// CategoriesFor answers the profile categories the contract declares for")
+	out.writef("// one tool, first one its primary grouping, nil for a declared none.")
+	out.writef("func CategoriesFor(name string) []string {")
+	out.writef("\treturn toolCategories[name]")
+	out.writef("}")
+	out.writef("")
+	out.writef("// toolCategories is each declaring tool's category list, declaration order.")
+	out.writef("var toolCategories = map[string][]string{")
+
+	for _, entry := range categorizedContracts(contracts) {
+		out.writef("\t%q: {%s},", entry.Name, quotedStrings(entry.Categories))
+	}
+
 	out.writef("}")
 
 	formatted, err := formatSource(registrySource(out), "registry")

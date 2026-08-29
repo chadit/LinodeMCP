@@ -111,7 +111,8 @@ func TestRefusesAToolDeclarationThatSaysTooLittle(t *testing.T) {
 				return goProbe(probeMessage(t, "ProbeStructFailPrefixInput",
 					messageOptions(withRoute("GET", probePath), withCapability(readCapability),
 						withDescription("Gets a free-form probe."),
-						withErrorMessage("Failed to retrieve the probe")),
+						withErrorMessage("Failed to retrieve the probe"),
+						probeScopes(), probeCategories()),
 					pathInt(probeIDArg)))
 			},
 		},
@@ -194,16 +195,58 @@ const (
 // getOptions is a read tool that emits, which the cases perturb one declaration
 // at a time.
 func getOptions(sets ...func(*descriptorpb.MessageOptions)) *descriptorpb.MessageOptions {
-	declared := make([]func(*descriptorpb.MessageOptions), 0, 5+len(sets))
+	declared := make([]func(*descriptorpb.MessageOptions), 0, 6+len(sets))
 	declared = append(declared,
 		withRoute("GET", probePath),
 		withCapability(readCapability),
 		withResponse(probeResource),
 		withDescription("Gets a probe."),
 		withErrorMessage("Failed to retrieve probe {probe_id}: {error}"),
+		probeScopes(),
+		probeCategories(),
 	)
 
 	return messageOptions(append(declared, sets...)...)
+}
+
+// probeScopes is the scope declaration every emitting routed probe carries:
+// the contract refuses a routed tool without one, and the cases here are
+// about other refusals.
+func probeScopes() func(*descriptorpb.MessageOptions) {
+	return withScopes(&linodev1.ToolScopes{Scope: []linodev1.ToolScope{
+		linodev1.ToolScope_TOOL_SCOPE_LINODES_READ_ONLY,
+	}})
+}
+
+func withScopes(scopes *linodev1.ToolScopes) func(*descriptorpb.MessageOptions) {
+	return func(options *descriptorpb.MessageOptions) {
+		proto.SetExtension(options, linodev1.E_ToolScopes, scopes)
+	}
+}
+
+// withoutScopes drops the declaration every routed tool is refused without.
+func withoutScopes(options *descriptorpb.MessageOptions) {
+	proto.ClearExtension(options, linodev1.E_ToolScopes)
+}
+
+// probeCategories is the category declaration every emitting probe carries:
+// the contract refuses any tool without one, and the cases here are about
+// other refusals.
+func probeCategories() func(*descriptorpb.MessageOptions) {
+	return withCategories(&linodev1.ToolCategories{Category: []linodev1.ToolCategory{
+		linodev1.ToolCategory_TOOL_CATEGORY_COMPUTE,
+	}})
+}
+
+func withCategories(categories *linodev1.ToolCategories) func(*descriptorpb.MessageOptions) {
+	return func(options *descriptorpb.MessageOptions) {
+		proto.SetExtension(options, linodev1.E_ToolCategories, categories)
+	}
+}
+
+// withoutCategories drops the declaration every tool is refused without.
+func withoutCategories(options *descriptorpb.MessageOptions) {
+	proto.ClearExtension(options, linodev1.E_ToolCategories)
 }
 
 // withoutErrorMessage drops the declaration the tiers that report failure in

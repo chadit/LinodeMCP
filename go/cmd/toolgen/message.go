@@ -173,7 +173,7 @@ const countSuffix = ":len"
 
 // defaultSeparator introduces a placeholder's declared default: {name|World}
 // renders World for a caller who left name out. It is what lets a meta tool
-// answer a whole sentence from the contract instead of falling back to a hook
+// answer a whole sentence from the contract instead of writing a body by hand
 // for one absent argument, and it needs no proto surface, since the default is
 // prose belonging to the sentence that reads it. Both languages parse the same
 // spelling, the way they already do for {month:02} and {linodes:len}.

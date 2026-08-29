@@ -53,13 +53,13 @@ func checkBodyReadShape(tool *contract) error {
 		return nil
 	}
 
-	// The assembled answer is the third shape: a hook makes the call, so there
-	// is no decoded resource to carry and the members it fills stand in for one.
-	// Held to the same prose requirement as the decoded envelope below, because
-	// both report their result in a sentence.
-	if tool.Hooks.Execute != "" && len(tool.Assembled) > 0 {
+	// The assembled answer is the third shape: a transport makes the call, so
+	// there is no decoded resource to carry and the members it fills stand in for
+	// the one it would have decoded. Held to the same prose requirement as the
+	// decoded envelope below, because both report their result in a sentence.
+	if tool.transported() && len(tool.Assembled) > 0 {
 		if tool.PayloadField != "" {
-			return fmt.Errorf("%w: %s answers with %s, which a hook fills and a decode also claims",
+			return fmt.Errorf("%w: %s answers with %s, which a transport fills and a decode also claims",
 				errNotABodyRead, tool.Name, tool.ResponseGo.FullName)
 		}
 
@@ -110,7 +110,7 @@ func emitBodyReadHandler(out *source, tool *contract) error {
 	out.writef("\t}")
 	out.writef("")
 
-	if tool.Hooks.Execute != "" && len(tool.Assembled) > 0 {
+	if tool.transported() && len(tool.Assembled) > 0 {
 		return emitBodyReadAssembled(out, tool, ordered, failure)
 	}
 
@@ -121,12 +121,12 @@ func emitBodyReadHandler(out *source, tool *contract) error {
 	return emitBodyReadEnvelope(out, tool, ordered, failure)
 }
 
-// emitBodyReadAssembled writes the tail of a read whose call a hook makes. The
-// route answers with something no decode can place: the Object Storage download
-// asks for a presigned URL and then follows it, so what the caller reads is the
-// transfer's own result rather than any member of the API's reply.
+// emitBodyReadAssembled writes the tail of a read whose call a transport makes.
+// The route answers with something no decode can place: the Object Storage
+// download asks for a presigned URL and then follows it, so what the caller
+// reads is the transfer's own result rather than any member of the API's reply.
 //
-// The hook stands in for the routed call the same way it does on the
+// The transport stands in for the routed call the same way it does on the
 // acknowledge tier, and the answer is assembled through the shared tail.
 func emitBodyReadAssembled(
 	out *source, tool *contract, ordered []field, failure formatted,
@@ -136,10 +136,7 @@ func emitBodyReadAssembled(
 		return err
 	}
 
-	out.need(importToolhooks)
-	out.writef("\t%s, err := toolhooks.%s(ctx, client, request, %s, %s)",
-		assembledLocal, tool.Hooks.Execute, pathValuesLiteral(ordered), executeBody(tool))
-	out.writef("\tif err != nil {")
+	emitTransportCall(out, tool, pathValuesLiteral(ordered))
 	out.writef("\t\treturn mcp.NewToolResultError(fmt.Sprintf(%s)), nil", failure.call("err"))
 	out.writef("\t}")
 	out.writef("")

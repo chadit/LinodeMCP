@@ -24,6 +24,7 @@ from linodemcp.cli._shared import (
     schema_properties,
 )
 from linodemcp.config import get_config_path, load_from_file
+from linodemcp.gentools import categories_for, scopes_for
 from linodemcp.profiles import Capability, ToolDescriptor, resolve_active_profile
 from linodemcp.server import get_tool_registry
 
@@ -81,7 +82,12 @@ def _active_profile_tool_names(stderr: TextIO) -> frozenset[str] | None:
         return None
 
     descriptors = [
-        ToolDescriptor(name=entry.name, capability=entry.capability)
+        ToolDescriptor(
+            name=entry.name,
+            capability=entry.capability,
+            scopes=tuple(scopes_for(entry.name)),
+            categories=tuple(categories_for(entry.name)),
+        )
         for entry in get_tool_registry()
     ]
     try:

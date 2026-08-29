@@ -3,7 +3,6 @@ package audit
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
 
 const (
@@ -159,7 +160,9 @@ func (s *JSONLSink) Write(ctx context.Context, event *Event) {
 		}
 	}
 
-	line, err := json.Marshal(event)
+	// The record's own canonical bytes rather than this language's struct
+	// order, which is what puts every sink's line in the contract's order.
+	line, err := genlocal.RecordAuditEvent(event, "", "")
 	if err != nil {
 		s.onWriteErr(fmt.Errorf("audit: marshal event: %w", err))
 

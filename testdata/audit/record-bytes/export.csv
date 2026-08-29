@@ -1,0 +1,4 @@
+ts,event_id,tool,tool_capability,status,environment,profile,mode,latency_ms,result_summary,error,plan_id,session_id,credential_generation,args_redacted,args
+2026-05-19T10:00:00Z,evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A,linode_instance_list,read,success,default,full-access,normal,12,listed 2 instances,,,sess-record-bytes,0,[],{}
+2026-05-19T11:30:00.250000Z,evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B,linode_instance_delete,destroy,error,staging,operator,apply,56,,instance 1 not found,plan_01HQXY3ZKQ8M7VRBNP4W5T2J9B,sess-record-bytes,7,"[""root_pass"",""token""]","{""confirm"":true,""linode_id"":123}"
+2026-05-19T12:00:00Z,evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C,linode_instance_create,write,success,default,full-access,normal,340,created instance 1,,,sess-record-bytes,0,[],"{""accented"":""café <b>"",""count"":3,""label"":""a \""quoted\"" name\twith a\\backslash and a\nnewline"",""nested"":{""alpha"":2,""zebra"":1},""ratio"":1.5,""region"":""us-east"",""tags"":[""x"",""y""],""whole_float"":2.0}"

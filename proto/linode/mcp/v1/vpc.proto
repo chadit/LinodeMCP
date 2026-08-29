@@ -73,6 +73,8 @@ message VpcGetInput {
     path: "/vpcs/{vpc_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Vpc";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a single VPC by its ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve VPC {vpc_id}: {error}";
@@ -109,6 +111,8 @@ message VpcSubnetGetInput {
     path: "/vpcs/{vpc_id}/subnets/{subnet_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnet";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a specific subnet within a VPC";
   option (linode.mcp.v1.error_message) = "Failed to retrieve subnet {subnet_id} for VPC {vpc_id}: {error}";
@@ -173,6 +177,8 @@ message VpcListInput {
     path: "/vpcs"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all VPCs. Can filter by label or region.";
 
@@ -211,6 +217,8 @@ message VpcCreateInput {
     path: "/vpcs"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VPC_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new VPC. WARNING: This creates a billable resource. Use linode_region_list to find valid region values.";
   option (linode.mcp.v1.error_message) = "Failed to create VPC: {error}";
@@ -278,14 +286,33 @@ message VpcUpdateInput {
     path: "/vpcs/{vpc_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VPC_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an existing VPC's label or description.";
   option (linode.mcp.v1.error_message) = "Failed to modify VPC {vpc_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the VPC configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "VPC {vpc_id} modified successfully";
-  // preview reads the VPC so the label a change starts from can be named; the
-  // request carries only the new values.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the VPC, whose label the request alone does not carry.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_vpc_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Label changes from \"{state:label}\" to \"{label}\"."
+    template: "Label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "label"
+    argument: "label"
+  };
+  // The description text stays out of the sentence because it is free-form
+  // prose a caller already sent.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The VPC description is updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_present: "description"
+  };
 
   // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
   // zero, and negative vpc_id alike.
@@ -328,6 +355,8 @@ message VpcDeleteInput {
     path: "/vpcs/{vpc_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VPC_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. All subnets in the VPC will also be deleted. Set confirm=true to proceed.";
@@ -341,7 +370,21 @@ message VpcDeleteInput {
   option (linode.mcp.v1.state_route) = {
     tool: "linode_vpc_get"
   };
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_vpc_subnet_list"
+    emit: {
+      kind: "vpc_subnet"
+      id_field: "id"
+      label_field: "label"
+      action: "cascade_deleted"
+      note: "{len:linodes} attached Linode interface(s)"
+    }
+    warnings: {
+      template: "{sum:len:linodes} Linode interface(s) across {count} subnet(s) will be detached."
+      when_positive: "sum:len:linodes"
+    }
+    list_error_warning: "Could not list VPC subnets: {error}"
+  };
 
   option (buf.validate.message).cel = {
     id: "vpc_delete.vpc_id.positive"
@@ -375,6 +418,8 @@ message VPCIPAllListInput {
     path: "/vpcs/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VPCIPListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all IP addresses across all VPCs";
 
@@ -394,6 +439,8 @@ message VPCIPListInput {
     path: "/vpcs/{vpc_id}/ips"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IPS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VPCIPListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all IP addresses for a specific VPC";
 
@@ -418,6 +465,8 @@ message VpcSubnetListInput {
     path: "/vpcs/{vpc_id}/subnets"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all subnets for a specific VPC";
 
@@ -442,6 +491,8 @@ message VpcSubnetCreateInput {
     path: "/vpcs/{vpc_id}/subnets"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VPC_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new subnet within a VPC.";
   option (linode.mcp.v1.error_message) = "Failed to create subnet in VPC {vpc_id}: {error}";
@@ -496,6 +547,8 @@ message VpcSubnetUpdateInput {
     path: "/vpcs/{vpc_id}/subnets/{subnet_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VPC_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the label of a subnet within a VPC.";
   option (linode.mcp.v1.error_message) = "Failed to modify subnet {subnet_id} in VPC {vpc_id}: {error}";
@@ -548,6 +601,8 @@ message VpcSubnetDeleteInput {
     path: "/vpcs/{vpc_id}/subnets/{subnet_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VPC_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_VPCS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VpcSubnetDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a subnet from a VPC. WARNING: This is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. The subnet will be permanently deleted. Set confirm=true to proceed.";
@@ -559,8 +614,25 @@ message VpcSubnetDeleteInput {
   option (linode.mcp.v1.state_route) = {
     tool: "linode_vpc_subnet_get"
   };
-  // dependency_walk names the interfaces that lose the subnet.
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // The walk names the Linodes whose interfaces lose the subnet, and the
+  // warning names the VPC through the enrichment read.
+  option (linode.mcp.v1.dependency_walk) = {
+    state_member: "linodes"
+    emit: {
+      kind: "instance"
+      id_field: "id"
+      action: "detached"
+      note: "{len:interfaces} interface(s) in this subnet are detached."
+    }
+    warnings: {
+      template: "{count} Linode(s) have interfaces in subnet \"{state:label}\" (VPC \"{enrich:label}\") and will be detached."
+      when_any: true
+    }
+    enrich: {
+      tool: "linode_vpc_get"
+      fields: "label"
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

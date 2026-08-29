@@ -1,0 +1,90 @@
+{
+  "description": "The verdict linode_profile_can_run answers for every blocked category, pinned identically in every language. These reason and remedy sentences are declared on the operation as a per-verdict wording vocabulary, because a can_run reason is a member of a successful answer rather than a refusal that ends the call and two tools sharing the operation have to answer the same words; neither engine keeps a copy. The shared behavior fixtures cannot reach three of the four categories because that replay runs under full-access, which permits every tool in every environment. Each language builds the catalog and profile below, sends calls, and compares the whole answer to expect_result, so rewording one language's copy alone fails that language's suite instead of forking the words two binaries show for the same pre-check.",
+  "catalog": [
+    {
+      "tool": "linode_instance_list",
+      "capability": "read"
+    },
+    {
+      "tool": "linode_instance_create",
+      "capability": "write"
+    },
+    {
+      "tool": "linode_instance_delete",
+      "capability": "destroy"
+    }
+  ],
+  "profile": {
+    "name": "compute-readonly",
+    "allowed_tools": [
+      "linode_instance_list"
+    ],
+    "allowed_environments": [
+      "prod"
+    ]
+  },
+  "calls": [
+    {
+      "tool": "linode_instance_list"
+    },
+    {
+      "tool": "linode_instance_list",
+      "args": {
+        "environment": "dev"
+      }
+    },
+    {
+      "tool": "linode_instance_create"
+    },
+    {
+      "tool": "linode_instance_delete"
+    },
+    {
+      "tool": "linode_not_a_real_tool"
+    }
+  ],
+  "expect_result": {
+    "active_profile": "compute-readonly",
+    "results": [
+      {
+        "tool": "linode_instance_list",
+        "allowed": true
+      },
+      {
+        "tool": "linode_instance_list",
+        "allowed": false,
+        "reason": "environment not permitted by profile",
+        "remedy": "target an environment in the profile's allowed_environments, or switch to a profile that permits this environment"
+      },
+      {
+        "tool": "linode_instance_create",
+        "allowed": false,
+        "reason": "tool not in profile's allowed_tools",
+        "remedy": "switch to a profile that permits linode_instance_create, or add it to the current profile"
+      },
+      {
+        "tool": "linode_instance_delete",
+        "allowed": false,
+        "reason": "tool not in profile's allowed_tools (CapDestroy)",
+        "remedy": "switch to a profile that permits linode_instance_delete, or use yolo on a profile that allows it"
+      },
+      {
+        "tool": "linode_not_a_real_tool",
+        "allowed": false,
+        "reason": "tool name not registered",
+        "remedy": "check spelling or call linode_profile_list_tools to discover the registered tool surface"
+      }
+    ],
+    "summary": {
+      "total": 5,
+      "allowed": 1,
+      "blocked": 4,
+      "blocked_by_reason": {
+        "capability_block": 1,
+        "environment_block": 1,
+        "profile_block": 1,
+        "unregistered": 1
+      }
+    }
+  }
+}

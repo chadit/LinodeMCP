@@ -54,6 +54,8 @@ message FirewallDeviceGetInput {
     path: "/networking/firewalls/{firewall_id}/devices/{device_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDevice";
   option (linode.mcp.v1.tool_description) = "Gets one device assigned to a Cloud Firewall.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve device {device_id} on firewall {firewall_id}: {error}";
@@ -87,6 +89,8 @@ message FirewallDeviceListInput {
     path: "/networking/firewalls/{firewall_id}/devices"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists devices assigned to a Cloud Firewall.";
 
@@ -112,6 +116,8 @@ message FirewallDeviceCreateInput {
     path: "/networking/firewalls/{firewall_id}/devices"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Assigns a Linode, Linode interface, or NodeBalancer device to a Cloud Firewall.";
   option (linode.mcp.v1.error_message) = "Failed to assign firewall device: {error}";
@@ -171,6 +177,8 @@ message FirewallDeviceDeleteInput {
     path: "/networking/firewalls/{firewall_id}/devices/{device_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Removes one device assignment from a Cloud Firewall. Pass dry_run=true to preview without removing. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This removes a device assignment from a Cloud Firewall. Set confirm=true to proceed.";

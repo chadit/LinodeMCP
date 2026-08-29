@@ -154,13 +154,13 @@ class ToolDeclaration(NamedTuple):
     reaches the Linode API, `tool_meta` for one that works on local state. Both
     are read here, so the gate can hold a message to naming its tool once.
 
-    The last eight say what the tool answers with rather than what it calls.
+    The last seven say what the tool answers with rather than what it calls.
     Each reads back as "" or False when the message does not declare it, which
     is what lets a gate tell "not declared" from a declared empty value.
 
-    hooks names the steps of the tool's handler that are hand-written, which is
-    what the hand-validator ratchet counts and what tells a generated handler
-    which functions to call.
+    transported says the tool's live call is a declared execute_transport rather
+    than the derived JSON request, which is what gives a routed message
+    somewhere to read a TOOL argument from.
 
     api_surface is the declared value's enum name, "" when the message declares
     none. The two readings differ: an absent option means v4, and an option
@@ -179,8 +179,13 @@ class ToolDeclaration(NamedTuple):
     retry_disabled: bool = False
     description: str = ""
     error_message: str = ""
-    hooks: tuple[str, ...] = ()
+    transported: bool = False
     api_surface: str = ""
+    # The declared tool_scopes: scope enum member names in declaration order,
+    # and whether the message declares an explicit none. A member's wire
+    # spelling stays the emitter's, so no scope string is written here.
+    scopes: tuple[str, ...] = ()
+    scopeless: bool = False
     # The message's own field names, which is what holds the surface to being a
     # declaration rather than something a caller can pass.
     arguments: tuple[str, ...] = ()
@@ -212,7 +217,7 @@ def _read_declarations() -> list[ToolDeclaration]:
             retry_disabled=bool(declared.Extensions[options.retry_disabled]),
             description=str(declared.Extensions[options.tool_description]),
             error_message=str(declared.Extensions[options.error_message]),
-            hooks=tuple(str(kind) for kind in declared.Extensions[options.tool_hooks]),
+            transported=declared.HasExtension(options.execute_transport),
             api_surface=(
                 str(
                     options.ApiSurface.Name(
@@ -222,6 +227,11 @@ def _read_declarations() -> list[ToolDeclaration]:
                 if declared.HasExtension(options.tool_api_surface)
                 else ""
             ),
+            scopes=tuple(
+                str(options.ToolScope.Name(member))
+                for member in declared.Extensions[options.tool_scopes].scope
+            ),
+            scopeless=bool(declared.Extensions[options.tool_scopes].none),
             arguments=tuple(str(field.name) for field in descriptor.fields),
         )
         # A stray surface with nothing beside it still has to reach the gate, or
@@ -263,6 +273,20 @@ def _read_capability_values() -> list[str]:
     return [value.name for value in options.ToolCapability.DESCRIPTOR.values]
 
 
+def _read_local_operations() -> list[str]:
+    """Every member the LocalCall enum defines, in declared order.
+
+    Its unset sentinel is left out: it names no operation, so no engine writes
+    an arm for it and no gate has anything to look for.
+    """
+    options = importlib.import_module(f"{GENERATED_PACKAGE}.options_pb2")
+    return [
+        value.name
+        for value in options.LocalCall.DESCRIPTOR.values
+        if value.name != "LOCAL_CALL_UNSPECIFIED"
+    ]
+
+
 def _payload() -> dict[str, Any]:
     """Every reading in one descriptor walk, for the venv re-exec below."""
     return {
@@ -270,6 +294,7 @@ def _payload() -> dict[str, Any]:
         "fields": _read_field_locations(),
         "declarations": [list(entry) for entry in _read_declarations()],
         "capability_values": _read_capability_values(),
+        "local_operations": _read_local_operations(),
         "message_fields": _read_message_fields(),
     }
 
@@ -356,6 +381,26 @@ def declarations() -> list[ToolDeclaration]:
 
     if not found:
         msg = "no tool declarations in the generated descriptors; run `make proto`"
+        raise SystemExit(msg)
+
+    return found
+
+
+def local_operations() -> list[str]:
+    """Every operation the LocalCall enum declares.
+
+    Empty means `make proto` has not run or the vocabulary is gone, either of
+    which would let the hand-arms gate report a clean scan by looking for
+    nothing.
+    """
+    try:
+        found = _read_local_operations()
+    except ImportError:
+        members: list[str] = _read_through_venv()["local_operations"]
+        found = members
+
+    if not found:
+        msg = "the LocalCall enum declares no operations; run `make proto`"
         raise SystemExit(msg)
 
     return found

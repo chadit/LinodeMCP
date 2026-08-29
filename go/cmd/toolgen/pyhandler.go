@@ -22,7 +22,7 @@ func pyHandler(tool *pyTool) ([]string, error) {
 		"",
 	}
 	lines = append(lines, pyRouteDoc(tool, pyDocIndent)...)
-	lines = append(lines, `    """`)
+	lines = append(lines, pyDocClose)
 
 	lines = append(lines, pyNormalizeLines(tool)...)
 
@@ -35,14 +35,10 @@ func pyHandler(tool *pyTool) ([]string, error) {
 }
 
 // pyNormalizeLines is the tool's argument rewrite, which runs before anything
-// reads an argument. A tool declares either the transforms or a hook, never
-// both. Each call is written the way ruff format would: one line when it fits,
-// otherwise one argument per line with the trailing comma ruff keeps.
+// reads an argument. Each call is written the way ruff format would: one line
+// when it fits, otherwise one argument per line with the trailing comma ruff
+// keeps.
 func pyNormalizeLines(tool *pyTool) []string {
-	if hook := tool.hook(hookKindNormalize); hook != "" {
-		return []string{"    " + hook + "(" + pyArgumentsMap + ")"}
-	}
-
 	rendering := normalizeRendering()
 	lines := make([]string, 0, len(tool.c.Normalizes))
 
@@ -57,6 +53,11 @@ func pyNormalizeLines(tool *pyTool) []string {
 		}
 
 		lines = append(lines, pyNormalizeWrapped(call, rewrite.Fields)...)
+	}
+
+	if fold := tool.c.Fold; fold != nil {
+		lines = append(lines, "    fold_int_list("+pyArgumentsMap+", "+
+			pyQuote(fold.Source)+", "+pyQuote(fold.Target)+", "+pyQuote(fold.Key)+")")
 	}
 
 	return lines
@@ -115,7 +116,7 @@ func pyTierLines(
 // its own sentence. The signature stays the one every generated handler has, so
 // the registry calls all of them the same way.
 func pyConfigParameter(tool *pyTool) string {
-	if tool.c.Tier == tierMeta && tool.hook(hookKindAnswer) == "" {
+	if tool.c.Tier == tierMeta && !metaReadsConfig(tool.c) {
 		return "_cfg"
 	}
 
@@ -133,15 +134,6 @@ func pyMeta(tool *pyTool) ([]string, error) {
 		"",
 	}
 
-	if tool.hook(hookKindValidate) != "" {
-		lines = append(lines,
-			"    message = "+tool.hook(hookKindValidate)+"(arguments)",
-			"    if message:",
-			"        return error_response(message)",
-			"",
-		)
-	}
-
 	if tool.c.Confirm {
 		// Asked after the rules for the reason a mutation asks it before them: a
 		// gated meta tool changes local state rather than a resource, and its
@@ -151,8 +143,8 @@ func pyMeta(tool *pyTool) ([]string, error) {
 		lines = append(lines, "        )", "")
 	}
 
-	if tool.hook(hookKindAnswer) != "" {
-		return append(lines, "    return await "+tool.hook(hookKindAnswer)+"(arguments, cfg)"), nil
+	if tool.c.answersLocally() {
+		return append(lines, pyLocalAnswer(tool)...), nil
 	}
 
 	sentence, err := pyMetaSentence(tool)
@@ -163,8 +155,8 @@ func pyMeta(tool *pyTool) ([]string, error) {
 	return append(lines, sentence...), nil
 }
 
-// pyMetaSentence is the answer of a meta tool with no hook: its declared
-// sentence. The arguments it names are read above it rather than inside the
+// pyMetaSentence is the answer of a meta tool that declares no local
+// operation: its declared sentence. The arguments it names are read above it rather than inside the
 // literal, so the rendered line stays under the budget however many it names.
 func pyMetaSentence(tool *pyTool) ([]string, error) {
 	reads, rendered, err := pyMetaMessage(tool)
@@ -222,7 +214,12 @@ func pyMetaMessage(tool *pyTool) ([]string, string, error) {
 			reads = append(reads, line)
 		}
 
-		rendered.WriteString(pyEscaped(rest[:opened]) + "{" + pyLocal(name) + form + "}")
+		rendered.WriteString(pyEscaped(rest[:opened]))
+		rendered.WriteString("{")
+		rendered.WriteString(pyLocal(name))
+		rendered.WriteString(form)
+		rendered.WriteString("}")
+
 		rest = rest[closed+1:]
 	}
 }
@@ -334,25 +331,13 @@ func pyNameTuple(names []string) string {
 	return joined
 }
 
-// pyArguments reads the path values and refuses a call that omits one. A tool
-// with a declared hook has none of the derived checks: the hook owns the whole
-// argument check, which is the point of declaring one.
+// pyArguments reads the path values and refuses a call that omits one.
 func pyArguments(tool *pyTool) ([]string, error) {
-	hook := tool.hook(hookKindValidate)
 	lines := []string{
 		"    message = " + pyConstraintCall(tool),
 		"    if message:",
 		"        return error_response(message)",
 		"",
-	}
-
-	if hook != "" {
-		lines = append(lines,
-			"    message = "+hook+"(arguments)",
-			"    if message:",
-			"        return error_response(message)",
-			"",
-		)
 	}
 
 	checks, err := pyReaderChecks(tool)
@@ -375,13 +360,11 @@ func pyArguments(tool *pyTool) ([]string, error) {
 		lines = append(lines, "    "+pyLocal(slot)+" = "+pyPathRead(tool, slot))
 	}
 
-	if hook == "" {
-		for _, slot := range tool.derivedSlots() {
-			lines = append(lines,
-				"    if not "+pyLocal(slot)+":",
-				"        return error_response("+pyQuote(slot+" is required")+")",
-			)
-		}
+	for _, slot := range tool.derivedSlots() {
+		lines = append(lines,
+			"    if not "+pyLocal(slot)+":",
+			"        return error_response("+pyQuote(slot+" is required")+")",
+		)
 	}
 
 	query, err := pyGetQuery(tool)
@@ -494,48 +477,30 @@ func pyAcknowledgeArguments(tool *pyTool) ([]string, error) {
 // pyTwoStageClosures hands the plan its state read and its walk, for a staged
 // mutation. The state a plan hashes is not the one a preview reports: a resize
 // plans against the instance and its disks together because the resize moves
-// both, so the fetch here is the fetch_state hook's, never the preview's.
+// both, so the fetch here reads the declared composite, never the preview's
+// state.
 func pyTwoStageClosures(tool *pyTool) []string {
 	if !tool.c.Mode {
 		return nil
 	}
 
-	locals := make([]string, 0, len(tool.c.Slots))
-	for _, slot := range tool.c.Slots {
-		locals = append(locals, pyLocal(slot))
-	}
+	lines := []string{"    async def fetch_state(client: RetryableClient) -> Any:"}
+	lines = append(lines, pyTwoStageFetchBody(tool)...)
+	lines = append(lines, "")
 
-	ids := strings.Join(locals, ", ")
-	lines := []string{
-		"    async def fetch_state(client: RetryableClient) -> Any:",
-		"        return await " + tool.hook(hookKindFetchState) + "(client, " + ids + ")",
-		"",
-	}
-
-	if tool.hook(hookKindDependencyWalk) != "" {
-		lines = append(lines,
-			"    async def dependency_walk(",
-			"        client: RetryableClient, state: Any",
-			"    ) -> DryRunDetails:",
-			"        return await "+tool.hook(hookKindDependencyWalk)+"(",
-			"            client, arguments, state",
-			"        )",
-			"",
-		)
+	// The seeded prose rides the same closure the walks do, so a staged tool
+	// that declares sentences and no walk still reports them on its plan.
+	if len(tool.c.DepWalks) > 0 || len(tool.c.PreviewSentences) > 0 || tool.c.BillingDecl != nil {
+		return append(lines, pyDeclaredWalks(tool)...)
 	}
 
 	return lines
 }
 
-// pyValidation is the argument check: the contract's own rules, then the hook
-// or the route. The rules come first because they are the contract's words and
-// a hook is what a tool falls back on for the checks no rule can carry.
+// pyValidation is the argument check: the contract's own rules, then the route's
+// derived ones.
 func pyValidation(tool *pyTool) ([]string, error) {
 	call := pyConstraintCall(tool)
-	if tool.hook(hookKindValidate) != "" {
-		return []string{"    message = " + call + " or " + tool.hook(hookKindValidate) + "(arguments)"}, nil
-	}
-
 	if pyNothingToCheck(tool) {
 		return []string{"    message = " + call}, nil
 	}
@@ -573,6 +538,17 @@ func pyValidation(tool *pyTool) ([]string, error) {
 
 	derived := tool.derivedSlots()
 	if len(derived) == 0 {
+		return lines, nil
+	}
+
+	// A lone slot folds into the guard: a single nested if under it is the
+	// shape the linter refuses.
+	if len(derived) == 1 {
+		lines = append(lines,
+			"    if not message and not arguments.get("+pyQuote(derived[0])+"):",
+			"        message = "+pyQuote(derived[0]+" is required"),
+		)
+
 		return lines, nil
 	}
 
@@ -833,4 +809,10 @@ func pyQueryParts(tool *pyTool) ([]string, []string, error) {
 	}
 
 	return page, forwarded, nil
+}
+
+// pyTwoStageFetchBody is the staged fetch's body: the composite the tool
+// declares.
+func pyTwoStageFetchBody(tool *pyTool) []string {
+	return pyCompositeFetch(tool)
 }

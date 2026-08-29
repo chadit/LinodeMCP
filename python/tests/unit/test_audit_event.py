@@ -8,7 +8,10 @@ the current code path.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+
+import pytest
 
 from linodemcp.audit import (
     EVENT_ID_PREFIX,
@@ -16,9 +19,13 @@ from linodemcp.audit import (
     Event,
     Mode,
     Status,
+    event_timestamp,
+    finalize,
     new_event,
     new_event_id,
+    set_mode,
 )
+from linodemcp.genlocal import record_audit_event
 
 _FIXTURE_TOOL = "fixture_tool"
 _FIXTURE_ENV = "fixture_env"
@@ -65,14 +72,14 @@ def test_new_event_populates_every_field() -> None:
     assert evt.ts_unix_ns > 0
     assert evt.event_id.startswith(EVENT_ID_PREFIX)
     assert evt.tool == _FIXTURE_TOOL
-    assert evt.tool_capability is Capability.DESTROY
+    assert evt.tool_capability == Capability.DESTROY.value
     assert evt.environment == _FIXTURE_ENV
     assert evt.profile == _FIXTURE_PROFILE
-    assert evt.mode is Mode.NORMAL
+    assert evt.mode == Mode.NORMAL.value
     assert evt.plan_id is None
     assert evt.args[_ARG_LINODE_ID] == args[_ARG_LINODE_ID]
     assert evt.args_redacted == []
-    assert evt.status is Status.SUCCESS
+    assert evt.status == Status.SUCCESS.value
     assert evt.latency_ms == 0
     assert evt.result_summary == ""
     assert evt.error is None
@@ -85,9 +92,9 @@ def test_finalize_writes_outcome_fields() -> None:
     """Finalize updates status/latency/summary and populates Error when provided."""
     evt = _new_fixture_event()
 
-    evt.finalize(Status.ERROR, 250, "API returned 500", "instance update failed")
+    evt = finalize(evt, Status.ERROR, 250, "API returned 500", "instance update failed")
 
-    assert evt.status is Status.ERROR
+    assert evt.status == Status.ERROR.value
     assert evt.latency_ms == 250
     assert evt.result_summary == "instance update failed"
     assert evt.error == "API returned 500"
@@ -97,9 +104,9 @@ def test_finalize_with_empty_error_leaves_error_none() -> None:
     """Empty err_msg produces None error so JSON renders ``null``, not ``""``."""
     evt = _new_fixture_event()
 
-    evt.finalize(Status.SUCCESS, 100, "", "ok")
+    evt = finalize(evt, Status.SUCCESS, 100, "", "ok")
 
-    assert evt.status is Status.SUCCESS
+    assert evt.status == Status.SUCCESS.value
     assert evt.error is None
 
 
@@ -107,33 +114,33 @@ def test_set_mode_populates_plan_id() -> None:
     """Pointer-style plan_id: set with non-empty, clear with empty."""
     evt = _new_fixture_event()
 
-    evt.set_mode(Mode.APPLY, "plan_01H...")
+    evt = set_mode(evt, Mode.APPLY, "plan_01H...")
     assert evt.plan_id == "plan_01H..."
 
-    evt.set_mode(Mode.NORMAL, "")
+    evt = set_mode(evt, Mode.NORMAL, "")
     assert evt.plan_id is None, "empty plan_id must clear back to None"
 
 
-def test_to_dict_serializes_empty_collections_as_arrays() -> None:
+def test_record_serializes_empty_collections_as_arrays() -> None:
     """Empty args / args_redacted serialize as ``{}`` / ``[]`` not ``null``.
 
-    JSONL consumers downstream of this expect arrays. A regression
-    that drops the substitution would produce ``null`` and break the
-    consumer parse.
+    JSONL consumers downstream of this expect arrays, which is the
+    array-over-null contract the record writer keeps. A regression that
+    dropped it would produce ``null`` and break the consumer parse.
     """
     evt = Event(
-        ts=datetime.now(UTC),
+        ts=event_timestamp(datetime.now(UTC)),
         ts_unix_ns=0,
         event_id="evt_test",
         tool=_FIXTURE_TOOL,
-        tool_capability=Capability.META,
+        tool_capability=Capability.META.value,
         environment="",
         profile="",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
-        status=Status.SUCCESS,
+        status=Status.SUCCESS.value,
         latency_ms=0,
         result_summary="",
         error=None,
@@ -142,10 +149,38 @@ def test_to_dict_serializes_empty_collections_as_arrays() -> None:
         credential_generation=0,
     )
 
-    payload = evt.to_dict()
+    payload = json.loads(record_audit_event(evt, "", ""))
 
     assert payload["args"] == {}
     assert payload["args_redacted"] == []
+
+
+@pytest.mark.parametrize(
+    ("instant", "want"),
+    [
+        (datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC), "2026-05-19T12:00:00Z"),
+        (
+            datetime(2026, 5, 19, 11, 30, 0, 250000, tzinfo=UTC),
+            "2026-05-19T11:30:00.250000Z",
+        ),
+        (
+            datetime(2026, 5, 19, 11, 30, 0, 1, tzinfo=UTC),
+            "2026-05-19T11:30:00.000001Z",
+        ),
+    ],
+)
+def test_event_timestamp_spells_the_instant_the_record_carries(
+    instant: datetime, want: str
+) -> None:
+    """Pin the two forms a ts member takes.
+
+    A record written by an EARLIER version carries the whole-second form, so an
+    instant that lands on a second has to come back without a fractional part;
+    anything finer carries microseconds with their zeros kept. One spelling for
+    both would read the same on this batch's own fixtures and move a timestamp
+    the SQLite store reconstructs.
+    """
+    assert event_timestamp(instant) == want
 
 
 def test_event_id_is_correct_length() -> None:

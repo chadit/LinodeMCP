@@ -24,3 +24,10 @@ var ErrUnknownExportFormat = errors.New("audit: unknown export format")
 // the first event" as an empty result rather than an error, without a
 // (nil, nil) return.
 var errAuditDirMissing = errors.New("audit: directory does not exist")
+
+// ErrReportDefinition indicates a report the configuration wrote wrong: an
+// offset that is not a duration, a bound that is not a timestamp, a group_by
+// column outside the summary vocabulary. Report answers it so the tool layer
+// can tell the caller's own condition from a failed read, which reach it
+// through one return.
+var ErrReportDefinition = errors.New("audit: unusable report definition")

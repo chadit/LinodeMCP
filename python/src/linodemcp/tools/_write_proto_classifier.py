@@ -51,11 +51,6 @@ _TOOLS_DIR = Path(__file__).resolve().parent
 # has no generated tools to classify.
 _GENTOOLS_DIR = _TOOLS_DIR.parent / "gentools"
 
-# The hand-written steps a contract cannot express, indexed with the two tool
-# trees because a generated handler's path to a proto serializer can run through
-# one: a meta tool's whole answer is its answer hook.
-_HOOKS_PATH = _TOOLS_DIR.parent / "toolhooks.py"
-
 _CAPABILITIES_PATH = (
     _TOOLS_DIR.parents[3] / "docs" / "contracts" / "tools-capabilities.txt"
 )
@@ -175,12 +170,15 @@ def _collect_direct_calls(node: ast.AST) -> set[str]:
 
 
 def _tool_files(tools_dir: Path) -> list[Path]:
-    """Every source file the classifier reads: hand-written, generated, hooks."""
+    """Every source file the classifier reads: hand-written, then generated.
+
+    A meta tool's whole answer is its answer hook, and those live in the
+    hand-written tree under the tool they serve, so the two trees are the
+    whole graph.
+    """
     files = sorted(tools_dir.glob("*.py"))
     if _GENTOOLS_DIR.is_dir():
         files.extend(sorted(_GENTOOLS_DIR.glob("*.py")))
-    if _HOOKS_PATH.is_file():
-        files.append(_HOOKS_PATH)
     return files
 
 

@@ -198,12 +198,14 @@ func TestClientRoutesAccountPart8(t *testing.T) {
 
 	runClientRouteCases(t, []clientRouteCase{
 		{
-			name:     labelUpdateOAuthClientThumbnail,
+			name:     "CallRouteRawBody",
 			wantVerb: http.MethodPut,
 			wantPath: "/account/oauth-clients/alpha/thumbnail",
 			response: clientRouteEmptyObject,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.UpdateOAuthClientThumbnail(ctx, "alpha", []byte("payload")))
+				return nil, clientRouteError(client.CallRouteRawBody(
+					ctx, thumbnailUpdateTool, []any{transportClientAlpha}, "image/png", []byte("payload"),
+				))
 			},
 		},
 	})

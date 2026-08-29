@@ -92,6 +92,26 @@ async def test_validate_scopes_pat_path() -> None:
     )
 
 
+async def test_validate_scopes_pat_path_with_scopes_outside_the_catalog() -> None:
+    """The PAT path compares catalog-external scope strings by value.
+
+    Built-in unions require declared values the token catalog does not
+    spell, and user-defined profiles may require anything; both must
+    validate when the token genuinely carries the scope.
+    """
+    inspector = _FakeInspector(
+        profile=_profile(scopes="events:read_only child_account:read_write")
+    )
+
+    result = await validate_scopes(
+        inspector,
+        ["events:read_only", "child_account:read_write"],
+    )
+
+    assert not result.comparison.has_missing
+    assert not result.comparison.has_excess
+
+
 async def test_validate_scopes_oauth_path() -> None:
     """Empty Profile.scopes triggers a grants fetch and uses flatten_grants."""
     inspector = _FakeInspector(

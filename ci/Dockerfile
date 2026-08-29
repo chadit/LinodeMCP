@@ -10,7 +10,8 @@
 # hadolint ignore=DL3007
 FROM golang:latest
 
-# Pipes below (curl | sh) must fail loudly, not mask a failed download.
+# Every RUN below is written against bash. pipefail is on so a pipe added
+# later cannot pass on the strength of its last stage alone.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Unpinned apt versions on purpose, same always-latest policy as the base
@@ -21,22 +22,20 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends nodejs npm jq \
     && rm -rf /var/lib/apt/lists/*
 
-# uv supplies both the lock-check tool and the Python 3.14 interpreter (the
-# Go base image ships no Python; CI gets its Python from actions/setup-python
-# with the same version). The interpreter store lives outside /root so the
-# non-root user can execute it.
-ENV UV_INSTALL_DIR=/usr/local/bin \
-    UV_PYTHON_INSTALL_DIR=/opt/uv/python
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && uv python install 3.14 \
-    && ln -s "$(uv python find 3.14)" /usr/local/bin/python3.14-uv \
-    && ln -s /usr/local/bin/python3.14-uv /usr/local/bin/python3
-
-# The same provisioning script the CI workflow runs. GOBIN routes the
-# go-installed tools into /usr/local/bin so they are on PATH for the
+# The same provisioning script the CI workflow runs, uv included: this image
+# has no pip, so ci-setup.sh takes its checksum-verified release archive. GOBIN
+# routes the go-installed tools into /usr/local/bin so they are on PATH for the
 # non-root user.
 COPY scripts/ci-setup.sh /tmp/ci-setup.sh
 RUN GOBIN=/usr/local/bin bash /tmp/ci-setup.sh && rm /tmp/ci-setup.sh
+
+# uv also supplies the Python 3.14 interpreter, because the Go base image ships
+# no Python (CI gets its Python from actions/setup-python at the same version).
+# The interpreter store lives outside /root so the non-root user can read it.
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
+RUN uv python install 3.14 \
+    && ln -s "$(uv python find 3.14)" /usr/local/bin/python3.14-uv \
+    && ln -s /usr/local/bin/python3.14-uv /usr/local/bin/python3
 
 COPY --chmod=0755 scripts/ci-container-entry.sh /usr/local/bin/ci-container-entry
 

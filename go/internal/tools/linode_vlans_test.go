@@ -71,7 +71,7 @@ func TestLinodeVLANsListToolSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData: []map[string]any{{keyLabel: vlanLabelApp, keySupportTicketRegion: regionUSEast, "linodes": []int{123}}},
+			keyData: []map[string]any{{keyLabel: vlanLabelApp, keySupportTicketRegion: regionUSEast, keyPlacementGroupLinodes: []int{123}}},
 			keyPage: 1, keyPages: 1, keyResults: 1,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)

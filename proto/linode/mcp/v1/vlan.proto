@@ -41,6 +41,8 @@ message VLANListInput {
     path: "/networking/vlans"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VLANListResponse";
   option (linode.mcp.v1.tool_description) = "Lists VLANs on the account with optional pagination.";
 
@@ -60,6 +62,8 @@ message VLANDeleteInput {
     path: "/networking/vlans/{region_id}/{label}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VLANDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one VLAN by region and label. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a VLAN. Set confirm=true to proceed.";
@@ -69,9 +73,15 @@ message VLANDeleteInput {
   // here is what makes the two answer a transport failure the same way, and a
   // delete is the direction where not replaying is the safe half.
   option (linode.mcp.v1.retry_disabled) = true;
-  // A VLAN has no single-resource GET, so fetch_state lists and filters to the
-  // matching region and label, which is the read both hand clients made.
-  option (linode.mcp.v1.tool_hooks) = "fetch_state";
+  // A VLAN has no single-resource GET, so the state is scanned out of the
+  // list: every page is read and the element matching both pairs is the
+  // resource. The hand-written reads took one page; the scan retires that
+  // limit.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_vlan_list"
+    match: { field: "region", argument: "region_id" }
+    match: { field: "label", argument: "label" }
+  };
 
   // Fail-fast runs these in order, so each presence sentence comes ahead of the
   // shape rule that would otherwise answer for an absent value.

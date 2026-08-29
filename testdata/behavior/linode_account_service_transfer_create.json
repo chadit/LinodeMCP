@@ -40,6 +40,32 @@
       }
     },
     {
+      "name": "a caller-supplied entities wins and linode_ids is dropped",
+      "args": {
+        "linode_ids": [
+          123
+        ],
+        "entities": {
+          "domains": [
+            9
+          ]
+        },
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/service-transfers",
+        "body": {
+          "entities": {
+            "domains": [
+              9
+            ]
+          }
+        }
+      }
+    },
+    {
       "name": "requires confirm",
       "args": {
         "linode_ids": [

@@ -4,40 +4,130 @@
   "cases": [
     {
       "name": "rejects non-positive stackscript_id",
-      "args": { "confirm": true, "stackscript_id": 0, "label": "renamed" },
+      "args": {
+        "confirm": true,
+        "stackscript_id": 0,
+        "label": "renamed"
+      },
       "expect_error": "stackscript_id must be a positive integer"
     },
     {
       "name": "requires at least one editable field",
-      "args": { "confirm": true, "stackscript_id": 123 },
+      "args": {
+        "confirm": true,
+        "stackscript_id": 123
+      },
       "expect_error": "at least one editable field is required"
     },
     {
       "name": "updates a StackScript field",
-      "args": { "confirm": true, "stackscript_id": 123, "label": "renamed" },
-      "api_response": { "id": 123, "label": "renamed" },
+      "args": {
+        "confirm": true,
+        "stackscript_id": 123,
+        "label": "renamed"
+      },
+      "api_response": {
+        "id": 123,
+        "label": "renamed"
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/linode/stackscripts/123",
-        "body": { "label": "renamed" }
+        "body": {
+          "label": "renamed"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"stackscript_id": 123, "label": "renamed"},
+      "args": {
+        "stackscript_id": 123,
+        "label": "renamed"
+      },
       "expect_error": "This updates a StackScript in your account. Set confirm=true to proceed."
     },
     {
       "name": "rejects malformed success body",
-      "args": { "confirm": true, "stackscript_id": 123, "label": "renamed" },
+      "args": {
+        "confirm": true,
+        "stackscript_id": 123,
+        "label": "renamed"
+      },
       "api_response_raw": "not json",
       "expect_api_error": "line 1"
     },
     {
       "name": "rejects empty success body",
-      "args": { "confirm": true, "stackscript_id": 123, "label": "renamed" },
+      "args": {
+        "confirm": true,
+        "stackscript_id": 123,
+        "label": "renamed"
+      },
       "api_response_raw": "",
       "expect_api_error": "line 1"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "stackscript_id": 7,
+        "label": "renamed",
+        "description": "new desc",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/stackscripts/7": {
+          "id": 7,
+          "label": "bootstrap",
+          "description": "",
+          "images": [],
+          "script": "#!/bin/bash",
+          "is_public": false,
+          "rev_note": "",
+          "created": "",
+          "updated": "",
+          "user_defined_fields": [],
+          "deployments_active": 0,
+          "deployments_total": 0,
+          "username": "",
+          "user_gravatar_id": "",
+          "mine": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_stackscript_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/linode/stackscripts/7",
+          "body": {
+            "label": "renamed",
+            "description": "new desc"
+          }
+        },
+        "current_state": {
+          "id": 7,
+          "label": "bootstrap",
+          "description": "",
+          "images": [],
+          "script": "#!/bin/bash",
+          "is_public": false,
+          "rev_note": "",
+          "created": "",
+          "updated": "",
+          "user_defined_fields": [],
+          "deployments_active": 0,
+          "deployments_total": 0,
+          "username": "",
+          "user_gravatar_id": "",
+          "mine": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Label changes from \"bootstrap\" to \"renamed\".",
+          "The StackScript description is updated."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

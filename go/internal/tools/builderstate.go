@@ -5,25 +5,21 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 )
 
-// The sentences every profile-builder tool shares. Both languages answer these
-// exact words, so a caller reads the same refusal whichever binary served it.
-const (
-	// msgBuilderUnconfigured is what a builder tool answers when it was called
-	// with no server state attached.
-	msgBuilderUnconfigured = "draft registry not configured"
-	// msgDraftNameMissing is what the seven name-taking builder tools answer
-	// when the caller left the draft name out.
-	msgDraftNameMissing = "name argument is required"
-)
+// msgBuilderUnconfigured is what a builder tool answers when it was called
+// with no server state attached. Both languages answer these exact words, so a
+// caller reads the same refusal whichever binary served it.
+const msgBuilderUnconfigured = "draft registry not configured"
 
 // BuilderState is the server-scoped state the profile-builder tools read: the
-// draft registry they mutate, the catalog they compose a profile against, and
-// the profile a pre-check answers for. The server attaches it to every call's
-// context, the way it attaches the two-stage plan store.
+// draft registry they mutate, the catalog they compose a profile against, the
+// profile a pre-check answers for, and the configuration a clone source is
+// resolved against. The server attaches it to every call's context, the way it
+// attaches the two-stage plan store.
 //
 // Catalog and ActiveProfile are read at call time rather than captured, so a
 // hot reload is reflected without re-registering a tool.
@@ -31,13 +27,15 @@ type BuilderState struct {
 	Drafts        *builder.Registry
 	Catalog       func() []profiles.ToolDescriptor
 	ActiveProfile func() profiles.Profile
+	Config        *config.Config
 }
 
 // whole reports whether every member the builder tools read is present. A
 // partial state is treated as no state: a tool that reached a nil member would
 // fail on the deref rather than answer the sentence the caller can act on.
 func (s *BuilderState) whole() bool {
-	return s != nil && s.Drafts != nil && s.Catalog != nil && s.ActiveProfile != nil
+	return s != nil && s.Drafts != nil && s.Catalog != nil &&
+		s.ActiveProfile != nil && s.Config != nil
 }
 
 // builderStateCtxKey namespaces the builder state on a context. Its own
@@ -61,20 +59,13 @@ func BuilderStateFromContext(ctx context.Context) *BuilderState {
 	return state
 }
 
-// builderStateOrRefusal answers the attached state, or the refusal the tool
+// BuilderStateOrRefusal answers the attached state, or the refusal the tool
 // reports in its place. Exactly one of the two is non-nil.
-func builderStateOrRefusal(ctx context.Context) (*BuilderState, *mcp.CallToolResult) {
+func BuilderStateOrRefusal(ctx context.Context) (*BuilderState, *mcp.CallToolResult) {
 	state := BuilderStateFromContext(ctx)
 	if !state.whole() {
 		return nil, mcp.NewToolResultError(msgBuilderUnconfigured)
 	}
 
 	return state, nil
-}
-
-// draftNotFound is the sentence every builder tool answers for a name no draft
-// carries. One spelling here is what keeps the seven handlers that say it from
-// drifting apart a word at a time.
-func draftNotFound(name string) string {
-	return "draft not found: " + name
 }

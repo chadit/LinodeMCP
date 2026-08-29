@@ -60,6 +60,12 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 
+# The tools whose routes the transport primitives address, named once so the
+# same string is not spelled in every case.
+ATTACHMENT_TOOL = "linode_support_ticket_attachment_create"
+THUMBNAIL_GET_TOOL = "linode_account_oauth_client_thumbnail_get"
+THUMBNAIL_UPDATE_TOOL = "linode_account_oauth_client_thumbnail_update"
+
 
 @pytest.fixture
 def mock_httpx_client() -> MagicMock:
@@ -294,24 +300,24 @@ async def test_retryable_get_account_settings_delegates_to_client() -> None:
     await retryable.close()
 
 
-async def test_update_account_oauth_client_thumbnail_sends_route() -> None:
-    """OAuth client thumbnail update PUTs the raw PNG bytes as image/png."""
+async def test_route_raw_body_sends_the_bytes_as_the_whole_body() -> None:
+    """A raw-body route PUTs the bytes it was handed under the declared type."""
     client = Client("https://api.linode.com/v4", "test-token")
     thumbnail = b"\x89PNG\r\n\x1a\n"
-    response_data = {"id": "client-1", "thumbnail_url": "https://example.com/t.png"}
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.content = b'{"id":"client-1"}'
-    mock_response.json.return_value = response_data
+    mock_response.content = b""
 
     with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.update_account_oauth_client_thumbnail(
-            "client-1", thumbnail
+        await client.route_raw_body(
+            THUMBNAIL_UPDATE_TOOL,
+            "client-1",
+            content_type="image/png",
+            payload=thumbnail,
         )
 
-    assert result == response_data
     mock_request.assert_awaited_once_with(
         "PUT",
         "https://api.linode.com/v4/account/oauth-clients/client-1/thumbnail",
@@ -325,8 +331,8 @@ async def test_update_account_oauth_client_thumbnail_sends_route() -> None:
     await client.close()
 
 
-async def test_update_account_oauth_client_thumbnail_handles_empty_body() -> None:
-    """OAuth client thumbnail update returns {} when the API sends no body."""
+async def test_route_raw_body_encodes_the_path_argument() -> None:
+    """A raw-body route escapes its slot the way every routed primitive does."""
     client = Client("https://api.linode.com/v4", "test-token")
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -335,25 +341,12 @@ async def test_update_account_oauth_client_thumbnail_handles_empty_body() -> Non
     with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.update_account_oauth_client_thumbnail("client-1", b"png")
-
-    assert result == {}
-    mock_response.json.assert_not_called()
-    await client.close()
-
-
-async def test_update_account_oauth_client_thumbnail_encodes_client_id() -> None:
-    """OAuth client thumbnail update URL-encodes path separators."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.content = b'{"id":"client/123?query"}'
-    mock_response.json.return_value = {"id": "client/123?query"}
-
-    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = mock_response
-
-        await client.update_account_oauth_client_thumbnail("client/123?query", b"png")
+        await client.route_raw_body(
+            THUMBNAIL_UPDATE_TOOL,
+            "client/123?query",
+            content_type="image/png",
+            payload=b"png",
+        )
 
     await_args = mock_request.await_args
     assert await_args is not None
@@ -364,42 +357,29 @@ async def test_update_account_oauth_client_thumbnail_encodes_client_id() -> None
     await client.close()
 
 
-async def test_update_account_oauth_client_thumbnail_wraps_http_errors() -> None:
-    """OAuth client thumbnail update wraps HTTP errors."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
-        mock_request.side_effect = httpx.HTTPError("boom")
-
-        with pytest.raises(NetworkError) as excinfo:
-            await client.update_account_oauth_client_thumbnail("client-1", b"png")
-
-    assert "UpdateAccountOAuthClientThumbnail" in str(excinfo.value)
-    await client.close()
-
-
-async def test_retryable_update_account_oauth_client_thumbnail_delegates_once() -> None:
-    """RetryableClient delegates thumbnail update without replaying the write."""
+async def test_retryable_route_raw_body_can_take_one_protected_attempt() -> None:
+    """The thumbnail update declares retry_disabled, and the caller selects the
+    unprotected executor rather than the client deciding for it."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
 
     with (
         patch.object(
-            retryable.client,
-            "update_account_oauth_client_thumbnail",
-            new_callable=AsyncMock,
-        ) as mock_update,
+            retryable.client, "route_raw_body", new_callable=AsyncMock
+        ) as mock_send,
         patch.object(
             retryable, "_execute_with_retry", new_callable=AsyncMock
         ) as mock_retry,
     ):
-        mock_update.return_value = {"id": "client-1"}
-        result = await retryable.update_account_oauth_client_thumbnail(
-            "client-1", b"png"
+        await retryable.route_raw_body(
+            THUMBNAIL_UPDATE_TOOL,
+            "client-1",
+            content_type="image/png",
+            payload=b"png",
+            retry=False,
         )
 
-    mock_update.assert_awaited_once_with("client-1", b"png")
+    mock_send.assert_awaited_once()
     mock_retry.assert_not_called()
-    assert result == {"id": "client-1"}
     await retryable.close()
 
 
@@ -754,8 +734,8 @@ async def test_get_account_oauth_client_url_encodes_client_id() -> None:
     await client.close()
 
 
-async def test_get_account_oauth_client_thumbnail_sends_exact_route() -> None:
-    """OAuth client thumbnail get sends the documented PNG route."""
+async def test_route_raw_body_read_answers_with_the_bytes() -> None:
+    """A raw-body read negotiates the declared type and hands back the body."""
     client = Client("https://api.linode.com/v4", "test-token")
     thumbnail = b"\x89PNG\r\n\x1a\n"
     mock_response = MagicMock()
@@ -766,9 +746,11 @@ async def test_get_account_oauth_client_thumbnail_sends_exact_route() -> None:
     with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.get_account_oauth_client_thumbnail("client-123")
+        result = await client.route_raw_body_read(
+            THUMBNAIL_GET_TOOL, "client-123", accept="image/png"
+        )
 
-    assert result == {"thumbnail_png_base64": "iVBORw0KGgo="}
+    assert result == thumbnail
     mock_request.assert_awaited_once_with(
         "GET",
         "https://api.linode.com/v4/account/oauth-clients/client-123/thumbnail",
@@ -781,8 +763,8 @@ async def test_get_account_oauth_client_thumbnail_sends_exact_route() -> None:
     await client.close()
 
 
-async def test_get_account_oauth_client_thumbnail_url_encodes_client_id() -> None:
-    """OAuth client thumbnail get URL-encodes the client ID path parameter."""
+async def test_route_raw_body_read_encodes_the_path_argument() -> None:
+    """A raw-body read escapes its slot the way every routed primitive does."""
     client = Client("https://api.linode.com/v4", "test-token")
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -792,9 +774,11 @@ async def test_get_account_oauth_client_thumbnail_url_encodes_client_id() -> Non
     with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.get_account_oauth_client_thumbnail("client/id?query")
+        result = await client.route_raw_body_read(
+            THUMBNAIL_GET_TOOL, "client/id?query", accept="image/png"
+        )
 
-    assert result["thumbnail_png_base64"] == "cG5n"
+    assert result == b"png"
     await_args = mock_request.await_args
     assert await_args is not None
     assert await_args.args == (
@@ -804,20 +788,9 @@ async def test_get_account_oauth_client_thumbnail_url_encodes_client_id() -> Non
     await client.close()
 
 
-async def test_get_account_oauth_client_thumbnail_wraps_http_errors() -> None:
-    """OAuth client thumbnail get wraps HTTP errors."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
-        mock_request.side_effect = httpx.HTTPError("boom")
-
-        with pytest.raises(NetworkError, match="GetAccountOAuthClientThumbnail"):
-            await client.get_account_oauth_client_thumbnail("client-123")
-    await client.close()
-
-
-async def test_get_account_oauth_client_thumbnail_maps_http_status_errors() -> None:
-    """OAuth client thumbnail get maps non-2xx API responses."""
+async def test_route_raw_body_read_maps_http_status_errors() -> None:
+    """A failing status is read off the same bytes the answer would have been,
+    so the API's own reason survives instead of an empty body."""
     client = Client("https://api.linode.com/v4", "test-token")
     mock_response = MagicMock()
     mock_response.status_code = 404
@@ -829,26 +802,29 @@ async def test_get_account_oauth_client_thumbnail_maps_http_status_errors() -> N
         mock_request.return_value = mock_response
 
         with pytest.raises(APIError, match="Not found"):
-            await client.get_account_oauth_client_thumbnail("client-123")
+            await client.route_raw_body_read(
+                THUMBNAIL_GET_TOOL, "client-123", accept="image/png"
+            )
 
     mock_request.assert_awaited_once()
     await client.close()
 
 
-async def test_retryable_get_account_oauth_client_thumbnail_delegates() -> None:
-    """Retryable OAuth client thumbnail get delegates to the client."""
+async def test_retryable_route_raw_body_read_delegates() -> None:
+    """The read declares no retry policy of its own, so it replays by default."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    response_data = {"thumbnail_png_base64": "iVBORw0KGgo="}
 
     with patch.object(
-        retryable.client, "get_account_oauth_client_thumbnail", new_callable=AsyncMock
-    ) as mock_get:
-        mock_get.return_value = response_data
+        retryable.client, "route_raw_body_read", new_callable=AsyncMock
+    ) as mock_read:
+        mock_read.return_value = b"png"
 
-        result = await retryable.get_account_oauth_client_thumbnail("client-123")
+        result = await retryable.route_raw_body_read(
+            THUMBNAIL_GET_TOOL, "client-123", accept="image/png"
+        )
 
-    assert result == response_data
-    mock_get.assert_awaited_once_with("client-123")
+    assert result == b"png"
+    mock_read.assert_awaited_once()
     await retryable.close()
 
 
@@ -1554,23 +1530,23 @@ async def test_retryable_get_support_ticket_delegates_to_client() -> None:
     await retryable.close()
 
 
-async def test_create_support_ticket_attachment_route(tmp_path: Any) -> None:
-    """Test support ticket attachment creation sends multipart file upload."""
+async def test_route_multipart_sends_the_file_contents(tmp_path: Any) -> None:
+    """A multipart route frames the named file into the declared form field."""
     client = Client("https://api.linode.com/v4", "test-token")
     attachment = tmp_path / "attachment.txt"
     attachment.write_text("attachment-content")
 
-    response_data: dict[str, Any] = {}
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = response_data
+    mock_response.content = b"{}"
 
     with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.create_support_ticket_attachment(123, str(attachment))
+        await client.route_multipart(
+            ATTACHMENT_TOOL, 123, part_name="file", file_path=str(attachment)
+        )
 
-    assert result == response_data
     mock_request.assert_awaited_once()
     await_args = mock_request.await_args
     assert await_args is not None
@@ -1602,36 +1578,29 @@ async def test_create_support_ticket_attachment_route(tmp_path: Any) -> None:
     await client.close()
 
 
-async def test_create_support_ticket_attachment_wraps_http_errors(
-    tmp_path: Any,
-) -> None:
-    """Test support ticket attachment creation wraps HTTP errors."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    attachment = tmp_path / "attachment.txt"
-    attachment.write_text("attachment-content")
-
-    with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
-        mock_request.side_effect = httpx.HTTPError("boom")
-
-        with pytest.raises(NetworkError) as excinfo:
-            await client.create_support_ticket_attachment(123, str(attachment))
-
-    assert "CreateSupportTicketAttachment" in str(excinfo.value)
-    await client.close()
-
-
-async def test_retryable_create_support_ticket_attachment_delegates_to_client() -> None:
-    """Test RetryableClient delegates support ticket attachment creation."""
+async def test_retryable_route_multipart_can_take_one_protected_attempt() -> None:
+    """The attachment declares retry_disabled, and the caller selects the
+    unprotected executor rather than the client deciding for it."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
 
-    with patch.object(
-        retryable.client, "create_support_ticket_attachment", new_callable=AsyncMock
-    ) as mock_create:
-        mock_create.return_value = {"id": 789}
-        result = await retryable.create_support_ticket_attachment(123, "/Users/e/a.txt")
+    with (
+        patch.object(
+            retryable.client, "route_multipart", new_callable=AsyncMock
+        ) as mock_send,
+        patch.object(
+            retryable, "_execute_with_retry", new_callable=AsyncMock
+        ) as mock_retry,
+    ):
+        await retryable.route_multipart(
+            ATTACHMENT_TOOL,
+            123,
+            part_name="file",
+            file_path="/Users/e/a.txt",
+            retry=False,
+        )
 
-    assert result == {"id": 789}
-    mock_create.assert_awaited_once_with(123, "/Users/e/a.txt")
+    mock_send.assert_awaited_once()
+    mock_retry.assert_not_called()
     await retryable.close()
 
 

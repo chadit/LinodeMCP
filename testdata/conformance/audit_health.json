@@ -27,6 +27,7 @@
       "event_count": 1200,
       "oldest_event_unix_ns": 1782734400000000000,
       "db_bytes": 262144
-    }
+    },
+    "warnings": []
   }
 }

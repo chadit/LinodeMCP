@@ -52,7 +52,7 @@ func TestWriteBodyKeepsDeclarationOrder(t *testing.T) {
 
 	body := tools.NewWriteBody(bodyRequest(map[string]any{
 		"domain":    "example.com",
-		"type":      "master",
+		argType:     "master",
 		"soa_email": "admin@example.com",
 		keyTTLSec:   300,
 		keyImages: []any{map[string]any{
@@ -63,7 +63,7 @@ func TestWriteBodyKeepsDeclarationOrder(t *testing.T) {
 	}), 5)
 
 	body.PutString("domain")
-	body.PutString("type")
+	body.PutString(argType)
 	body.SetString("soa_email")
 	body.SetInt(keyTTLSec)
 	body.SetMessageList(keyImages, imageItems())
@@ -201,7 +201,7 @@ func TestWriteBodyReportsTheTypeItDeclares(t *testing.T) {
 		},
 		{
 			name:  keyTags,
-			value: []any{"prod", 5},
+			value: []any{canRunEnvProd, 5},
 			set:   func(b *tools.WriteBody, name string) { b.SetStringList(name) },
 			want:  errTagsArrayOfStrings,
 		},
@@ -676,11 +676,11 @@ func TestWriteBodyRenameRefusesNothingItWasNotToldAbout(t *testing.T) {
 func TestWriteBodyRedactingStandsInForTheNamedMembers(t *testing.T) {
 	t.Parallel()
 
-	arguments := map[string]any{keyPaymentData: map[string]any{cardNumberMember: "4111"}, "type": "credit_card"}
+	arguments := map[string]any{keyPaymentData: map[string]any{cardNumberMember: "4111"}, argType: "credit_card"}
 	body := tools.NewWriteBody(bodyRequest(arguments), 2)
 
 	body.SetObject(keyPaymentData)
-	body.PutString("type")
+	body.PutString(argType)
 
 	reported := body.Redacting(keyPaymentData)
 
@@ -690,6 +690,80 @@ func TestWriteBodyRedactingStandsInForTheNamedMembers(t *testing.T) {
 
 	if got, want := marshalBody(t, body), `{"data":{"card_number":"4111"},"type":"credit_card"}`; got != want {
 		t.Errorf("live body = %s, want it untouched (%s)", got, want)
+	}
+}
+
+// standInText is what these reports carry in place of a member's value, which
+// is the shape the security answers declare, and labelWebBody is the one-member
+// body a stand-in that reaches nothing leaves alone.
+const (
+	standInText  = "[redacted]"
+	labelWebBody = `{"label":"web"}`
+)
+
+// TestWriteBodyStandingInReplacesOneMemberOfEveryEntry: the entries keep their
+// order and every other member, so a caller still reads the call the request
+// would make while the declared member never leaves.
+func TestWriteBodyStandingInReplacesOneMemberOfEveryEntry(t *testing.T) {
+	t.Parallel()
+
+	arguments := map[string]any{keyImages: []any{
+		map[string]any{keyID: imagePrivate15Fixture, keyLabel: nestedLabelOne, keyDescription: "kept"},
+		map[string]any{keyID: "private/16", keyLabel: nestedLabelTwo, keyDescription: "kept too"},
+	}}
+	body := tools.NewWriteBody(bodyRequest(arguments), 1)
+
+	body.SetMessageList(keyImages, imageItems())
+
+	reported := body.StandingIn(keyImages, keyLabel, standInText)
+
+	want := `{"images":[{"id":"private/15","label":"[redacted]","description":"kept"},` +
+		`{"id":"private/16","label":"[redacted]","description":"kept too"}]}`
+	if got := marshalBody(t, reported); got != want {
+		t.Errorf("reported body = %s, want %s", got, want)
+	}
+
+	live := `{"images":[{"id":"private/15","label":"first","description":"kept"},` +
+		`{"id":"private/16","label":"second","description":"kept too"}]}`
+	if got := marshalBody(t, body); got != live {
+		t.Errorf("live body = %s, want it untouched (%s)", got, live)
+	}
+}
+
+// TestWriteBodyStandingInLeavesAnEntryWithoutTheMemberAlone: a member the
+// caller left out is not one the report invents.
+func TestWriteBodyStandingInLeavesAnEntryWithoutTheMemberAlone(t *testing.T) {
+	t.Parallel()
+
+	arguments := map[string]any{keyImages: []any{map[string]any{keyID: imagePrivate15Fixture}}}
+	body := tools.NewWriteBody(bodyRequest(arguments), 1)
+
+	body.SetMessageList(keyImages, imageItems())
+
+	reported := body.StandingIn(keyImages, keyLabel, standInText)
+
+	if got, want := marshalBody(t, reported), `{"images":[{"id":"private/15"}]}`; got != want {
+		t.Errorf("reported body = %s, want %s", got, want)
+	}
+}
+
+// TestWriteBodyStandingInLeavesABodyWithNoSuchEntriesAlone covers the two ways
+// a stand-in reaches no entries: a member the call never sent, and one carrying
+// something that is not a list of them.
+func TestWriteBodyStandingInLeavesABodyWithNoSuchEntriesAlone(t *testing.T) {
+	t.Parallel()
+
+	body := tools.NewWriteBody(bodyRequest(map[string]any{managedServiceLabelParam: tagWeb}), 1)
+
+	body.PutString(managedServiceLabelParam)
+
+	for _, reported := range []*tools.WriteBody{
+		body.StandingIn(keyImages, keyLabel, standInText),
+		body.StandingIn(managedServiceLabelParam, keyLabel, standInText),
+	} {
+		if got := marshalBody(t, reported); got != labelWebBody {
+			t.Errorf("reported body = %s, want %s", got, labelWebBody)
+		}
 	}
 }
 
@@ -1836,5 +1910,22 @@ func TestWriteBodyOptionalFoldsNothingAfterAFailure(t *testing.T) {
 
 	if want := errLabelString; body.Message() != want {
 		t.Errorf("message = %q, want %q", body.Message(), want)
+	}
+}
+
+func TestSetIntOmitsAnExplicitNull(t *testing.T) {
+	t.Parallel()
+
+	body := tools.NewWriteBody(bodyRequest(map[string]any{
+		keyDescription: "set",
+		keyTTLSec:      nil,
+	}), 2)
+
+	body.SetString(keyDescription)
+	body.SetInt(keyTTLSec)
+
+	want := `{"description":"set"}`
+	if got := marshalBody(t, body); got != want {
+		t.Errorf("body = %s, want %s", got, want)
 	}
 }

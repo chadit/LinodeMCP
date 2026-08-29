@@ -85,6 +85,8 @@ message LongviewClientGetInput {
     path: "/longview/clients/{client_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LONGVIEW_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClient";
   option (linode.mcp.v1.tool_description) = "Gets one Longview client. Secret-bearing Longview install fields are not included in the tool response.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Longview client {client_id}: {error}";
@@ -107,6 +109,8 @@ message LongviewClientListInput {
     path: "/longview/clients"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LONGVIEW_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Longview clients configured for the account.";
 
@@ -127,6 +131,8 @@ message LongviewClientCreateInput {
     path: "/longview/clients"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LONGVIEW_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientCreateWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a Longview client. WARNING: the API key and install code are returned in the response and may be needed to configure the client application. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.error_message) = "Failed to create the Longview client: {error}";
@@ -188,6 +194,8 @@ message LongviewClientUpdateInput {
     path: "/longview/clients/{client_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LONGVIEW_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the label for one Longview client. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to update Longview client {client_id}: {error}";
@@ -208,9 +216,10 @@ message LongviewClientUpdateInput {
 
   // The rule below holds its peace until the id is usable and the label is
   // non-empty, because the sentences for those two are the ones each language
-  // words differently. Rules run before a hook, so a rule that answered for
-  // them would take the hook's turn: an unusable id arrives as the zero a
-  // missing one does, and an absent label arrives as the empty string.
+  // words differently. Rules run before the derived checks, so a rule that
+  // answered for them would take those checks' turn: an unusable id arrives as
+  // the zero a missing one does, and an absent label arrives as the empty
+  // string.
   option (buf.validate.message).cel = {
     id: "longview_client_update.label.pattern"
     message: "label must be 3-32 characters and contain only letters, digits, hyphen, or underscore"
@@ -251,6 +260,8 @@ message LongviewClientDeleteInput {
     path: "/longview/clients/{client_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LONGVIEW_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientIDResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one Longview client. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.error_message) = "Failed to delete Longview client {client_id}: {error}";
@@ -311,6 +322,8 @@ message LongviewSubscriptionGetInput {
     path: "/longview/subscriptions/{subscription_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscription";
   option (linode.mcp.v1.tool_description) = "Gets one Longview subscription by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Longview subscription {subscription_id}: {error}";
@@ -351,6 +364,8 @@ message LongviewPlanGetInput {
     path: "/longview/plan"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LONGVIEW_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscription";
   option (linode.mcp.v1.tool_description) = "Gets the current Longview subscription plan for the account.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve the Longview plan: {error}";
@@ -368,6 +383,8 @@ message LongviewPlanUpdateInput {
     path: "/longview/plan"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LONGVIEW_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscriptionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the account Longview subscription plan. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to update the Longview plan: {error}";
@@ -426,6 +443,8 @@ message LongviewSubscriptionListInput {
     path: "/longview/subscriptions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscriptionListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Longview subscription plans.";
 
@@ -445,6 +464,8 @@ message LongviewTypeListInput {
     path: "/longview/types"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LONGVIEW};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewTypeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Longview subscription types.";
 

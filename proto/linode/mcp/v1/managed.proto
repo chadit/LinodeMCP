@@ -53,6 +53,8 @@ message ManagedServiceGetInput {
     path: "/managed/services/{service_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedService";
   option (linode.mcp.v1.tool_description) = "Gets one service monitored by Linode Managed by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve managed service {service_id}: {error}";
@@ -75,6 +77,8 @@ message ManagedServiceListInput {
     path: "/managed/services"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists services monitored by Linode Managed.";
 
@@ -96,6 +100,8 @@ message ManagedServiceCreateInput {
     path: "/managed/services"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a Managed service monitor.";
   option (linode.mcp.v1.error_message) = "Failed to create the managed service: {error}";
@@ -186,6 +192,8 @@ message ManagedServiceUpdateInput {
     path: "/managed/services/{service_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a service monitored by Linode Managed. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to update managed service {service_id}: {error}";
@@ -311,6 +319,8 @@ message ManagedServiceDeleteInput {
     path: "/managed/services/{service_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a service monitored by Linode Managed. Pass dry_run=true to preview without deleting.";
   // Undeclared before: Go assembled "Failed to delete <tool name>" in its shared
@@ -357,6 +367,8 @@ message ManagedServiceDisableInput {
     path: "/managed/services/{service_id}/disable"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
   option (linode.mcp.v1.tool_description) = "Disables monitoring for a Linode Managed service.";
   option (linode.mcp.v1.error_message) = "Failed to disable Managed service {service_id}: {error}";
@@ -399,6 +411,8 @@ message ManagedServiceEnableInput {
     path: "/managed/services/{service_id}/enable"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
   option (linode.mcp.v1.tool_description) = "Enables monitoring for a Linode Managed service.";
   option (linode.mcp.v1.error_message) = "Failed to enable Managed service {service_id}: {error}";
@@ -466,6 +480,8 @@ message ManagedLinodeSettingsGetInput {
     path: "/managed/linode-settings/{linode_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettings";
   option (linode.mcp.v1.tool_description) = "Gets Managed service settings for one Linode by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve managed settings for instance {linode_id}: {error}";
@@ -488,6 +504,8 @@ message ManagedLinodeSettingsListInput {
     path: "/managed/linode-settings"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettingsListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Managed service settings for Linodes on the account.";
 
@@ -513,6 +531,8 @@ message ManagedLinodeSettingsUpdateInput {
     path: "/managed/linode-settings/{linode_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettingsWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates Managed service SSH settings for one Linode.";
   option (linode.mcp.v1.error_message) = "Failed to update managed settings for instance {linode_id}: {error}";
@@ -634,6 +654,8 @@ message ManagedContactGetInput {
     path: "/managed/contacts/{contact_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContact";
   option (linode.mcp.v1.tool_description) = "Gets one Linode Managed contact by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve managed contact {contact_id}: {error}";
@@ -656,6 +678,8 @@ message ManagedContactListInput {
     path: "/managed/contacts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactListResponse";
   option (linode.mcp.v1.tool_description) = "Lists contacts configured for Linode Managed service alerts.";
 
@@ -679,6 +703,8 @@ message ManagedContactCreateInput {
     path: "/managed/contacts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a managed contact for service monitor issue handling. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.error_message) = "Failed to create the managed contact: {error}";
@@ -777,6 +803,8 @@ message ManagedContactUpdateInput {
     path: "/managed/contacts/{contact_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a contact configured for Linode Managed service alerts.";
   option (linode.mcp.v1.error_message) = "Failed to update managed contact {contact_id}: {error}";
@@ -883,6 +911,8 @@ message ManagedContactDeleteInput {
     path: "/managed/contacts/{contact_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactIDResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a contact configured for Linode Managed service alerts. Pass dry_run=true to preview without deleting.";
   // Undeclared before, for the same reason the service delete's was: Go built
@@ -934,6 +964,8 @@ message ManagedSSHKeyGetInput {
     path: "/managed/credentials/sshkey"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedSSHKey";
   option (linode.mcp.v1.tool_description) = "Retrieves the Managed SSH public key assigned to the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve the managed SSH key: {error}";
@@ -950,6 +982,8 @@ message ManagedStatsGetInput {
     path: "/managed/stats"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_description) = "Lists Linode Managed statistics from the last 24 hours.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve managed stats: {error}";
 
@@ -986,6 +1020,8 @@ message ManagedCredentialGetInput {
     path: "/managed/credentials/{credential_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredential";
   option (linode.mcp.v1.tool_description) = "Gets one stored managed credential by ID. This account-level managed credential metadata requires admin capability and confirm=true. Pass dry_run=true to preview the request without retrieving it.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Managed credential {credential_id}: {error}";
@@ -1016,6 +1052,8 @@ message ManagedCredentialListInput {
     path: "/managed/credentials"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialListResponse";
   option (linode.mcp.v1.tool_description) = "Lists stored managed credentials for the authenticated account.";
 
@@ -1036,6 +1074,8 @@ message ManagedCredentialCreateInput {
     path: "/managed/credentials"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a stored Managed credential for the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to create the managed credential: {error}";
@@ -1102,6 +1142,8 @@ message ManagedCredentialUpdateInput {
     path: "/managed/credentials/{credential_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates one stored managed credential by ID. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to update managed credential {credential_id}: {error}";
@@ -1164,6 +1206,8 @@ message ManagedCredentialUsernamePasswordUpdateInput {
     path: "/managed/credentials/{credential_id}/update"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialIDResponse";
   option (linode.mcp.v1.tool_description) = "Updates a stored Managed credential's username and password by ID.";
   option (linode.mcp.v1.error_message) = "Failed to update the username and password for managed credential {credential_id}: {error}";
@@ -1232,6 +1276,8 @@ message ManagedCredentialRevokeInput {
     path: "/managed/credentials/{credential_id}/revoke"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialIDResponse";
   option (linode.mcp.v1.tool_description) = "Revokes one stored managed credential by ID. This credential-affecting action requires admin capability and confirm=true. Pass dry_run=true to preview without revoking.";
   option (linode.mcp.v1.error_message) = "Failed to revoke managed credential {credential_id}: {error}";

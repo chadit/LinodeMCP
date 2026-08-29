@@ -35,7 +35,6 @@ const (
 	httpServerErrorMax = 600
 	authHeaderPrefix   = "Bearer "
 	contentTypeJSON    = "application/json"
-	contentTypePNG     = "image/png"
 
 	// requestTimeout is the per-request context timeout for API calls.
 	requestTimeout = 30 * time.Second
@@ -52,11 +51,10 @@ type Client struct {
 	limiter    *RateLimiter
 	baseURL    string
 	token      string
-	// objectStorage rides the client because the Object Storage execute hook is
-	// handed a client and no config, and widening that hook signature is an
-	// emitter change. The client is already the resolved-per-call object every
-	// other setting arrives through, so the data-plane budgets sit beside the
-	// retry policy rather than in a second channel.
+	// objectStorage rides the client because the Object Storage transfers are
+	// handed a client and no config. The client is already the resolved-per-call
+	// object every other setting arrives through, so the data-plane budgets sit
+	// beside the retry policy rather than in a second channel.
 	objectStorage config.ObjectStorageConfig
 	retryCfg      retryConfig
 }
@@ -162,7 +160,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, paylo
 		body = bytes.NewReader(jsonData)
 	}
 
-	return c.makeRequestWithContentType(ctx, method, endpoint, body, contentTypeJSON)
+	return c.makeRequestWithContentType(ctx, method, endpoint, body, contentTypeJSON, "")
 }
 
 // onSurface answers the client that addresses one API surface, which is how a
@@ -213,14 +211,17 @@ func (c *Client) makeRouteRequestQuery(
 	return c.onSurface(segment).makeRequest(ctx, method, endpoint, payload)
 }
 
-// makeRouteRequestContentType is makeRouteRequest for a call site that sends a
-// body the JSON marshaller cannot produce, a multipart form or raw image bytes.
-// Like makeRouteRequestQuery it calls the content-type request builder directly
-// to stay one hop from the request layer, which is all cmd/route-dump reads as
-// route evidence.
+// makeRouteRequestContentType is makeRouteRequest for a call site whose request
+// or answer the JSON marshaller cannot handle: a multipart form, raw image bytes
+// sent, raw image bytes negotiated back. Like makeRouteRequestQuery it calls the
+// content-type request builder directly to stay one hop from the request layer,
+// which is all cmd/route-dump reads as route evidence.
+//
+// Either header is optional, so one call names what it sends and another names
+// what it will take, the way Python's make_route_request_content_type does.
 func (c *Client) makeRouteRequestContentType(
 	ctx context.Context,
-	tool, contentType string,
+	tool, contentType, accept string,
 	body io.Reader,
 	values ...any,
 ) (*http.Response, error) {
@@ -229,7 +230,7 @@ func (c *Client) makeRouteRequestContentType(
 		return nil, err
 	}
 
-	return c.onSurface(segment).makeRequestWithContentType(ctx, method, endpoint, body, contentType)
+	return c.onSurface(segment).makeRequestWithContentType(ctx, method, endpoint, body, contentType, accept)
 }
 
 // routedRequest resolves the method and path a tool declares and attaches the
@@ -257,15 +258,15 @@ func withRawQuery(path, rawQuery string) string {
 	return path + "?" + rawQuery
 }
 
-func (c *Client) makeRequestWithContentType(ctx context.Context, method, endpoint string, body io.Reader, contentType string) (*http.Response, error) {
-	return c.makeSurfacedRequestWithContentType(ctx, c.baseURL, method, endpoint, body, contentType)
+func (c *Client) makeRequestWithContentType(ctx context.Context, method, endpoint string, body io.Reader, contentType, accept string) (*http.Response, error) {
+	return c.makeSurfacedRequestWithContentType(ctx, c.baseURL, method, endpoint, body, contentType, accept)
 }
 
 func (c *Client) makeSurfacedRequestWithContentType(
 	ctx context.Context,
 	base, method, endpoint string,
 	body io.Reader,
-	contentType string,
+	contentType, accept string,
 ) (*http.Response, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, err
@@ -284,7 +285,15 @@ func (c *Client) makeSurfacedRequestWithContentType(
 	}
 
 	req.Header.Set("Authorization", authHeaderPrefix+c.token)
-	req.Header.Set("Content-Type", contentType)
+
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
+
 	req.Header.Set("User-Agent", "LinodeMCP/"+appinfo.Version)
 
 	start := time.Now()

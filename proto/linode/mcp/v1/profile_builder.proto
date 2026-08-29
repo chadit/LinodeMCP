@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "buf/validate/validate.proto";
 import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
@@ -19,9 +20,40 @@ message ProfileDraftNewInput {
     tool: "linode_profile_draft_new"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftResponse";
   option (linode.mcp.v1.tool_description) = "Start a new profile draft in the server's in-memory builder registry. Optional clone_from seeds the draft from an existing built-in or user-defined profile. The draft persists only for this server's lifetime; use linode_profile_draft_save (Phase 8.5) to write it to the config file.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_DRAFT_CREATE
+    requires: LOCAL_STATE_BUILDER
+    bind: [
+      {
+        input: "draft"
+        argument: "name"
+      },
+      {
+        input: "source"
+        argument: "clone_from"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_NOT_FOUND
+        argument: "clone_from"
+        message: "clone_from profile not found: {clone_from}"
+      },
+      {
+        guard: LOCAL_GUARD_ALREADY_EXISTS
+        argument: "name"
+        message: "draft already exists: {name}"
+      }
+    ]
+  };
+  option (buf.validate.message).cel = {
+    id: "linode_profile_draft_new.name.required"
+    message: "name argument is required"
+    expression: "this.name != ''"
+  };
 
   // Name for the new draft. Must be unique within the registry.
   string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
@@ -36,9 +68,31 @@ message ProfileDraftShowInput {
     tool: "linode_profile_draft_show"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftResponse";
   option (linode.mcp.v1.tool_description) = "Show the current state of a profile draft. Returns name, description, allowed tools, allowed environments, required token scopes, and the allow_yolo flag.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_DRAFT_READ
+    requires: LOCAL_STATE_BUILDER
+    bind: [
+      {
+        input: "draft"
+        argument: "name"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_DRAFT_MISSING
+        argument: "name"
+        message: "draft not found: {name}"
+      }
+    ]
+  };
+  option (buf.validate.message).cel = {
+    id: "linode_profile_draft_show.name.required"
+    message: "name argument is required"
+    expression: "this.name != ''"
+  };
 
   // Draft name to show.
   string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
@@ -51,9 +105,24 @@ message ProfileDraftDiscardInput {
     tool: "linode_profile_draft_discard"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftDiscardResponse";
   option (linode.mcp.v1.tool_description) = "Discard a profile draft. Idempotent: returns {\"discarded\": false} when the draft does not exist (no error), so the model can call it from cleanup paths without first checking existence.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_DRAFT_DISCARD
+    requires: LOCAL_STATE_BUILDER
+    bind: [
+      {
+        input: "draft"
+        argument: "name"
+      }
+    ]
+  };
+  option (buf.validate.message).cel = {
+    id: "linode_profile_draft_discard.name.required"
+    message: "name argument is required"
+    expression: "this.name != ''"
+  };
 
   // Draft name to discard.
   string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
@@ -66,9 +135,43 @@ message ProfileDraftSetInput {
     tool: "linode_profile_draft_set"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftSetResponse";
   option (linode.mcp.v1.tool_description) = "Set draft settings. Each field is optional; missing fields are left unchanged. Settable: allowed_environments (array of environment names), required_token_scopes (array of Linode scope strings), allow_yolo (boolean opt-in to the yolo execution path).";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_DRAFT_SET
+    requires: LOCAL_STATE_BUILDER
+    bind: [
+      {
+        input: "draft"
+        argument: "name"
+      },
+      {
+        input: "environments"
+        argument: "allowed_environments"
+      },
+      {
+        input: "scopes"
+        argument: "required_token_scopes"
+      },
+      {
+        input: "yolo"
+        argument: "allow_yolo"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_DRAFT_MISSING
+        argument: "name"
+        message: "draft not found: {name}"
+      }
+    ]
+  };
+  option (buf.validate.message).cel = {
+    id: "linode_profile_draft_set.name.required"
+    message: "name argument is required"
+    expression: "this.name != ''"
+  };
 
   // Draft name to mutate.
   string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
@@ -86,12 +189,50 @@ message ProfileDraftSaveInput {
     tool: "linode_profile_draft_save"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftSaveResponse";
   option (linode.mcp.v1.tool_description) = "Save a profile draft to the config file. Requires confirm=true. Computes the diff against the prior user-defined profile with the same name (or against empty for a new profile) and returns it in the response so the model can summarize. Does NOT change the active profile; the user runs `linodemcp profile use <name>` separately. Saving over a built-in profile name is refused.";
   // The sentence both languages answer today, declared here so the generated
   // confirm gate reports it unchanged when this tool migrates.
   option (linode.mcp.v1.confirm_message) = "confirm=true is required for draft save";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  // The two store sentences carry the path in their cause rather than in a
+  // second placeholder, because the failing path is the one the operation
+  // resolved and not an argument the caller sent.
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_DRAFT_SAVE
+    requires: LOCAL_STATE_BUILDER
+    bind: [
+      {
+        input: "draft"
+        argument: "name"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_BUILTIN_PROFILE
+        argument: "name"
+        message: "cannot save over built-in profile name: {name}"
+      },
+      {
+        guard: LOCAL_GUARD_DRAFT_MISSING
+        argument: "name"
+        message: "draft not found: {name}"
+      },
+      {
+        guard: LOCAL_GUARD_READ_FAILED
+        message: "failed to load config from {error}"
+      },
+      {
+        guard: LOCAL_GUARD_WRITE_FAILED
+        message: "failed to write config to {error}"
+      }
+    ]
+  };
+  option (buf.validate.message).cel = {
+    id: "linode_profile_draft_save.name.required"
+    message: "name argument is required"
+    expression: "this.name != ''"
+  };
 
   // Draft name to save.
   string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
@@ -100,42 +241,94 @@ message ProfileDraftSaveInput {
 }
 
 // ProfileDraftAddToolsInput is the input contract for
-// linode_profile_draft_add_tools. tools is required at runtime, but a repeated
-// field cannot be marked required in the generated schema, so the required flag
-// is dropped (the handler still enforces presence).
+// linode_profile_draft_add_tools. A repeated field cannot be marked required in
+// the generated schema, and the tool answers an empty added list rather than
+// refusing, so an omitted tools list is a call that adds nothing.
 message ProfileDraftAddToolsInput {
   option (linode.mcp.v1.tool_meta) = {
     tool: "linode_profile_draft_add_tools"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftAddToolsResponse";
   option (linode.mcp.v1.tool_description) = "Add tools to a profile draft. Accepts literal tool names and wildcards (shell-glob, only '*' is special). Wildcards expand against the live tool catalog at call time. Names already on the draft are not duplicated and are not reported in the response.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_DRAFT_TOOLS
+    requires: LOCAL_STATE_BUILDER
+    direction: LOCAL_DIRECTION_ADD
+    bind: [
+      {
+        input: "draft"
+        argument: "name"
+      },
+      {
+        input: "patterns"
+        argument: "tools"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_DRAFT_MISSING
+        argument: "name"
+        message: "draft not found: {name}"
+      }
+    ]
+  };
+  option (buf.validate.message).cel = {
+    id: "linode_profile_draft_add_tools.name.required"
+    message: "name argument is required"
+    expression: "this.name != ''"
+  };
 
   // Draft name to mutate.
   string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
-  // Tool names to add to the draft. Required at runtime, though the generated
-  // schema cannot mark a repeated field required.
+  // Tool names to add to the draft.
   repeated string tools = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 
 // ProfileDraftRemoveToolsInput is the input contract for
-// linode_profile_draft_remove_tools. tools is required at runtime, but a
-// repeated field cannot be marked required in the generated schema, so the
-// required flag is dropped (the handler still enforces presence).
+// linode_profile_draft_remove_tools. A repeated field cannot be marked required
+// in the generated schema, and the tool answers an empty removed list rather
+// than refusing, so an omitted tools list is a call that removes nothing.
 message ProfileDraftRemoveToolsInput {
   option (linode.mcp.v1.tool_meta) = {
     tool: "linode_profile_draft_remove_tools"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftRemoveToolsResponse";
   option (linode.mcp.v1.tool_description) = "Remove tools from a profile draft. Accepts literal tool names and wildcards (shell-glob, only '*' is special). Patterns match against the draft's current allowed_tools list, not the live catalog.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_DRAFT_TOOLS
+    requires: LOCAL_STATE_BUILDER
+    direction: LOCAL_DIRECTION_REMOVE
+    bind: [
+      {
+        input: "draft"
+        argument: "name"
+      },
+      {
+        input: "patterns"
+        argument: "tools"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_DRAFT_MISSING
+        argument: "name"
+        message: "draft not found: {name}"
+      }
+    ]
+  };
+  option (buf.validate.message).cel = {
+    id: "linode_profile_draft_remove_tools.name.required"
+    message: "name argument is required"
+    expression: "this.name != ''"
+  };
 
   // Draft name to mutate.
   string name = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
-  // Tool names to remove from the draft. Required at runtime, though the
-  // generated schema cannot mark a repeated field required.
+  // Tool names to remove from the draft.
   repeated string tools = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 
@@ -145,9 +338,23 @@ message ProfileListToolsInput {
     tool: "linode_profile_list_tools"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileToolListResponse";
   option (linode.mcp.v1.tool_description) = "List every registerable tool with its capability tag and categories. Used by the profile builder to enumerate the full menu before composing a user-defined profile. Optional filters: category, capability.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_CATALOG_TOOLS
+    requires: LOCAL_STATE_BUILDER
+    bind: [
+      {
+        input: "category"
+        argument: "category"
+      },
+      {
+        input: "capability"
+        argument: "capability"
+      }
+    ]
+  };
 
   // Filter to tools whose Categories include this exact name (e.g. "compute",
   // "dns").
@@ -165,9 +372,13 @@ message ProfileListCategoriesInput {
     tool: "linode_profile_list_categories"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileCategoryListResponse";
   option (linode.mcp.v1.tool_description) = "List tool categories with the number of tools each covers. Used by the profile builder to discover available categories before drilling into a category with linode_profile_list_tools.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_CATALOG_CATEGORIES
+    requires: LOCAL_STATE_BUILDER
+  };
 }
 
 // ProfileCanRunCall is one entry in a linode_profile_can_run request: a tool
@@ -179,21 +390,32 @@ message ProfileCanRunCall {
   google.protobuf.Struct args = 2;
 }
 
-// ProfileCanRunInput is the input contract for linode_profile_can_run. calls is
-// required at runtime, but a repeated field cannot be marked required in the
-// generated schema, so the required flag is dropped (the handler still enforces
-// presence).
+// ProfileCanRunInput is the input contract for linode_profile_can_run. A
+// repeated field cannot be marked required in the generated schema, and the
+// tool answers an empty verdict list rather than refusing, so an omitted calls
+// list is a call that checks nothing.
 message ProfileCanRunInput {
   option (linode.mcp.v1.tool_meta) = {
     tool: "linode_profile_can_run"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileCanRunResponse";
   option (linode.mcp.v1.tool_description) = "Pre-check whether the active profile would permit a sequence of tool calls before executing any of them. Returns a per-call allowed/blocked verdict with a reason and remedy, plus a summary. Inspects only the tool name and optional environment arg, not resource IDs. Advice only; it does not execute anything.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  // No refusals: every verdict this answers is a member of the body, so the
+  // whole call succeeds even where it permits nothing.
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_CATALOG_CAN_RUN
+    requires: LOCAL_STATE_BUILDER
+    bind: [
+      {
+        input: "calls"
+        argument: "calls"
+      }
+    ]
+  };
 
-  // The tool calls to check against the active profile. Required at runtime,
-  // though the generated schema cannot mark a repeated field required.
+  // The tool calls to check against the active profile.
   repeated ProfileCanRunCall calls = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
 }
 

@@ -30,6 +30,8 @@ message LKEAPIEndpointListInput {
     path: "/lke/clusters/{cluster_id}/api-endpoints"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEAPIEndpointListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the API endpoints for an LKE cluster";
 

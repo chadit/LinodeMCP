@@ -52,6 +52,20 @@ func (s DeclaredState) Text(name string) string {
 	return text
 }
 
+// Object is the object the named singular member carries, empty when it
+// carries none, so a composite state's members read the way a resource does.
+func (s DeclaredState) Object(name string) DeclaredState {
+	if value, isState := s[name].(DeclaredState); isState {
+		return value
+	}
+
+	if value, isMap := s[name].(map[string]any); isMap {
+		return DeclaredState(value)
+	}
+
+	return DeclaredState{}
+}
+
 // Objects are the objects the named repeated member carries, each read the way
 // the state itself is.
 func (s DeclaredState) Objects(name string) []DeclaredState {
@@ -63,8 +77,12 @@ func (s DeclaredState) Objects(name string) []DeclaredState {
 	objects := make([]DeclaredState, 0, len(items))
 
 	for _, item := range items {
-		fields, isObject := item.(map[string]any)
-		if isObject {
+		// An envelope state's elements arrive already projected, so both the
+		// raw map and the projected shape read as one kind of object.
+		switch fields := item.(type) {
+		case DeclaredState:
+			objects = append(objects, fields)
+		case map[string]any:
 			objects = append(objects, fields)
 		}
 	}

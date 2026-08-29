@@ -1,0 +1,57 @@
+{
+  "tool": "linode_profile_can_run",
+  "description": "CapMeta pre-check tool over the active profile (no Linode API call). Pins the verdict shape both languages must project identically: an allowed row carrying neither reason nor remedy, a blocked row carrying both, and the summary with all four reason buckets present so a zero bucket is never dropped from the map.",
+  "cases": [
+    {
+      "name": "answers a verdict per call with the reason buckets filled",
+      "args": {
+        "calls": [
+          { "tool": "linode_instance_list" },
+          { "tool": "no-such-tool" }
+        ]
+      },
+      "expect_result": {
+        "active_profile": "full-access",
+        "results": [
+          { "tool": "linode_instance_list", "allowed": true },
+          {
+            "tool": "no-such-tool",
+            "allowed": false,
+            "reason": "tool name not registered",
+            "remedy": "check spelling or call linode_profile_list_tools to discover the registered tool surface"
+          }
+        ],
+        "summary": {
+          "total": 2,
+          "allowed": 1,
+          "blocked": 1,
+          "blocked_by_reason": {
+            "capability_block": 0,
+            "environment_block": 0,
+            "profile_block": 0,
+            "unregistered": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "answers an empty verdict list when no calls are named",
+      "args": {},
+      "expect_result": {
+        "active_profile": "full-access",
+        "results": [],
+        "summary": {
+          "total": 0,
+          "allowed": 0,
+          "blocked": 0,
+          "blocked_by_reason": {
+            "capability_block": 0,
+            "environment_block": 0,
+            "profile_block": 0,
+            "unregistered": 0
+          }
+        }
+      }
+    }
+  ]
+}

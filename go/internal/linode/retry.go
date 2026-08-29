@@ -302,27 +302,6 @@ func (c *Client) GetAccountOAuthClient(ctx context.Context, clientID string) (*O
 	return client, err
 }
 
-// UpdateOAuthClientThumbnail updates an account OAuth client's thumbnail
-// without retrying the mutating request.
-func (c *Client) UpdateOAuthClientThumbnail(ctx context.Context, clientID string, thumbnailPNG []byte) error {
-	return c.httpUpdateOAuthClientThumbnail(ctx, clientID, thumbnailPNG)
-}
-
-// GetOAuthClientThumbnail retrieves an OAuth client's thumbnail.
-func (c *Client) GetOAuthClientThumbnail(ctx context.Context, clientID string) ([]byte, error) {
-	var thumbnailPNG []byte
-
-	err := c.executeWithRetry(ctx, "GetOAuthClientThumbnail", func() error {
-		var err error
-
-		thumbnailPNG, err = c.httpGetOAuthClientThumbnail(ctx, clientID)
-
-		return err
-	})
-
-	return thumbnailPNG, err
-}
-
 // ListTaggedObjects retrieves objects with the supplied tag label.
 func (c *Client) ListTaggedObjects(ctx context.Context, tagLabel string, page, pageSize int) (*PaginatedResponse[TaggedObject], error) {
 	var taggedObjects *PaginatedResponse[TaggedObject]
@@ -366,12 +345,6 @@ func (c *Client) GetAccountUserGrants(ctx context.Context, username string) (*Gr
 	})
 
 	return grants, err
-}
-
-// CreateSupportTicketAttachment creates a support ticket attachment without
-// retrying the mutating request.
-func (c *Client) CreateSupportTicketAttachment(ctx context.Context, ticketID int, request *CreateSupportTicketAttachmentRequest) (*SupportTicketAttachment, error) {
-	return c.httpCreateSupportTicketAttachment(ctx, ticketID, request)
 }
 
 // GetAccountServiceTransfer retrieves one account service transfer.

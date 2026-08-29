@@ -97,6 +97,8 @@ message IamDelegationChildAccountListInput {
     path: "/iam/delegation/child-accounts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the child accounts the authenticated account delegates users into.";
   option (linode.mcp.v1.error_message) = "Failed to list delegated child accounts: {error}";
@@ -119,6 +121,8 @@ message IamDelegationChildAccountUserListInput {
     path: "/iam/delegation/child-accounts/{euuid}/users"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountUsers";
   option (linode.mcp.v1.tool_description) = "Lists the parent-account users delegated into one child account, by euuid.";
   option (linode.mcp.v1.error_message) = "Failed to list delegate users for child account '{euuid}': {error}";
@@ -147,7 +151,9 @@ message IamDelegationChildAccountUserUpdateInput {
     method: "PUT"
     path: "/iam/delegation/child-accounts/{euuid}/users"
   };
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountUsers";
   option (linode.mcp.v1.tool_description) = "Replaces the set of parent-account users delegated into one child account. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This replaces the delegate users on a child account. Set confirm=true to proceed.";
@@ -194,6 +200,8 @@ message IamDelegationDefaultRolePermissionGetInput {
     path: "/iam/delegation/default-role-permissions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationDefaultRolePermissions";
   option (linode.mcp.v1.tool_description) = "Gets the role assignment a delegate user receives by default: the account access roles and the entity access roles.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve the default delegate role permissions: {error}";
@@ -214,7 +222,9 @@ message IamDelegationDefaultRolePermissionUpdateInput {
     method: "PUT"
     path: "/iam/delegation/default-role-permissions"
   };
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationDefaultRolePermissionsWriteResponse";
   option (linode.mcp.v1.tool_description) = "Replaces the role assignment delegate users receive by default. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This replaces the default role assignment for every delegate user. Set confirm=true to proceed.";
@@ -259,6 +269,8 @@ message IamDelegationProfileChildAccountListInput {
     path: "/iam/delegation/profile/child-accounts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the child accounts the authenticated user is delegated into.";
   option (linode.mcp.v1.error_message) = "Failed to list your delegated child accounts: {error}";
@@ -277,6 +289,8 @@ message IamDelegationProfileChildAccountGetInput {
     path: "/iam/delegation/profile/child-accounts/{euuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccount";
   option (linode.mcp.v1.tool_description) = "Gets one child account the authenticated user is delegated into, by euuid.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve delegated child account '{euuid}': {error}";
@@ -305,7 +319,9 @@ message IamDelegationProfileChildAccountTokenCreateInput {
     method: "POST"
     path: "/iam/delegation/profile/child-accounts/{euuid}/token"
   };
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountTokenWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a short-lived token for calling one child account the authenticated user is delegated into. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a delegate user token for a child account. Set confirm=true to proceed.";
@@ -345,6 +361,8 @@ message IamDelegationUserChildAccountListInput {
     path: "/iam/delegation/users/{username}/child-accounts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamDelegationChildAccountListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the child accounts one parent-account user is delegated into, by username.";
   option (linode.mcp.v1.error_message) = "Failed to list delegated child accounts for user '{username}': {error}";

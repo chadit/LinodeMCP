@@ -18,6 +18,9 @@ const (
 type languageArm struct {
 	lang renderer
 	out  string
+	// answers is where the shared answer shapes land, which is a tree of its
+	// own for the reason renderAnswers states.
+	answers string
 }
 
 // registeredLanguages is the language column of docs/contracts/languages.txt in
@@ -53,6 +56,17 @@ func registeredLanguages(path string) ([]string, error) {
 	return names, nil
 }
 
+// languageNames is the registry's own order, read back off the arms so nothing
+// downstream re-reads the file to ask which languages a run serves.
+func languageNames(arms []languageArm) []string {
+	names := make([]string, 0, len(arms))
+	for _, arm := range arms {
+		names = append(names, arm.lang.language())
+	}
+
+	return names
+}
+
 // armFor answers the arm that emits one registered language's tree.
 //
 // A registered language with no arm here fails by name rather than being
@@ -61,9 +75,11 @@ func registeredLanguages(path string) ([]string, error) {
 func armFor(name string, paths *runPaths) (languageArm, error) {
 	switch name {
 	case languageGo:
-		return boundArm(name, goRenderer{}, paths.goOut)
+		return boundArm(name, goRenderer{}, paths.goOut, paths.goAnswers)
 	case languagePython:
-		return boundArm(name, pyRenderer{outDir: paths.pyOut, ruff: paths.ruff}, paths.pyOut)
+		return boundArm(name, pyRenderer{
+			outDir: paths.pyOut, answersDir: paths.pyAnswers, ruff: paths.ruff,
+		}, paths.pyOut, paths.pyAnswers)
 	}
 
 	return languageArm{}, fmt.Errorf("%w: %s", errNoRendererArm, name)
@@ -76,14 +92,14 @@ func armFor(name string, paths *runPaths) (languageArm, error) {
 // above is three literals per line and a copy-paste that pairs one language
 // with another's renderer would write that language's tree into this one's
 // directory while every refusal about it named the wrong arm.
-func boundArm(name string, lang renderer, out string) (languageArm, error) {
+func boundArm(name string, lang renderer, out, answers string) (languageArm, error) {
 	if lang.language() != name {
 		return languageArm{}, fmt.Errorf("%w: %s bound as %s", errArmMisnamed, lang.language(), name)
 	}
 
-	if out == "" {
+	if out == "" || answers == "" {
 		return languageArm{}, fmt.Errorf("%w: %s", errNoOutputDir, name)
 	}
 
-	return languageArm{lang: lang, out: out}, nil
+	return languageArm{lang: lang, out: out, answers: answers}, nil
 }

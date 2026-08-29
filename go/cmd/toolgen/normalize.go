@@ -39,24 +39,33 @@ func normalizeRendering() map[linodev1.NormalizeTransform]normalizeCall {
 		linodev1.NormalizeTransform_NORMALIZE_TRANSFORM_TRIM_LIST_DROP_BLANK: {
 			Go: "TrimListDropBlank", Python: "trim_list_drop_blank",
 		},
+		linodev1.NormalizeTransform_NORMALIZE_TRANSFORM_TRIM_LIST: {
+			Go: "TrimList", Python: "trim_list",
+		},
+		linodev1.NormalizeTransform_NORMALIZE_TRANSFORM_UPPERCASE: {
+			Go: "UppercaseArguments", Python: "uppercase_arguments",
+		},
 	}
 }
 
+// normalizeFold is the declared convenience-into-object rewrite, read from
+// normalize_fold. The semantics are fixed by the option's contract; only the
+// three names travel here.
+type normalizeFold struct {
+	Source string
+	Target string
+	Key    string
+}
+
 // readNormalizeFields resolves the rewrites a tool declares over its arguments.
-//
-// Refused beside a normalize hook: the hook already answers the whole map, so a
-// declaration next to it would rewrite a value twice in an order nothing states.
 func (c *contract) readNormalizeFields(options protoreflect.ProtoMessage) error {
 	declared, _ := proto.GetExtension(options, linodev1.E_NormalizeFields).([]*linodev1.NormalizeField)
-	if len(declared) == 0 {
-		return nil
-	}
-
-	if c.Hooks.Normalize != "" {
-		return fmt.Errorf("%w: %s", errNormalizeWithHook, c.Name)
-	}
 
 	rewritten := make(map[string]bool, len(declared))
+	if len(declared) == 0 {
+		return c.readNormalizeFold(options, rewritten)
+	}
+
 	rewrites := make([]normalizeRewrite, 0, len(declared))
 
 	for _, entry := range declared {
@@ -69,6 +78,76 @@ func (c *contract) readNormalizeFields(options protoreflect.ProtoMessage) error 
 	}
 
 	c.Normalizes = rewrites
+
+	return c.readNormalizeFold(options, rewritten)
+}
+
+// readNormalizeFold resolves the declared convenience fold, holding both of
+// its names to arguments the tool has and to the two shapes the rendered
+// helper reads: an integer list folding into an open object.
+func (c *contract) readNormalizeFold(
+	options protoreflect.ProtoMessage, rewritten map[string]bool,
+) error {
+	if !proto.HasExtension(options, linodev1.E_NormalizeFold) {
+		return nil
+	}
+
+	declared, _ := proto.GetExtension(options, linodev1.E_NormalizeFold).(*linodev1.NormalizeFold)
+
+	if err := c.checkFoldNames(declared, rewritten); err != nil {
+		return err
+	}
+
+	if err := c.checkFoldShapes(declared); err != nil {
+		return err
+	}
+
+	c.Fold = &normalizeFold{
+		Source: declared.GetSource(),
+		Target: declared.GetTarget(),
+		Key:    declared.GetKey(),
+	}
+
+	return nil
+}
+
+// checkFoldNames holds the fold's names to being distinct declared arguments
+// no other rewrite touches, with an address to write to.
+func (c *contract) checkFoldNames(
+	declared *linodev1.NormalizeFold, rewritten map[string]bool,
+) error {
+	if declared.GetKey() == "" {
+		return fmt.Errorf("%w: %s", errFoldEmptyKey, c.Name)
+	}
+
+	if declared.GetSource() == declared.GetTarget() {
+		return fmt.Errorf("%w: %s folds %s into itself",
+			errFoldSelfTarget, c.Name, declared.GetSource())
+	}
+
+	for _, name := range []string{declared.GetSource(), declared.GetTarget()} {
+		if err := c.checkNormalizeField(name, rewritten); err != nil {
+			return err
+		}
+
+		rewritten[name] = true
+	}
+
+	return nil
+}
+
+// checkFoldShapes holds the fold to the two shapes the rendered helper reads:
+// the source an integer list, the target an open object.
+func (c *contract) checkFoldShapes(declared *linodev1.NormalizeFold) error {
+	source, sourceDeclared := c.bodyField(declared.GetSource())
+	if !sourceDeclared || !source.Repeated || source.Kind != protoreflect.Int32Kind {
+		return fmt.Errorf("%w: %s folds %s", errFoldSourceKind, c.Name, declared.GetSource())
+	}
+
+	target, targetDeclared := c.bodyField(declared.GetTarget())
+	if !targetDeclared || !target.ObjectMap {
+		return fmt.Errorf("%w: %s folds into %s", errFoldTargetKind, c.Name, declared.GetTarget())
+	}
 
 	return nil
 }
@@ -116,7 +195,8 @@ func (c *contract) checkNormalizeField(name string, rewritten map[string]bool) e
 }
 
 // namesSecret reports whether an argument name marks it as the credential
-// itself rather than something that merely addresses one. The hooks this
+// itself rather than something that merely addresses one. The hand-written
+// bodies this
 // option replaces stepped around those names by hand, so the rule reads the
 // name the way they did.
 func namesSecret(name string) bool {

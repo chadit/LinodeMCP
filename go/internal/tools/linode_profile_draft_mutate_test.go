@@ -39,20 +39,37 @@ func mutateFixtureCatalog() []profiles.ToolDescriptor {
 // mutateState carries the registry plus the catalog _draft_add_tools expands
 // patterns against.
 func mutateState(reg *builder.Registry) *tools.BuilderState {
-	return builderState(reg, mutateFixtureCatalog(), noProfile)
+	return builderState(reg, mutateFixtureCatalog(), noProfile, emptyConfig())
 }
 
-// callMutateAnswer invokes the answer with the state attached and returns the
-// parsed response. None of the three mutators reads the configuration.
+// mutateHandler is the generated handler behind one draft mutator. The three
+// declare their answers now, so every case here drives the handler, which is
+// where the whole body lives: the reads, the operation and the sentences.
+func mutateHandler(factory builderFactory) builderHandler {
+	return generatedBuilder(factory, &config.Config{})
+}
+
+// callMutateAnswer runs one mutator with the state attached and returns the
+// parsed response. None of the three reads the configuration.
 func callMutateAnswer(
 	t *testing.T,
 	state *tools.BuilderState,
-	answer builderAnswer,
+	factory builderFactory,
 	args map[string]any,
 ) map[string]any {
 	t.Helper()
 
-	return builderBody(t, callAnswer(t, state, answer, nil, args))
+	return builderBody(t, callBuilder(t, state, mutateHandler(factory), args))
+}
+
+// wantMutateRefusal asserts one mutator refused with exactly the sentence.
+func wantMutateRefusal(
+	t *testing.T, state *tools.BuilderState, factory builderFactory,
+	args map[string]any, want string,
+) {
+	t.Helper()
+
+	wantRefusal(t, state, mutateHandler(factory), args, want)
 }
 
 // TestDraftAddToolsRegistration locks in the CapMeta tag and tool
@@ -93,7 +110,7 @@ func TestDraftAddToolsAddsLiterals(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftAddToolsTool, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolInstanceBoot, toolHello},
 	})
@@ -150,9 +167,9 @@ func TestDraftAddToolsExpandsWildcards(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftAddToolsTool, map[string]any{
 		keyName:  mutateDraftName,
-		keyTools: []any{"linode_instance_*"},
+		keyTools: []any{toolInstanceGlob},
 	})
 
 	added, _ := out["added"].([]any)
@@ -186,13 +203,13 @@ func TestDraftAddToolsDedupesAgainstExisting(t *testing.T) {
 	}
 
 	// First add: toolHello lands.
-	_ = callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
+	_ = callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftAddToolsTool, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolHello},
 	})
 
 	// Second add: toolHello is already there.
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftAddToolsTool, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolHello},
 	})
@@ -219,7 +236,7 @@ func TestDraftAddToolsRefusesUnknownDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, nil, map[string]any{
+	wantMutateRefusal(t, mutateState(reg), gentools.NewLinodeProfileDraftAddToolsTool, map[string]any{
 		keyName:  envNonexistent,
 		keyTools: []any{toolHello},
 	}, "draft not found: nonexistent")
@@ -230,7 +247,7 @@ func TestDraftAddToolsRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftAddToolsAnswer, nil, nil, wantDraftNameMissing)
+	wantMutateRefusal(t, mutateState(reg), gentools.NewLinodeProfileDraftAddToolsTool, nil, wantDraftNameMissing)
 }
 
 // TestDraftRemoveToolsRefusesMissingName mirrors the add-tools guard.
@@ -238,7 +255,7 @@ func TestDraftRemoveToolsRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, nil, map[string]any{keyTools: []any{toolHello}},
+	wantMutateRefusal(t, mutateState(reg), gentools.NewLinodeProfileDraftRemoveToolsTool, map[string]any{keyTools: []any{toolHello}},
 		wantDraftNameMissing)
 }
 
@@ -256,7 +273,7 @@ func TestDraftRemoveToolsRemovesLiterals(t *testing.T) {
 
 	draft.AllowedTools = []string{toolInstanceBoot, toolInstanceReboot, toolHello}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftRemoveToolsTool, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{toolHello},
 	})
@@ -298,9 +315,9 @@ func TestDraftRemoveToolsExpandsWildcardsAgainstDraft(t *testing.T) {
 
 	draft.AllowedTools = []string{toolInstanceBoot, toolInstanceReboot, toolHello}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftRemoveToolsTool, map[string]any{
 		keyName:  mutateDraftName,
-		keyTools: []any{"linode_instance_*"},
+		keyTools: []any{toolInstanceGlob},
 	})
 
 	removed, _ := out["removed"].([]any)
@@ -343,7 +360,7 @@ func TestDraftRemoveToolsNoMatchIsBenign(t *testing.T) {
 
 	draft.AllowedTools = []string{toolHello}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftRemoveToolsTool, map[string]any{
 		keyName:  mutateDraftName,
 		keyTools: []any{"nonexistent-tool"},
 	})
@@ -368,7 +385,7 @@ func TestDraftRemoveToolsRefusesUnknownDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftRemoveToolsAnswer, nil, map[string]any{
+	wantMutateRefusal(t, mutateState(reg), gentools.NewLinodeProfileDraftRemoveToolsTool, map[string]any{
 		keyName:  envNonexistent,
 		keyTools: []any{toolHello},
 	}, "draft not found: nonexistent")
@@ -414,7 +431,7 @@ func TestDraftSetEnvironmentsOnly(t *testing.T) {
 	draft.RequiredTokenScopes = []string{tcScopeRead}
 	draft.AllowYolo = true
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftSetTool, map[string]any{
 		keyName:               "my-draft",
 		tcAllowedEnvironments: []any{envProd},
 	})
@@ -463,7 +480,7 @@ func TestDraftSetAllowYoloFlipsCleanly(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftSetTool, map[string]any{
 		keyName:      mutateDraftName,
 		keyAllowYolo: true,
 	})
@@ -495,7 +512,7 @@ func TestDraftSetMultipleFieldsAtOnce(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftSetTool, map[string]any{
 		keyName:               mutateDraftName,
 		tcAllowedEnvironments: []any{envProd, "dev"},
 		tcRequiredTokenScopes: []any{scopeLinodesReadWrite},
@@ -520,7 +537,7 @@ func TestDraftSetEmptyCallNoOps(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	out := callMutateAnswer(t, mutateState(reg), tools.ProfileDraftSetAnswer, map[string]any{keyName: mutateDraftName})
+	out := callMutateAnswer(t, mutateState(reg), gentools.NewLinodeProfileDraftSetTool, map[string]any{keyName: mutateDraftName})
 
 	changes, _ := out["changes"].(map[string]any)
 	if len(changes) != 0 {
@@ -534,7 +551,7 @@ func TestDraftSetRefusesUnknownDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftSetAnswer, nil, map[string]any{
+	wantMutateRefusal(t, mutateState(reg), gentools.NewLinodeProfileDraftSetTool, map[string]any{
 		keyName:      envNonexistent,
 		keyAllowYolo: true,
 	}, "draft not found: nonexistent")
@@ -545,7 +562,7 @@ func TestDraftSetRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftSetAnswer, nil, map[string]any{keyAllowYolo: true},
+	wantMutateRefusal(t, mutateState(reg), gentools.NewLinodeProfileDraftSetTool, map[string]any{keyAllowYolo: true},
 		wantDraftNameMissing)
 }
 
@@ -566,7 +583,7 @@ func TestDraftSetRefusesUnknownDraftPerField(t *testing.T) {
 
 			reg := builder.NewRegistry()
 
-			wantAnswerRefusal(t, mutateState(reg), tools.ProfileDraftSetAnswer, nil, args,
+			wantMutateRefusal(t, mutateState(reg), gentools.NewLinodeProfileDraftSetTool, args,
 				"draft not found: nonexistent")
 		})
 	}

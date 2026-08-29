@@ -384,8 +384,11 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 	t.Run("preview without updating", func(t *testing.T) {
 		t.Parallel()
 
+		// The record carries the target it is changing from: a declared wording
+		// naming a value the resource does not carry is dropped rather than
+		// reported with a gap in it.
 		cfg, methods := dryRunGetStateServer(t, "/domains/333/records/555",
-			linode.DomainRecord{ID: 555, Type: "A"})
+			linode.DomainRecord{ID: 555, Type: "A", Target: "192.0.2.1"})
 		_, _, handler := gentools.NewLinodeDomainRecordUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

@@ -1,46 +1,16 @@
-"""Version tool - server version and build information."""
+"""The build-information envelope the CLI ``version`` verb prints.
+
+The MCP tool reaches the same construction through the generated arm, which
+projects ``build_info`` the way this does, so both surfaces answer one field
+set.
+"""
 
 from typing import Any
 
-from linodemcp.genpb.linode.mcp.v1 import version_pb2
-from linodemcp.tools.proto_response import proto_to_canonical_dict
-from linodemcp.version import get_version_info
-
-# Machine names Python's platform.machine() reports mapped to Go's GOARCH so the
-# version output's platform value matches the Go server on the same host.
-_ARCH_ALIASES = {
-    "x86_64": "amd64",
-    "aarch64": "arm64",
-    "i386": "386",
-    "i686": "386",
-}
-
-
-def _normalized_platform(raw: str) -> str:
-    """Normalize a "system/machine" string to Go's runtime.GOOS/GOARCH naming.
-
-    Python reports "Darwin/arm64" or "Linux/x86_64"; Go reports "darwin/arm64"
-    or "linux/amd64". Lowercasing the OS and aliasing the common arch names lines
-    the two servers' version output up on the same host.
-    """
-    os_name, _, arch = raw.partition("/")
-    return f"{os_name.lower()}/{_ARCH_ALIASES.get(arch, arch)}"
+from linodemcp.genlocal import project_version_response
+from linodemcp.tools.operations import build_info
 
 
 def version_response_dict() -> dict[str, Any]:
-    """The canonical VersionResponse payload as a dict.
-
-    The one construction of the version envelope: the tool handler and the
-    CLI ``version`` verb both serialize this proto message, so every path in
-    every language emits the field set version.proto pins (the shape the
-    testdata/conformance/version_response.json fixture locks).
-    """
-    info = get_version_info()
-    message = version_pb2.VersionResponse(
-        version=info.version,
-        api_version=info.api_version,
-        build_date=info.build_date,
-        commit=info.git_commit,
-        platform=_normalized_platform(info.platform),
-    )
-    return proto_to_canonical_dict(message)
+    """The canonical VersionResponse payload as a dict."""
+    return project_version_response(build_info())

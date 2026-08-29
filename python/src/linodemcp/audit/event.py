@@ -1,19 +1,24 @@
-"""Audit event dataclass and supporting types.
+"""Audit event vocabularies and the record they tag.
 
-Mirrors ``go/internal/audit/event.go``. Field names and JSON wire
-shape match the Go side so events from either implementation parse
-the same way downstream.
+The record itself is the contract's own ``AuditEvent``, which declares
+``local_record``, so the members and their order on disk come from the
+declaration rather than from this language's dataclass. Mirrors
+``go/internal/audit/event.go``.
+
+The vocabularies below stay this module's own words: they are what the server
+tags a call with, and the record carries their text.
 """
 
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
 from linodemcp.audit.redact import redact, redact_with_pii
+from linodemcp.genlocal import AuditEvent
 
 # Constant prefix on every event_id. Combined with a 26-char ULID
 # body, the full id looks like ``evt_01HQXY3ZKQ8M7VRBNP4W5T2J9F``.
@@ -66,114 +71,21 @@ class Mode(StrEnum):
     YOLO = "yolo"
 
 
-@dataclass
-class Event:
-    """One audit record per tool call.
+# Event is one audit record per tool call, which is the contract's own
+# AuditEvent under this module's name for it. One declaration owns the member
+# set, their order and their types, so a log line reads the same whichever
+# language wrote it.
+Event = AuditEvent
 
-    Field names match the JSON wire shape via the ``to_dict`` method.
-    Dataclass is mutable so the capture middleware can fill in the
-    outcome fields after the handler returns.
+
+def event_timestamp(instant: datetime) -> str:
+    """One instant as an event's ts member spells it.
+
+    No fractional part where the instant lands on a whole second, and
+    microseconds where it does not, which is the spelling a record written by
+    an earlier version carries and a reconstructed timestamp comes back in.
     """
-
-    ts: datetime
-    ts_unix_ns: int
-    event_id: str
-    tool: str
-    tool_capability: Capability
-    environment: str
-    profile: str
-    mode: Mode
-    plan_id: str | None
-    args: dict[str, Any]
-    args_redacted: list[str]
-    status: Status
-    latency_ms: int
-    result_summary: str
-    error: str | None
-    linodemcp_version: str
-    session_id: str
-    credential_generation: int
-
-    def finalize(
-        self,
-        status: Status,
-        latency_ms: int,
-        err_msg: str,
-        summary: str,
-    ) -> None:
-        """Record the outcome of the tool call.
-
-        The capture middleware (Phase 1b) calls this once the handler
-        returns. Empty ``err_msg`` clears the error to ``None`` so the
-        JSON wire renders ``null``, not an empty string.
-        """
-        self.status = status
-        self.latency_ms = latency_ms
-        self.result_summary = summary
-        self.error = err_msg or None
-
-    def set_mode(self, mode: Mode, plan_id: str) -> None:
-        """Update execution mode and the optional plan ID."""
-        self.mode = mode
-        self.plan_id = plan_id or None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to a JSON-ready dict.
-
-        Empty ``args`` and ``args_redacted`` serialize as ``{}`` and
-        ``[]`` respectively, matching the Go-side MarshalJSON
-        substitution. JSONL consumers expect arrays, not nulls.
-        """
-        return {
-            "ts": self.ts.isoformat().replace("+00:00", "Z"),
-            "ts_unix_ns": self.ts_unix_ns,
-            "event_id": self.event_id,
-            "tool": self.tool,
-            "tool_capability": self.tool_capability.value,
-            "environment": self.environment,
-            "profile": self.profile,
-            "mode": self.mode.value,
-            "plan_id": self.plan_id,
-            "args": self.args or {},
-            "args_redacted": self.args_redacted or [],
-            "status": self.status.value,
-            "latency_ms": self.latency_ms,
-            "result_summary": self.result_summary,
-            "error": self.error,
-            "linodemcp_version": self.linodemcp_version,
-            "session_id": self.session_id,
-            "credential_generation": self.credential_generation,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Event:
-        """Reconstruct an Event from a ``to_dict`` wire object.
-
-        Inverse of :meth:`to_dict`, used by the JSONL reader to parse
-        log lines back into events. The ``ts`` field accepts the
-        trailing ``Z`` form that ``to_dict`` writes. Enum fields parse
-        through their value constructors.
-        """
-        return cls(
-            ts=datetime.fromisoformat(str(data["ts"])),
-            ts_unix_ns=int(data["ts_unix_ns"]),
-            event_id=str(data["event_id"]),
-            tool=str(data["tool"]),
-            tool_capability=Capability(data["tool_capability"]),
-            environment=str(data["environment"]),
-            profile=str(data["profile"]),
-            mode=Mode(data["mode"]),
-            plan_id=data["plan_id"],
-            args=data.get("args") or {},
-            args_redacted=data.get("args_redacted") or [],
-            status=Status(data["status"]),
-            latency_ms=int(data["latency_ms"]),
-            result_summary=str(data["result_summary"]),
-            error=data["error"],
-            linodemcp_version=str(data["linodemcp_version"]),
-            session_id=str(data["session_id"]),
-            credential_generation=int(data["credential_generation"]),
-        )
+    return instant.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def new_event(
@@ -191,9 +103,9 @@ def new_event(
     """Construct an Event with timestamp, ULID, and metadata populated.
 
     The remaining fields (status, latency, summary, error) populate
-    later via :meth:`Event.finalize`. ``args`` is redacted in place:
-    the returned event holds redacted args and the list of redacted
-    keys. Callers that need the unredacted values keep their own copy.
+    later via :func:`finalize`. ``args`` is redacted in place: the
+    returned event holds redacted args and the list of redacted keys.
+    Callers that need the unredacted values keep their own copy.
 
     ``redact_pii`` controls the PII redaction tier (Phase 4c). The
     default False applies only the always-on credential list; the
@@ -201,24 +113,27 @@ def new_event(
     ``audit.redact_pii: true`` (the default). Keyword-only to avoid
     accidental positional confusion with the other booleans the
     capture middleware might add later.
+
+    The nanosecond count is built from the seconds and the microseconds rather
+    than from a float, which loses the last digits of a modern timestamp.
     """
     now = datetime.now(UTC)
     redact_fn = redact_with_pii if redact_pii else redact
     redacted_args, redacted_keys = redact_fn(args)
 
-    return Event(
-        ts=now,
-        ts_unix_ns=int(now.timestamp() * 1_000_000_000),
+    return AuditEvent(
+        ts=event_timestamp(now),
+        ts_unix_ns=int(now.timestamp()) * 1_000_000_000 + now.microsecond * 1000,
         event_id=new_event_id(now),
         tool=tool,
-        tool_capability=capability,
+        tool_capability=capability.value,
         environment=environment,
         profile=profile,
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args=redacted_args if redacted_args is not None else {},
         args_redacted=redacted_keys,
-        status=Status.SUCCESS,
+        status=Status.SUCCESS.value,
         latency_ms=0,
         result_summary="",
         error=None,
@@ -226,6 +141,34 @@ def new_event(
         session_id=session_id,
         credential_generation=credential_generation,
     )
+
+
+def finalize(
+    event: Event,
+    status: Status,
+    latency_ms: int,
+    err_msg: str,
+    summary: str,
+) -> Event:
+    """Answer the event the call ended as.
+
+    The capture middleware calls this once the handler returns. A new record
+    rather than four writes into the old one, because the record is a value the
+    contract owns and this language's is frozen. Empty ``err_msg`` clears the
+    error to ``None`` so the record renders ``null``, not an empty string.
+    """
+    return replace(
+        event,
+        status=status.value,
+        latency_ms=latency_ms,
+        result_summary=summary,
+        error=err_msg or None,
+    )
+
+
+def set_mode(event: Event, mode: Mode, plan_id: str) -> Event:
+    """Answer the event under the execution mode the call took."""
+    return replace(event, mode=mode.value, plan_id=plan_id or None)
 
 
 def new_event_id(now: datetime) -> str:

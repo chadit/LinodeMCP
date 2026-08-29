@@ -40,6 +40,8 @@ message BucketSSLGetInput {
     path: "/object-storage/buckets/{region}/{label}/ssl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.BucketSSL";
   option (linode.mcp.v1.tool_description) = "Checks whether an Object Storage bucket has an SSL/TLS certificate installed";
   option (linode.mcp.v1.error_message) = "Failed to retrieve SSL status for bucket '{label}' in region '{region}': {error}";
@@ -62,6 +64,8 @@ message ObjectStorageSSLUploadInput {
     path: "/object-storage/buckets/{region}/{label}/ssl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageSSLWriteResponse";
   option (linode.mcp.v1.tool_description) = "Uploads an SSL/TLS certificate to an Object Storage bucket. Requires confirm=true to proceed.";
   option (linode.mcp.v1.error_message) = "Failed to upload SSL certificate for bucket '{label}' in region '{region}': {error}";
@@ -124,6 +128,8 @@ message ObjectStorageSSLDeleteInput {
     path: "/object-storage/buckets/{region}/{label}/ssl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageSSLDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes the SSL/TLS certificate from an Object Storage bucket. Requires confirm=true to proceed. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This removes the SSL certificate from the bucket. Set confirm=true to proceed.";

@@ -1,0 +1,30 @@
+{
+  "tool": "linode_profile_list_categories",
+  "description": "CapMeta catalog tool taking no arguments (no Linode API call). Its only success path is the whole table, so that is what is pinned: both languages must reduce their own catalog to the same categories with the same counts. A tool added to one language and not the other moves a count here and nowhere else.",
+  "cases": [
+    {
+      "name": "answers every category with its tool count",
+      "args": {},
+      "expect_result": {
+        "count": 15,
+        "categories": [
+          { "name": "account", "tool_count": 123 },
+          { "name": "block_storage", "tool_count": 10 },
+          { "name": "compute", "tool_count": 113 },
+          { "name": "compute_deep", "tool_count": 23 },
+          { "name": "core", "tool_count": 4 },
+          { "name": "databases", "tool_count": 34 },
+          { "name": "dns", "tool_count": 13 },
+          { "name": "iam", "tool_count": 25 },
+          { "name": "lke", "tool_count": 29 },
+          { "name": "longview", "tool_count": 10 },
+          { "name": "monitor", "tool_count": 34 },
+          { "name": "networking", "tool_count": 61 },
+          { "name": "object_storage", "tool_count": 32 },
+          { "name": "security", "tool_count": 5 },
+          { "name": "vpcs", "tool_count": 12 }
+        ]
+      }
+    }
+  ]
+}

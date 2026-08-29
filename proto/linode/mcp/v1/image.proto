@@ -66,6 +66,8 @@ message ImageGetInput {
     path: "/images/{image_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Image";
   // The API sends these as an explicit null, and the serializer drops them, so
   // a caller cannot tell an empty value from one the API said nothing about.
@@ -121,6 +123,8 @@ message ImageListInput {
     path: "/images"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status";
 
@@ -147,6 +151,11 @@ message ImageCreateInput {
     path: "/images"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_IMAGES_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_ONLY
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a private Linode image from an existing Linode disk.";
   option (linode.mcp.v1.error_message) = "Failed to create image: {error}";
@@ -155,9 +164,13 @@ message ImageCreateInput {
   // A replayed attempt would capture a second image off the same disk, so Go
   // called this POST without retry and Python stops here too.
   option (linode.mcp.v1.retry_disabled) = true;
-  // preview names the source disk and the label the capture starts with,
-  // neither of which a declared sentence can interpolate.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The image does not exist yet, so the sentence names the disk the capture
+  // reads and the label it lands under when the caller chose one.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new image will be captured from disk {disk_id} and labeled \"{label}\"."
+    template: "A new image will be captured from disk {disk_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Go reported "is required" for a negative disk id, which was never true of
   // the value it refused; Python's sentence is the rule both languages keep.
@@ -195,6 +208,8 @@ message ImageUploadInput {
     path: "/images/upload"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageUploadWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates an upload target for a custom image.";
   option (linode.mcp.v1.error_message) = "Failed to upload image: {error}";
@@ -259,6 +274,8 @@ message ImageUpdateInput {
     path: "/images/{image_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates editable metadata for a Linode image.";
   option (linode.mcp.v1.error_message) = "Failed to update image: {error}";
@@ -332,6 +349,8 @@ message ImageDeleteInput {
     path: "/images/{image_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a private image by image ID. WARNING: this cannot be undone and replicated instances are also deleted. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the image";
@@ -386,6 +405,8 @@ message ImageReplicateInput {
     path: "/images/{image_id}/regions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
   option (linode.mcp.v1.tool_description) = "Replicates an image to one or more compute regions.";
   option (linode.mcp.v1.error_message) = "Failed to replicate image: {error}";
@@ -395,11 +416,28 @@ message ImageReplicateInput {
   // retry off is what keeps the two clients answering a transport failure the
   // same way.
   option (linode.mcp.v1.retry_disabled) = true;
-  // normalize trims each region slug, which Python has always sent trimmed and
-  // Go refused. preview reads the image, so a caller sees what is replicated,
-  // and names the regions the way Python's twin sentence did.
-  option (linode.mcp.v1.tool_hooks) = "normalize";
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // Each region slug is trimmed with the blanks kept, so an entry that was
+  // only padding is refused by the slug rule that names it. preview reads the
+  // image, so a caller sees what is replicated, and names the regions the way
+  // Python's twin sentence did.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "regions"
+    transform: NORMALIZE_TRANSFORM_TRIM_LIST
+  };
+  // The read is the image, so a caller sees what is being replicated.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_image_get"
+  };
+  // One line naming every target region rather than a line each, which is the
+  // shape this family's sentence has always taken.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Image '{image_id}' will be replicated to {element}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    per_element: {
+      argument: "regions"
+      join: ", "
+    }
+  };
 
   // The rules run in order under fail-fast, so the required sentence has to
   // come first: the shape rule below would otherwise answer for a missing id in

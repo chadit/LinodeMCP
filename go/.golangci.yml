@@ -19,6 +19,7 @@ linters:
     # Explicitly disabled linters (as per requirements)
     - forbidigo # Forbid identifiers - too restrictive
     - exhaustruct # Exhaustive struct initialization - design choice
+    - exhaustruct_v5 # Same design choice; the floating linter renamed it (wsl -> wsl_v5 precedent)
     - depguard # Import restrictions - not needed
     - lll # Line length - handled by gofmt
     - cyclop # Cyclomatic complexity - duplicate of gocyclo

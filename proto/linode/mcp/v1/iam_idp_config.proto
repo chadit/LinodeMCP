@@ -158,6 +158,8 @@ message IamIdpConfigListInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the account's external identity provider (SSO) configurations.";
   option (linode.mcp.v1.error_message) = "Failed to list IDP configurations: {error}";
@@ -179,6 +181,8 @@ message IamIdpConfigGetInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfig";
   option (linode.mcp.v1.tool_description) = "Gets one external identity provider (SSO) configuration by idp_config_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve IDP configuration '{idp_config_id}': {error}";
@@ -198,9 +202,9 @@ message IamIdpConfigGetInput {
 // IamIdpConfigDeleteInput is the input contract for
 // linode_iam_idp_config_delete.
 //
-// It declares no fetch_state hook: the get above reads the same route, so the
-// preview and the plan hash read the configuration through that rather than
-// through a hand-written step per removal.
+// It declares state_route rather than leaving the read undeclared: the get
+// above reads the same route, so the preview and the plan hash read the
+// configuration through that.
 //
 // Destroy rather than the Admin its sibling mutators carry, because the tier
 // decides the shape of the handler and only Destroy gates a removal behind the
@@ -216,6 +220,8 @@ message IamIdpConfigDeleteInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes the account's external identity provider (SSO) configuration by idp_config_id, which ends single sign-on for every user it covered. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes the account's single sign-on configuration and ends SSO login for every user it covered. Set confirm=true to proceed.";
@@ -253,7 +259,9 @@ message IamIdpConfigCreateInput {
     path: "/iam/idp-configs"
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates the account's external identity provider (SSO) configuration from SAML metadata. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates the account's single sign-on configuration. Set confirm=true to proceed.";
@@ -338,7 +346,9 @@ message IamIdpConfigUpdateInput {
     path: "/iam/idp-configs/{idp_config_id}"
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the account's external identity provider (SSO) configuration. Enabling enforcement locks every user except the excluded list out of password login. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This changes the account's single sign-on configuration. Set confirm=true to proceed.";
@@ -422,6 +432,8 @@ message IamIdpConfigCertificateListInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigCertificateListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the SAML signing certificates on one external identity provider (SSO) configuration, by idp_config_id.";
   option (linode.mcp.v1.error_message) = "Failed to list IDP certificates for configuration '{idp_config_id}': {error}";
@@ -452,7 +464,9 @@ message IamIdpConfigCertificateCreateInput {
     path: "/iam/idp-configs/{idp_config_id}/certificates"
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigCertificateWriteResponse";
   option (linode.mcp.v1.tool_description) = "Adds a SAML signing certificate to one external identity provider (SSO) configuration. Requires confirm=true. Pass dry_run=true to preview without adding.";
   option (linode.mcp.v1.confirm_message) = "This adds a signing certificate to the single sign-on configuration. Set confirm=true to proceed.";
@@ -489,8 +503,8 @@ message IamIdpConfigCertificateCreateInput {
 // IamIdpConfigCertificateDeleteInput is the input contract for
 // linode_iam_idp_config_certificate_delete.
 //
-// It declares no fetch_state hook and no read shares its route: the API
-// publishes three certificate routes and none of them reads one certificate.
+// No read shares its route: the API publishes three certificate routes and
+// none of them reads one certificate.
 // The list above is the parent of this path, and its elements carry the id this
 // route's trailing segment names, so the preview and the plan hash read the
 // certificate out of that page.
@@ -502,6 +516,8 @@ message IamIdpConfigCertificateDeleteInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigCertificateDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one SAML signing certificate from an external identity provider (SSO) configuration, by idp_config_id and certificate_id. Assertions signed with it stop verifying, and removing the last one ends SSO login for every user the configuration covered. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes a signing certificate from the single sign-on configuration, and assertions signed with it stop verifying. Set confirm=true to proceed.";
@@ -547,6 +563,8 @@ message IamIdpConfigExcludedUserListInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the users excluded from SSO enforcement on one external identity provider configuration, by idp_config_id.";
   option (linode.mcp.v1.error_message) = "Failed to list excluded users for IDP configuration '{idp_config_id}': {error}";
@@ -578,7 +596,9 @@ message IamIdpConfigExcludedUserUpdateInput {
     path: "/iam/idp-configs/{idp_config_id}/users-excluded"
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
   option (linode.mcp.v1.tool_description) = "Replaces the list of users excluded from SSO enforcement. Pass an empty usernames list to clear it, which puts every user behind the identity provider. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This replaces the emergency access list for single sign-on. Set confirm=true to proceed.";
@@ -626,6 +646,8 @@ message IamIdpConfigIncludedUserListInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the users the external identity provider configuration applies to while enforcement is off, by idp_config_id.";
   option (linode.mcp.v1.error_message) = "Failed to list included users for IDP configuration '{idp_config_id}': {error}";
@@ -657,7 +679,9 @@ message IamIdpConfigIncludedUserUpdateInput {
     path: "/iam/idp-configs/{idp_config_id}/users-included"
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamIdpConfigUserListResponse";
   option (linode.mcp.v1.tool_description) = "Replaces the list of users the external identity provider configuration applies to. Pass an empty usernames list to clear it. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This replaces the single sign-on included user list. Set confirm=true to proceed.";

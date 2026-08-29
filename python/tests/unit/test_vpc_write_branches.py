@@ -32,8 +32,13 @@ async def test_delete_dry_run_degrades_on_subnet_list_failure(
     """A failed subnet list becomes a warning in the delete preview instead of
     raising."""
     client = _cm_client()
-    client.route_raw.return_value = {"id": 5}
-    client.list_vpc_subnets.side_effect = APIError(503, "unavailable")
+
+    def routed(tool: str, *_values: object, **_kwargs: object) -> dict[str, object]:
+        if tool == "linode_vpc_subnet_list":
+            raise APIError(503, "unavailable")
+        return {"id": 5}
+
+    client.route_raw.side_effect = routed
 
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await handle_linode_vpc_delete(

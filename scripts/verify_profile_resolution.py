@@ -332,9 +332,9 @@ def main() -> int:
         _report(
             "tools filed under different categories per language:",
             tables,
-            "the category tables are one table written twice"
-            " (go/internal/profiles/builtin.go Categories,"
-            " python/src/linodemcp/profiles/builtin.py _TOOL_CATEGORIES)",
+            "categories are declared per tool in the proto contract"
+            " (tool_categories on the input message; both languages render"
+            " the same generated table)",
         )
     if homeless or resolution or tables:
         return 1

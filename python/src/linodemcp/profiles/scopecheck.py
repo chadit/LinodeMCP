@@ -1,9 +1,15 @@
 """Scope comparison primitives for Phase 6.4 token validation.
 
 Mirrors ``go/internal/profiles/scopecheck.go``. Pure functions: parse a
-PAT scope string into a Scope set, flatten an OAuth Grants payload into
+PAT scope string into a scope set, flatten an OAuth Grants payload into
 the same set shape, and compare a profile's required scopes against
 what the token carries.
+
+The pipeline compares plain scope strings, matching Go's open Scope
+type: a token or a profile may name scopes the catalog does not spell
+(child_account:*, the declared per-tool families, future Linode
+scopes), and the comparison matches them by value. The Scope enum only
+names the values the grants converter produces.
 
 The loader (wired in Phase 6.4b) takes a comparison result and decides
 policy: missing scopes are a hard failure, excess scopes warn unless
@@ -18,40 +24,22 @@ from typing import TYPE_CHECKING
 from linodemcp.profiles.scope import Scope
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from linodemcp.linode import GlobalGrants, Grant, Grants
 
 
-def parse_pat_scopes(scope_str: str) -> list[Scope]:
-    """Split a Linode PAT scope string into a deduplicated sorted Scope list.
+def parse_pat_scopes(scope_str: str) -> list[str]:
+    """Split a Linode PAT scope string into a deduplicated sorted list.
 
     The format is space-delimited tokens; ``"*"`` stands for "all
     permissions" on every category. Whitespace-only or empty input
-    yields an empty list. Unknown scope strings are still accepted: the
-    Scope enum constructor falls back to a string-valued enum lookup
-    that allows future scopes the catalog doesn't yet name.
+    yields an empty list. Every token is kept as-is, catalog member or
+    not: a PAT carries whatever scopes Linode granted it, and dropping
+    one here would report the token as under-scoped for a value it
+    genuinely holds.
     """
-    fields_ = scope_str.split()
-    if not fields_:
-        return []
-
-    seen: set[str] = set()
-    for token in fields_:
-        seen.add(token)
-
-    out: list[Scope] = []
-    for token in sorted(seen):
-        # StrEnum constructor matches by value; unknown strings raise.
-        # We swallow unknown ones because future Linode scopes shouldn't
-        # crash the loader (the comparison logic treats unrecognized
-        # actuals as excess, which the warn path handles).
-        try:
-            out.append(Scope(token))
-        except ValueError:
-            # Skip unrecognized scope strings rather than failing the
-            # whole parse. The token still works at runtime; we just
-            # can't compare it against the catalog.
-            continue
-    return out
+    return sorted(set(scope_str.split()))
 
 
 def _add_pair(perm: str, read_only: Scope, read_write: Scope, seen: set[Scope]) -> None:
@@ -164,8 +152,8 @@ class ScopeComparison:
     strict mode promotes them to errors.
     """
 
-    missing: tuple[Scope, ...] = field(default_factory=tuple)
-    excess: tuple[Scope, ...] = field(default_factory=tuple)
+    missing: tuple[str, ...] = field(default_factory=tuple)
+    excess: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def has_missing(self) -> bool:
@@ -178,11 +166,13 @@ class ScopeComparison:
         return bool(self.excess)
 
 
-def compare_scopes(required: list[Scope], actual: list[Scope]) -> ScopeComparison:
+def compare_scopes(required: Sequence[str], actual: Sequence[str]) -> ScopeComparison:
     """Return the missing and excess sets between required and actual.
 
-    Set-based; order doesn't matter. Output is sorted ascending so
-    error messages stay stable. Wildcard handling:
+    Set-based; order doesn't matter, and both sides are plain scope
+    strings so values outside the catalog compare like any other.
+    Output is sorted ascending so error messages stay stable. Wildcard
+    handling:
 
     - ``Scope.Wildcard`` ("*") in ``actual`` matches every required
       scope. A token with just ``"*"`` satisfies any profile.
@@ -194,16 +184,12 @@ def compare_scopes(required: list[Scope], actual: list[Scope]) -> ScopeCompariso
 
     required_set = {s for s in required if s != Scope.Wildcard}
 
-    missing: list[Scope] = []
+    missing: list[str] = []
     if not has_wildcard:
-        missing = sorted(
-            (s for s in required_set if s not in actual_set),
-            key=lambda s: s.value,
-        )
+        missing = sorted(s for s in required_set if s not in actual_set)
 
     excess = sorted(
-        (s for s in actual_set if s != Scope.Wildcard and s not in required_set),
-        key=lambda s: s.value,
+        s for s in actual_set if s != Scope.Wildcard and s not in required_set
     )
 
     return ScopeComparison(missing=tuple(missing), excess=tuple(excess))

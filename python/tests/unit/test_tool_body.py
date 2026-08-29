@@ -1065,3 +1065,12 @@ def test_optional_fold_writes_nothing_after_a_failure() -> None:
     body.fold_optional("rules", _firewall_update_rules())
 
     assert body.result() == ({}, "label must be a string")
+
+
+def test_set_int_omits_an_explicit_null() -> None:
+    """null on an optional int means "use the default", never 0."""
+    body = WriteBody({"description": "set", "ttl_sec": None})
+    body.set_str("description")
+    body.set_int("ttl_sec")
+
+    assert _rendered(body) == '{"description":"set"}'

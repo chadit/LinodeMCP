@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 )
 
 // Longview is gated on its own longview:* scope, so it is its own category:
@@ -22,13 +22,13 @@ func TestLongviewToolsAreTheirOwnCategoryApartFromMonitor(t *testing.T) {
 		t.Run(toolName, func(t *testing.T) {
 			t.Parallel()
 
-			cats := profiles.Categories(toolName)
-			if !slices.Contains(cats, "longview") {
-				t.Errorf("Categories(%q) = %v, want it to contain longview", toolName, cats)
+			cats := gentools.CategoriesFor(toolName)
+			if !slices.Contains(cats, categoryLongview) {
+				t.Errorf("CategoriesFor(%q) = %v, want it to contain longview", toolName, cats)
 			}
 
-			if slices.Contains(cats, "monitor") {
-				t.Errorf("Categories(%q) = %v, want no monitor entry", toolName, cats)
+			if slices.Contains(cats, categoryMonitor) {
+				t.Errorf("CategoriesFor(%q) = %v, want no monitor entry", toolName, cats)
 			}
 		})
 	}
@@ -44,8 +44,8 @@ func TestMonitorToolsStayInMonitor(t *testing.T) {
 		t.Run(toolName, func(t *testing.T) {
 			t.Parallel()
 
-			if cats := profiles.Categories(toolName); !slices.Contains(cats, "monitor") {
-				t.Errorf("Categories(%q) = %v, want it to contain monitor", toolName, cats)
+			if cats := gentools.CategoriesFor(toolName); !slices.Contains(cats, categoryMonitor) {
+				t.Errorf("CategoriesFor(%q) = %v, want it to contain monitor", toolName, cats)
 			}
 		})
 	}

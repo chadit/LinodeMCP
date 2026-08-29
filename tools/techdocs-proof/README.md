@@ -1,0 +1,45 @@
+# techdocs-proof
+
+Compares the rendered Linode TechDocs contract against this repository's proto
+contract and reports where they disagree. It is a tool project: never installed
+with the server, never imported by it, and carrying no runtime dependencies
+beyond the `buf` and `gh` binaries it shells out to.
+
+Start with [docs/README.md](./docs/README.md). The nine chapters under `docs/`
+are the long form; chapter 01 states the authority boundary the whole thing
+serves, and chapter 08 is the operations page.
+
+## Running it
+
+Scraping needs the network, so it runs from a schedule
+(`.github/workflows/techdocs-drift.yml`) or by hand, never from `make check`:
+
+```bash
+PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof
+```
+
+The proto side comes from the working tree this command lives in.
+`--github-source` swaps that for an immutable commit archive resolved with
+`gh`, which is what a run needs when it must name a SHA.
+
+Evidence never lands in the repository. Dated runs and `latest.json` go to
+`$LINODEMCP_TECHDOCS_PROOF_ROOT`, else `$XDG_DATA_HOME/linodemcp/techdocs-proof`,
+else `~/.local/share/linodemcp/techdocs-proof`; `--evidence-root` overrides it
+and a root inside the repository is refused by name. `--retention-days` sweeps
+dated runs older than five days by default.
+
+The offline arm is what `make check` runs:
+
+```bash
+make techdocs-proof
+```
+
+## What lives here
+
+- `src/techdocs_proof/proof.py` is the comparator, including `--self-test`.
+- `data/known-divergences.json` is the exclusion ledger: divergences a triage
+  ruled are not repo defects, each scoped to one route, location, and
+  parameter, each carrying its reason. The self-test refuses a duplicate or a
+  malformed entry, so a bad edit fails the gate rather than silently widening
+  what counts as accepted.
+- `docs/` is the wiki.

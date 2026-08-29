@@ -19,6 +19,8 @@ message LKEDashboardGetInput {
     path: "/lke/clusters/{cluster_id}/dashboard"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEDashboard";
   option (linode.mcp.v1.tool_description) = "Retrieves the Kubernetes dashboard URL for an LKE cluster";
   option (linode.mcp.v1.error_message) = "Failed to retrieve dashboard URL for cluster {cluster_id}: {error}";

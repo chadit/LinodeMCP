@@ -1,0 +1,24 @@
+{
+  "tool": "linode_profile_list_tools",
+  "description": "CapMeta catalog tool (no Linode API call). Pins the success path both languages must project identically: a narrow category filter with its rows, and a filter matching nothing so the empty envelope stays {count, tools: []} rather than a null list. The rows move when the core category's membership moves, which is the point: a surface change that lands in one language only fails here.",
+  "cases": [
+    {
+      "name": "answers the core category with capability and category tags",
+      "args": { "category": "core" },
+      "expect_result": {
+        "count": 4,
+        "tools": [
+          { "name": "hello", "capability": "CapMeta", "categories": ["core"] },
+          { "name": "linode_account_get", "capability": "CapRead", "categories": ["core"] },
+          { "name": "linode_profile_get", "capability": "CapRead", "categories": ["core"] },
+          { "name": "version", "capability": "CapMeta", "categories": ["core"] }
+        ]
+      }
+    },
+    {
+      "name": "answers an empty envelope for a category no tool carries",
+      "args": { "category": "no-such-category" },
+      "expect_result": { "count": 0, "tools": [] }
+    }
+  ]
+}

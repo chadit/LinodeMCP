@@ -237,7 +237,8 @@ type DownloadResult struct {
 // existence check runs before the request, so a refused download costs no call.
 func Download(ctx context.Context, request DownloadRequest) (DownloadResult, error) {
 	destination, err := ResolveDestination(
-		request.DestPath, request.FilesystemRoot, request.Overwrite)
+		request.DestPath, request.FilesystemRoot, request.Overwrite,
+	)
 	if err != nil {
 		return DownloadResult{}, err
 	}

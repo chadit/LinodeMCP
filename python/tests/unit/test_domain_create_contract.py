@@ -18,9 +18,10 @@ from linodemcp import gentools
 from linodemcp.gentools import (
     create_linode_domain_create_tool,
     handle_linode_domain_create,
+    scopes_for,
 )
 from linodemcp.linode import APIError
-from linodemcp.profiles import Capability, Scope, required_scopes
+from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ def test_domain_create_is_exported_registered_scoped_and_schema_backed() -> None
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_domain_create"].capability is Capability.Write
     assert capability is Capability.Write
-    assert required_scopes(tool.name, capability) == [Scope.DomainsReadWrite]
+    assert scopes_for(tool.name) == ["domains:read_write"]
 
     assert set(tool.input_schema["properties"]) >= {
         "environment",

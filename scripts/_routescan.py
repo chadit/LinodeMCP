@@ -45,13 +45,18 @@ _REQUEST_BUILDER = "request"
 # one under the one name. route_call is the destroy tier's primitive: same
 # resolution, no body, and nothing decoded out of the answer.
 # make_route_request_content_type carries a prepared non-JSON body (raw PNG
-# bytes, a multipart form) to the same contract-resolved route.
+# bytes, a multipart form) to the same contract-resolved route. The three
+# transport primitives below reach it, each declared on both clients under one
+# name the same way route_raw is.
 _ROUTE_BUILDERS = frozenset(
     {
         "make_route_request",
         "make_route_request_content_type",
         "route_raw",
         "route_call",
+        "route_multipart",
+        "route_raw_body",
+        "route_raw_body_read",
     }
 )
 
@@ -70,6 +75,9 @@ _TOOL_DRIVERS = frozenset(
         # dead hand-written client methods were removed.
         "run_acknowledge_tool",
         "run_body_read_tool",
+        # The read whose answer is not JSON: its transport resolves the route
+        # from the tool this call site names, the same as the tiers above.
+        "run_assembled_read_tool",
         # Not a tier's driver: the sibling read a synthesized state fetch goes
         # through. It belongs here because it names its tool the same way, by
         # keyword at the call site.
@@ -78,6 +86,13 @@ _TOOL_DRIVERS = frozenset(
         # it deletes: the collection one segment up is read instead, named by
         # keyword at the call site the same way.
         "read_collection_state",
+        # The whole-collection scan and the envelope form, each named by
+        # keyword at the call site the same way.
+        "read_collection_scan",
+        "read_envelope_state",
+        # The composite names its tools through CompositeCall entries: the
+        # constructor is the naming site, by the same keyword.
+        "CompositeCall",
     }
 )
 
@@ -87,7 +102,34 @@ _TOOL_KEYWORD = "tool"
 # The driver-module helpers that carry a tool down to a route builder. They
 # name no tool either, so they are skipped rather than reported. Renaming one
 # without updating this list fails the gate by name, the safe direction.
-_DRIVER_INTERNALS = frozenset({"_route_write", "_routed_write", "_routed_delete"})
+_DRIVER_INTERNALS = frozenset(
+    {
+        "_route_write",
+        "_routed_write",
+        "_routed_delete",
+        # The composite performs calls whose tools its CompositeCall entries
+        # already named at the call site.
+        "read_composite_state",
+        "_composite_member",
+        # The walk engine reads lists, members, enrichments, and prices whose
+        # tools the emitted WalkSpec literals name; each such tool is a
+        # generated read with its own literal call site, so the engine's
+        # dynamic pass-through adds no route of its own.
+        "_list_elements",
+        "_member_elements",
+        "_monthly_price",
+        "_pools",
+        # The transport engine runs the arm a tool declared. Its tool arrives
+        # from the driver that named it, so the primitives it reaches carry no
+        # route of the engine's own.
+        "run_transport",
+        "_run_raw_body",
+        "_run_presign",
+        # The presign leg of a transfer, split out so each direction assigns
+        # the local end it reads. Its tool arrives from the driver too.
+        "_minted_url",
+    }
+)
 
 # Every function whose body is read for routes it does not name.
 _SKIPPED_BODIES = _ROUTE_BUILDERS | _TOOL_DRIVERS | _DRIVER_INTERNALS

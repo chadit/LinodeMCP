@@ -147,30 +147,33 @@
             }
           }
         },
-        "current_state": [
-          {
-            "algorithm": "",
-            "check": "",
-            "check_attempts": 0,
-            "check_body": "",
-            "check_interval": 0,
-            "check_passive": false,
-            "check_path": "",
-            "check_timeout": 0,
-            "cipher_suite": "",
-            "id": 7,
-            "nodebalancer_id": 5,
-            "nodes_status": {
-              "down": 0,
-              "up": 0
-            },
-            "port": 80,
-            "protocol": "http",
-            "ssl_commonname": "",
-            "ssl_fingerprint": "",
-            "stickiness": ""
-          }
-        ],
+        "current_state": {
+          "data": [
+            {
+              "algorithm": "",
+              "check": "",
+              "check_attempts": 0,
+              "check_body": "",
+              "check_interval": 0,
+              "check_passive": false,
+              "check_path": "",
+              "check_timeout": 0,
+              "cipher_suite": "",
+              "id": 7,
+              "nodebalancer_id": 5,
+              "nodes_status": {
+                "down": 0,
+                "up": 0
+              },
+              "port": 80,
+              "protocol": "http",
+              "ssl_commonname": "",
+              "ssl_fingerprint": "",
+              "stickiness": ""
+            }
+          ],
+          "results": 1
+        },
         "dependencies": [],
         "side_effects": [],
         "warnings": []

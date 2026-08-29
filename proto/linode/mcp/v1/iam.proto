@@ -53,6 +53,8 @@ message IamRolePermissionListInput {
     path: "/iam/role-permissions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamRolePermissions";
   option (linode.mcp.v1.tool_description) = "Lists the account and entity access roles that can be granted to a user, with the permissions each role carries.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve IAM role permissions: {error}";
@@ -98,6 +100,8 @@ message IamUserRolePermissionGetInput {
     path: "/iam/users/{username}/role-permissions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamUserRolePermissions";
   option (linode.mcp.v1.tool_description) = "Gets one user's access level: the account access roles and the entity access roles they hold.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve role permissions for user '{username}': {error}";
@@ -127,7 +131,9 @@ message IamUserRolePermissionUpdateInput {
     method: "PUT"
     path: "/iam/users/{username}/role-permissions"
   };
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_IAM};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IamUserRolePermissionsWriteResponse";
   option (linode.mcp.v1.tool_description) = "Replaces one user's access level with the account access and entity access roles given. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This replaces a user's account and entity access roles. Set confirm=true to proceed.";

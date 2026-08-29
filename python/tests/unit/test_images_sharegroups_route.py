@@ -37,9 +37,10 @@ from linodemcp.gentools import (
     handle_linode_image_sharegroup_token_get,
     handle_linode_image_sharegroup_token_image_list,
     handle_linode_image_sharegroup_token_list,
+    scopes_for,
 )
 from linodemcp.linode import Client, RetryableClient
-from linodemcp.profiles import Capability, Scope, required_scopes
+from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.version import FEATURE_TOOLS_LIST
 
@@ -178,9 +179,9 @@ def test_linode_image_sharegroups_by_image_list_registered() -> None:
 
 def test_linode_image_sharegroups_by_image_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroup_by_image_list", Capability.Read)
+    scopes = scopes_for("linode_image_sharegroup_by_image_list")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
     assert "linode_image_sharegroup_by_image_list" in FEATURE_TOOLS_LIST
 
 
@@ -275,16 +276,16 @@ def test_linode_images_sharegroups_list_registered() -> None:
 
 def test_linode_images_sharegroups_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroup_list", Capability.Read)
+    scopes = scopes_for("linode_image_sharegroup_list")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_linode_image_sharegroup_create_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the create route in the Images write category."""
-    scopes = required_scopes("linode_image_sharegroup_create", Capability.Write)
+    scopes = scopes_for("linode_image_sharegroup_create")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_create_linode_images_sharegroups_token_get_tool_schema() -> None:
@@ -360,9 +361,9 @@ def test_linode_images_sharegroups_token_get_registered() -> None:
 
 def test_linode_images_sharegroups_token_get_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroup_token_get", Capability.Read)
+    scopes = scopes_for("linode_image_sharegroup_token_get")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_linode_images_sharegroups_token_get_in_version_features() -> None:
@@ -511,9 +512,9 @@ def test_linode_images_sharegroups_token_sharegroup_get_registered() -> None:
 
 def test_linode_images_sharegroups_token_sharegroup_get_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroup_by_token_get", Capability.Read)
+    scopes = scopes_for("linode_image_sharegroup_by_token_get")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_linode_images_sharegroups_token_sharegroup_get_in_version_features() -> None:
@@ -616,11 +617,9 @@ def test_linode_images_sharegroups_token_sharegroup_images_list_registered() -> 
 
 def test_token_sharegroup_images_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes(
-        "linode_image_sharegroup_token_image_list", Capability.Read
-    )
+    scopes = scopes_for("linode_image_sharegroup_token_image_list")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_token_sharegroup_images_list_in_version_features() -> None:
@@ -745,9 +744,9 @@ def test_linode_images_sharegroup_members_list_registered() -> None:
 
 def test_linode_images_sharegroup_members_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroup_member_list", Capability.Read)
+    scopes = scopes_for("linode_image_sharegroup_member_list")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_linode_images_sharegroup_members_list_in_version_features() -> None:
@@ -870,11 +869,9 @@ def test_linode_images_sharegroup_member_token_get_registered() -> None:
 
 def test_linode_images_sharegroup_member_token_get_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes(
-        "linode_image_sharegroup_member_token_get", Capability.Read
-    )
+    scopes = scopes_for("linode_image_sharegroup_member_token_get")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_linode_images_sharegroup_member_token_get_in_version_features() -> None:
@@ -884,11 +881,9 @@ def test_linode_images_sharegroup_member_token_get_in_version_features() -> None
 
 def test_linode_images_sharegroup_member_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes(
-        "linode_image_sharegroup_member_token_update", Capability.Write
-    )
+    scopes = scopes_for("linode_image_sharegroup_member_token_update")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroup_member_token_update_in_version_features() -> None:
@@ -980,11 +975,9 @@ def test_linode_images_sharegroup_member_token_delete_registered() -> None:
 
 def test_linode_images_sharegroup_member_token_delete_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes(
-        "linode_image_sharegroup_member_token_delete", Capability.Destroy
-    )
+    scopes = scopes_for("linode_image_sharegroup_member_token_delete")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroup_member_token_delete_in_version_features() -> None:
@@ -1089,9 +1082,9 @@ def test_linode_images_sharegroup_image_delete_registered() -> None:
 
 def test_linode_images_sharegroup_image_delete_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_image_sharegroup_image_delete", Capability.Destroy)
+    scopes = scopes_for("linode_image_sharegroup_image_delete")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroup_image_delete_in_version_features() -> None:
@@ -1101,9 +1094,9 @@ def test_linode_images_sharegroup_image_delete_in_version_features() -> None:
 
 def test_linode_images_sharegroup_images_add_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_image_sharegroup_image_add", Capability.Write)
+    scopes = scopes_for("linode_image_sharegroup_image_add")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroup_images_add_in_version_features() -> None:
@@ -1122,9 +1115,9 @@ def test_linode_images_sharegroup_members_add_registered() -> None:
 
 def test_linode_images_sharegroup_members_add_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_image_sharegroup_member_add", Capability.Write)
+    scopes = scopes_for("linode_image_sharegroup_member_add")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroup_members_add_in_version_features() -> None:
@@ -1308,9 +1301,9 @@ def test_linode_images_sharegroup_images_list_registered() -> None:
 
 def test_linode_images_sharegroup_images_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroup_image_list", Capability.Read)
+    scopes = scopes_for("linode_image_sharegroup_image_list")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_linode_images_sharegroup_images_list_in_version_features() -> None:
@@ -1320,9 +1313,9 @@ def test_linode_images_sharegroup_images_list_in_version_features() -> None:
 
 def test_linode_images_sharegroups_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_image_sharegroup_token_update", Capability.Write)
+    scopes = scopes_for("linode_image_sharegroup_token_update")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroups_token_update_in_version_features() -> None:
@@ -1410,9 +1403,9 @@ def test_linode_images_sharegroups_token_delete_registered() -> None:
 
 def test_linode_images_sharegroups_token_delete_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_image_sharegroup_token_delete", Capability.Destroy)
+    scopes = scopes_for("linode_image_sharegroup_token_delete")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroups_token_delete_in_version_features() -> None:
@@ -1492,9 +1485,9 @@ def test_linode_images_sharegroups_tokens_list_registered() -> None:
 
 def test_linode_images_sharegroups_tokens_list_scopes_to_images_read() -> None:
     """Profile scope mapping keeps the route in the Images read category."""
-    scopes = required_scopes("linode_image_sharegroup_token_list", Capability.Read)
+    scopes = scopes_for("linode_image_sharegroup_token_list")
 
-    assert scopes == [Scope.ImagesReadOnly]
+    assert scopes == ["images:read_only"]
 
 
 def test_linode_images_sharegroups_tokens_list_in_version_features() -> None:
@@ -1514,9 +1507,9 @@ def test_linode_images_sharegroup_image_update_registered() -> None:
 
 def test_linode_images_sharegroup_image_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
-    scopes = required_scopes("linode_image_sharegroup_image_update", Capability.Write)
+    scopes = scopes_for("linode_image_sharegroup_image_update")
 
-    assert scopes == [Scope.ImagesReadWrite]
+    assert scopes == ["images:read_write"]
 
 
 def test_linode_images_sharegroup_image_update_in_version_features() -> None:

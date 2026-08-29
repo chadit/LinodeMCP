@@ -142,6 +142,8 @@ message NodeBalancerConfigGetInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfig";
   option (linode.mcp.v1.tool_description) = "Gets one config for a specific NodeBalancer by IDs.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve config {config_id} for NodeBalancer {nodebalancer_id}: {error}";
@@ -179,6 +181,8 @@ message NodeBalancerConfigListInput {
     path: "/nodebalancers/{nodebalancer_id}/configs"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigListResponse";
   option (linode.mcp.v1.tool_description) = "Lists configs for a specific NodeBalancer by its ID.";
 
@@ -221,15 +225,20 @@ message NodeBalancerConfigCreateInput {
     path: "/nodebalancers/{nodebalancer_id}/configs"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a config for a specific NodeBalancer by its ID. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.error_message) = "Failed to create config for NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This creates a NodeBalancer config. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "NodeBalancer config {id} created successfully for NodeBalancer {nodebalancer_id}";
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview reads the NodeBalancer's existing configs, so a caller sees
-  // which ports are already taken before adding one.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The NodeBalancer's existing configs are the state, envelope and all, so a
+  // caller sees which ports are already taken before adding one.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_nodebalancer_config_list"
+    envelope_state: true
+  };
   // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
   // zero, and negative nodebalancer_id alike.
   option (buf.validate.message).cel = {
@@ -368,6 +377,8 @@ message NodeBalancerConfigUpdateInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a config for a specific NodeBalancer by NodeBalancer and config ID.";
   option (linode.mcp.v1.error_message) = "Failed to update config {config_id} for NodeBalancer {nodebalancer_id}: {error}";
@@ -526,18 +537,33 @@ message NodeBalancerConfigDeleteInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a config from a NodeBalancer. WARNING: This can disrupt load balancer traffic.";
   option (linode.mcp.v1.error_message) = "Failed to delete config {config_id} from NodeBalancer {nodebalancer_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Config {config_id} removed from NodeBalancer {nodebalancer_id} successfully";
   option (linode.mcp.v1.retry_disabled) = true;
-  // The walk lists the backend nodes it takes out of rotation, which is an
-  // extra call no descriptor describes.
   option (linode.mcp.v1.state_route) = {
     tool: "linode_nodebalancer_config_get"
   };
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // The walk lists the backend nodes it takes out of rotation.
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_nodebalancer_config_node_list"
+    emit: {
+      kind: "nodebalancer_node"
+      id_field: "id"
+      label_field: "label"
+      action: "cascade_deleted"
+      note: "backend {address} ({mode})"
+    }
+    warnings: {
+      template: "Deleting this config removes {count} backend node(s) from the rotation."
+      when_any: true
+    }
+    list_error_warning: "Could not list config backend nodes: {error}"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -567,6 +593,8 @@ message NodeBalancerConfigRebuildInput {
     path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}/rebuild"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
   option (linode.mcp.v1.tool_description) = "Rebuilds a config for a specific NodeBalancer by NodeBalancer and config ID.";
   option (linode.mcp.v1.error_message) = "Failed to rebuild config {config_id} for NodeBalancer {nodebalancer_id}: {error}";
@@ -579,8 +607,8 @@ message NodeBalancerConfigRebuildInput {
     tool: "linode_nodebalancer_config_get"
   };
   // proto3 collapses an absent int32 onto 0, so one rule per id answers absent,
-  // zero, and negative alike. They are CEL rather than derived path checks
-  // because the validate hook above suppresses the derived ones.
+  // zero, and negative alike. CEL rather than derived path checks, because the
+  // rebuild words the two ids the way its hand clients both did.
   option (buf.validate.message).cel = {
     id: "nodebalancer_config_rebuild.nodebalancer_id.positive"
     message: "nodebalancer_id must be a positive integer"

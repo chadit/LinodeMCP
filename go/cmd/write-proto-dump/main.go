@@ -1,7 +1,7 @@
 // Command write-proto-dump AST-analyzes the tool factories and handlers in
 // go/internal/tools and go/internal/gentools and prints a JSON object on stdout
-// mapping tool name to classification. It tells the proto-everywhere ratchet
-// gates which tools are proto-canonical and which still use the legacy
+// mapping tool name to classification. It tells the generated-form gate which
+// tools are proto-canonical and which still use the legacy
 // map[string]any / MarshalToolResponse path.
 //
 // -surface write (default) classifies the mutating surface (CapWrite,
@@ -13,7 +13,7 @@
 // regardless of capability: "generated" when the factory builds its MCP input
 // schema from the proto contract (it reaches mcp.NewToolWithRawSchema or
 // toolschemas.Schema), "hand" when it builds the schema from mcp.With* option
-// builders. This drives scripts/verify_input_proto.py.
+// builders. This drives the input surface of scripts/verify_generated_form.py.
 //
 // Detection strategy (identifier-name reachability, no go/types):
 //
@@ -130,12 +130,6 @@ const (
 	// MarshalProtoToolResponse ends at a name nothing in the graph declares and
 	// every generated tool classifies as review.
 	toolsQualifier = "tools."
-
-	// hooksQualifier is the same thing for the hand-written steps a generated
-	// handler declares. A meta tool's whole answer is its answer hook, so the
-	// path from the handler to the message it serializes runs through
-	// internal/toolhooks.
-	hooksQualifier = "toolhooks."
 )
 
 // callRecord records a single outgoing call from a function.
@@ -211,10 +205,9 @@ func main() {
 }
 
 // locateToolDirs returns the absolute paths of the packages a tool's answer is
-// assembled across: the hand-written internal/tools, the generated
-// internal/gentools, and internal/toolhooks, where the steps a contract cannot
-// express live. All three are read as one call graph, because a generated
-// handler's path to the message it serializes can run through any of them.
+// assembled across: the hand-written internal/tools and the generated
+// internal/gentools. Both are read as one call graph, because a generated
+// handler's path to the message it serializes can run through either.
 //
 // A missing generated tree is not an error, since before `make proto` has run
 // there are no generated tools to classify and buildToolSet would have failed
@@ -227,11 +220,9 @@ func locateToolDirs() ([]string, error) {
 
 	dirs := []string{toolsDir}
 
-	for _, sibling := range []string{generatedToolsPackage, hookToolsPackage} {
-		candidate := filepath.Join(filepath.Dir(toolsDir), sibling)
-		if _, statErr := os.Stat(candidate); statErr == nil {
-			dirs = append(dirs, candidate)
-		}
+	candidate := filepath.Join(filepath.Dir(toolsDir), generatedToolsPackage)
+	if _, statErr := os.Stat(candidate); statErr == nil {
+		dirs = append(dirs, candidate)
 	}
 
 	return dirs, nil
@@ -240,10 +231,6 @@ func locateToolDirs() ([]string, error) {
 // generatedToolsPackage is the directory name of the emitted tool package,
 // a sibling of internal/tools.
 const generatedToolsPackage = "gentools"
-
-// hookToolsPackage is the directory name of the hand-written hook package,
-// the other sibling of internal/tools a handler's answer can run through.
-const hookToolsPackage = "toolhooks"
 
 // locateToolsDir returns the absolute path to go/internal/tools. It tries
 // executable-relative resolution first (works for built binaries), then falls
@@ -798,16 +785,9 @@ func collectCalls(body *ast.BlockStmt) []callRecord {
 		// package. Record the call as written, then continue with the bare
 		// name so the sink comparisons below see the same function a call from
 		// inside internal/tools would.
-		for _, qualifier := range []string{toolsQualifier, hooksQualifier} {
-			bare, qualified := strings.CutPrefix(name, qualifier)
-			if !qualified {
-				continue
-			}
-
+		if bare, qualified := strings.CutPrefix(name, toolsQualifier); qualified {
 			records = append(records, callRecord{name: name})
 			name = bare
-
-			break
 		}
 
 		for _, arg := range callExpr.Args {

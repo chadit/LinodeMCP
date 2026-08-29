@@ -4,51 +4,140 @@
   "cases": [
     {
       "name": "requires volume_id",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "volume_id is required"
     },
     {
       "name": "rejects a negative volume_id",
-      "args": { "confirm": true, "volume_id": -1, "label": "clone-vol" },
+      "args": {
+        "confirm": true,
+        "volume_id": -1,
+        "label": "clone-vol"
+      },
       "expect_error": "volume_id must be a positive integer"
     },
     {
       "name": "requires label",
-      "args": { "confirm": true, "volume_id": 123 },
+      "args": {
+        "confirm": true,
+        "volume_id": 123
+      },
       "expect_error": "label is required"
     },
     {
       "name": "clones a volume",
-      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
-      "api_response": { "id": 200, "label": "clone-vol" },
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "label": "clone-vol"
+      },
+      "api_response": {
+        "id": 200,
+        "label": "clone-vol"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/volumes/123/clone",
-        "body": { "label": "clone-vol" }
+        "body": {
+          "label": "clone-vol"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"volume_id": 123, "label": "clone-vol"},
+      "args": {
+        "volume_id": 123,
+        "label": "clone-vol"
+      },
       "expect_error": "This operation creates a billable cloned volume. Set confirm=true to proceed."
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "label": "clone-vol"
+      },
       "api_response": 7,
       "expect_api_error": "Failed to clone volume"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "label": "clone-vol"
+      },
       "api_response": true,
       "expect_api_error": "Failed to clone volume"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
-      "api_response": [1, 2],
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "label": "clone-vol"
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to clone volume"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "volume_id": 123,
+        "label": "data-copy",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /volumes/123": {
+          "id": 123,
+          "label": "data",
+          "status": "active",
+          "size": 20,
+          "region": "us-east",
+          "linode_id": 456,
+          "linode_label": "web",
+          "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data",
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "hardware_type": "nvme"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_volume_clone",
+        "would_execute": {
+          "method": "POST",
+          "path": "/volumes/123/clone"
+        },
+        "current_state": {
+          "id": 123,
+          "label": "data",
+          "status": "active",
+          "size": 20,
+          "region": "us-east",
+          "linode_id": 456,
+          "linode_label": "web",
+          "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data",
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "hardware_type": "nvme"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Volume 123 (\"data\") will be cloned to a new volume labeled \"data-copy\"."
+        ],
+        "warnings": [
+          "Billing for the cloned volume starts immediately on creation."
+        ]
+      }
     }
   ]
 }

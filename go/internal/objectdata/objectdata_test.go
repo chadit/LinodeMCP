@@ -298,7 +298,8 @@ func TestInspectRefusesWhenTheConfiguredRootDoesNotExist(t *testing.T) {
 	t.Parallel()
 
 	_, err := objectdata.Inspect(
-		writeSource(t, "file.bin", "ok"), filepath.Join(t.TempDir(), "absent-root"))
+		writeSource(t, "file.bin", "ok"), filepath.Join(t.TempDir(), "absent-root"),
+	)
 	if !errors.Is(err, objectdata.ErrSourceOutsideRoot) {
 		t.Errorf("error = %v, want ErrSourceOutsideRoot", err)
 	}
@@ -445,7 +446,8 @@ func TestResolveDestination(t *testing.T) {
 		t.Parallel()
 
 		if _, err := objectdata.ResolveDestination(
-			writeSource(t, "there.bin", "x"), "", true); err != nil {
+			writeSource(t, "there.bin", "x"), "", true,
+		); err != nil {
 			t.Errorf("ResolveDestination: %v", err)
 		}
 	})

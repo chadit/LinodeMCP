@@ -1,0 +1,24 @@
+{
+  "tool": "version",
+  "description": "CapMeta build-metadata tool (no Linode API call). Every field is a build constant except platform, which reports the running host's own OS and architecture, so platform is declared host-decided and pinned by pattern while the rest stays a literal. commit reads \"unknown\" in both languages: a development build knows no commit, and saying so beats naming a build type nobody chose.",
+  "cases": [
+    {
+      "name": "reports the development build metadata",
+      "args": {},
+      "host_decided": [
+        {
+          "path": "platform",
+          "type": "string",
+          "pattern": "^[a-z0-9]+/[a-z0-9]+$",
+          "reason": "the running host's own OS and architecture, so no literal holds on both a developer machine and the CI container"
+        }
+      ],
+      "expect_result": {
+        "version": "0.1.0",
+        "api_version": "0.1.0",
+        "build_date": "unknown",
+        "commit": "unknown"
+      }
+    }
+  ]
+}

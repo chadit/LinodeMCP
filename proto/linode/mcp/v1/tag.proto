@@ -60,6 +60,8 @@ message TagListInput {
     path: "/tags"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TagListResponse";
   option (linode.mcp.v1.tool_description) = "Lists tags visible to the authenticated account.";
 
@@ -80,6 +82,8 @@ message TagCreateInput {
     path: "/tags"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TagWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a Linode tag and optionally applies it to existing resources. Pass dry_run=true to preview without creating the tag.";
   option (linode.mcp.v1.error_message) = "Failed to create tag: {error}";
@@ -155,6 +159,8 @@ message TagDeleteInput {
     path: "/tags/{tag_label}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a tag from all objects on the account. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm must be true to delete a tag";
@@ -163,10 +169,31 @@ message TagDeleteInput {
   // Go has never retried this route, so a replay cannot re-run the delete
   // against a tag the first attempt already removed.
   option (linode.mcp.v1.retry_disabled) = true;
-  // fetch_state lists the objects carrying the tag, which is what the preview
-  // reports and what the walk names one by one.
-  option (linode.mcp.v1.tool_hooks) = "fetch_state";
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // The objects carrying the tag are the state, envelope and all: the preview
+  // reports the page and the walk names each object, while the envelope's own
+  // total keeps a truncated first page from understating the blast radius.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_tag_object_list"
+    envelope_state: true
+  };
+  option (linode.mcp.v1.dependency_walk) = {
+    state_member: "data"
+    emit: {
+      kind_field: "type"
+      kind_fallback: "resource"
+      id_field: "data.id"
+      action: "removed"
+      note: "Loses this tag; the resource itself is not deleted."
+    }
+    warnings: {
+      template: "Deleting this tag removes it from {max_results} tagged object(s); the objects are not deleted."
+      when_any: true
+    }
+    warnings: {
+      template: "Only the first {count} tagged object(s) are itemized in this preview."
+      when_truncated: true
+    }
+  };
 
   // A label carrying these would address a route the caller never named: '?'
   // opens a query, '#' a fragment, and '..' climbs a segment.
@@ -202,6 +229,8 @@ message TaggedObjectListInput {
     path: "/tags/{tag_label}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TaggedObjectListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Linode objects that have the supplied tag label.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve items: {error}";

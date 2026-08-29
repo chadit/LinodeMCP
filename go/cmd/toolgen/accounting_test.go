@@ -49,7 +49,7 @@ func unreachedRefusals() map[string]string {
 		"errNotAWritePage":       "needs a mutation answering with a page carrying members the envelope cannot fill",
 		"errNotAWrapper":         "needs a response named a get envelope and shaped otherwise",
 		"errNotABodyRead":        "needs a body read whose response is not the resource the call decodes into",
-		"errNotAnAssembledRead":  "needs a read whose execute hook cannot fill the declared response",
+		"errNotAnAssembledRead":  "needs a read whose declared transport cannot fill the declared response",
 		"errUnplacedLocalMember": "needs a response declaring a LOCAL member on a tier that decodes its whole answer",
 		"errUnusedResponseBody":  "needs a response that already decodes whole beside response_body_fields",
 		"errNoNullPayload":       "needs a tier with no decoded body beside explicit_null_fields",
@@ -58,7 +58,7 @@ func unreachedRefusals() map[string]string {
 
 		"errUnsupportedDestroyShape": "needs a removal whose path shape no emitted driver addresses",
 		"errReaderOnDestroy":         "needs an argument_reader on a removal",
-		"errUngatedExecute":          "needs an execute hook on a tier that decodes its answer",
+		"errUngatedExecute":          "needs an execute_transport on a tier that decodes its answer",
 		"errMetaDryRun":              "needs a meta tool advertising dry_run",
 		"errUnmatchedFilter":         "needs a list_filter matching no element field",
 		"errUnsupportedItemKind":     "needs a typed list item member with no request representation",

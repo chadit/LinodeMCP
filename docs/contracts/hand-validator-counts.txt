@@ -10,12 +10,15 @@
 # be lowered in the same change, so this file keeps stating the real
 # remaining work rather than an old high-water mark.
 #
-# The number is two populations added: the `validate` hooks a language's
-# hook tree defines, plus the argument checks its handler tree still
+# The number is the argument checks a language's hand-written tree still
 # writes out, counted once per definition site. A rule the contract can
 # carry belongs on the message; what is left here is what CEL cannot say.
 #
-# Both populations are empty in both languages. Every argument check the
+# It is the population `make hand-code` cannot see: that gate fails on a
+# function named after a TOOL, and an argument check is named after what
+# it checks.
+#
+# The population is empty in both languages. Every argument check the
 # surface makes is now the contract's: a buf.validate rule, a declared
 # argument_reader, or an object_walk over an open map or object list. The
 # file stays because zero is a measurement that has to keep being taken.

@@ -33,6 +33,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 COHORTS: tuple[str, ...] = (
     "go/internal/gentools",
     "python/src/linodemcp/gentools",
+    "go/internal/genlocal",
+    "python/src/linodemcp/genlocal",
     "go/internal/toolschemas/data",
     "docs/contracts/tools-manifest.txt",
     "docs/contracts/tools-capabilities.txt",

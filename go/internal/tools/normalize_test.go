@@ -16,6 +16,9 @@ const (
 	keyNormalizeImages  = "images"
 	keyNormalizeSummary = "summary"
 	paddedDebian12      = "  linode/debian12  "
+	keyFoldSource       = "linode_ids"
+	keyFoldTarget       = "entities"
+	caseAbsentArgument  = "an absent argument is not invented"
 )
 
 func TestTrimArgumentsRewritesEveryNamedTextValue(t *testing.T) {
@@ -37,7 +40,7 @@ func TestTrimArgumentsRewritesEveryNamedTextValue(t *testing.T) {
 			arguments: map[string]any{keyNormalizeLabel: 5, managedServiceAddressParam: nil},
 			want:      map[string]any{keyNormalizeLabel: 5, managedServiceAddressParam: nil},
 		},
-		"an absent argument is not invented": {
+		caseAbsentArgument: {
 			arguments: map[string]any{"weight": 100},
 			want:      map[string]any{"weight": 100},
 		},
@@ -80,7 +83,7 @@ func TestTrimListDropBlankRewritesOnlyAllTextLists(t *testing.T) {
 			arguments: map[string]any{keyNormalizeImages: testDebian12Image},
 			want:      map[string]any{keyNormalizeImages: testDebian12Image},
 		},
-		"an absent argument is not invented": {
+		caseAbsentArgument: {
 			arguments: map[string]any{keyNormalizeLabel: tagWeb},
 			want:      map[string]any{keyNormalizeLabel: tagWeb},
 		},
@@ -124,5 +127,129 @@ func TestTransformsRewriteEveryNameTheyAreGiven(t *testing.T) {
 
 	if got := request.GetArguments(); !reflect.DeepEqual(got, want) {
 		t.Errorf("arguments = %v, want %v", got, want)
+	}
+}
+
+func TestTrimListTrimsEntriesAndKeepsBlanks(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		arguments map[string]any
+		want      map[string]any
+	}{
+		"padded entries are trimmed in place": {
+			arguments: map[string]any{keyNormalizeImages: []any{"  us-east  ", "eu-west"}},
+			want:      map[string]any{keyNormalizeImages: []any{placementGroupCreateRegion, "eu-west"}},
+		},
+		"an entry that was only padding stays as the blank the rule refuses": {
+			arguments: map[string]any{keyNormalizeImages: []any{blankString, placementGroupCreateRegion}},
+			want:      map[string]any{keyNormalizeImages: []any{"", placementGroupCreateRegion}},
+		},
+		"non-text entries are left for the type refusal": {
+			arguments: map[string]any{keyNormalizeImages: []any{" us-east ", 3}},
+			want:      map[string]any{keyNormalizeImages: []any{placementGroupCreateRegion, 3}},
+		},
+		"a value that is not a list is left alone": {
+			arguments: map[string]any{keyNormalizeImages: placementGroupCreateRegion},
+			want:      map[string]any{keyNormalizeImages: placementGroupCreateRegion},
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			request := requestFor(test.arguments)
+			tools.TrimList(&request, keyNormalizeImages)
+
+			if got := request.GetArguments(); !reflect.DeepEqual(got, test.want) {
+				t.Errorf("arguments = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestUppercaseArgumentsFoldsOnlyText(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		arguments map[string]any
+		want      map[string]any
+	}{
+		"lower case folds up": {
+			arguments: map[string]any{keyNormalizeSummary: "get"},
+			want:      map[string]any{keyNormalizeSummary: "GET"},
+		},
+		"mixed case folds up": {
+			arguments: map[string]any{keyNormalizeSummary: "Put"},
+			want:      map[string]any{keyNormalizeSummary: "PUT"},
+		},
+		"a value that is not text is left for the type refusal": {
+			arguments: map[string]any{keyNormalizeSummary: 7},
+			want:      map[string]any{keyNormalizeSummary: 7},
+		},
+		caseAbsentArgument: {
+			arguments: map[string]any{keyNormalizeLabel: "x"},
+			want:      map[string]any{keyNormalizeLabel: "x"},
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			request := requestFor(test.arguments)
+			tools.UppercaseArguments(&request, keyNormalizeSummary)
+
+			if got := request.GetArguments(); !reflect.DeepEqual(got, test.want) {
+				t.Errorf("arguments = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestFoldIntListFoldsDropsAndRefusesLikeTheHookItReplaced(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		arguments map[string]any
+		want      map[string]any
+	}{
+		"the convenience form folds into the target member and leaves": {
+			arguments: map[string]any{keyFoldSource: []any{float64(123), float64(456)}},
+			want:      map[string]any{keyFoldTarget: map[string]any{keyPlacementGroupLinodes: []int{123, 456}}},
+		},
+		"a caller-supplied target wins and the source is dropped": {
+			arguments: map[string]any{
+				keyFoldSource: []any{float64(123)},
+				keyFoldTarget: map[string]any{"volumes": []any{float64(9)}},
+			},
+			want: map[string]any{keyFoldTarget: map[string]any{"volumes": []any{float64(9)}}},
+		},
+		"an unusable source is left alone so validate names it": {
+			arguments: map[string]any{keyFoldSource: "123"},
+			want:      map[string]any{keyFoldSource: "123"},
+		},
+		"an unusable target is left alone so the body builder names it": {
+			arguments: map[string]any{keyFoldSource: []any{float64(1)}, keyFoldTarget: "linodes"},
+			want:      map[string]any{keyFoldSource: []any{float64(1)}, keyFoldTarget: "linodes"},
+		},
+		"nothing supplied means nothing invented": {
+			arguments: map[string]any{},
+			want:      map[string]any{},
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			request := requestFor(test.arguments)
+			tools.FoldIntList(&request, keyFoldSource, keyFoldTarget, "linodes")
+
+			if got := request.GetArguments(); !reflect.DeepEqual(got, test.want) {
+				t.Errorf("arguments = %v, want %v", got, test.want)
+			}
+		})
 	}
 }

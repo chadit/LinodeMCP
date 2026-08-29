@@ -50,6 +50,8 @@ message ImageShareGroupMemberTokenGetInput {
     path: "/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupMember";
   option (linode.mcp.v1.tool_description) = "Gets details for one membership token in an owned image share group.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve image share group member token: {error}";
@@ -100,6 +102,8 @@ message ImageShareGroupMemberListInput {
     path: "/images/sharegroups/{sharegroup_id}/members"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupMemberListResponse";
   option (linode.mcp.v1.tool_description) = "Lists members linked to an owned image share group.";
 
@@ -126,6 +130,8 @@ message ImageShareGroupMemberAddInput {
     path: "/images/sharegroups/{sharegroup_id}/members"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupWriteResponse";
   option (linode.mcp.v1.tool_description) = "Adds members to an image share group using a membership token.";
   option (linode.mcp.v1.error_message) = "Failed to add members to image share group: {error}";
@@ -195,6 +201,8 @@ message ImageShareGroupMemberTokenUpdateInput {
     path: "/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupMemberWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a member token label for an owned image share group.";
   option (linode.mcp.v1.error_message) = "Failed to update image share group member token: {error}";
@@ -267,6 +275,8 @@ message ImageShareGroupMemberTokenDeleteInput {
     path: "/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupMemberTokenDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Revokes an accepted image share group membership token from an owned share group. Pass dry_run=true to preview without revoking.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to revoke the member token";

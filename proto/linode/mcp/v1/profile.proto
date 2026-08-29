@@ -50,6 +50,8 @@ message ProfileGetInput {
     path: "/profile"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_CORE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Profile";
   option (linode.mcp.v1.tool_description) = "Retrieves Linode user account profile information";
   option (linode.mcp.v1.error_message) = "Failed to retrieve the profile: {error}";
@@ -90,6 +92,8 @@ message ProfileUpdateInput {
     path: "/profile"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the authenticated user's own profile: email, timezone, notification and Lish settings, and the account restriction and two-factor flags. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This changes your own Linode profile. Set confirm=true to proceed.";
@@ -166,6 +170,8 @@ message ProfileGrantsGetInput {
     path: "/profile/grants"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrants";
   option (linode.mcp.v1.tool_description) = "Gets the grants and account permissions for the authenticated user's profile.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve profile grants: {error}";
@@ -198,6 +204,8 @@ message ProfileAppGetInput {
     path: "/profile/apps/{app_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileApp";
   option (linode.mcp.v1.tool_description) = "Gets one OAuth app authorization from the profile.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve authorized app {app_id}: {error}";
@@ -363,6 +371,8 @@ message ProfilePreferencesGetInput {
     path: "/profile/preferences"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_description) = "Retrieves Linode user preference settings";
   option (linode.mcp.v1.error_message) = "Failed to retrieve profile preferences: {error}";
 
@@ -382,6 +392,8 @@ message ProfilePreferencesUpdateInput {
     path: "/profile/preferences"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfilePreferencesUpdateResponse";
   option (linode.mcp.v1.tool_description) = "Updates dashboard preferences for the authenticated profile. The call replaces the stored preferences with the ones supplied rather than merging them.";
   option (linode.mcp.v1.confirm_message) = "This updates profile preferences. Set confirm=true to proceed.";
@@ -416,6 +428,8 @@ message ProfileAppListInput {
     path: "/profile/apps"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileAppListResponse";
   option (linode.mcp.v1.tool_description) = "Lists OAuth app authorizations for the authenticated profile.";
 
@@ -435,6 +449,8 @@ message ProfileAppDeleteInput {
     path: "/profile/apps/{app_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileAppIDResponse";
   option (linode.mcp.v1.tool_description) = "Revokes OAuth app access from the authenticated profile.";
   option (linode.mcp.v1.error_message) = "Failed to revoke profile app: {error}";
@@ -474,6 +490,8 @@ message ProfileDeviceListInput {
     path: "/profile/devices"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TrustedDeviceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists trusted devices for the authenticated profile.";
   option (linode.mcp.v1.list_envelope) = {shape: SHAPE_REQUIRED_DATA};
@@ -494,6 +512,8 @@ message ProfileDeviceGetInput {
     path: "/profile/devices/{device_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TrustedDevice";
   option (linode.mcp.v1.tool_description) = "Gets one trusted device from the profile.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve trusted device {device_id}: {error}";
@@ -516,6 +536,8 @@ message ProfileDeviceRevokeInput {
     path: "/profile/devices/{device_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDeviceIDResponse";
   option (linode.mcp.v1.tool_description) = "Revokes a trusted device from the authenticated profile.";
   option (linode.mcp.v1.error_message) = "Failed to revoke profile trusted device: {error}";
@@ -554,6 +576,8 @@ message ProfileTokenListInput {
     path: "/profile/tokens"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessTokenListResponse";
   option (linode.mcp.v1.tool_description) = "Lists personal access tokens for the authenticated profile.";
 
@@ -573,6 +597,8 @@ message ProfileTokenGetInput {
     path: "/profile/tokens/{token_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessToken";
   option (linode.mcp.v1.tool_description) = "Gets one personal access token by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve personal access token {token_id}: {error}";
@@ -594,6 +620,8 @@ message ProfileTokenCreateInput {
     path: "/profile/tokens"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTokenCreateResponse";
   option (linode.mcp.v1.tool_description) = "Creates a personal access token for the authenticated profile. Pass dry_run=true to preview without creating a token.";
   option (linode.mcp.v1.error_message) = "Failed to create profile token: {error}";
@@ -645,6 +673,8 @@ message ProfileTokenUpdateInput {
     path: "/profile/tokens/{token_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessTokenWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a personal access token for the authenticated profile.";
   option (linode.mcp.v1.error_message) = "Failed to update profile token: {error}";
@@ -705,6 +735,8 @@ message ProfileTokenDeleteInput {
     path: "/profile/tokens/{token_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTokenIDResponse";
   option (linode.mcp.v1.tool_description) = "Revokes a personal access token for the authenticated profile. Pass dry_run=true to preview without revoking the token.";
   option (linode.mcp.v1.error_message) = "Failed to revoke profile token: {error}";
@@ -744,6 +776,8 @@ message ProfileTfaEnableInput {
     path: "/profile/tfa-enable"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTfaEnableResponse";
   option (linode.mcp.v1.tool_description) = "Generates a two-factor authentication secret for the authenticated profile. The secret must be confirmed with the API before two-factor authentication is enabled.";
   option (linode.mcp.v1.error_message) = "Failed to generate profile two-factor authentication secret: {error}";
@@ -776,6 +810,8 @@ message ProfileTfaDisableInput {
     path: "/profile/tfa-disable"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Disables two-factor authentication for the authenticated profile.";
   option (linode.mcp.v1.error_message) = "Failed to disable two-factor authentication: {error}";
@@ -814,6 +850,8 @@ message ProfileTfaEnableConfirmInput {
     path: "/profile/tfa-enable-confirm"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTfaEnableConfirmResponse";
   option (linode.mcp.v1.tool_description) = "Confirms two-factor authentication enablement for the authenticated profile with a TFA code.";
   option (linode.mcp.v1.error_message) = "Failed to confirm profile two-factor authentication: {error}";
@@ -869,6 +907,8 @@ message ProfilePhoneNumberSendInput {
     path: "/profile/phone-number"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Sends a verification code to a profile phone number.";
   option (linode.mcp.v1.error_message) = "Failed to send profile phone number verification code: {error}";
@@ -924,6 +964,8 @@ message ProfilePhoneNumberDeleteInput {
     path: "/profile/phone-number"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Deletes the authenticated profile phone number.";
   option (linode.mcp.v1.error_message) = "Failed to delete profile phone number: {error}";
@@ -952,6 +994,8 @@ message ProfilePhoneNumberVerifyInput {
     path: "/profile/phone-number/verify"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Verifies a profile phone number with a one-time SMS code.";
   option (linode.mcp.v1.error_message) = "Failed to verify profile phone number: {error}";
@@ -1004,6 +1048,8 @@ message SecurityQuestionListInput {
     path: "/profile/security-questions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SecurityQuestionListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available profile security questions for the authenticated profile";
   option (linode.mcp.v1.list_envelope) = {
@@ -1038,6 +1084,8 @@ message SecurityQuestionAnswerInput {
     path: "/profile/security-questions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Answers security questions for the authenticated profile. Pass dry_run=true to preview without submitting.";
   option (linode.mcp.v1.error_message) = "Failed to answer profile security questions: {error}";
@@ -1046,9 +1094,18 @@ message SecurityQuestionAnswerInput {
   // Neither language retried this POST; a replay would answer the questions a
   // second time with material the caller only meant to send once.
   option (linode.mcp.v1.retry_disabled) = true;
-  // preview reports the answers redacted, one item at a time, so the question
-  // ids stay readable while the answers themselves never leave.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The profile's security question answers are saved."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The answers are security material and the question ids are what a caller
+  // checks before confirming, so the report stands in for one member of each
+  // entry rather than for the whole argument.
+  option (linode.mcp.v1.preview_stand_in) = {
+    argument: "security_questions"
+    member: "response"
+    text: "[redacted]"
+  };
 
   // Ordered: the count is checked before the items, because a caller who sent
   // the wrong number of answers has not yet been asked about any one of them.

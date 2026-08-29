@@ -50,8 +50,8 @@ async def test_audit_middleware_records_success(sample_config: Config) -> None:
     assert len(events) == 1
     event = events[0]
     assert event.tool == "hello"
-    assert event.tool_capability is AuditCapability.META
-    assert event.status is Status.SUCCESS
+    assert event.tool_capability == AuditCapability.META.value
+    assert event.status == Status.SUCCESS.value
     assert event.error is None
     assert event.args["name"] == "Auditor"
     assert event.latency_ms >= 0
@@ -73,7 +73,7 @@ async def test_audit_middleware_records_refusal_on_unknown_tool(
     assert len(events) == 1
     event = events[0]
     assert event.tool == "nonexistent_tool"
-    assert event.status is Status.REFUSED
+    assert event.status == Status.REFUSED.value
     assert event.error is not None
 
 

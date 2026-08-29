@@ -64,6 +64,17 @@
       }
     },
     {
+      "name": "rejects a malformed list body in the dry-run scan",
+      "args": {
+        "region_id": "us-east",
+        "label": "my-vlan",
+        "confirm": true,
+        "dry_run": true
+      },
+      "expect_api_error": "Failed to fetch state for dry-run",
+      "api_response_raw": "not json"
+    },
+    {
       "name": "dry_run_preview",
       "args": {
         "region_id": "us-east",
@@ -104,6 +115,21 @@
         "side_effects": [],
         "warnings": []
       }
+    },
+    {
+      "name": "a vlan the whole collection does not carry reads as missing",
+      "args": {
+        "region_id": "us-east",
+        "label": "ghost",
+        "dry_run": true
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_api_error": "collection holds no matching element: linode_vlan_list carries no element matching region='us-east', label='ghost'"
     }
   ]
 }

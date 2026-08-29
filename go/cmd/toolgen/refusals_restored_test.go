@@ -62,7 +62,7 @@ func TestRefusesWhatThePythonSuitePinned(t *testing.T) {
 				t.Helper()
 
 				return goProbe(probeMessage(t, "ProbeUnsupportedToolArgInput",
-					metaOptions(withHooks(), withResponse(probeWriteBody),
+					metaOptions(withResponse(probeWriteBody),
 						withSuccessMessage("Reported {flag}")),
 					probeField("flag", 1, descriptorpb.FieldDescriptorProto_TYPE_BOOL,
 						fieldOptions(withLocation(linodev1.FieldLocation_FIELD_LOCATION_TOOL)))))
@@ -70,11 +70,11 @@ func TestRefusesWhatThePythonSuitePinned(t *testing.T) {
 		},
 		{
 			name:    "a removal with no state read to plan through",
-			refusal: "errNoFetchState",
+			refusal: "errNoStateRead",
 			build: func(t *testing.T) *toolgen.ProbeRun {
 				t.Helper()
 
-				return goProbe(probeMessage(t, "ProbeNoFetchStateInput",
+				return goProbe(probeMessage(t, "ProbeNoStateReadInput",
 					destroyOptions(), pathInt(probeDeleteArg)))
 			},
 		},
@@ -116,7 +116,7 @@ const (
 // destroyOptions is a removal that emits, whose answer is the id echo the
 // contract already declares for domains.
 func destroyOptions(sets ...func(*descriptorpb.MessageOptions)) *descriptorpb.MessageOptions {
-	declared := make([]func(*descriptorpb.MessageOptions), 0, 7+len(sets))
+	declared := make([]func(*descriptorpb.MessageOptions), 0, 8+len(sets))
 	declared = append(declared,
 		withRoute("DELETE", probeDeletePath),
 		withCapability(linodev1.ToolCapability_TOOL_CAPABILITY_DESTROY),
@@ -125,6 +125,8 @@ func destroyOptions(sets ...func(*descriptorpb.MessageOptions)) *descriptorpb.Me
 		withErrorMessage("Failed to remove probe {domain_id}: {error}"),
 		withConfirmMessage("This removes a probe. Set confirm=true to proceed."),
 		withSuccessMessage("Probe {domain_id} removed successfully"),
+		probeScopes(),
+		probeCategories(),
 	)
 
 	return messageOptions(append(declared, sets...)...)

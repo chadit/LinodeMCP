@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_draft_add_tools",
-  "description": "CapMeta builder tool adding tools to a draft (no Linode API call). Pins the two refusals: an absent name and a name the registry does not hold. The success path mutates the registry, so it is pinned by the in-package tests.",
+  "description": "CapMeta builder tool adding tools to a draft (no Linode API call). Pins the two refusals (an absent name and a name the registry does not hold) and the success path, which setup_calls reaches by creating the draft against the same server first. Exact tool names rather than a wildcard: a pinned wildcard expansion would move every time the surface grows.",
   "cases": [
     {
       "name": "refuses an absent name",
@@ -20,6 +20,31 @@
         ]
       },
       "expect_error": "draft not found: no-such-draft"
+    },
+    {
+      "name": "adds the named tools and reports them sorted",
+      "setup_calls": [
+        {
+          "tool": "linode_profile_draft_new",
+          "args": {
+            "name": "seam-fixture"
+          }
+        }
+      ],
+      "args": {
+        "name": "seam-fixture",
+        "tools": [
+          "linode_vlan_list",
+          "linode_region_list"
+        ]
+      },
+      "expect_result": {
+        "name": "seam-fixture",
+        "added": [
+          "linode_region_list",
+          "linode_vlan_list"
+        ]
+      }
     }
   ]
 }

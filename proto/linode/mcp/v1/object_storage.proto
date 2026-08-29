@@ -133,6 +133,8 @@ message ObjectStorageKeyGetInput {
     path: "/object-storage/keys/{key_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKey";
   option (linode.mcp.v1.tool_description) = "Gets details about a specific Object Storage access key by ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve access key {key_id}: {error}";
@@ -155,6 +157,8 @@ message ObjectStorageKeyListInput {
     path: "/object-storage/keys"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all Object Storage access keys for the authenticated user";
 
@@ -171,6 +175,8 @@ message ObjectStorageKeyCreateInput {
     path: "/object-storage/keys"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyCreateResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new Object Storage access key. WARNING: The secret_key is only shown ONCE in the response and cannot be retrieved later.";
   option (linode.mcp.v1.error_message) = "Failed to create access key: {error}";
@@ -230,6 +236,8 @@ message ObjectStorageKeyUpdateInput {
     path: "/object-storage/keys/{key_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an Object Storage access key's label or bucket permissions.";
   option (linode.mcp.v1.error_message) = "Failed to modify access key {key_id}: {error}";
@@ -238,8 +246,25 @@ message ObjectStorageKeyUpdateInput {
   // bucket_access and regions are complete replacement sets, so a replay
   // reapplies permissions someone else may have changed since the first call.
   option (linode.mcp.v1.retry_disabled) = true;
-  // preview reads the key so a caller sees the label the update replaces.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the key, and it is credential-safe: the key GET never carries
+  // the secret.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_key_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Label changes from \"{state:label}\" to \"{label}\"."
+    template: "Label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "label"
+    argument: "label"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The key's bucket access scopes are replaced."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_present: "bucket_access"
+  };
 
   // The id is read before the body it addresses, matching the sibling read.
   option (buf.validate.message).cel = {
@@ -287,6 +312,8 @@ message ObjectStorageKeyDeleteInput {
     path: "/object-storage/keys/{key_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Revokes an Object Storage access key permanently. Pass dry_run=true to preview without revoking. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This revokes the access key permanently. Set confirm=true to proceed.";
@@ -371,6 +398,8 @@ message ObjectStorageBucketGetInput {
     path: "/object-storage/buckets/{region}/{label}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucket";
   option (linode.mcp.v1.tool_description) = "Gets details about a specific Object Storage bucket by region and label";
   option (linode.mcp.v1.error_message) = "Failed to retrieve bucket '{label}' in region '{region}': {error}";
@@ -417,6 +446,8 @@ message ObjectStorageBucketListInput {
     path: "/object-storage/buckets"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all Object Storage buckets across all regions for the authenticated user";
 
@@ -433,6 +464,8 @@ message ObjectStorageBucketByRegionListInput {
     path: "/object-storage/buckets/{region}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Object Storage buckets in a specific region for the authenticated user";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage buckets in region '{region}': {error}";
@@ -467,6 +500,8 @@ message ObjectStorageBucketObjectListInput {
     path: "/object-storage/buckets/{region}/{label}/object-list"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectListResponse";
   option (linode.mcp.v1.tool_description) = "Lists objects in an Object Storage bucket with optional prefix/delimiter filtering and pagination";
   option (linode.mcp.v1.error_message) = "Failed to list contents of bucket '{label}' in region '{region}': {error}";
@@ -519,6 +554,8 @@ message ObjectStorageBucketCreateInput {
     path: "/object-storage/buckets"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new Object Storage bucket. WARNING: Billing starts immediately.";
   option (linode.mcp.v1.error_message) = "Failed to create bucket: {error}";
@@ -614,6 +651,8 @@ message ObjectStorageBucketDeleteInput {
     path: "/object-storage/buckets/{region}/{label}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes an Object Storage bucket. WARNING: This is irreversible. All objects must be removed first. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed.";
@@ -655,6 +694,8 @@ message ObjectStorageCancelInput {
     path: "/object-storage/cancel"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Cancels Object Storage service for the account. WARNING: This changes account service state.";
   option (linode.mcp.v1.error_message) = "Failed to cancel Object Storage: {error}";
@@ -700,6 +741,8 @@ message ObjectStorageEndpointListInput {
     path: "/object-storage/endpoints"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageEndpointListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Object Storage endpoints across regions";
 
@@ -741,6 +784,8 @@ message ObjectStorageQuotaListInput {
     path: "/object-storage/quotas"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Object Storage quotas on the account";
 
@@ -758,6 +803,8 @@ message ObjectStorageQuotaGetInput {
     path: "/object-storage/quotas/{obj_quota_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuota";
   option (linode.mcp.v1.tool_description) = "Gets details about a single Object Storage quota by ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage quota {obj_quota_id}: {error}";
@@ -797,6 +844,8 @@ message ObjectStorageQuotaUsageGetInput {
     path: "/object-storage/quotas/{obj_quota_id}/usage"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaUsage";
   option (linode.mcp.v1.tool_description) = "Gets usage data for a specific Object Storage quota";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage quota usage for {obj_quota_id}: {error}";
@@ -849,6 +898,8 @@ message ObjectStorageGlobalQuotaListInput {
     path: "/object-storage/global-quotas"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageGlobalQuotaListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Object Storage global quotas on the account.";
 
@@ -866,6 +917,8 @@ message ObjectStorageGlobalQuotaGetInput {
     path: "/object-storage/global-quotas/{obj_global_quota_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuota";
   option (linode.mcp.v1.tool_description) = "Gets a single Object Storage global quota by quota ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage global quota {obj_global_quota_id}: {error}";
@@ -886,6 +939,8 @@ message ObjectStorageGlobalQuotaUsageGetInput {
     path: "/object-storage/global-quotas/{obj_global_quota_id}/usage"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaUsage";
   option (linode.mcp.v1.tool_description) = "Gets usage for a single Object Storage global quota by quota ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage global quota usage {obj_global_quota_id}: {error}";
@@ -912,6 +967,8 @@ message ObjectStorageTransferGetInput {
     path: "/object-storage/transfer"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageTransfer";
   option (linode.mcp.v1.tool_description) = "Gets Object Storage outbound data transfer usage for the current month";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage transfer usage: {error}";
@@ -937,12 +994,17 @@ message PresignedURLCreateInput {
     path: "/object-storage/buckets/{region}/{label}/object-url"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PresignedURLResponse";
   option (linode.mcp.v1.tool_description) = "Generates a presigned URL for accessing an object in Object Storage. Use method=GET to create a download URL, method=PUT to create an upload URL.";
   option (linode.mcp.v1.error_message) = "Failed to generate presigned URL for '{name}' in bucket '{label}': {error}";
   // The method arrives in whatever case the caller typed it, so it is folded to
   // the canonical S3 verb before the enum rule below reads it.
-  option (linode.mcp.v1.tool_hooks) = "normalize";
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "method"
+    transform: NORMALIZE_TRANSFORM_UPPERCASE
+  };
 
   option (buf.validate.message).cel = {
     id: "object_storage_presigned_url_create.region.required"
@@ -969,7 +1031,6 @@ message PresignedURLCreateInput {
   // reports that string instead of its declared one.
   option (buf.validate.message).cel = {
     id: "object_storage_presigned_url_create.expires_in.range"
-    message: "expires_in must be between 1 and 604800 seconds (7 days)"
     expression: "(!has(this.expires_in) || (this.expires_in >= 1 && this.expires_in <= 604800)) ? '' : string('expires_in must be between 1 and 604800 seconds (7 days), got ' + string(this.expires_in))"
   };
 
@@ -1085,6 +1146,8 @@ message ObjectStorageObjectDownloadInput {
     path: "/object-storage/buckets/{region}/{label}/object-url"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectDownloadResponse";
   option (linode.mcp.v1.tool_description) = "Downloads an object from an Object Storage bucket to a local file. Takes a filesystem path on the machine running the server, streams the object to it, and reports the byte count and stored ETag.";
   option (linode.mcp.v1.error_message) = "Failed to download '{name}' from bucket '{label}': {error}";
@@ -1104,9 +1167,18 @@ message ObjectStorageObjectDownloadInput {
     field: "dest_path"
     transform: NORMALIZE_TRANSFORM_TRIM
   };
-  // execute owns the whole transfer: the presign call, the GET, and the
-  // write.
-  option (linode.mcp.v1.tool_hooks) = "execute";
+  // The declared POST mints the URL; the transfer that follows it is the GET
+  // streamed to the destination, which no route builds.
+  option (linode.mcp.v1.execute_transport) = {
+    presign {
+      direction: TRANSFER_DIRECTION_DOWN
+      url_field: "url"
+      local_path_argument: "dest_path"
+      overwrite_argument: "overwrite"
+      size_field: "size_bytes"
+      etag_field: "etag"
+    }
+  };
 
   option (buf.validate.message).cel = {
     id: "object_storage_object_download.region.required"
@@ -1169,7 +1241,7 @@ message ObjectStorageObjectDownloadInput {
 // Linode operation this tool calls: it asks for a URL and then PUTs the file to
 // the URL the API handed back. Following a URL is not a route the client builds,
 // which is why nothing here declares an S3 path and why no Object Storage key is
-// ever minted. The transfer itself is the execute hook's.
+// ever minted. The transfer itself is the declared transport's.
 message ObjectStorageObjectUploadInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_object_upload"
@@ -1177,6 +1249,8 @@ message ObjectStorageObjectUploadInput {
     path: "/object-storage/buckets/{region}/{label}/object-url"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectUploadResponse";
   option (linode.mcp.v1.tool_description) = "Uploads a local file to an Object Storage bucket. Takes a filesystem path on the machine running the server, streams it to a presigned URL, and reports the byte count and stored ETag.";
   option (linode.mcp.v1.error_message) = "Failed to upload '{name}' to bucket '{label}': {error}";
@@ -1198,10 +1272,30 @@ message ObjectStorageObjectUploadInput {
     field: "source_path"
     transform: NORMALIZE_TRANSFORM_TRIM
   };
-  // preview stats the file and reports what would be sent. execute owns the
-  // whole transfer: the presign call, the PUT, and the byte count.
-  option (linode.mcp.v1.tool_hooks) = "preview";
-  option (linode.mcp.v1.tool_hooks) = "execute";
+  // The dry run sizes the source the transport would send, so a file the
+  // single-part ceiling refuses is named in the preview rather than on the
+  // live call. The size the wording reads is the one measurement a preview
+  // takes without moving a byte.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "{transport:size_bytes} bytes will be uploaded to '{name}' in bucket '{label}' as a single part."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The declared POST mints the URL; the transfer that follows it is the PUT of
+  // the file itself, which no route builds.
+  option (linode.mcp.v1.execute_transport) = {
+    presign {
+      direction: TRANSFER_DIRECTION_UP
+      url_field: "url"
+      local_path_argument: "source_path"
+      content_type_argument: "content_type"
+      size_field: "size_bytes"
+      etag_field: "etag"
+      answer_constant {
+        field: "upload_mode"
+        text: "single"
+      }
+    }
+  };
 
   option (buf.validate.message).cel = {
     id: "object_storage_object_upload.region.required"

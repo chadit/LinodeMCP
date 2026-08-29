@@ -6,9 +6,7 @@ them apart is most of the orientation you need:
 - **Pages** (`.md`) are prose for people and agents. Each covers one topic and
   links to its neighbors, so any page can be read on its own.
 - **Machine contracts** (`.txt`, all under [`contracts/`](./contracts/)) are
-  read by the `make check` gates by exact path. Scripts generate and ratchet
-  them. Never edit their entry lines by hand; each file's header comment names
-  its rules and regenerate command. They are listed in
+  read by the `make check` gates by exact path and listed in
   [Machine contracts](#machine-contracts) below so nobody mistakes them for
   reading material.
 
@@ -21,9 +19,8 @@ also carries an `llms.txt` with this same map, one line per page.
 
 - [Profiles](./profiles.md): the permission model. A profile names the set of
   tools the connected AI client can see and call. Also covers capability tags,
-  the built-in catalog, config schema, token-scope validation, and hot-reload.
-- [Profile recipes](./profile-recipes.md): copy-paste profile configs for
-  common postures (read-only oncall, DNS admin, dev-environment-only).
+  the built-in catalog, config schema, token-scope validation, hot-reload, and
+  copy-paste recipes for common postures.
 
 ## Write safety
 
@@ -32,9 +29,8 @@ also carries an `llms.txt` with this same map, one line per page.
   waived.
 - [Two-stage writes](./two-stage-writes.md): plan a destructive call, review
   it, apply it by id. The server refuses the apply if the resource changed.
-- [State drift](./state-drift.md): what counts as a change between plan and
-  apply, and how to read each refusal (`PLAN_DRIFT_DETECTED`, `PLAN_EXPIRED`,
-  `PLAN_NOT_FOUND`).
+  Also covers what counts as drift and how to read each refusal
+  (`PLAN_DRIFT_DETECTED`, `PLAN_EXPIRED`, `PLAN_NOT_FOUND`).
 
 ## Object Storage
 
@@ -46,18 +42,18 @@ also carries an `llms.txt` with this same map, one line per page.
 
 ## Audit
 
-- [Audit log](./audit-log.md): structured record of every tool invocation.
-  Event schema, redaction, the query tools, and investigative patterns.
-- [Audit operations](./audit-operations.md): running the audit subsystem.
-  Sinks, retention, the config block, recovery, and failure modes.
-- [Audit reports](./audit-reports.md): named queries against the audit log,
-  defined in config. The filter grammar, with worked examples.
+- [Audit](./audit.md): structured record of every tool invocation. Event
+  schema, redaction, the query tools, sinks, retention, recovery, and the
+  named-report filter grammar.
 
 ## Host integrations
 
-- [Host integrations](./host-integrations/README.md): wiring per MCP host.
-  Launch config plus command wrappers for Claude Code and Claude Desktop,
-  each in its own self-contained directory.
+- [Host integrations](./host-integrations/README.md): registering the server
+  with each MCP host, plus per-topic command wrappers
+  ([profiles](./host-integrations/profiles.md),
+  [audit](./host-integrations/audit.md),
+  [two-stage](./host-integrations/two-stage.md)) for Claude Code and
+  Claude Desktop.
 
 ## Running and operating
 
@@ -86,84 +82,41 @@ also carries an `llms.txt` with this same map, one line per page.
   the gates fail you if you hand-write any of it.
 - [The check gates](./gates.md): every `make check` gate in one page. What
   each one checks, the contract file it ratchets, and how to update it.
+- [Refreshing dependency versions](./dependency-updates.md): what
+  `make update-deps` moves, the pins it refuses and why (buf above all), and
+  how it coexists with Renovate, which manages the same four surfaces daily.
 - [Git hooks](./git-hooks.md): pre-commit setup for commit-time and push-time
   checks (`make install-hooks`).
 - [Deprecated routes](./deprecated-routes.md): tools and routes removed from
   the surface, with the replacement to use instead.
+- [TechDocs comparator](../tools/techdocs-proof/README.md): the tool project
+  that compares the proto contract against the rendered Linode TechDocs site,
+  its exclusion ledger, and its nine-chapter wiki. Its self-test is a `make
+  check` gate; the scrape runs on a schedule.
 
 ## Machine contracts
 
 Gate-consumed files, all under `docs/contracts/`. `make check` reads every one
-of these by exact path, so moving or renaming one means a coordinated sweep of
-its consumers. Baselines are ratchets: fixing an item removes its line, and
-lines are never added by hand. Most gates have no baseline at all (see [Hard
-gates](#hard-gates-no-baseline)); the ones below are what is left. An accepted
-line carries a dated annotation
-citing a tracking-issue URL, and the baseline guard fails growth without one
-(the two `*-exempt.txt` files may use a free-text reason instead). That guard
-only checks the shape of the URL, so `make sync-issues` resolves each cited
-issue on the sync schedule and fails when one is closed; an acceptance whose
-issue can never close belongs in an exempt file, not a ratchet. Each file's
-header comment holds its full rules and exact regenerate command.
-
-Which Linode API operation a tool calls is not one of these files. It lives in
-the proto contract, as a `linode.mcp.v1.tool_route` option on the tool's
-`*Input` message carrying the tool name, the method, and the path template.
-That makes an input message the equivalent of an OpenAPI operation object, so
-the generated descriptors answer "which route?" for every consumer.
-`scripts/_toolroutes.py` is the shared reader; `make tool-routes` pins the
-annotations from both sides against `tools-manifest.txt`.
-
-A path template names each of its parameters in snake_case, the way the Linode
-API documentation names them:
-`/databases/postgresql/instances/{postgresql_instance_id}`. The name is there
-to be read, not dispatched on. The two route scanners resolve routes out of
-code that builds URLs from variables, where no name exists, so they emit the
-`{p}` placeholder for every parameter and anything comparing a declared route
-against a resolved one runs it through `_toolroutes.norm_template` first.
-Shape is what the gates enforce; `make tool-routes` is the only place a name
-is checked, and only for the convention.
-
-Which tools exist and what each may do lives in the proto too. Every `*Input`
-message declares `linode.mcp.v1.tool_capability`, and names its tool in exactly
-one marker: `tool_route` for the 444 that reach the Linode API, and
-`linode.mcp.v1.tool_meta` for the 17 that work on local config or session state.
-So the descriptors alone answer "which tools exist, and which are Meta by
-design", which is what lets each language's route validator take no arguments
-and lets a server check its own registry against the contract at startup.
-`tools-manifest.txt` and `tools-capabilities.txt` are that declaration written
-out: `scripts/gen_tool_registries.py` emits both inside `make proto`, and both
-are gitignored the way the generated code is, so neither is a second place a
-tool can be added. `make tool-capability` still compares them against the
-descriptors, which now catches a stale file rather than a hand edit.
-
-What a tool answers with lives on the same input message. `tool_response` names
-the message the handler serializes, `confirm_message` carries the exact prose a
-Write, Admin, or Destroy tool returns when `confirm` is unset, `success_message`
-carries the completed-mutation text with `{field}` placeholders bound to fields
-of the input or the response, `resource_type` names the two-stage hash-ignore
-key a Destroy uses, and `retry_disabled` marks a call that must not be replayed.
-The response binding is written out rather than derived: about half the surface
-answers with a message spelled differently from what its input name would
-suggest, so `AccountBetaGetInput` naming `AccountBetaProgram` is ordinary. Four
-tools whose Linode response is an open-ended object declare no response and are
-listed by name in the gate. `make tool-response` pins all five from both
-directions.
+by exact path; never edit their entry lines by hand. Each file's header comment
+holds its full rules and exact regenerate command. Baselines are ratchets:
+fixing an item removes its line, lines are never added by hand, and an accepted
+line carries a dated annotation citing a tracking-issue URL that
+`make sync-issues` resolves on the sync schedule (the two `*-exempt.txt` files
+may use a free-text reason instead).
 
 ### Registries
 
 | File | Pins | Consumed by |
 |------|------|-------------|
 | tools-manifest.txt | The full tool surface, one name per line. Generated from the `tool_route` and `tool_meta` options by `make proto` and gitignored | Manifest gate tests in each language |
-| tools-capabilities.txt | Capability tier (`Read`/`Write`/`Destroy`/`Admin`/`Meta`) for every tool. Generated from the `tool_capability` options by `make proto` and gitignored | `scripts/verify_tool_capability.py`, capability gate tests in each language |
+| tools-capabilities.txt | Capability tier (`Read`/`Write`/`Destroy`/`Admin`/`Meta`) for every tool. Generated from the `tool_capability` options by `make proto` and gitignored | Capability gate tests in each language |
 | [handwritten-tools.txt](./contracts/handwritten-tools.txt) | The tools each language still serves from a hand-written factory, which is the codegen cohort inverted: everything else is generated, so new surface is born generated (shrink-only) | `scripts/verify_generated_tools.py`, `go/cmd/toolgen` |
 | [languages.txt](./contracts/languages.txt) | The registered language implementations: name, working dir, surface-dump command. `make proto` emits one tool tree per language listed here | `Makefile`, `go/cmd/toolgen`, `scripts/verify_tool_parity.py` |
 | [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
 | [coverage-floors.txt](./contracts/coverage-floors.txt) | Minimum total unit-test statement coverage per registered language (rise-only; the per-line half is `make diff-coverage`) | `scripts/verify_coverage_floor.py` |
 | [route-source-counts.txt](./contracts/route-source-counts.txt) | Request call sites per registered language that still build their endpoint by hand instead of resolving it from the proto (fall-only; what is left of the route-builder migration) | `scripts/verify_route_source.py` |
 | [generated-tools-counts.txt](./contracts/generated-tools-counts.txt) | Tools per registered language still served by a hand-written factory rather than by the tree the emitter writes for it from the proto (fall-only; what is left of the codegen migration) | `scripts/verify_generated_tools.py` |
-| [hand-validator-counts.txt](./contracts/hand-validator-counts.txt) | Tools per registered language whose argument check is still hand-written rather than declared as buf.validate rules on the tool's `*Input` message (fall-only; what is left of the validator migration) | `scripts/verify_hand_validators.py` |
-| [hook-body-counts.txt](./contracts/hook-body-counts.txt) | Handler steps per registered language per `tool_hooks` kind that are still written by hand rather than derived from the tool's `*Input` message (fall-only; the header records why each kind stays) | `scripts/verify_hook_bodies.py` |
+| [hand-validator-counts.txt](./contracts/hand-validator-counts.txt) | Argument checks per registered language still written out by hand rather than declared on the tool's `*Input` message (fall-only; the population `hand-code` cannot see, since a check is named after what it checks rather than after a tool) | `scripts/verify_hand_validators.py` |
 | [system-params.txt](./contracts/system-params.txt) | The proto input fields the server consumes itself rather than passing to the Linode API, by field name and proto type; each one carries a trailing `// system param` marker that stays out of the generated schema | `scripts/verify_system_params.py` |
 
 ### Ratchet baselines
@@ -184,13 +137,12 @@ directions.
 
 Most gates hold their class at zero and carry no file at all: a finding fails
 by name, there is nothing to accept it into, and the fix ships with the change
-that caused it. `input-proto`, `read-proto`, `write-proto` and `meta-proto`
-(a hand-written tool surface), `behavior` coverage and its malformed-response
-rule, `messages`, `pagination`, `response-shapes`, `list-envelope` and
-`route-evidence` all work this way, along with the offline gates that never
-had a baseline (`tool-routes`, `field-location`, `tool-capability`,
-`tool-response`, `dryrun`, `env-parity`, `cli-surface`, `metrics-surface`,
-`system-params`).
+that caused it. `generated-form` (a hand-written tool surface), `behavior`
+coverage and its malformed-response rule, `messages`, `pagination`,
+`response-shapes`, `list-envelope` and `route-evidence` all work this way,
+along with the offline gates that never had a baseline (`tool-routes`,
+`field-location`, `tool-response`, `dryrun`, `env-parity`, `cli-surface`,
+`metrics-surface`, `system-params`).
 
 An empty baseline file used to say the same thing, and it also proved the gate
 still had a surface to look at. Nothing carries that second meaning now, so

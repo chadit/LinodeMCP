@@ -12,17 +12,16 @@ import (
 // in three places, which is what a plain method and its proto variant
 // reporting under one label looks like.
 const (
-	labelGetAccount                 = "GetAccount"
-	labelGetAccountChildAccount     = "GetAccountChildAccount"
-	labelGetAccountEvent            = "GetAccountEvent"
-	labelGetAccountOAuthClient      = "GetAccountOAuthClient"
-	labelGetAccountPaymentMethod    = "GetAccountPaymentMethod"
-	labelGetAccountServiceTransfer  = "GetAccountServiceTransfer"
-	labelGetAccountSettings         = "GetAccountSettings"
-	labelGetAccountUser             = "GetAccountUser"
-	labelGetManagedCredential       = "GetManagedCredential"
-	labelGetProfileApp              = "GetProfileApp"
-	labelUpdateOAuthClientThumbnail = "UpdateOAuthClientThumbnail"
+	labelGetAccount                = "GetAccount"
+	labelGetAccountChildAccount    = "GetAccountChildAccount"
+	labelGetAccountEvent           = "GetAccountEvent"
+	labelGetAccountOAuthClient     = "GetAccountOAuthClient"
+	labelGetAccountPaymentMethod   = "GetAccountPaymentMethod"
+	labelGetAccountServiceTransfer = "GetAccountServiceTransfer"
+	labelGetAccountSettings        = "GetAccountSettings"
+	labelGetAccountUser            = "GetAccountUser"
+	labelGetManagedCredential      = "GetManagedCredential"
+	labelGetProfileApp             = "GetProfileApp"
 )
 
 // TestRoutedTransportAccountPart1 checks that each method below reports a failed
@@ -121,9 +120,10 @@ func TestRoutedTransportAccountPart2(t *testing.T) {
 			},
 		},
 		{
-			name: "GetOAuthClientThumbnail",
+			name:      "CallRouteRawBodyRead",
+			operation: thumbnailGetTool,
 			call: func(ctx context.Context, client *linode.Client) error {
-				_, err := client.GetOAuthClientThumbnail(ctx, "alpha")
+				_, err := client.CallRouteRawBodyRead(ctx, thumbnailGetTool, []any{transportClientAlpha}, "image/png")
 
 				return clientRouteError(err)
 			},
@@ -165,9 +165,12 @@ func TestRoutedTransportAccountPart3(t *testing.T) {
 			},
 		},
 		{
-			name: labelUpdateOAuthClientThumbnail,
+			name:      "CallRouteRawBody",
+			operation: thumbnailUpdateTool,
 			call: func(ctx context.Context, client *linode.Client) error {
-				return clientRouteError(client.UpdateOAuthClientThumbnail(ctx, "alpha", []byte("png")))
+				return clientRouteError(client.CallRouteRawBody(
+					ctx, thumbnailUpdateTool, []any{transportClientAlpha}, "image/png", []byte("png"),
+				))
 			},
 		},
 	})

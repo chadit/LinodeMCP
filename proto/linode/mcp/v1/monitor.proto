@@ -22,6 +22,8 @@ message MonitorServiceGetInput {
     path: "/monitor/services/{service_type}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorService";
   option (linode.mcp.v1.tool_description) = "Gets details for one supported monitoring service type by service_type.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve monitor service {service_type}: {error}";
@@ -44,6 +46,8 @@ message MonitorServiceListInput {
     path: "/monitor/services"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists supported monitoring service types.";
 
@@ -60,6 +64,8 @@ message MonitorServiceDashboardListInput {
     path: "/monitor/services/{service_type}/dashboards"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceDashboardListResponse";
   option (linode.mcp.v1.tool_description) = "Lists dashboards for one supported monitoring service type by service_type.";
 
@@ -81,6 +87,8 @@ message MonitorServiceMetricDefinitionListInput {
     path: "/monitor/services/{service_type}/metric-definitions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceMetricDefinitionListResponse";
   option (linode.mcp.v1.tool_description) = "Lists metric definitions for one supported monitoring service type by service_type.";
 
@@ -103,6 +111,8 @@ message MonitorServiceAlertDefinitionListInput {
     path: "/monitor/services/{service_type}/alert-definitions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceAlertDefinitionListResponse";
   option (linode.mcp.v1.tool_description) = "Lists alert definitions for one supported monitoring service type by service_type.";
 
@@ -128,6 +138,8 @@ message MonitorServiceMetricQueryInput {
     path: "/monitor/services/{service_type}/metrics"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceMetricQueryResponse";
   option (linode.mcp.v1.tool_description) = "Gets metrics for one supported monitoring service type by service_type.";
   option (linode.mcp.v1.success_message) = "Monitor service metrics read for '{service_type}'";
@@ -158,6 +170,8 @@ message MonitorAlertDefinitionGetInput {
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinition";
   option (linode.mcp.v1.tool_description) = "Gets one alert definition for one supported monitoring service type by service_type and alert_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve alert definition {alert_id} for monitor service {service_type}: {error}";
@@ -187,6 +201,8 @@ message MonitorAlertDefinitionDeleteInput {
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one alert definition for a supported monitoring service type by service_type and alert_id. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes a monitor alert definition. Set confirm=true to proceed.";
@@ -243,12 +259,14 @@ message MonitorServiceTokenCreateInput {
     path: "/monitor/services/{service_type}/token"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceTokenCreateResponse";
   option (linode.mcp.v1.tool_description) = "Creates a token for one supported monitoring service type. The token is returned only once and cannot be retrieved later; capture both `token` and `expiry` from the response. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a monitor service token. Set confirm=true to proceed.";
   option (linode.mcp.v1.retry_disabled) = true;
-  // The slug addresses a path segment, so the hook answers it rather than a
-  // derived check: a value the route cannot carry never reaches the wire.
+  // The slug addresses a path segment, so a value the route cannot carry never
+  // reaches the wire.
   option (linode.mcp.v1.error_message) = "Failed to create monitor service token for '{service_type}': {error}";
 
   option (buf.validate.message).cel = {
@@ -300,6 +318,8 @@ message MonitorServiceAlertDefinitionCreateInput {
     path: "/monitor/services/{service_type}/alert-definitions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates an alert definition for one supported monitoring service type. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a monitor alert definition. Set confirm=true to proceed.";
@@ -404,6 +424,8 @@ message MonitorServiceAlertDefinitionCloneInput {
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}/clone"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Clones one alert definition for a supported monitoring service type. Requires confirm=true. Pass dry_run=true to preview without cloning.";
   option (linode.mcp.v1.confirm_message) = "This clones a monitor alert definition. Set confirm=true to proceed.";
@@ -502,6 +524,8 @@ message MonitorServiceAlertDefinitionUpdateInput {
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates one alert definition for a supported monitoring service type. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This updates a monitor alert definition. Set confirm=true to proceed.";
@@ -606,6 +630,8 @@ message MonitorDashboardListInput {
     path: "/monitor/dashboards"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorDashboardListResponse";
   option (linode.mcp.v1.tool_description) = "Lists monitoring dashboards available to the user.";
 
@@ -626,6 +652,8 @@ message MonitorDashboardGetInput {
     path: "/monitor/dashboards/{dashboard_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorDashboard";
   option (linode.mcp.v1.tool_description) = "Gets one monitoring dashboard by dashboard_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve monitor dashboard {dashboard_id}: {error}";
@@ -648,6 +676,8 @@ message MonitorAlertDefinitionListInput {
     path: "/monitor/alert-definitions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionListResponse";
   option (linode.mcp.v1.tool_description) = "Lists monitoring alert definitions available to the user.";
 
@@ -672,6 +702,8 @@ message MonitorAlertChannelListInput {
     path: "/monitor/alert-channels"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertChannelListResponse";
   option (linode.mcp.v1.tool_description) = "Lists monitoring alert channels available to the user.";
   option (linode.mcp.v1.error_message) = "Failed to list monitor alert channels: {error}";
@@ -689,6 +721,8 @@ message MonitorAlertChannelGetInput {
     path: "/monitor/alert-channels/{channel_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertChannel";
   option (linode.mcp.v1.tool_description) = "Gets one monitoring alert channel by channel_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve monitor alert channel {channel_id}: {error}";
@@ -715,6 +749,8 @@ message MonitorAlertChannelAlertListInput {
     path: "/monitor/alert-channels/{channel_id}/alerts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertChannelAlertListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the monitoring alerts that use one alert channel, by channel_id.";
   option (linode.mcp.v1.error_message) = "Failed to list alerts for monitor alert channel {channel_id}: {error}";
@@ -741,6 +777,8 @@ message MonitorAlertChannelCreateInput {
     path: "/monitor/alert-channels"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertChannelWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a monitoring alert channel. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a monitor alert channel. Set confirm=true to proceed.";
@@ -792,6 +830,8 @@ message MonitorAlertChannelUpdateInput {
     path: "/monitor/alert-channels/{channel_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertChannelWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates one monitoring alert channel by channel_id. Requires confirm=true. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.confirm_message) = "This updates a monitor alert channel. Set confirm=true to proceed.";
@@ -836,9 +876,9 @@ message MonitorAlertChannelUpdateInput {
 // MonitorAlertChannelDeleteInput is the input contract for
 // linode_monitor_alert_channel_delete.
 //
-// It declares no fetch_state hook: the get above reads the same route, so the
-// preview and the plan hash read the channel through that rather than through a
-// hand-written step per removal.
+// It declares state_route rather than leaving the read undeclared: the get
+// above reads the same route, so the preview and the plan hash read the
+// channel through that.
 message MonitorAlertChannelDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_monitor_alert_channel_delete"
@@ -846,6 +886,8 @@ message MonitorAlertChannelDeleteInput {
     path: "/monitor/alert-channels/{channel_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertChannelDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one monitoring alert channel by channel_id, which stops delivery for every alert that uses it. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes a monitor alert channel and stops delivery for the alerts that use it. Set confirm=true to proceed.";
@@ -1147,6 +1189,8 @@ message MonitorAlertDefinitionEntityListInput {
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}/entities"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_MONITOR_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionEntityListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the entities one alert definition watches, by service_type and alert_id.";
   option (linode.mcp.v1.error_message) = "Failed to list entities for alert definition {alert_id}: {error}";

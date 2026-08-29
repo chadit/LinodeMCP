@@ -438,8 +438,14 @@ func (b *WriteBody) SetStringOrNull(name string) {
 	})
 }
 
-// SetInt writes an optional integer field when the caller supplied one.
+// SetInt writes an optional integer field when the caller supplied one. An
+// explicit null reads as "use the default": the key is omitted rather than
+// sent as 0, which is never an id the caller meant. Mirrors Python's set_int.
 func (b *WriteBody) SetInt(name string) {
+	if raw, present := b.arguments[name]; present && raw == nil {
+		return
+	}
+
 	b.set(name, func(raw any) (any, string) {
 		return bodyIntValue(name, raw)
 	})
@@ -534,12 +540,7 @@ func (b *WriteBody) SetTags(name string) {
 // that echoed a card number back would widen where it lands, which the live
 // request never needed.
 func (b *WriteBody) Redacting(names ...string) *WriteBody {
-	reported := &WriteBody{
-		arguments: b.arguments,
-		message:   b.message,
-		keys:      slices.Clone(b.keys),
-		values:    slices.Clone(b.values),
-	}
+	reported := b.reportedCopy()
 
 	for index, key := range reported.keys {
 		if slices.Contains(names, key) {
@@ -550,9 +551,51 @@ func (b *WriteBody) Redacting(names ...string) *WriteBody {
 	return reported
 }
 
+// StandingIn answers the body a dry run reports for one member of a repeated
+// argument's entries: the same entries in the same order, with that member
+// carrying fixed text. Redacting cannot say it, since standing in for the whole
+// member takes the rest of each entry with it, and the security answers are
+// declared this way because the question ids beside them are what a caller
+// checks before confirming.
+func (b *WriteBody) StandingIn(name, member, text string) *WriteBody {
+	reported := b.reportedCopy()
+
+	index := slices.Index(reported.keys, name)
+	if index < 0 {
+		return reported
+	}
+
+	// A member carrying anything but entries is left as the body built it.
+	entries, listed := reported.values[index].([]orderedObject)
+	if !listed {
+		return reported
+	}
+
+	stood := make([]orderedObject, 0, len(entries))
+	for _, entry := range entries {
+		stood = append(stood, entry.standingIn(member, text))
+	}
+
+	reported.values[index] = stood
+
+	return reported
+}
+
 // MarshalJSON writes the body in declaration order.
 func (b *WriteBody) MarshalJSON() ([]byte, error) {
 	return MarshalOrderedJSON(b.keys, b.values)
+}
+
+// reportedCopy is the body a dry run reports before anything stands in: the
+// same fields in the same order, held apart from the live one so a change to
+// the report cannot reach the request.
+func (b *WriteBody) reportedCopy() *WriteBody {
+	return &WriteBody{
+		arguments: b.arguments,
+		message:   b.message,
+		keys:      slices.Clone(b.keys),
+		values:    slices.Clone(b.values),
+	}
 }
 
 // MarshalOrderedJSON writes a JSON object holding keys and values pairwise, in
@@ -846,6 +889,20 @@ type orderedObject struct {
 // MarshalJSON writes the item in item-field declaration order.
 func (o orderedObject) MarshalJSON() ([]byte, error) {
 	return MarshalOrderedJSON(o.keys, o.values)
+}
+
+// standingIn is this entry as a dry run reports it, with the named member
+// carrying text instead of its value. An entry the member never reached is
+// answered unchanged, which is what a member the caller left out already means.
+func (o orderedObject) standingIn(member, text string) orderedObject {
+	stood := orderedObject{keys: slices.Clone(o.keys), values: slices.Clone(o.values)}
+
+	index := slices.Index(stood.keys, member)
+	if index >= 0 {
+		stood.values[index] = text
+	}
+
+	return stood
 }
 
 // messageValue reads one named-message value, held to the members its message

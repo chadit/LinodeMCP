@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -921,120 +920,10 @@ func TestClientGetAccountOAuthClientRetriesTransientError(t *testing.T) {
 	}
 }
 
-func TestClientUpdateOAuthClientThumbnailSuccess(t *testing.T) {
-	t.Parallel()
-
-	thumbnailPNG := []byte("png-bytes")
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != managedContactAuthHeader {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
-		}
-
-		if r.Header.Get("Content-Type") != "image/png" {
-			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), "image/png")
-		}
-
-		got, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(got, thumbnailPNG) {
-			t.Errorf("got = %v, want %v", got, thumbnailPNG)
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, thumbnailPNG)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestClientUpdateOAuthClientThumbnailEscapesClientID(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.EscapedPath() != "/account/oauth-clients/client%2F123%3Fquery/thumbnail" {
-			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/oauth-clients/client%2F123%3Fquery/thumbnail")
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(linode.OAuthClient{ID: oauthClientIDWithSeparators}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators, []byte("png-bytes"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestClientUpdateOAuthClientThumbnailAPIError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPut)
-		}
-
-		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-		w.WriteHeader(http.StatusForbidden)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: errForbidden}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	apiErr, ok := errors.AsType[*linode.APIError](err)
-	if !ok {
-		t.Fatalf("error = %v, want %v", err, &apiErr)
-	}
-
-	if apiErr.StatusCode != http.StatusForbidden {
-		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusForbidden)
-	}
-}
-
-func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T) {
+// The route the thumbnail update declares carries retry_disabled: replaying a
+// PUT would resend the whole image over a replacement that may already have
+// landed.
+func TestCallRouteRawBodyHonorsTheDeclaredRetryPolicy(t *testing.T) {
 	t.Parallel()
 
 	var requestCount atomic.Int32
@@ -1052,7 +941,8 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	err := client.UpdateOAuthClientThumbnail(t.Context(), oauthClientID, []byte("png-bytes"))
+	err := client.CallRouteRawBody(t.Context(), thumbnailUpdateTool,
+		[]any{oauthClientID}, "image/png", []byte("png-bytes"))
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -1062,113 +952,9 @@ func TestClientUpdateOAuthClientThumbnailDoesNotRetryTransientError(t *testing.T
 	}
 }
 
-func TestClientGetOAuthClientThumbnailSuccess(t *testing.T) {
-	t.Parallel()
-
-	thumbnailPNG := []byte("png-bytes")
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != managedContactAuthHeader {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
-		}
-
-		w.Header().Set("Content-Type", "image/png")
-
-		_, writeErr := w.Write(thumbnailPNG)
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !reflect.DeepEqual(got, thumbnailPNG) {
-		t.Errorf("got = %v, want %v", got, thumbnailPNG)
-	}
-}
-
-func TestClientGetOAuthClientThumbnailEscapesClientID(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.EscapedPath() != "/account/oauth-clients/client%2F123%3Fquery/thumbnail" {
-			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/account/oauth-clients/client%2F123%3Fquery/thumbnail")
-		}
-
-		w.Header().Set("Content-Type", "image/png")
-
-		_, writeErr := w.Write([]byte("png-bytes"))
-		if writeErr != nil {
-			t.Errorf("unexpected error: %v", writeErr)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientIDWithSeparators)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestClientGetOAuthClientThumbnailAPIError(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
-		}
-
-		if r.URL.Path != "/account/oauth-clients/"+oauthClientID+"/thumbnail" {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/account/oauth-clients/"+oauthClientID+"/thumbnail")
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-		w.WriteHeader(http.StatusNotFound)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{keyErrors: []map[string]string{{keyReason: "Not Found"}}}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	_, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	apiErr, ok := errors.AsType[*linode.APIError](err)
-	if !ok {
-		t.Fatalf("error = %v, want %v", err, &apiErr)
-	}
-
-	if apiErr.StatusCode != http.StatusNotFound {
-		t.Errorf("apiErr.StatusCode = %v, want %v", apiErr.StatusCode, http.StatusNotFound)
-	}
-}
-
-func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
+// The read declares no such policy, so a transient failure is replayed and the
+// second attempt's bytes are the answer.
+func TestCallRouteRawBodyReadRetriesATransientFailure(t *testing.T) {
 	t.Parallel()
 
 	var requestCount atomic.Int32
@@ -1185,8 +971,7 @@ func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
 
 		w.Header().Set("Content-Type", "image/png")
 
-		_, writeErr := w.Write(thumbnailPNG)
-		if writeErr != nil {
+		if _, writeErr := w.Write(thumbnailPNG); writeErr != nil {
 			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
@@ -1194,7 +979,8 @@ func TestClientGetOAuthClientThumbnailRetriesOnTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	got, err := client.GetOAuthClientThumbnail(t.Context(), oauthClientID)
+	got, err := client.CallRouteRawBodyRead(t.Context(), thumbnailGetTool,
+		[]any{oauthClientID}, "image/png")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2495,8 +2281,9 @@ func TestClientGetImageShareGroupRetriesTransientFailure(t *testing.T) {
 }
 
 // TestNewClientCarriesTheObjectStorageSettings pins the seam the Object Storage
-// upload depends on: its execute hook is handed a client and no config, so the
-// data-plane budgets have to arrive on the client or the hook cannot read them.
+// upload depends on: its transfer is handed a client and no config, so the
+// data-plane budgets have to arrive on the client or the engine cannot read
+// them.
 func TestNewClientCarriesTheObjectStorageSettings(t *testing.T) {
 	t.Parallel()
 

@@ -24,7 +24,7 @@ from linodemcp.genpb.linode.mcp.v1 import (
     monitor_pb2,
     support_ticket_pb2,
 )
-from linodemcp.gentools import handle_hello, handle_version
+from linodemcp.gentools import handle_hello, handle_version, scopes_for
 from linodemcp.linode import (
     Client,
     NetworkError,
@@ -2281,11 +2281,8 @@ async def test_account_oauth_client_thumbnail_update_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """Thumbnail update is callable through server dispatch."""
-    response_data = {"id": "client-1", "thumbnail_url": "https://example.com/t.png"}
-
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_account_oauth_client_thumbnail.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -2304,8 +2301,14 @@ async def test_account_oauth_client_thumbnail_update_dispatches_from_registry(
         "message": "OAuth client thumbnail updated successfully",
         "client_id": "client-1",
     }
-    mock_client.update_account_oauth_client_thumbnail.assert_awaited_once_with(
-        "client-1", b"\x89PNG\r\n\x1a\n"
+    # The route takes the raw PNG, so the decoded bytes travel rather than the
+    # text the schema advertises.
+    mock_client.route_raw_body.assert_awaited_once_with(
+        "linode_account_oauth_client_thumbnail_update",
+        "client-1",
+        content_type="image/png",
+        payload=b"\x89PNG\r\n\x1a\n",
+        retry=False,
     )
 
 
@@ -2982,7 +2985,7 @@ async def test_account_event_seen_tool_is_exported_registered_and_profiled(
 ) -> None:
     """Account event seen tool should be exported, registered, and profiled."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.profiles.builtin import categories
+    from linodemcp.gentools import categories_for
 
     assert "create_linode_account_event_seen_tool" in gentools_mod.__all__
     assert "handle_linode_account_event_seen" in gentools_mod.__all__
@@ -2994,8 +2997,8 @@ async def test_account_event_seen_tool_is_exported_registered_and_profiled(
     assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
     assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
     assert set(tool.input_schema["required"]) == {"event_id", "confirm"}
-    assert "account" in categories("linode_account_event_seen")
-    assert "account" in categories("linode_managed_contact_update")
+    assert "account" in categories_for("linode_account_event_seen")
+    assert "account" in categories_for("linode_managed_contact_update")
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_account_event_seen" in srv.registered_tool_names
@@ -3857,7 +3860,10 @@ async def test_database_mysql_instance_credentials_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """MySQL database credentials get is callable through server dispatch."""
-    response_data: dict[str, object] = {"username": "linode", "password": "secret"}
+    response_data: dict[str, object] = {
+        "username": "linode",
+        "password": "secret",  # betterleaks:allow test fixture
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -4001,7 +4007,10 @@ async def test_database_postgresql_credentials_get_dispatches(
     sample_config: Config,
 ) -> None:
     """PostgreSQL credentials get returns the client response."""
-    response_data: dict[str, object] = {"username": "linode", "password": "secret"}
+    response_data: dict[str, object] = {
+        "username": "linode",
+        "password": "secret",  # betterleaks:allow test fixture
+    }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.route_raw.return_value = response_data
@@ -4770,13 +4779,11 @@ async def test_account_oauth_client_thumbnail_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """OAuth client thumbnail get serializes through the proto on dispatch."""
-    response_data: dict[str, object] = {
-        "thumbnail_png_base64": "iVBORw0KGgoAAAANSUhEUgAA",
-    }
-
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_oauth_client_thumbnail.return_value = response_data
+        mock_client.route_raw_body_read.return_value = (
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00"
+        )
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -4790,8 +4797,11 @@ async def test_account_oauth_client_thumbnail_get_dispatches_from_registry(
         "client_id": "client-123",
         "thumbnail_png_base64": "iVBORw0KGgoAAAANSUhEUgAA",
     }
-    mock_client.get_account_oauth_client_thumbnail.assert_awaited_once_with(
-        "client-123"
+    mock_client.route_raw_body_read.assert_awaited_once_with(
+        "linode_account_oauth_client_thumbnail_get",
+        "client-123",
+        accept="image/png",
+        retry=True,
     )
 
 
@@ -6699,7 +6709,11 @@ async def test_database_postgresql_credentials_reset_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """PostgreSQL credential reset is callable through server dispatch."""
-    response_data = {"id": 123, "username": "linode", "password": "secret"}
+    response_data = {
+        "id": 123,
+        "username": "linode",
+        "password": "secret",  # betterleaks:allow test fixture
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -6844,7 +6858,11 @@ async def test_database_mysql_credentials_reset_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """MySQL credential reset is callable through server dispatch."""
-    response_data = {"id": 123, "username": "linode", "password": "secret"}
+    response_data = {
+        "id": 123,
+        "username": "linode",
+        "password": "secret",  # betterleaks:allow test fixture
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -9272,7 +9290,7 @@ async def test_managed_linode_settings_update_tool_is_exported_and_registered(
 ) -> None:
     """Managed Linode settings update tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.profiles.builtin import categories
+    from linodemcp.gentools import categories_for
 
     assert "create_linode_managed_linode_settings_update_tool" in gentools_mod.__all__
     assert "handle_linode_managed_linode_settings_update" in gentools_mod.__all__
@@ -9284,7 +9302,7 @@ async def test_managed_linode_settings_update_tool_is_exported_and_registered(
     assert set(tool.input_schema["required"]) == {"linode_id", "confirm"}
     assert tool.input_schema["properties"]["ssh"]["type"] == "object"
     assert "dry_run" in tool.input_schema["properties"]
-    assert "account" in categories("linode_managed_linode_settings_update")
+    assert "account" in categories_for("linode_managed_linode_settings_update")
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_managed_linode_settings_update" in srv.registered_tool_names
@@ -9527,7 +9545,10 @@ async def test_managed_credential_create_rejects_non_true_confirm(
     confirm: object,
 ) -> None:
     """Managed credential create requires literal confirm=true before client calls."""
-    arguments: dict[str, object] = {"label": "prod-root", "password": "s3cret"}
+    arguments: dict[str, object] = {
+        "label": "prod-root",
+        "password": "s3cret",  # betterleaks:allow test fixture
+    }
     if confirm is not None:
         arguments["confirm"] = confirm
 
@@ -9547,7 +9568,11 @@ async def test_managed_credential_create_dry_run_previews_without_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_managed_credential_create",
-            {"dry_run": True, "label": "prod-root", "password": "s3cret"},
+            {
+                "dry_run": True,
+                "label": "prod-root",
+                "password": "s3cret",  # betterleaks:allow test fixture
+            },
         )
 
     assert '"dry_run": true' in result[0].text
@@ -9617,7 +9642,10 @@ async def test_credential_username_password_update_rejects_confirm(
     sample_config: Config, confirm: object
 ) -> None:
     """Credential username/password update requires literal confirm=true."""
-    arguments: dict[str, object] = {"credential_id": 91, "password": "s3cret"}
+    arguments: dict[str, object] = {
+        "credential_id": 91,
+        "password": "s3cret",  # betterleaks:allow test fixture
+    }
     if confirm is not None:
         arguments["confirm"] = confirm
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -11561,13 +11589,9 @@ async def test_account_support_ticket_attachment_create_dispatches_from_registry
 ) -> None:
     """Support ticket attachment create is callable through server dispatch."""
     srv = Server(_full_access_config(sample_config))
-    response_data: dict[str, Any] = {"id": 789, "file": "attachment.txt"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        # The tool declares retry_disabled, so the execute hook uploads through
-        # the plain client rather than the retrying wrapper around it.
-        mock_client.client.create_support_ticket_attachment.return_value = response_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11586,8 +11610,14 @@ async def test_account_support_ticket_attachment_create_dispatches_from_registry
         support_ticket_pb2.SupportTicketIDResponse(),
     )
     assert json.loads(result[0].text) == expected
-    mock_client.client.create_support_ticket_attachment.assert_awaited_once_with(
-        123, "/Users/e/a.txt"
+    # The tool declares retry_disabled, so the upload takes one protected
+    # attempt rather than the retrying default.
+    mock_client.route_multipart.assert_awaited_once_with(
+        "linode_support_ticket_attachment_create",
+        123,
+        part_name="file",
+        file_path="/Users/e/a.txt",
+        retry=False,
     )
 
 
@@ -12586,6 +12616,34 @@ async def test_validate_scopes_no_token_raises_sentinel(
 
     with pytest.raises(TokenNotConfiguredError):
         await srv.validate_scopes()
+
+
+async def test_validate_scopes_hands_the_profile_union_to_the_validator(
+    sample_config: Config,
+) -> None:
+    """The active profile's scope union reaches the validator as strings.
+
+    Every built-in union names declared scopes the Scope catalog does not
+    spell (events:read_only and friends). Converting the union through the
+    enum raised before any API call, so a configured token crashed scope
+    validation for every profile.
+    """
+    srv = Server(sample_config)
+    seen: list[str] = []
+
+    async def fake_validate(client: object, required: object) -> object:
+        del client
+        seen.extend(str(scope) for scope in cast("list[str]", required))
+        return object()
+
+    with (
+        patch("linodemcp.server.RetryableClient", return_value=AsyncMock()),
+        patch("linodemcp.server.validate_scopes", new=fake_validate),
+    ):
+        await srv.validate_scopes()
+
+    assert "events:read_only" in seen
+    assert "linodes:read_only" in seen
 
 
 async def test_profile_is_elevated_reflects_required_scopes(
@@ -14987,7 +15045,7 @@ async def test_destroy_yolo_bypasses_gate_and_records_mode(
     mock_client.route_call.assert_awaited_once_with(
         "linode_volume_delete", 789, retry=False
     )
-    assert sink.events()[-1].mode is Mode.YOLO
+    assert sink.events()[-1].mode == Mode.YOLO.value
 
 
 async def test_yolo_ignored_when_profile_disallows(sample_config: Config) -> None:
@@ -15224,8 +15282,7 @@ async def test_longview_plan_update_tool_is_registered_and_categorized(
 ) -> None:
     """Longview plan update is generated, registered, and categorized."""
     import linodemcp.gentools as gentools_mod
-    from linodemcp.profiles.builtin import categories
-    from linodemcp.profiles.scope import Scope, required_scopes
+    from linodemcp.gentools import categories_for
 
     default_srv = Server(sample_config)
     srv = Server(_full_access_config(sample_config))
@@ -15234,10 +15291,8 @@ async def test_longview_plan_update_tool_is_registered_and_categorized(
     assert "linode_longview_plan_update" not in default_srv.registered_tool_names
     assert "linode_longview_plan_update" in registry_names
     assert "linode_longview_plan_update" in srv.registered_tool_names
-    assert categories("linode_longview_plan_update") == ["longview"]
-    assert required_scopes("linode_longview_plan_update", Capability.Write) == [
-        Scope.LongviewReadWrite
-    ]
+    assert categories_for("linode_longview_plan_update") == ["longview"]
+    assert scopes_for("linode_longview_plan_update") == ["longview:read_write"]
 
     tool, capability = gentools_mod.create_linode_longview_plan_update_tool()
     assert tool.name == "linode_longview_plan_update"
@@ -15559,17 +15614,12 @@ async def test_longview_client_create_dry_run_dispatches_from_registry(
 
 def test_longview_tools_map_to_longview_scopes() -> None:
     """Longview read/write tools map to the matching Longview scopes."""
-    from linodemcp.profiles.scope import Scope, required_scopes
 
-    assert required_scopes("linode_longview_client_list", Capability.Read) == [
-        Scope.LongviewReadOnly
-    ]
+    assert scopes_for("linode_longview_client_list") == ["longview:read_only"]
     # The Longview type list is a public pricing route: the spec
     # documents no scope for it.
-    assert required_scopes("linode_longview_type_list", Capability.Read) == []
-    assert required_scopes("linode_longview_client_create", Capability.Write) == [
-        Scope.LongviewReadWrite
-    ]
+    assert scopes_for("linode_longview_type_list") == []
+    assert scopes_for("linode_longview_client_create") == ["longview:read_write"]
 
 
 async def test_linode_longview_client_get_exported_and_registered(

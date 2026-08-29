@@ -6,6 +6,16 @@ package tools_test
 // response field names, fixture values, error strings, and validation case
 // names.
 const (
+	// The summary column a group-by case names, which is also the key the
+	// answer's bucket carries it under.
+	summaryColumnCapability = "capability"
+
+	// Values a fixture event and a tool filter carry, shared because goconst
+	// counts a literal across the whole package.
+	capabilityRead   = "read"
+	profileOperator  = "operator"
+	toolInstanceGlob = "linode_instance_*"
+
 	// Environment config keys and labels.
 	envKeyDefault            = "default"
 	envLabelDefault          = "Default"
@@ -523,7 +533,10 @@ const (
 	tcAccountOauthClientsClient123               = "/account/oauth-clients/client-123"
 	tcAccountPaymentMethods123                   = "/account/payment-methods/123"
 	tcAccountServiceTransfersServiceTokenExample = "/account/service-transfers/service-token-example"
+	tcCalls                                      = "calls"
+	tcCapabilityWrite                            = "write"
 	tcDestroys                                   = "destroys"
+	tcStaging                                    = "staging"
 	tcLinodeInstanceShutdown                     = "linode_instance_shutdown"
 	tcLinodeInstances123Configs                  = "/linode/instances/123/configs"
 	tcLinodeInstances123Configs789Interfaces456  = "/linode/instances/123/configs/789/interfaces/456"

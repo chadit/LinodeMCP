@@ -145,6 +145,8 @@ message FirewallGetInput {
     path: "/networking/firewalls/{firewall_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Firewall";
   option (linode.mcp.v1.tool_description) = "Gets a Cloud Firewall by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve firewall {firewall_id}: {error}";
@@ -166,6 +168,8 @@ message FirewallRulesGetInput {
     path: "/networking/firewalls/{firewall_id}/rules"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRules";
   option (linode.mcp.v1.tool_description) = "Lists rules for a Cloud Firewall.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve rules for firewall {firewall_id}: {error}";
@@ -187,6 +191,8 @@ message FirewallListInput {
     path: "/networking/firewalls"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all Cloud Firewalls on your account. Can filter by status or label.";
 
@@ -210,6 +216,8 @@ message FirewallCreateInput {
     path: "/networking/firewalls"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new Cloud Firewall. The firewall is created with no rules by default.";
   option (linode.mcp.v1.error_message) = "Failed to create firewall: {error}";
@@ -217,8 +225,13 @@ message FirewallCreateInput {
   option (linode.mcp.v1.success_message) = "Firewall '{label}' (ID: {id}) created successfully";
   option (linode.mcp.v1.retry_disabled) = true;
   // The preview names the firewall and the policies it would start with; the
-  // firewall does not exist yet, so there is no state to read.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // firewall does not exist yet, so there is no state to read. A policy the
+  // caller omitted reports the value its own fold sends, which is why the
+  // wording names the arguments rather than restating ACCEPT here.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A new Cloud Firewall \"{label}\" will be created with inbound policy {inbound_policy} and outbound policy {outbound_policy}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   option (buf.validate.message).cel = {
     id: "firewall_create.label.required"
@@ -296,17 +309,47 @@ message FirewallUpdateInput {
     path: "/networking/firewalls/{firewall_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an existing Cloud Firewall. Can modify label, status, and default policies.";
   option (linode.mcp.v1.error_message) = "Failed to modify firewall {firewall_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Cloud Firewall. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Firewall {firewall_id} modified successfully";
-  // The preview reads the firewall the update changes and states the label and
-  // status changes against it.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the firewall, whose label and status the request alone does not
+  // carry.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_firewall_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Label changes from \"{state:label}\" to \"{label}\"."
+    template: "Label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "label"
+    argument: "label"
+  };
+  // Going disabled stops enforcement and going anything else starts it, which
+  // is one line whose verb the value picks and no wording can interpolate.
+  option (linode.mcp.v1.preview_sentence) = {
+    matched_by: {
+      argument: "status"
+      arm: {
+        equals: "disabled"
+        wording: "Firewall status changes to \"{status}\"; this immediately stops enforcing its rules."
+      }
+      otherwise: "Firewall status changes to \"{status}\"; this immediately starts enforcing its rules."
+    }
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_changed: {
+      state: "status"
+      argument: "status"
+    }
+  };
 
-  // No validate hook, so the derived path check answers an absent id in the
-  // sentence both hand clients used. The policy pair is a rule instead: an
+  // The derived path check answers an absent id in the sentence both hand
+  // clients used. The policy pair is a rule instead: an
   // argument naming no member reaches the message as the enum's zero, which is
   // what these tell from an absent one.
   option (buf.validate.message).cel = {
@@ -376,6 +419,8 @@ message FirewallDeleteInput {
     path: "/networking/firewalls/{firewall_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a Cloud Firewall. WARNING: This will remove all firewall rules and unassign all attached devices. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
@@ -389,7 +434,21 @@ message FirewallDeleteInput {
   option (linode.mcp.v1.state_route) = {
     tool: "linode_firewall_get"
   };
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_firewall_device_list"
+    emit: {
+      kind_field: "entity.type"
+      id_field: "entity.id"
+      label_field: "entity.label"
+      action: "removed"
+      note: "Loses this firewall's rules when the firewall is deleted."
+    }
+    warnings: {
+      template: "{count} resource(s) currently use this firewall and will lose its rules."
+      when_any: true
+    }
+    list_error_warning: "Could not list firewall devices: {error}"
+  };
 
   option (buf.validate.message).cel = {
     id: "firewall_delete.firewall_id.positive"
@@ -423,6 +482,8 @@ message FirewallSettingsGetInput {
     path: "/networking/firewalls/settings"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallSettings";
   option (linode.mcp.v1.tool_description) = "Lists default Cloud Firewall assignments for Linodes, NodeBalancers, public interfaces, and VPC interfaces.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve firewall settings: {error}";
@@ -444,6 +505,8 @@ message FirewallRuleVersionListInput {
     path: "/networking/firewalls/{firewall_id}/history"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRuleVersionListResponse";
   // The route answers one firewall-shaped object whose version sits inside its
   // rules, and the shared FirewallRules message declares no version. Without
@@ -477,6 +540,8 @@ message FirewallRuleVersionGetInput {
     path: "/networking/firewalls/{firewall_id}/history/rules/{version}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRuleVersion";
   option (linode.mcp.v1.tool_description) = "Retrieves one rule version for a Cloud Firewall.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve rule version {version} for firewall {firewall_id}: {error}";
@@ -504,6 +569,8 @@ message FirewallTemplateListInput {
     path: "/networking/firewalls/templates"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallTemplateListResponse";
   option (linode.mcp.v1.tool_description) = "Lists reusable Cloud Firewall templates for VPC and public interfaces.";
 
@@ -524,6 +591,8 @@ message FirewallTemplateGetInput {
     path: "/networking/firewalls/templates/{slug}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallTemplate";
   option (linode.mcp.v1.tool_description) = "Gets a reusable Cloud Firewall template for VPC or public interfaces.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve firewall template {slug}: {error}";
@@ -556,6 +625,8 @@ message FirewallRulesUpdateInput {
     path: "/networking/firewalls/{firewall_id}/rules"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRulesWriteResponse";
   option (linode.mcp.v1.tool_description) = "Replaces inbound and outbound rules for a Cloud Firewall.";
   option (linode.mcp.v1.error_message) = "Failed to update firewall {firewall_id} rules: {error}";
@@ -567,8 +638,7 @@ message FirewallRulesUpdateInput {
     tool: "linode_firewall_rules_get"
   };
 
-  // The path id is checked first, then the optional policies. A validate hook
-  // suppresses only the derived path check, so the id keeps its sentence here.
+  // The path id is checked first, then the optional policies.
   option (buf.validate.message).cel = {
     id: "firewall_rules_update.firewall_id.positive"
     message: "firewall_id must be a positive integer"
@@ -628,6 +698,8 @@ message FirewallSettingsUpdateInput {
     path: "/networking/firewalls/settings"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallSettingsWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates default Cloud Firewall assignments for Linodes, NodeBalancers, public interfaces, and VPC interfaces.";
   option (linode.mcp.v1.error_message) = "Failed to update default firewall settings: {error}";
@@ -680,6 +752,8 @@ message InstanceFirewallListInput {
     path: "/linode/instances/{linode_id}/firewalls"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Cloud Firewalls assigned to a Linode instance with optional pagination.";
 
@@ -705,6 +779,8 @@ message InstanceInterfaceFirewallListInput {
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}/firewalls"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Cloud Firewalls assigned to a specific Linode interface.";
 
@@ -735,18 +811,24 @@ message InstanceFirewallUpdateInput {
     path: "/linode/instances/{linode_id}/firewalls"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
   option (linode.mcp.v1.tool_description) = "Replaces the Cloud Firewall assignments for a Linode instance. Pass an empty firewall_ids list to remove all assignments.";
   option (linode.mcp.v1.error_message) = "Failed to update firewall assignments for instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This replaces firewall assignments for a Linode instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.retry_disabled) = true;
-  // firewall_ids is required but an empty list is a legal value that removes
-  // every assignment, and proto3 collapses an absent repeated field onto the
-  // empty list, so no rule can tell the two apart and the check reads the
-  // arguments the caller actually sent. The hook owns the path id with it,
-  // which keeps both of the id's sentences rather than collapsing them.
-  // The preview reads the assignments the replacement overwrites.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The assignments the replacement overwrites are the state, envelope and
+  // all, read on the page this call itself publishes so the preview and the
+  // answer describe one page.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_firewall_list"
+    envelope_state: true
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Firewall assignments for Linode {linode_id} will be replaced."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Entry positivity is all a rule can see of firewall_ids: a list the caller
   // omitted arrives here as the empty one, which passes vacuously.

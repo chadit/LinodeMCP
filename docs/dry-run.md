@@ -4,7 +4,7 @@ Every mutating tool in LinodeMCP can be previewed before it runs, and destructiv
 calls are gated so the model cannot delete or replace a resource without either
 previewing it first or explicitly opting out. These safety mechanisms layer on
 top of [profiles](./profiles.md) (which decide *what* the model may call) and the
-[audit log](./audit-log.md) (which records *what it did*, including which safety
+[audit log](./audit.md) (which records *what it did*, including which safety
 path each call took).
 
 Four related features are covered here:
@@ -107,7 +107,7 @@ Two guard rails:
 
 Detection is client-asserted: the server trusts `confirmed_dry_run` rather than
 tracking session state. The defense against a model that lies is **observability**,
-not server-side gatekeeping, the [audit log](./audit-log.md) records both the
+not server-side gatekeeping, the [audit log](./audit.md) records both the
 dry-run and the apply (and the `mode`, below), so a destructive call with no
 preceding dry-run is visible after the fact.
 
@@ -162,26 +162,11 @@ for speed and is recorded as `mode: yolo` in the audit log.
 ## Audit modes
 
 Every call records the safety path it took in the audit event's `mode` field:
-
-| `mode` | Meaning |
-| --- | --- |
-| `normal` | a regular call (including a confirmed destroy) |
-| `dry_run` | a preview; nothing was mutated |
-| `bypass_dry_run` | a destroy executed with `confirm_bypass_dry_run` (no preview) |
-| `yolo` | executed via the yolo break-glass path |
-
-Two more modes exist beyond these four: `plan` and `apply`, recorded by the
-[two-stage flow](./two-stage-writes.md). The full six-value enum lives in the
-[audit event schema](./audit-log.md).
-
-Filter on it with the audit query tools, e.g. find every preview-skipped destroy:
-
-```text
-linode_audit_recent  with  {"capability": "destroy"}
-# then inspect mode == "bypass_dry_run" or "yolo"
-```
+`normal`, `dry_run`, `bypass_dry_run`, or `yolo` from this page, plus `plan`
+and `apply` from the [two-stage flow](./two-stage-writes.md). The full enum and
+the query tools that filter on it live in the [audit event schema](./audit.md).
 
 ## See also
 
 - [profiles.md](./profiles.md): what the active profile permits, and `allow_yolo`
-- [audit-log.md](./audit-log.md): the event schema, the `mode` field, and queries
+- [audit.md](./audit.md): the event schema, the `mode` field, and queries

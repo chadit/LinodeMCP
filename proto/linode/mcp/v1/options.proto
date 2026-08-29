@@ -155,6 +155,107 @@ enum ApiSurface {
   API_SURFACE_V4BETA = 2;
 }
 
+// ToolScope names one OAuth scope a route's documented security block can
+// demand. Members exist only for the scopes the surface actually declares, so
+// none can sit unreachable the way the hand catalogs' unused constants did,
+// and the emitter owns each member's wire spelling ("account:read_only"), so
+// a scope string is written in exactly one place.
+enum ToolScope {
+  TOOL_SCOPE_UNSPECIFIED = 0;
+  TOOL_SCOPE_ACCOUNT_READ_ONLY = 1;
+  TOOL_SCOPE_ACCOUNT_READ_WRITE = 2;
+  TOOL_SCOPE_DATABASES_READ_ONLY = 3;
+  TOOL_SCOPE_DATABASES_READ_WRITE = 4;
+  TOOL_SCOPE_DOMAINS_READ_ONLY = 5;
+  TOOL_SCOPE_DOMAINS_READ_WRITE = 6;
+  TOOL_SCOPE_EVENTS_READ_ONLY = 7;
+  TOOL_SCOPE_FIREWALL_READ_ONLY = 8;
+  TOOL_SCOPE_FIREWALL_READ_WRITE = 9;
+  TOOL_SCOPE_IMAGES_READ_ONLY = 10;
+  TOOL_SCOPE_IMAGES_READ_WRITE = 11;
+  TOOL_SCOPE_IPS_READ_ONLY = 12;
+  TOOL_SCOPE_IPS_READ_WRITE = 13;
+  TOOL_SCOPE_LINODES_READ_ONLY = 14;
+  TOOL_SCOPE_LINODES_READ_WRITE = 15;
+  TOOL_SCOPE_LKE_READ_ONLY = 16;
+  TOOL_SCOPE_LKE_READ_WRITE = 17;
+  TOOL_SCOPE_LONGVIEW_READ_ONLY = 18;
+  TOOL_SCOPE_LONGVIEW_READ_WRITE = 19;
+  TOOL_SCOPE_MONITOR_READ_ONLY = 20;
+  TOOL_SCOPE_MONITOR_READ_WRITE = 21;
+  TOOL_SCOPE_NODEBALANCERS_READ_ONLY = 22;
+  TOOL_SCOPE_NODEBALANCERS_READ_WRITE = 23;
+  TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY = 24;
+  TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE = 25;
+  TOOL_SCOPE_RESERVED_IPS_READ_ONLY = 26;
+  TOOL_SCOPE_RESERVED_IPS_READ_WRITE = 27;
+  TOOL_SCOPE_STACKSCRIPTS_READ_ONLY = 28;
+  TOOL_SCOPE_STACKSCRIPTS_READ_WRITE = 29;
+  TOOL_SCOPE_VOLUMES_READ_ONLY = 30;
+  TOOL_SCOPE_VOLUMES_READ_WRITE = 31;
+  TOOL_SCOPE_VPC_READ_WRITE = 32;
+}
+
+// ToolScopes is one tool's OAuth scope answer: the scopes its route's
+// documented security block names, or an explicit none for a route documented
+// without any. The marker is a field rather than an empty list because proto3
+// cannot tell a declared-empty repeated field from an absent one, and the two
+// mean different things here: dozens of routes are documented scopeless, while
+// silence has to stay readable as a forgotten answer.
+message ToolScopes {
+  // True when the route is documented with no OAuth scope requirement: a
+  // public route, or a token-only route documented with an empty scope list.
+  // Refused beside a non-empty scope list, which would claim both answers.
+  bool none = 1;
+  // The documented scopes, primary category first. A repeated value is
+  // refused: it would read as two requirements where the API names one.
+  repeated ToolScope scope = 2;
+}
+
+// ToolCategory names one slice of the tool surface a profile can elevate.
+// This is the repo's own profile taxonomy rather than anything Linode
+// documents, which is what separates it from ToolScope: a scope restates the
+// API's security block, a category says which profiles serve the tool. The
+// emitter owns each member's string spelling, and the `*` wildcard a profile
+// elevates everything with stays profile-side prose, never a member here.
+enum ToolCategory {
+  TOOL_CATEGORY_UNSPECIFIED = 0;
+  TOOL_CATEGORY_ACCOUNT = 1;
+  TOOL_CATEGORY_BLOCK_STORAGE = 2;
+  TOOL_CATEGORY_COMPUTE = 3;
+  TOOL_CATEGORY_COMPUTE_DEEP = 4;
+  TOOL_CATEGORY_CORE = 5;
+  TOOL_CATEGORY_DATABASES = 6;
+  TOOL_CATEGORY_DNS = 7;
+  TOOL_CATEGORY_IAM = 8;
+  TOOL_CATEGORY_LKE = 9;
+  TOOL_CATEGORY_LONGVIEW = 10;
+  TOOL_CATEGORY_MONITOR = 11;
+  TOOL_CATEGORY_NETWORKING = 12;
+  TOOL_CATEGORY_OBJECT_STORAGE = 13;
+  TOOL_CATEGORY_SECURITY = 14;
+  TOOL_CATEGORY_VPCS = 15;
+}
+
+// ToolCategories is one tool's profile-category answer: the slices of the
+// surface it belongs to, or an explicit none for a tool no category-scoped
+// profile serves (the audit and builder tools, which work on session state).
+// The marker is a field for the reason ToolScopes' is: proto3 cannot tell a
+// declared-empty repeated field from an absent one, and silence has to stay
+// readable as a forgotten answer.
+//
+// Declaration order is meaningful and preserved: the catalog TUI groups a
+// tool under its first category, so the instance sub-resource family declares
+// compute_deep ahead of compute.
+message ToolCategories {
+  // True when no category-scoped profile serves the tool. Refused beside a
+  // non-empty category list, which would claim both answers.
+  bool none = 1;
+  // The categories, first one the tool's primary grouping. A repeated value
+  // is refused: it would file the tool under one slice twice.
+  repeated ToolCategory category = 2;
+}
+
 extend google.protobuf.MessageOptions {
   // Declares the Linode API route the annotated *Input message's tool calls.
   // Meta tools (profile builder, audit, version, hello) reach no Linode route
@@ -261,73 +362,13 @@ extend google.protobuf.MessageOptions {
   // the list surface, where one shared sentence covers every collection.
   string error_message = 50011;
 
-  // The steps of this tool's handler that are hand-written rather than derived
-  // from the rest of the contract, named by kind. A generator can produce the
-  // whole mechanical skeleton of a tool, but some tools need a step nothing in
-  // the descriptors can express, and this is where the tool says so.
-  //
-  // Kinds:
-  //   normalize   Rewrites the tool's arguments in place before anything
-  //               reads them and answers nothing: the handler goes on to read
-  //               the same map it was given. It runs first, so every check
-  //               below sees the value the request will actually carry. Prefer
-  //               a normalize_fields declaration: a named transform is one word
-  //               both languages render, a hook is two copies of it. What is
-  //               left here is the rewrites no transform spells, such as
-  //               folding one argument spelling into another.
-  //
-  //   validate    Checks the arguments, answering with the message the tool
-  //               reports, or nothing to continue. It replaces the
-  //               required-field checks the generator would derive, so a tool
-  //               declaring it owns its whole argument check. Prefer a
-  //               buf.validate rule: a rule is one sentence both languages read,
-  //               a hook is two copies of it.
-  //
-  //   preview     Answers a mutating tool's dry run. It receives the call the
-  //               tool would have made and the body the generated builder
-  //               assembled, so it never re-spells a route or rebuilds a body:
-  //               what it owns is the side-effect prose, and for an update the
-  //               fetch that prose is diffed against. A mutating tool without it
-  //               previews the request alone.
-  //
-  //   fetch_state Reads the state a plan hashes for drift, which is also what a
-  //               destroy's preview reports as current_state, so the shape it
-  //               returns is part of the tool's contract. Every destroy declares
-  //               one, and so does a mutation advertising mode and plan_id: a
-  //               plan's state is not always the preview's, since a resize plans
-  //               against the instance and its disks and previews the instance.
-  //
-  //   dependency_walk
-  //               Says what else the change touches, over the state fetch_state
-  //               already read. A destroy without one previews the call and the
-  //               state alone; a staged mutation without one plans without
-  //               side-effect prose.
-  //
-  //   execute     Makes the live call itself, for a route whose request is not
-  //               the JSON body every generated mutation sends: the
-  //               support-ticket attachment posts multipart/form-data built
-  //               from a local file. It is the one kind that replaces the call
-  //               rather than something around it, so it is accepted only on
-  //               the tier that assembles its answer from the call instead of
-  //               decoding one. The dry-run branch never reaches it.
-  //
-  //   answer      Produces a meta tool's whole result from local state: the
-  //               audit stores, the profile builder's registry. It reaches no
-  //               Linode route, so it takes no client and returns the result
-  //               itself rather than a body to serialize. Accepted only on a
-  //               meta tool, and only where the contract declares no
-  //               success_message: those are two sources for one answer. A
-  //               meta tool without one answers the declared sentence.
-  //
-  // Declaring a kind is a fact about the TOOL, so every language implements it.
-  // The function name is derived from the tool and the kind rather than written
-  // out (linode_domain_record_get + validate is Go's
-  // LinodeDomainRecordGetValidate and Python's
-  // linode_domain_record_get_validate), which is what lets a missing
-  // implementation fail the build naming the tool. One language's hook may well
-  // answer exactly what derivation would have: that is still a hand-written
-  // answer, because nothing holds it to the derived one afterwards.
-  repeated string tool_hooks = 50012;
+  // 50012 is retired. It carried `tool_hooks`, which named the steps of a
+  // tool's handler that each language wrote out by hand. Every kind it
+  // named is a declaration now, so nothing derives a hand-written function
+  // name any more and hand-coded tool code beside the generated tree fails
+  // `make hand-code` by name. The number must never be reused: proto
+  // forbids `reserved` inside an extend block, so this comment is the only
+  // place that can say so.
 
   // Declares the JSON shape the annotated tool's list route answers with, for
   // the few collections that do not arrive as the standard page envelope. See
@@ -417,46 +458,39 @@ extend google.protobuf.MessageOptions {
   // Declares that the caller must have sent at least one of the named BODY
   // arguments. See RequireAnyOf: the check reads the argument map after the
   // per-field checks and before the body is built, which is the order the
-  // hooks it replaces answered in. Refused beside a validate hook, which
-  // already owns the whole argument check.
+  // hand-written checks it replaced answered in.
   RequireAnyOf require_any_of = 50028;
 
   // Declares the arguments the annotated tool refuses outright. See
-  // RefuseArguments. Refused beside a validate hook, which already owns the
-  // whole argument check.
+  // RefuseArguments.
   RefuseArguments refuse_arguments = 50029;
 
   // Declares that the annotated tool refuses any argument its input message
-  // does not name. See RefuseUnknownArguments. Refused beside a validate hook,
-  // which already owns the whole argument check.
+  // does not name. See RefuseUnknownArguments.
   RefuseUnknownArguments refuse_unknown_arguments = 50030;
 
   // Declares the check each of the tool's open-object arguments gets. See
-  // ObjectWalk. Refused beside a validate hook, which already owns the whole
-  // argument check.
+  // ObjectWalk.
   repeated ObjectWalk object_walk = 50031;
 
   // Declares the rewrites the tool's arguments get before anything reads them.
   // See NormalizeField: the rewrites run first, so every check below sees the
   // value the request will actually carry.
   //
-  // Refused beside a normalize hook, which already owns the whole rewrite, and
-  // on a tier whose driver reads the arguments ahead of any rewrite point.
+  // Refused on a tier whose driver reads the arguments ahead of any rewrite
+  // point.
   repeated NormalizeField normalize_fields = 50032;
 
   // Declares the read a removal reports and hashes its resource through. See
   // StateRoute: the contract says which route a delete calls, not which one
   // reads the thing it is about to delete.
   //
-  // Refused beside a fetch_state hook, which already owns the whole read, and
-  // on a tool that removes nothing, which has no state to fetch.
+  // Refused on a tool that removes nothing, which has no state to fetch.
   StateRoute state_route = 50033;
 
   // Declares the prose a dry run reports about what the call would do. See
   // PreviewSentence: the request body says what is sent, and these say what
   // happens because of it.
-  //
-  // Refused beside a preview hook, which already owns the whole dry run.
   repeated PreviewSentence preview_sentence = 50034;
 
   // Declares that the tool's dry run reports no request body, which a handful
@@ -465,6 +499,928 @@ extend google.protobuf.MessageOptions {
   // saying nothing, so an explicit false is refused rather than read as a
   // second spelling of the default.
   bool preview_omits_body = 50035;
+
+  // Declares a convenience argument folded into an object argument before
+  // anything reads either. See NormalizeFold.
+  NormalizeFold normalize_fold = 50036;
+
+  // Declares a state read assembled from more than one call. See
+  // StateComposite. Refused beside state_route, which already owns the whole
+  // read.
+  StateComposite state_composite = 50037;
+
+  // Declares what else the call touches, one walk per iteration source. See
+  // DependencyWalk. Declaration order is emission order.
+  repeated DependencyWalk dependency_walk = 50038;
+
+  // Declares the billing consequence a dry run estimates. See BillingDelta.
+  BillingDelta billing_delta = 50039;
+
+  // Declares that the live call travels as something other than the JSON
+  // request the emitter derives. See ExecuteTransport.
+  ExecuteTransport execute_transport = 50040;
+
+  // Declares the state readings the tool's prose reports only where they differ
+  // from the argument the call would set. See PreviewUnchanged. Refused on a
+  // tool whose prose reads no state.
+  repeated PreviewUnchanged preview_unchanged = 50041;
+
+  // Declares the member of a repeated argument's entries a dry run reports
+  // fixed text for. See PreviewStandIn.
+  repeated PreviewStandIn preview_stand_in = 50042;
+
+  // Declares the OAuth scopes the annotated *Input message's tool requires,
+  // resolved at generation time into each language's registry table. See
+  // ToolScopes. Required on every routed tool, so a family cannot go silently
+  // unrestricted in every language at once, and refused on a meta tool, which
+  // reaches no route to need a scope.
+  ToolScopes tool_scopes = 50043;
+
+  // Declares the profile categories the annotated *Input message's tool
+  // belongs to, resolved at generation time into each language's registry
+  // table. See ToolCategories. Required on EVERY tool input, meta included,
+  // unlike tool_scopes: two core tools are meta, so a meta exemption would
+  // leave part of the taxonomy undeclarable, and a mutator that declared
+  // nothing would be served by no category-scoped profile in silence.
+  ToolCategories tool_categories = 50044;
+
+  // Declares how the annotated *Input message's meta tool builds its whole
+  // result from local state: the audit stores on disk, the profile builder's
+  // registry, the version the binary reports. See LocalAnswer.
+  //
+  // It is the meta-tier twin of tool_route. A routed tool declares the call it
+  // makes and the emitter writes the request, the refusals and the projection
+  // around it; a meta tool has no route, so it names a local operation instead
+  // and gets the same three things written around that. Accepted only on the
+  // meta tier, and only where the contract declares no success_message, which
+  // already owns the whole result.
+  LocalAnswer local_answer = 50045;
+
+  // Declares that the annotated message is a record an engine WRITES TO DISK as
+  // well as answers with: the audit sink's own JSONL line today. The emitter
+  // gives such a message a serializer and a hydrator per language, both reading
+  // the member list the projection already reads, so the on-disk member order is
+  // the message's own and not each language's struct layout.
+  //
+  // Accepted only on a message some declared operation answers with, and only
+  // where every member is a value rather than another record: a record inside a
+  // record would need its own order held too, and nothing declares one. The
+  // emitter refuses both rather than emitting a direction it cannot spell.
+  bool local_record = 50047;
+}
+
+// LocalState is ambient state a local operation reads whose ABSENCE the tool
+// answers for. It is deliberately not every ambient thing an operation touches:
+// the clock, the configuration and the audit directories are always there, so
+// naming them would declare a refusal no tool can reach.
+enum LocalState {
+  LOCAL_STATE_UNSPECIFIED = 0;
+
+  // The profile builder's draft registry, tool catalog and active profile,
+  // which a server attaches or does not. A tool declaring it answers "draft
+  // registry not configured" when the server attached none, ahead of every
+  // other guard.
+  LOCAL_STATE_BUILDER = 1;
+}
+
+// LocalDirection says which way a two-sided local operation runs, the way
+// TransferDirection says which way a transport's bytes move. It is what lets
+// one operation serve two tools: adding tools to a draft and removing them are
+// the same registry operation read in two directions.
+enum LocalDirection {
+  LOCAL_DIRECTION_UNSPECIFIED = 0;
+
+  // The operation adds what its inputs name.
+  LOCAL_DIRECTION_ADD = 1;
+
+  // The operation removes what its inputs name.
+  LOCAL_DIRECTION_REMOVE = 2;
+}
+
+// LocalGuard is one thing that can go wrong, named for the CONDITION rather
+// than for the tool that meets it, so two tools reporting the same condition
+// declare the same guard and answer their own sentences for it.
+//
+// The first two are read where the arguments are, before the operation runs.
+// The rest are the operation's own report: it answers which condition it met
+// and the text of the cause, and the generated handler words the sentence, so
+// no prose reaches the operation and no operation invents one.
+enum LocalGuard {
+  LOCAL_GUARD_UNSPECIFIED = 0;
+
+  // The named argument arrived in a form the input's reader cannot build,
+  // which today is a timestamp that is not RFC 3339.
+  LOCAL_GUARD_ARGUMENT_UNUSABLE = 1;
+
+  // The operation read the named argument and refused the value it carries,
+  // for a vocabulary only the operation knows.
+  LOCAL_GUARD_INPUT_REJECTED = 2;
+
+  // No draft carries the name the argument spells.
+  LOCAL_GUARD_DRAFT_MISSING = 3;
+
+  // The argument spells a built-in profile name, which a draft may not be
+  // saved over.
+  LOCAL_GUARD_BUILTIN_PROFILE = 4;
+
+  // The operation found nothing filed under the name the argument spells,
+  // which is a report that is not configured or a profile to clone that does
+  // not exist.
+  LOCAL_GUARD_NOT_FOUND = 5;
+
+  // Something is already filed under the name the argument spells.
+  LOCAL_GUARD_ALREADY_EXISTS = 6;
+
+  // The operation could not read the store it answers from.
+  LOCAL_GUARD_READ_FAILED = 7;
+
+  // The operation could not write what it was asked to write.
+  LOCAL_GUARD_WRITE_FAILED = 8;
+}
+
+// LocalVerdict is one condition an operation reports about a SINGLE entry of
+// what it was handed, rather than about the call as a whole.
+//
+// A LocalGuard ends the call, so the tool words it and the operation reports it
+// without words. A verdict is a member of a SUCCESSFUL answer, one per entry,
+// and its words are answer data: the bucket a caller counts by, and the two
+// sentences that say what stopped the entry and what would clear it. Those
+// belong to the operation, so every tool built on it answers the same ones.
+// That difference is the whole reason this vocabulary is worded here and
+// LocalRefusal is worded on the tool.
+enum LocalVerdict {
+  LOCAL_VERDICT_UNSPECIFIED = 0;
+
+  // The entry is permitted. It counts in no bucket and is worded with nothing.
+  LOCAL_VERDICT_PERMITTED = 1;
+
+  // The entry names a tool the registry does not carry.
+  LOCAL_VERDICT_UNREGISTERED = 2;
+
+  // The entry names a registered tool the active profile leaves out.
+  LOCAL_VERDICT_PROFILE_BLOCK = 3;
+
+  // The entry names a registered tool the active profile leaves out whose
+  // capability is one that listing the tool alone cannot unblock.
+  LOCAL_VERDICT_CAPABILITY_BLOCK = 4;
+
+  // The entry targets an environment the active profile does not permit.
+  LOCAL_VERDICT_ENVIRONMENT_BLOCK = 5;
+}
+
+// LocalVerdictValue is the closed set of values a verdict's wording can name,
+// and with it the whole vocabulary of the verdict sentences.
+//
+// Two members and no more. Both are read off the ENTRY the verdict was reached
+// on, so a sentence cannot reach the request, the argument map, or the name of
+// the tool that asked, which is the same guard LocalInputKind is for inputs.
+enum LocalVerdictValue {
+  LOCAL_VERDICT_VALUE_UNSPECIFIED = 0;
+
+  // The tool the entry names.
+  LOCAL_VERDICT_VALUE_TOOL = 1;
+
+  // The capability that tool carries, spelled the way the catalog spells it.
+  LOCAL_VERDICT_VALUE_CAPABILITY = 2;
+}
+
+// LocalVerdictWording is one verdict with the words the operation answers for
+// it: the summary bucket it counts in, why the entry was stopped, and what
+// would let it through.
+//
+// A {placeholder} names a LocalVerdictValue member by its own stem, so {tool}
+// is LOCAL_VERDICT_VALUE_TOOL, and a name outside that set is refused at
+// generation. The three words are all-or-nothing: a verdict that stops an entry
+// states all of them, because a bucket with no sentence counts an entry the
+// caller is told nothing about, and a verdict that permits one states none.
+message LocalVerdictWording {
+  // The verdict these words answer for.
+  LocalVerdict verdict = 1;
+
+  // The summary key it counts in, empty on a verdict that permits the entry.
+  string bucket = 2;
+
+  // Why the entry was stopped, empty on a verdict that permits it.
+  string reason = 3;
+
+  // What would let the entry through, empty on a verdict that permits it.
+  string remedy = 4;
+}
+
+// LocalAmbient is a reading no argument carries and no tool answers for.
+//
+// It is how one contract states what a language has to hand an operation
+// without stating any language's spelling for it: Go passes a context where
+// Python passes nothing, and both are rendered from the same row.
+enum LocalAmbient {
+  LOCAL_AMBIENT_UNSPECIFIED = 0;
+
+  // The caller's cancellation, where the language has one to pass on.
+  LOCAL_AMBIENT_CANCELLATION = 1;
+
+  // The loaded configuration, which an operation reads the paths and the
+  // definitions it answers from out of.
+  LOCAL_AMBIENT_CONFIG = 2;
+
+  // The reference instant a relative window is measured back from. Declared
+  // because a language reading its own wall clock cannot replay a pinned
+  // report, which is what the behavior corpus holds the report tool to.
+  LOCAL_AMBIENT_CLOCK = 3;
+}
+
+// LocalInputKind is the closed set of types one operation input can carry, and
+// with it the whole vocabulary of the typed-parameter guard: no member carries
+// the request, the argument map, or a tool's name, so an operation cannot be
+// handed one and cannot tell which tool reached it.
+enum LocalInputKind {
+  LOCAL_INPUT_KIND_UNSPECIFIED = 0;
+
+  LOCAL_INPUT_KIND_STRING = 1;
+
+  LOCAL_INPUT_KIND_STRING_LIST = 2;
+
+  LOCAL_INPUT_KIND_INT = 3;
+
+  LOCAL_INPUT_KIND_BOOL = 4;
+
+  // Read from text, and the one reader that answers a cause beside its value.
+  LOCAL_INPUT_KIND_TIMESTAMP = 5;
+
+  // A list of tool-call entries, each a tool name and the environment that
+  // call would target. The reader keeps the rest of an entry's arguments out,
+  // so a list of calls reaches an operation as typed values rather than as a
+  // bag it could read anything from.
+  LOCAL_INPUT_KIND_CALL_LIST = 6;
+}
+
+// LocalOperationInput is one typed parameter, named for the operation rather
+// than for any tool, which is what lets two tools binding different arguments
+// fill the same parameter.
+message LocalOperationInput {
+  // The input's own spelling, which a LocalBinding names to fill it.
+  string name = 1;
+
+  // The type it carries, which settles the reader each language fills it
+  // through.
+  LocalInputKind kind = 2;
+
+  // Whether the operation is told the argument was absent rather than reading
+  // its zero, which is what lets a setter leave a field alone.
+  bool optional = 3;
+}
+
+// LocalOperationAnswer is the shape one direction fills.
+//
+// The operation names no message of its own, so this is where a declaring
+// tool's response is held to what the operation can actually build.
+message LocalOperationAnswer {
+  // Which direction fills this shape, unset on a one-sided operation.
+  LocalDirection direction = 1;
+
+  // The message it fills, fully qualified. The emitter resolves the name
+  // against the linked-in descriptors and refuses one nothing declares, so a
+  // shape that does not resolve fails the run rather than the first call.
+  string shape = 2;
+}
+
+// LocalOperation declares one subsystem operation: what it is handed, what it
+// can report, and what it answers with. It says nothing about how the operation
+// runs, which stays each language's engine to write.
+//
+// Carried on the LocalCall member it declares, the way tool_route is carried on
+// the tool's own *Input message, so a member and its declaration cannot come
+// apart and neither restates the other. A member carrying none is refused: the
+// emitter would have no operation to write a call to.
+message LocalOperation {
+  // Ambient state the operation reads whose ABSENCE a declaring tool answers
+  // for. Required by an operation that reads some and refused on one that reads
+  // none, so the declaration and the engine cannot disagree in silence.
+  LocalState requires = 1;
+
+  // Readings no caller supplies and no tool answers for, each rendered in the
+  // language's own idiom or in nothing at all. A reading declared twice, or one
+  // outside the set, is refused rather than dropped.
+  repeated LocalAmbient ambient = 2;
+
+  // Whether the operation runs in a declared direction, which is what lets one
+  // operation serve two tools.
+  bool two_sided = 3;
+
+  // The inputs, in call order, each filled by one binding on a declaring tool.
+  // The order is the order the call passes them in, so it is the declaration
+  // and not any engine that settles the signature.
+  repeated LocalOperationInput input = 4;
+
+  // Every condition the operation can report. A declaring tool words each one,
+  // and the operation may report no other.
+  repeated LocalGuard reports = 5;
+
+  // The answer shape per direction. A one-sided operation declares one row with
+  // the direction unset; a two-sided one declares a row per side.
+  repeated LocalOperationAnswer answers = 6;
+
+  // Every verdict the operation reports about one entry of what it was handed,
+  // with the words it answers for each. Empty on an operation that answers
+  // about the call as a whole, which is all but one of them. A verdict declared
+  // twice, one outside the vocabulary, and a member of the vocabulary the
+  // operation leaves out are each refused, so the set an engine switches over
+  // is the set the contract states.
+  repeated LocalVerdictWording verdict = 7;
+}
+
+extend google.protobuf.EnumValueOptions {
+  // Declares the subsystem operation the annotated LocalCall member names. See
+  // LocalOperation.
+  //
+  // This is where the emitter learns its arm table. The table used to be a Go
+  // literal inside the emitter, which left the operation vocabulary in the
+  // contract and everything the vocabulary means in one language's source,
+  // where no other language could read it and no gate could hold it to the
+  // members it serves.
+  LocalOperation local_operation = 50046;
+}
+
+// LocalCall is the closed set of local operations a meta tool can be built on.
+//
+// Every member names a SUBSYSTEM OPERATION and never a tool. That is what lets
+// two tools share one operation, which DRAFT_TOOLS already does, and it is what
+// keeps the engine from growing a per-tool function under another name: an
+// operation cannot tell which tool reached it, because it is handed typed
+// inputs and nothing else.
+enum LocalCall {
+  LOCAL_CALL_UNSPECIFIED = 0;
+
+  // The build information the binary reports about itself.
+  LOCAL_CALL_BUILD_INFO = 1 [(linode.mcp.v1.local_operation) = {
+    answers: [
+      {
+        shape: "linode.mcp.v1.VersionResponse"
+      }
+    ]
+  }];
+
+  // The audit stores' own health: log size, rotation, and the database's row
+  // count where one is configured.
+  LOCAL_CALL_AUDIT_HEALTH = 2 [(linode.mcp.v1.local_operation) = {
+    ambient: [
+      LOCAL_AMBIENT_CANCELLATION,
+      LOCAL_AMBIENT_CONFIG
+    ]
+    reports: [LOCAL_GUARD_READ_FAILED]
+    answers: [
+      {
+        shape: "linode.mcp.v1.AuditHealthResponse"
+      }
+    ]
+  }];
+
+  // The most recent audit events, read from the JSONL log. No cancellation:
+  // this one reads the log alone, and the reader behind it takes none the way
+  // the store readers do.
+  LOCAL_CALL_AUDIT_RECENT = 3 [(linode.mcp.v1.local_operation) = {
+    input: [
+      {
+        name: "limit"
+        kind: LOCAL_INPUT_KIND_INT
+      },
+      {
+        name: "since"
+        kind: LOCAL_INPUT_KIND_TIMESTAMP
+      },
+      {
+        name: "until"
+        kind: LOCAL_INPUT_KIND_TIMESTAMP
+      },
+      {
+        name: "tool"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "capability"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "status"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "include_meta"
+        kind: LOCAL_INPUT_KIND_BOOL
+      }
+    ]
+    reports: [LOCAL_GUARD_READ_FAILED]
+    answers: [
+      {
+        shape: "linode.mcp.v1.AuditRecentResponse"
+      }
+    ]
+  }];
+
+  // Audit events counted over a window and grouped by declared columns.
+  LOCAL_CALL_AUDIT_SUMMARY = 4 [(linode.mcp.v1.local_operation) = {
+    ambient: [
+      LOCAL_AMBIENT_CANCELLATION,
+      LOCAL_AMBIENT_CONFIG
+    ]
+    input: [
+      {
+        name: "since"
+        kind: LOCAL_INPUT_KIND_TIMESTAMP
+      },
+      {
+        name: "group_by"
+        kind: LOCAL_INPUT_KIND_STRING_LIST
+      },
+      {
+        name: "include_meta"
+        kind: LOCAL_INPUT_KIND_BOOL
+      }
+    ]
+    reports: [
+      LOCAL_GUARD_INPUT_REJECTED,
+      LOCAL_GUARD_READ_FAILED
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.AuditSummaryResponse"
+      }
+    ]
+  }];
+
+  // Audit events written to a file in a named format.
+  LOCAL_CALL_AUDIT_EXPORT = 5 [(linode.mcp.v1.local_operation) = {
+    ambient: [
+      LOCAL_AMBIENT_CANCELLATION,
+      LOCAL_AMBIENT_CONFIG
+    ]
+    input: [
+      {
+        name: "format"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "since"
+        kind: LOCAL_INPUT_KIND_TIMESTAMP
+      },
+      {
+        name: "until"
+        kind: LOCAL_INPUT_KIND_TIMESTAMP
+      },
+      {
+        name: "tool"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "max_records"
+        kind: LOCAL_INPUT_KIND_INT
+      },
+      {
+        name: "include_meta"
+        kind: LOCAL_INPUT_KIND_BOOL
+      }
+    ]
+    reports: [
+      LOCAL_GUARD_READ_FAILED,
+      LOCAL_GUARD_WRITE_FAILED
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.AuditExportResponse"
+      }
+    ]
+  }];
+
+  // A named report from the audit configuration, run over the same stores. The
+  // definition itself can be unusable: a group_by column outside the
+  // vocabulary, a bound that is not a timestamp.
+  LOCAL_CALL_AUDIT_REPORT = 6 [(linode.mcp.v1.local_operation) = {
+    ambient: [
+      LOCAL_AMBIENT_CANCELLATION,
+      LOCAL_AMBIENT_CONFIG,
+      LOCAL_AMBIENT_CLOCK
+    ]
+    input: [
+      {
+        name: "report"
+        kind: LOCAL_INPUT_KIND_STRING
+      }
+    ]
+    reports: [
+      LOCAL_GUARD_NOT_FOUND,
+      LOCAL_GUARD_INPUT_REJECTED,
+      LOCAL_GUARD_READ_FAILED
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.AuditReportResponse"
+      }
+    ]
+  }];
+
+  // Create a draft in the builder's registry, optionally from a profile. The
+  // seed is resolved through the builder state rather than a reading of its
+  // own, because the profiles a seed can name are what that state already
+  // holds.
+  LOCAL_CALL_DRAFT_CREATE = 7 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    input: [
+      {
+        name: "draft"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "source"
+        kind: LOCAL_INPUT_KIND_STRING
+      }
+    ]
+    reports: [
+      LOCAL_GUARD_NOT_FOUND,
+      LOCAL_GUARD_ALREADY_EXISTS
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileDraftResponse"
+      }
+    ]
+  }];
+
+  // Read one draft out of the registry.
+  LOCAL_CALL_DRAFT_READ = 8 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    input: [
+      {
+        name: "draft"
+        kind: LOCAL_INPUT_KIND_STRING
+      }
+    ]
+    reports: [LOCAL_GUARD_DRAFT_MISSING]
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileDraftResponse"
+      }
+    ]
+  }];
+
+  // Remove a draft from the registry, reporting whether one was there.
+  LOCAL_CALL_DRAFT_DISCARD = 9 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    input: [
+      {
+        name: "draft"
+        kind: LOCAL_INPUT_KIND_STRING
+      }
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileDraftDiscardResponse"
+      }
+    ]
+  }];
+
+  // Set a draft's settings, leaving the ones the call did not send alone.
+  LOCAL_CALL_DRAFT_SET = 10 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    input: [
+      {
+        name: "draft"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "environments"
+        kind: LOCAL_INPUT_KIND_STRING_LIST
+        optional: true
+      },
+      {
+        name: "scopes"
+        kind: LOCAL_INPUT_KIND_STRING_LIST
+        optional: true
+      },
+      {
+        name: "yolo"
+        kind: LOCAL_INPUT_KIND_BOOL
+        optional: true
+      }
+    ]
+    reports: [LOCAL_GUARD_DRAFT_MISSING]
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileDraftSetResponse"
+      }
+    ]
+  }];
+
+  // Add tool names to a draft, or remove them. Two-sided.
+  LOCAL_CALL_DRAFT_TOOLS = 11 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    two_sided: true
+    input: [
+      {
+        name: "draft"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "patterns"
+        kind: LOCAL_INPUT_KIND_STRING_LIST
+      }
+    ]
+    reports: [LOCAL_GUARD_DRAFT_MISSING]
+    answers: [
+      {
+        direction: LOCAL_DIRECTION_ADD
+        shape: "linode.mcp.v1.ProfileDraftAddToolsResponse"
+      },
+      {
+        direction: LOCAL_DIRECTION_REMOVE
+        shape: "linode.mcp.v1.ProfileDraftRemoveToolsResponse"
+      }
+    ]
+  }];
+
+  // Write a draft into the configuration file as a user profile.
+  LOCAL_CALL_DRAFT_SAVE = 12 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    input: [
+      {
+        name: "draft"
+        kind: LOCAL_INPUT_KIND_STRING
+      }
+    ]
+    reports: [
+      LOCAL_GUARD_BUILTIN_PROFILE,
+      LOCAL_GUARD_DRAFT_MISSING,
+      LOCAL_GUARD_READ_FAILED,
+      LOCAL_GUARD_WRITE_FAILED
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileDraftSaveResponse"
+      }
+    ]
+  }];
+
+  // The tool catalog, narrowed by category and capability.
+  LOCAL_CALL_CATALOG_TOOLS = 13 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    input: [
+      {
+        name: "category"
+        kind: LOCAL_INPUT_KIND_STRING
+      },
+      {
+        name: "capability"
+        kind: LOCAL_INPUT_KIND_STRING
+      }
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileToolListResponse"
+      }
+    ]
+  }];
+
+  // The catalog's categories with the number of tools each covers.
+  LOCAL_CALL_CATALOG_CATEGORIES = 14 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileCategoryListResponse"
+      }
+    ]
+  }];
+
+  // Whether the active profile would permit each of a list of calls.
+  //
+  // The one operation that answers per entry rather than per call, so it is the
+  // one that words a verdict vocabulary. The sentences below used to be two
+  // per-language copies in two engine files, agreeing by hand and held by
+  // nothing; the summary's bucket keys are answer data a caller counts by, so
+  // they are declared beside the sentences that explain them.
+  LOCAL_CALL_CATALOG_CAN_RUN = 15 [(linode.mcp.v1.local_operation) = {
+    requires: LOCAL_STATE_BUILDER
+    input: [
+      {
+        name: "calls"
+        kind: LOCAL_INPUT_KIND_CALL_LIST
+      }
+    ]
+    answers: [
+      {
+        shape: "linode.mcp.v1.ProfileCanRunResponse"
+      }
+    ]
+    verdict: [
+      {
+        verdict: LOCAL_VERDICT_PERMITTED
+      },
+      {
+        verdict: LOCAL_VERDICT_UNREGISTERED
+        bucket: "unregistered"
+        reason: "tool name not registered"
+        remedy: "check spelling or call linode_profile_list_tools to discover the registered tool surface"
+      },
+      {
+        verdict: LOCAL_VERDICT_PROFILE_BLOCK
+        bucket: "profile_block"
+        reason: "tool not in profile's allowed_tools"
+        remedy: "switch to a profile that permits {tool}, or add it to the current profile"
+      },
+      {
+        verdict: LOCAL_VERDICT_CAPABILITY_BLOCK
+        bucket: "capability_block"
+        reason: "tool not in profile's allowed_tools ({capability})"
+        remedy: "switch to a profile that permits {tool}, or use yolo on a profile that allows it"
+      },
+      {
+        verdict: LOCAL_VERDICT_ENVIRONMENT_BLOCK
+        bucket: "environment_block"
+        reason: "environment not permitted by profile"
+        remedy: "target an environment in the profile's allowed_environments, or switch to a profile that permits this environment"
+      }
+    ]
+  }];
+}
+
+// LocalBinding fills one input of the declared operation from one argument of
+// this message. It is the ONLY way a caller's value reaches an operation: the
+// emitter reads the argument through the reader the input's declared type
+// names and passes the result positionally, so no operation is ever handed the
+// request or the argument map and none can tell which tool called it.
+message LocalBinding {
+  // The operation input this fills, which the declared call must take.
+  string input = 1;
+
+  // The argument it is filled from, which this message must declare.
+  string argument = 2;
+}
+
+// LocalRefusal is one guard with the sentence the tool answers for it.
+//
+// The ladder is ordered and the operation reports at most one condition, so
+// the sentences are the tool's own wording of conditions the operation names
+// without words. A {placeholder} names an argument a binding fills, in the
+// {argument:quoted} form to answer it in quotes, and {error} carries the cause
+// the operation reported.
+message LocalRefusal {
+  // The condition this sentence answers.
+  LocalGuard guard = 1;
+
+  // The argument the guard reads, required by every guard that reads one and
+  // refused by the two that report a store failure instead.
+  string argument = 2;
+
+  // The sentence the tool answers. A guard with no sentence would refuse in
+  // silence, so it is refused at generation.
+  string message = 3;
+}
+
+// LocalAnswer is how a meta tool builds its whole result from local state.
+//
+// Four declarations, read in the order the handler runs them: the ambient
+// state whose absence is answered first, the operation itself, the arguments
+// its inputs are filled from, and the sentences its conditions are answered
+// with. What comes back is projected onto the declared tool_response exactly
+// the way a routed tool's decoded body is, so a meta tool and a routed one
+// differ in where the answer comes from and in nothing after that.
+//
+// The operations live in each language's engine because a draft registry and
+// an audit store are not describable in a descriptor. What is declarable is
+// everything around them, which is where the two languages used to drift.
+message LocalAnswer {
+  // The operation this tool is built on.
+  LocalCall call = 1;
+
+  // Ambient state the operation reads whose absence the tool answers for.
+  // Required by an operation that reads some and refused on one that reads
+  // none, so the declaration and the engine cannot disagree in silence.
+  LocalState requires = 2;
+
+  // Which way a two-sided operation runs. Required on a two-sided operation
+  // and refused on a one-sided one, for the reason TransferDirection is:
+  // absent reads as one of the two directions rather than as unset.
+  LocalDirection direction = 3;
+
+  // The operation's inputs, each filled from one argument. Every input the
+  // operation requires needs a row: an input nothing fills would reach it as a
+  // zero the caller never sent.
+  repeated LocalBinding bind = 4;
+
+  // The guard ladder, answered in declaration order. Every condition the
+  // declared operation can report needs a row, since a condition with no
+  // sentence would refuse without saying why.
+  repeated LocalRefusal refuse = 5;
+}
+
+// TransferDirection says which way the bytes move on a transport that carries
+// them in only one direction.
+enum TransferDirection {
+  TRANSFER_DIRECTION_UNSPECIFIED = 0;
+
+  // The tool sends bytes: a PUT of a raw image, a PUT to a presigned URL.
+  TRANSFER_DIRECTION_UP = 1;
+
+  // The tool receives bytes: a GET answering an image, a GET from a presigned
+  // URL streamed to a local file.
+  TRANSFER_DIRECTION_DOWN = 2;
+}
+
+// ExecuteTransport is how a tool's live call travels when the derived JSON
+// request is not what reaches the API.
+//
+// The declared route stays the route: each arm still addresses the method and
+// path the tool's tool_route names, and the generated body is still built so
+// the schema advertises what the caller may send. What the arm changes is the
+// bytes on the wire, which is the one part no field descriptor carries.
+//
+// Only the transport is declarable. The framing of a multipart form, the
+// streaming of a presigned transfer and the sentences a refused transfer
+// answers with live in each language's client and object-data layers, where a
+// message option cannot reach.
+message ExecuteTransport {
+  oneof kind {
+    MultipartUpload multipart = 1;
+    RawBody raw_body = 2;
+    PresignTransfer presign = 3;
+  }
+}
+
+// MultipartUpload posts multipart/form-data assembled from a local file's
+// CONTENTS. The generated JSON body is deliberately not the request: it carries
+// the path so the schema can advertise it and the rules can check it, and what
+// reaches the API is the bytes it names.
+message MultipartUpload {
+  // The argument naming the local file whose contents become the part.
+  string file_argument = 1;
+
+  // The form field the part is filed under.
+  string part_name = 2;
+}
+
+// RawBody carries the resource itself as the body, under one content type,
+// with no JSON around it.
+//
+// The member and the argument named here hold standard base64 text, because
+// that is the only way a JSON tool schema can advertise bytes. Encoding is the
+// transport's: an upward transfer decodes before sending, a downward one
+// encodes what it read.
+message RawBody {
+  TransferDirection direction = 1;
+
+  // The media type the bytes travel under: sent as Content-Type going up,
+  // negotiated as Accept coming down.
+  string content_type = 2;
+
+  // Going up, the argument holding the base64 text to decode and send.
+  string source_argument = 3;
+
+  // Coming down, the response member receiving the base64 text.
+  string answer_field = 4;
+}
+
+// PresignTransfer asks the API for a presigned URL over the declared route and
+// then moves a local file through it. Only one Linode operation happens, the
+// presign, which is why that is the route the tool declares; the transfer goes
+// to the URL the API just minted.
+//
+// The presign body always carries a signed content type and a lifetime, since
+// a URL signed without either is refused by the endpoint, so both are filled
+// here rather than declared per tool.
+//
+// The guard follows the direction: going up the source is inspected and sized
+// against the configured single-part ceiling, coming down the destination is
+// resolved inside the configured filesystem root. Either way it runs before the
+// presign call, so a refused transfer costs no request at all.
+message PresignTransfer {
+  TransferDirection direction = 1;
+
+  // The member of the presign response carrying the minted URL.
+  string url_field = 2;
+
+  // The argument naming the local file: the source going up, the destination
+  // coming down.
+  string local_path_argument = 3;
+
+  // Going up, the argument naming the media type the transfer sends under.
+  string content_type_argument = 4;
+
+  // Coming down, the argument permitting an occupied destination.
+  string overwrite_argument = 5;
+
+  // The response member receiving the transferred byte count.
+  string size_field = 6;
+
+  // The response member receiving the stored object's entity tag.
+  string etag_field = 7;
+
+  // Response members the transport answers with a fixed value: an upload
+  // reports the only mode it has, since a file over the ceiling is refused
+  // rather than split.
+  repeated TransferConstant answer_constant = 8;
+}
+
+// TransferConstant is one response member a transport fills with fixed text.
+message TransferConstant {
+  string field = 1;
+  string text = 2;
 }
 
 // PreviewSentence is one line a dry run reports about what the call does, and
@@ -490,6 +1446,16 @@ message PreviewSentence {
   // with a gap in it, which is what lets a whole sentence be conditional: the
   // volume create names the instance it attaches to only when the call names
   // one.
+  //
+  // `{transport:member}` reads what the tool's presigned upload measured off
+  // the local file before the call, and the member is the transport's
+  // size_field: the size is the one reading a dry run takes without making
+  // the transfer. Declaring it is what makes the dry run inspect the source,
+  // fill the presign body the way the live call fills it, and report a source
+  // the guard refuses as a warning, with this line dropped the way any
+  // unfilled wording is. Refused on a tool with no presigned upload, on any
+  // other member, and beside a declared state read, since the two word their
+  // lines against different subjects.
   repeated string template = 1;
 
   // Where the line lands in the preview. Unspecified is refused rather than
@@ -502,6 +1468,173 @@ message PreviewSentence {
   // which is the other way of saying what a line reports and nothing here says
   // which of the two would win.
   PreviewChoice chosen_by = 3;
+
+  // The arguments the call must carry for this line to be reported at all, for
+  // the lines that say something happened without naming what: a description
+  // replaced, a tag set swapped, an autoscaler reconfigured. A wording with no
+  // placeholder to drop on is always filled, so nothing else here can say
+  // "only when the caller asked for it".
+  //
+  // Carried means the call sent the argument, EXCEPT for a text argument, where
+  // it means the call sent a non-empty one. The asymmetry is not a preference:
+  // every reader here already collapses an empty string onto an absent one, so
+  // a text argument has no third state to distinguish, while a number, a flag,
+  // a list and an object each have a real zero value a caller can mean. That is
+  // what lets a throttle of 0 and an empty tag list still report.
+  //
+  // A number this line names in both when_present and a wording is read with
+  // zero as a value, since the guard has already established the call carried
+  // it. A number guarded on one line and read unguarded on another is refused:
+  // the two lines would read one argument two ways.
+  repeated string when_present = 4;
+
+  // The pair this line is only reported for when the two differ: the reading
+  // the resource carries now, and the argument the call would set it to.
+  //
+  // This is the question preview_unchanged deliberately does not answer. That
+  // rule holds a READING a wording names, so a wording naming both values gets
+  // its own fallback for free. This holds a LINE whose wording names only the
+  // new value: "SOA email is set to X" says nothing about what it was, and
+  // reporting it over a value that already matches would announce a change that
+  // is not happening.
+  //
+  // The line is dropped when the argument carries nothing, and when the two
+  // agree. Declaring both this and preview_unchanged over one reading is
+  // refused: the two would answer the same call differently, one by stepping a
+  // wording aside and one by dropping the line.
+  PreviewUnchanged when_changed = 5;
+
+  // The wordings this line takes, selected by the value an argument carries.
+  // See PreviewMatch. Refused beside template and beside chosen_by, each of
+  // which is another way of saying what one line reports.
+  PreviewMatch matched_by = 6;
+
+  // The repeated argument this line is written over. See PreviewElements. The
+  // wording is this line's own template, with `{element}` standing for the
+  // entry.
+  PreviewElements per_element = 7;
+}
+
+// PreviewElements is the repeated argument one line is written over, and
+// whether it writes a line per entry or one line naming them all.
+//
+// A placeholder reports a single value, which is why the membership calls kept
+// a hand-written body: the request carries a list of ids and the preview owes
+// the caller a sentence about each. `{element}` is that entry, and it is the
+// one placeholder that does not name an argument.
+message PreviewElements {
+  // The repeated argument the entries come from. It must be a repeated
+  // argument the tool declares, holding text or whole numbers, since those are
+  // the values both languages spell the same way.
+  string argument = 1;
+
+  // The separator that makes this ONE line naming every entry rather than a
+  // line per entry. Empty writes a line per entry, in the order the call sent
+  // them.
+  //
+  // A list the call did not send writes nothing either way: no entries is no
+  // lines, and joining none leaves `{element}` empty, which drops the line the
+  // way any unfilled wording does.
+  string join = 2;
+}
+
+// PreviewMatch is the wordings one line takes, selected by the value an
+// argument carries rather than filled from it.
+//
+// PreviewChoice is the same idea over a bool, and the two are apart for the
+// reason a bool is: a flag has exactly the three states the contract names,
+// while a text value has as many as the API defines, so the arms are declared
+// rather than fixed. A firewall going disabled stops enforcing its rules and
+// one going anything else starts, which is one line whose verb the value picks
+// and no wording can interpolate.
+message PreviewMatch {
+  // The argument whose value selects. It must be a value the tool carries and
+  // may report, the same bar a placeholder answers to, since an arm's wording
+  // usually names it too. Exactly one of argument and state.
+  string argument = 1;
+
+  // The arms, one per value the line words differently. A value two arms name
+  // is refused: nothing here would say which one wins.
+  repeated PreviewMatchArm arm = 2;
+
+  // The wording for a value no arm names, which is what makes the arms a
+  // shortlist rather than the whole vocabulary. Empty drops the line for those
+  // values, the way an unfilled wording does.
+  string otherwise = 3;
+
+  // The state member whose value selects instead of an argument, spelled the
+  // way a wording spells it after `state:`. A rescue warns about downtime only
+  // for a Linode that is up, which is a reading of the resource rather than of
+  // the call, and no argument carries it.
+  //
+  // The comparison is case-folded, the way a walk's state guard already
+  // compares one: the API spells its own vocabularies, where an argument's
+  // values are the ones this tool's schema publishes and are compared exactly.
+  // Refused on a tool whose preview reads no state, and refused beside
+  // argument, since nothing here would say which one selects.
+  string state = 4;
+}
+
+// PreviewMatchArm is one value and the wording the line takes for it.
+message PreviewMatchArm {
+  // The value this arm words, compared exactly. An enum argument travels as its
+  // member name, which is what the comparison sees.
+  string equals = 1;
+
+  // The wording, which carries placeholders like any other.
+  string wording = 2;
+}
+
+// PreviewUnchanged is one state reading a preview reports only where it differs
+// from the argument the call would set.
+//
+// The reading reads as ABSENT when the two already agree, which is the rule an
+// empty placeholder already has: the wording naming it steps aside for the next
+// one. That is the whole of what turns "Label changes from X to Y" into "Label
+// is set to Y" when X and Y are the same value, with no second rule for
+// choosing between them and no predicate spelled per line.
+//
+// It says nothing about a line whose wording never names the reading. A line
+// guarded on a change it does not report is a different question and is not
+// declarable here.
+message PreviewUnchanged {
+  // The state member, spelled the way a wording spells it after `state:`.
+  // Held to the same member the read answers with, one level or two.
+  string state = 1;
+
+  // The argument it is held against, a value the tool declares and may report.
+  string argument = 2;
+}
+
+// PreviewStandIn is one member of a repeated argument's entries that a dry run
+// reports fixed text for rather than echoing back.
+//
+// preview_redact is the same idea over a whole body member, and it cannot say
+// this: standing in for `security_questions` takes the question ids with it,
+// and the ids are the half of that call a caller checks before confirming.
+//
+// It reports text where preview_redact reports its marker object, so the
+// reported entry keeps the shape the API reads: the one member declared this
+// way is a string, and an object in its place would describe a request the
+// route would refuse.
+//
+// Only the report changes. The live request carries what the caller sent, the
+// entries stay in the order the call sent them, and every member this does not
+// name is echoed as the body built it.
+message PreviewStandIn {
+  // The repeated argument whose entries carry the member. It must be a BODY
+  // argument repeating a named message, since a free-form list declares no
+  // member to stand in for.
+  string argument = 1;
+
+  // The member of one entry, spelled the way that message declares it. A
+  // member no entry can carry is refused: nothing would be stood in for and
+  // the value the declaration is about would reach the report intact.
+  string member = 2;
+
+  // The text reported in its place. Empty is refused rather than read as "drop
+  // the member", which is what an absent one already means.
+  string text = 3;
 }
 
 // PreviewChoice is the wordings one line takes, selected by a bool the line
@@ -591,6 +1724,38 @@ message StateRoute {
   // the action routes are addressed by linode_id and the read they need is
   // addressed by instance_id.
   repeated StateRouteSlot slot_arguments = 4;
+
+  // The pairs a scan selects the resource by, for a removal whose only read is
+  // a paginated collection and whose element no single id names: the VLAN has
+  // no GET, so its delete scans the list for the region and label together.
+  // Declaring any makes the named tool's read a whole-collection scan: every
+  // page is read, and the first element every pair matches is the state. No
+  // match answers the not-found sentence naming each pair. Refused beside
+  // payload_member or body_key, which describe a single-resource answer.
+  repeated StateRouteMatch match = 5;
+
+  // The page envelope itself, results total included, is the state: the tag
+  // delete previews the objects carrying the tag, and a truncated first page
+  // must not understate the blast radius, so the envelope's own total rides
+  // along. The projected state carries the elements under "data" and the total
+  // under "results". Refused beside payload_member, body_key, or match, each
+  // of which says the answer is one resource.
+  bool envelope_state = 6;
+}
+
+// StateRouteMatch is one pair a collection scan selects by: an element member
+// and the removal's validated argument that fills it. Several pairs must all
+// match one element, which is what lets a resource addressed by two names
+// (region and label) be found without either being an id.
+message StateRouteMatch {
+  // The element member the pair reads, a field the read's element declares. An
+  // undeclared name is refused: the scan would compare against nothing.
+  string field = 1;
+
+  // The removal's own validated argument holding the value. An argument the
+  // removal does not carry is refused, as is a secret-named one, for the same
+  // reasons the slot fill refuses them.
+  string argument = 2;
 }
 
 // StateRouteSlot is one read slot filled from a removal argument spelled
@@ -637,10 +1802,10 @@ message NormalizeField {
 // NormalizeTransform is one rewrite an argument gets, named rather than spelled
 // out so both languages read one word for it.
 //
-// A member is added when a second tool wants it, the cap ArgumentReader carries:
-// without it the enum grows one member per tool, which is the per-tool hook
-// again in a worse place to read it. A tool whose rewrite no member spells keeps
-// its normalize hook.
+// A member is added when a second tool wants it, the cap ArgumentReader carries,
+// OR when the alternative is writing a whole tool body by hand for one word: the
+// hand surface must reach zero, and a sole-user member here is cheaper than the
+// per-tool body it replaces.
 enum NormalizeTransform {
   // The declaration names no rewrite, which is refused rather than read as any
   // member below: a transform the emitter cannot render would otherwise reach
@@ -657,6 +1822,91 @@ enum NormalizeTransform {
   // value nothing can match. A list holding anything but text is left whole,
   // since the body builder words that refusal for the whole surface alike.
   NORMALIZE_TRANSFORM_TRIM_LIST_DROP_BLANK = 2;
+
+  // Every entry of a list argument is trimmed and the blanks kept, so an entry
+  // that was only padding is refused by the rule that names it rather than
+  // silently dropped. A list holding anything but text is left whole.
+  NORMALIZE_TRANSFORM_TRIM_LIST = 3;
+
+  // A text argument is folded to upper case, for the values the API reads as
+  // an upper-case vocabulary while callers spell them freely.
+  NORMALIZE_TRANSFORM_UPPERCASE = 4;
+}
+
+// NormalizeFold is one convenience argument folded into a member of an object
+// argument before anything reads either: the transfer's linode_ids becoming
+// entities.linodes. The two names stay declared so the schema accepts both;
+// the fold decides which one the wire carries.
+//
+// The semantics are fixed rather than declared: a caller-supplied target wins
+// and the source is dropped from the arguments, so the wire never carries both
+// spellings of one fact; a foldable source becomes target[key] and the source
+// is dropped; a source no reader can parse is left alone so the rules and the
+// body builder refuse it by name. Fixing the collision rule is what makes one
+// declaration reviewable: a per-tool precedence knob would be a hand-written
+// body again.
+message NormalizeFold {
+  // The convenience argument callers may send, a declared BODY field of the
+  // input. An undeclared name is refused, as is one another normalize
+  // declaration rewrites, and a name marked as a credential.
+  string source = 1;
+
+  // The object argument the fold lands in, a declared BODY map field of the
+  // input. The source's own name is refused: folding a field into itself is
+  // a rename, which the schema handles.
+  string target = 2;
+
+  // The member of the target the source's value becomes: linode_ids folds to
+  // entities under "linodes". Empty is refused, since the fold would have no
+  // address to write to.
+  string key = 3;
+}
+
+// StateComposite is a removal-or-mutation state read assembled from more than
+// one call, for the tools whose plan hashes a projection no single route
+// answers: a resize moves the instance's type and its disks together, and a
+// cosmetic instance field must not refuse an apply, so each call keeps only
+// the fields the change would move.
+message StateComposite {
+  // The calls, in declaration order, each landing one member of the projected
+  // state. At least two are required: one call with a field subset is a
+  // state_route with a projection, which this message exists to compose.
+  repeated StateCompositeCall calls = 1;
+
+  // The member the tool's declared prose reads its state placeholders through,
+  // for a staged tool whose preview and plan read different shapes. The resize
+  // previews the Linode and plans against the Linode and its disks together,
+  // and one wording serves both because `{state:type}` reads the instance
+  // either way.
+  //
+  // Empty leaves the prose reading the whole projection, which is what a tool
+  // whose wordings name a member of it means. A member no call lands is
+  // refused: the prose would read nothing.
+  string prose_member = 2;
+}
+
+// StateCompositeCall is one read of a composite state: a declared GET tool,
+// the member its kept fields land under, and the fields kept.
+message StateCompositeCall {
+  // The read tool whose route the call performs. Must be a declared GET; its
+  // path slots fill from the tool's own validated arguments by name.
+  string tool = 1;
+
+  // The member of the projected state this call's answer becomes: an object of
+  // the kept fields for a single-resource read, an array of them for a list.
+  // A member a second call also names is refused.
+  string member = 2;
+
+  // The fields kept, each a field the read's element declares. Everything else
+  // is dropped before the state is reported or hashed, which is what keeps a
+  // cosmetic field from refusing an apply. Empty is refused: a call keeping
+  // nothing reads nothing.
+  repeated string fields = 3;
+
+  // The read slots this tool spells differently, the same exception
+  // StateRoute.slot_arguments is: the disk list is addressed by linode_id
+  // where the resize validates instance_id.
+  repeated StateRouteSlot slot_arguments = 4;
 }
 
 // ObjectWalk is the check one open-object argument gets: a map or a repeated
@@ -680,6 +1930,239 @@ enum NormalizeTransform {
 //   {minimum} {maximum} {max_length}
 //                the bounds the value declares, so a sentence stating one does
 //                not carry a second copy of the number
+// DependencyWalk is one iteration a dry run reports: what it walks, what each
+// element emits, and the warnings the whole says. Declaration order is
+// emission order for dependencies AND for warnings: each walk appends its
+// sentences as it runs, so a warning meant to land last is declared on the
+// last walk. What no descriptor carries
+// is which resources a change touches beside its own; declaring it is what
+// lets both languages word one blast radius.
+//
+// Templates interpolate element fields by name, the tool's own validated
+// arguments as {arg:name}, {len:member} for a nested list's length, and the
+// aggregate vocabulary the renderer computes: {count} (emitted elements),
+// {total} (fetched elements, before the filter), {sum:field} (a field summed
+// across elements), {sum:len:member} (a nested list's length summed across
+// elements), {max_results} (the larger of the envelope total and the
+// itemized count, the total read from the state's "results" member), and
+// {state:field} (a scalar off the declared state).
+//
+// A name both pools spell resolves by position: inside emit.note the element
+// field wins, inside warnings the aggregate wins, so a pool's own `count`
+// and the emitted-element count can never collide.
+//
+// A template whose element placeholders are all empty drops its line, which
+// is deliberate where the hand bodies formatted the empty value instead: an
+// apex NS record reads as no line rather than a sentence with a hole in it.
+message DependencyWalk {
+  // The list tool the walk iterates, its slots filled from this tool's own
+  // validated arguments by name. Exactly one of list_tool, state_member, or
+  // state_scalar says where elements come from.
+  string list_tool = 1;
+
+  // The repeated member of the declared state the walk iterates instead of a
+  // route, for the walks whose fetch already carries the elements.
+  string state_member = 2;
+
+  // One conditional element from the declared state's scalars: the id field
+  // that, when positive, is the single dependency this walk emits.
+  string state_scalar = 3;
+
+  // Keeps only the elements whose member matches. See WalkFilter.
+  WalkFilter filter = 4;
+
+  // What each element becomes. See WalkEmit. A walk may emit nothing and
+  // carry warnings alone only when it names no source; otherwise an emit is
+  // required, since an iteration nothing reads is wiring with no effect.
+  WalkEmit emit = 5;
+
+  // The warnings the walk says about the whole, in declaration order. See
+  // WalkWarning.
+  repeated WalkWarning warnings = 6;
+
+  // The sentence a failed list becomes, with {error} for the failure. The
+  // walk stays best-effort: a list that cannot be read must not turn a
+  // preview into an error. It lands before the declared warnings and the
+  // walk continues over no elements, so a state-fed warning still speaks.
+  // Required with list_tool, refused without it.
+  string list_error_warning = 7;
+
+  // A read whose fields join the template pool as {enrich:field}, best-effort
+  // and empty on failure: the subnet walk names its parent VPC's label. See
+  // WalkEnrich.
+  WalkEnrich enrich = 8;
+
+  // The list's slots spelled differently, the same exception StateRoute
+  // carries: the instance sub-lists read {linode_id} where the tool argument
+  // is instance_id.
+  repeated StateRouteSlot slot_arguments = 9;
+
+  // The repeated member the walk iterates when the list answers a nested
+  // object rather than a page envelope, dotted up to two levels: the
+  // instance IP read keeps "ipv4.public" and nothing else. Requires
+  // list_tool; empty reads the envelope's data.
+  string list_member = 10;
+}
+
+// WalkFilter keeps only the elements whose member matches a literal or one of
+// the tool's own arguments. The member may reach one level into the values of
+// an open object or a typed message map ("devices.*.disk_id"), the same
+// one-level rule PreviewChoice states. The comparison is by rendered value:
+// each side is worded the way the templates word it, so a numeric argument
+// matches a numeric member without a type spelled here.
+message WalkFilter {
+  // The element member the filter reads.
+  string field = 1;
+
+  // The literal the member must equal. Exactly one of value or argument.
+  string value = 2;
+
+  // The tool's validated argument the member must equal.
+  string argument = 3;
+
+  // Case-folded comparison, for the vocabularies the API spells freely.
+  bool fold = 4;
+}
+
+// WalkEmit is what one element becomes in the dry run's answer.
+message WalkEmit {
+  // Where the line lands: dependencies (default) or side_effects, which the
+  // rebuild uses because its disks are consequences rather than resources.
+  WalkTarget target = 1;
+
+  // The reported kind, a constant. Exactly one of kind or kind_field,
+  // except under WALK_TARGET_SIDE_EFFECTS, where a line is bare prose and
+  // both may be absent along with action and the field references.
+  string kind = 2;
+
+  // The element member the kind is read from, dotted one level for a nested
+  // body ("entity.type"), with kind_fallback when the member is empty: a
+  // tagged object says its own type or reads as "resource".
+  string kind_field = 3;
+  string kind_fallback = 4;
+
+  // The element member the reported id is read from, dotted one level for a
+  // nested body ("data.id"). A scalar walk still names it, even when it
+  // spells the same member state_scalar triggered on: the trigger and the
+  // reported id are two statements, and only this one reports.
+  string id_field = 5;
+
+  // The element member the reported label is read from, dotted one level,
+  // empty for none.
+  string label_field = 6;
+
+  // The action the element undergoes: "detached", "cascade_deleted",
+  // "removed", "released".
+  string action = 7;
+
+  // The line's wording, a template over the element's fields.
+  string note = 8;
+
+  // The label's wording when label_field renders empty, a template over the
+  // same pools the note reads: the volume walk falls back to the enriched
+  // instance label. Requires label_field; a fallback with nothing to fall
+  // back from is wiring with no effect.
+  string label_fallback = 9;
+}
+
+// WalkTarget is where an emitted line lands.
+enum WalkTarget {
+  // Dependencies is the default and the zero value.
+  WALK_TARGET_DEPENDENCIES = 0;
+
+  // Side effects, for consequences that are not resources.
+  WALK_TARGET_SIDE_EFFECTS = 1;
+}
+
+// WalkWarning is one sentence the walk says about the whole.
+message WalkWarning {
+  // The sentence, a template over the aggregate vocabulary.
+  string template = 1;
+
+  // Says the sentence only when the named state member equals the value,
+  // case-folded: the running-instance warnings. Empty says it always.
+  string when_field = 2;
+  string when_equals = 3;
+
+  // Says the sentence only when the envelope total exceeds the itemized
+  // count: the truncation notice.
+  bool when_truncated = 4;
+
+  // Says the sentence only when at least one element was emitted. The count
+  // warnings use this so a walk over nothing stays silent.
+  bool when_any = 5;
+
+  // Says the sentence only when the named aggregate is positive, from the
+  // same vocabulary the template reads ("total", "sum:count",
+  // "sum:len:linodes", "state:count"). The guards that count something other
+  // than emitted elements use this where when_any would miscount.
+  string when_positive = 6;
+
+  // The alternative pair: says the sentence only when the named state member
+  // is non-empty (when_present) or empty (when_absent), so a wording that
+  // names a value and its fallback wording declare as two lines of which
+  // exactly one speaks.
+  string when_present = 7;
+  string when_absent = 8;
+}
+
+// WalkEnrich is one best-effort read whose fields decorate the templates.
+// The read runs once per walk and only when the walk kept at least one
+// element; a walk that kept nothing reads nothing, matching the hand bodies
+// that skipped the call outright.
+message WalkEnrich {
+  // The read tool, its slots filled from this tool's own arguments by name,
+  // with the state's own members as a second pool for the ids only the fetch
+  // knows.
+  string tool = 1;
+
+  // The fields kept into the {enrich:field} pool.
+  repeated string fields = 2;
+
+  // The read slots spelled differently, the same exception StateRoute
+  // carries; the argument side may also name a state member, since the id an
+  // enrichment needs is often one the fetch read.
+  repeated StateRouteSlot slot_arguments = 3;
+}
+
+// BillingDelta is the price consequence a dry run estimates: the type read
+// off the declared state prices the monthly delta, signed, with a sentinel
+// when the price cannot be fetched. The answer lands under the dry run's
+// billing_delta as {monthly_change_usd, note}, the keys the hand bodies
+// always wrote.
+//
+// A removal is the ordinary case, since the resource it prices is one it has
+// already read. A create may declare the other form: a deliberately-unknown
+// estimate, price_tool and type_field left out, where absent_type_sentence is
+// the whole answer. Reserved IPv4 has no region price a reservation could be
+// costed from, so the honest report is the sentinel and a note pointing at the
+// tool that lists the prices. That form reads no state, which is what lets it
+// ride a create's preview rather than a removal's walk.
+message BillingDelta {
+  // The pricing tool the estimate reads, its one slot filled with the type.
+  string price_tool = 1;
+
+  // The declared state member holding the priced type.
+  string type_field = 2;
+
+  // The note beside a priced amount.
+  string sentence = 3;
+
+  // The note beside the "unknown" amount a failed price fetch reports.
+  string unknown_sentence = 4;
+
+  // The amount's wording, with {monthly:.2f} for the fetched price: a
+  // removal declares "-{monthly:.2f}" because the spend stops.
+  string amount = 5;
+
+  // The note beside the "unknown" amount when the state carries no type at
+  // all; empty is a deliberate empty note, matching a body that never
+  // learned what to price. It is also the note of the deliberately-unknown
+  // form, which never learns a type because there is none to read, and there
+  // it is required: the note is the whole of what that estimate says.
+  string absent_type_sentence = 6;
+}
+
 message ObjectWalk {
   // The arguments this walk reads, each a BODY map or repeated Struct field of
   // the annotated input. Naming several is what lets one declaration serve a
@@ -1010,7 +2493,7 @@ extend google.protobuf.FieldOptions {
   // and giving it presence would move the field's requiredness in the generated
   // JSON schema. The readers answer two sentences off a distinction no rule can
   // make, and the check the emitter derives without this answers only the first
-  // one, so dropping a hook silently rewords the second.
+  // one, so a tool that dropped this would silently reword the second.
   //
   // A member names a reader both languages already have. Its own sentences
   // apply unless `reader_message` words an arm differently.
@@ -1070,10 +2553,10 @@ message ReaderMessage {
 //
 // Adding a member: at least two tools must want it AND both languages must
 // already accept exactly what it accepts (TestEveryArgumentReaderHasTwoDeclarers).
-// A tool whose ACCEPTED SET would need a member of its own either converges onto
-// an existing member, named and fixtured, or keeps its validate hook. Without
-// that cap this enum grows one member per tool, which is the per-tool hook again
-// in a worse place to read it.
+// A tool whose ACCEPTED SET would need a member of its own converges onto an
+// existing member, named and fixtured. Without that cap this enum grows one
+// member per tool, which is a per-tool body again in a worse place to read
+// it.
 enum ArgumentReader {
   // The argument declares no shared reader. Every field that says nothing.
   ARGUMENT_READER_UNSPECIFIED = 0;

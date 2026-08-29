@@ -44,6 +44,7 @@ func TestAllProfilesContainsBuiltins(t *testing.T) {
 		profiles.BuiltinNetworkAdmin,
 		profiles.BuiltinKubernetesAdmin,
 		profiles.BuiltinStorageAdmin,
+		profiles.BuiltinIamAdmin,
 		profiles.BuiltinFullAccess,
 		profiles.BuiltinEmergency,
 	}

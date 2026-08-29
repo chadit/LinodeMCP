@@ -49,8 +49,8 @@ type walkPlace struct {
 // readArgumentDeclarations resolves what a tool declares about its whole
 // argument map rather than about one field: the names it refuses, the ones it
 // must be given at least one of, and the walks over its open objects. They are
-// read together because each of them is refused beside a validate hook, and a
-// tool declaring that hook owns the lot.
+// read together because each of them answers for the map rather than for one
+// field.
 func (c *contract) readArgumentDeclarations(options protoreflect.ProtoMessage) error {
 	if err := c.readRefusals(options); err != nil {
 		return err
@@ -70,10 +70,6 @@ func (c *contract) readArgumentDeclarations(options protoreflect.ProtoMessage) e
 // readObjectWalks resolves the walks a tool declares over its open-object
 // arguments, holding each to a field it can read and each sentence to
 // placeholders the walk fills.
-//
-// Refused beside a validate hook for the reason require_any_of is: a tool
-// declaring one owns its whole argument check, so a walk beside it would be a
-// second answer nothing holds to the hook's wording.
 func (c *contract) readObjectWalks(options protoreflect.ProtoMessage) error {
 	walks, _ := proto.GetExtension(options, linodev1.E_ObjectWalk).([]*linodev1.ObjectWalk)
 	if len(walks) == 0 {
@@ -82,10 +78,6 @@ func (c *contract) readObjectWalks(options protoreflect.ProtoMessage) error {
 
 	if c.Tier != tierWrite {
 		return fmt.Errorf("%w: %s", errWalkTier, c.Name)
-	}
-
-	if c.Hooks.Validate != "" {
-		return fmt.Errorf("%w: %s", errWalkWithValidate, c.Name)
 	}
 
 	var read []string

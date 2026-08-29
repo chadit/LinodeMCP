@@ -1,11 +1,7 @@
 package linode
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"io"
-	"net/http"
 	"net/url"
 	"strconv"
 
@@ -218,55 +214,6 @@ func (c *Client) httpGetAccountOAuthClient(ctx context.Context, clientID string)
 	}
 
 	return &client, nil
-}
-
-// httpUpdateOAuthClientThumbnail replaces one OAuth client's thumbnail PNG.
-func (c *Client) httpUpdateOAuthClientThumbnail(ctx context.Context, clientID string, thumbnailPNG []byte) error {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRouteRequestContentType(ctx, "linode_account_oauth_client_thumbnail_update",
-		contentTypePNG, bytes.NewReader(thumbnailPNG), clientID)
-	if err != nil {
-		return wrapRequestError("UpdateOAuthClientThumbnail", err)
-	}
-
-	defer drainClose(resp)
-
-	return c.handleResponse(resp, nil)
-}
-
-// httpGetOAuthClientThumbnail retrieves one OAuth client's thumbnail PNG bytes.
-func (c *Client) httpGetOAuthClientThumbnail(ctx context.Context, clientID string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_thumbnail_get", nil, clientID)
-	if err != nil {
-		return nil, wrapRequestError("GetOAuthClientThumbnail", err)
-	}
-
-	defer drainClose(resp)
-
-	// Read the body first since handleResponse would consume it
-	thumbnailPNG, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetOAuthClientThumbnail", Err: err}
-	}
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		apiErr := c.handleErrorResponse(resp.StatusCode, thumbnailPNG, resp)
-
-		// Stamp the request method onto the API error so the retry layer can
-		// decide whether a 5xx is safe to replay.
-		if typedErr, ok := errors.AsType[*APIError](apiErr); ok && resp.Request != nil {
-			typedErr.Method = resp.Request.Method
-		}
-
-		return nil, apiErr
-	}
-
-	return thumbnailPNG, nil
 }
 
 // httpGetAccountUser retrieves one account user by username.

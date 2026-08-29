@@ -1,7 +1,7 @@
 // Command toolgen emits the MCP tool factories and handlers for every tool the
 // linode.mcp.v1 contract declares, except the ones
 // docs/contracts/handwritten-tools.txt still claims. A tool's route, tier,
-// response message, argument locations, filters, hooks, and prose all live on
+// response message, argument locations, filters, and prose all live on
 // its *Input message, so the factory is read out of the compiled descriptors
 // rather than hand-written per language where no gate could check it against
 // the contract.
@@ -24,7 +24,8 @@
 //
 // Usage: toolgen -languages <file> -handwritten <file> -schemas <dir>
 //
-//	-out <dir> -python-out <dir> [-ruff <path>]
+//	-out <dir> -python-out <dir>
+//	-answers-out <dir> -python-answers-out <dir> [-ruff <path>]
 package main
 
 import (
@@ -50,6 +51,8 @@ func main() {
 		schemas:     flagValue("-schemas", "go/internal/toolschemas/data"),
 		goOut:       flagValue("-out", "go/internal/gentools"),
 		pyOut:       flagValue("-python-out", "python/src/linodemcp/gentools"),
+		goAnswers:   flagValue("-answers-out", "go/internal/genlocal"),
+		pyAnswers:   flagValue("-python-answers-out", "python/src/linodemcp/genlocal"),
 		ruff:        flagValue("-ruff", "python/.venv/bin/ruff"),
 	}
 
@@ -87,6 +90,8 @@ type runPaths struct {
 	schemas     string
 	goOut       string
 	pyOut       string
+	goAnswers   string
+	pyAnswers   string
 	ruff        string
 }
 
@@ -115,12 +120,34 @@ func run(paths *runPaths) error {
 		return err
 	}
 
+	operations, err := localArms()
+	if err != nil {
+		return err
+	}
+
+	// Held to the whole declared surface rather than the emitted cohort: an
+	// operation named after a hand-written tool is the same mistake as one
+	// named after a generated tool, and the cohort shrinks as tools move.
+	if armErr := checkLocalArms(operations, languageNames(arms), sortedNames(declared)); armErr != nil {
+		return armErr
+	}
+
+	generated, err := generatedOperations(operations)
+	if err != nil {
+		return err
+	}
+
 	contracts, err := readContracts(cohort, declared, newSchemaDocs(paths.schemas))
 	if err != nil {
 		return err
 	}
 
-	return emit(arms, contracts)
+	shapes, err := localAnswerShapes(operations)
+	if err != nil {
+		return err
+	}
+
+	return emit(arms, contracts, shapes, generated)
 }
 
 // resolveArms answers an arm per registered language, ahead of any rendering:
@@ -146,10 +173,14 @@ func resolveArms(paths *runPaths) ([]languageArm, error) {
 	return arms, nil
 }
 
-// emit writes one tree per arm from the single contract model.
-func emit(arms []languageArm, contracts []contract) error {
+// emit writes one tool tree and one answers tree per arm, both from the single
+// contract model.
+func emit(
+	arms []languageArm, contracts []contract, shapes []answerShape,
+	operations []localOperation,
+) error {
 	for _, arm := range arms {
-		files, err := renderTree(arm.lang, contracts)
+		files, err := renderTree(arm.lang, contracts, operations)
 		if err != nil {
 			return err
 		}
@@ -157,9 +188,23 @@ func emit(arms []languageArm, contracts []contract) error {
 		if err := writeTree(arm.out, arm.lang, files); err != nil {
 			return err
 		}
+
+		if err := emitAnswers(arm, shapes, operations); err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+// emitAnswers writes one language's answer shapes into their own tree.
+func emitAnswers(arm languageArm, shapes []answerShape, operations []localOperation) error {
+	file, err := arm.lang.renderAnswers(shapes, operations)
+	if err != nil {
+		return err
+	}
+
+	return writeTree(arm.answers, arm.lang, map[string]string{file.Name: file.Text})
 }
 
 // deriveCohort answers which tools this run emits: every one the descriptors
@@ -172,6 +217,19 @@ func emit(arms []languageArm, contracts []contract) error {
 // An empty result stops the run too. The emitter and the ratchet both scope
 // their checks to what is generated, so a list that swallowed the whole surface
 // would leave every one of them passing over nothing.
+// sortedNames is every tool one descriptor walk found, in a settled order so a
+// refusal names the same one on every run.
+func sortedNames(declared map[string]protoreflect.MessageDescriptor) []string {
+	names := make([]string, 0, len(declared))
+	for name := range declared {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names
+}
+
 func deriveCohort(
 	declared map[string]protoreflect.MessageDescriptor, handwritten []string,
 ) ([]string, error) {

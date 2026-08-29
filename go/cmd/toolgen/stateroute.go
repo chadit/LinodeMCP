@@ -23,14 +23,6 @@ func (c *contract) readStateRoute(options protoreflect.ProtoMessage) error {
 		return nil
 	}
 
-	if c.Hooks.FetchState != "" {
-		return fmt.Errorf("%w: %s", errStateRouteWithHook, c.Name)
-	}
-
-	if c.Hooks.Preview != "" {
-		return fmt.Errorf("%w: %s", errStateRouteWithPreviewHook, c.Name)
-	}
-
 	if !c.readsDeclaredState() {
 		return fmt.Errorf("%w: %s", errStateRouteWithNoReader, c.Name)
 	}
@@ -93,6 +85,14 @@ func (c *contract) resolveStateRoute(declared map[string]protoreflect.MessageDes
 		return err
 	}
 
+	if len(c.StateRouteDecl.GetMatch()) > 0 {
+		return c.resolveStateScan(options, named, slots, query)
+	}
+
+	if c.StateRouteDecl.GetEnvelopeState() {
+		return c.resolveStateEnvelope(options, named, slots, query)
+	}
+
 	resolved, err := c.stateRouteMessage(options, named)
 	if err != nil {
 		return err
@@ -108,6 +108,129 @@ func (c *contract) resolveStateRoute(declared map[string]protoreflect.MessageDes
 	}
 
 	return nil
+}
+
+// resolveStateScan turns a declared match into a whole-collection scan: the
+// named list's element is the state's shape, and each pair holds an element
+// member to one of the removal's own validated arguments.
+func (c *contract) resolveStateScan(
+	options protoreflect.ProtoMessage, named string, slots []string, query []stateReadQuery,
+) error {
+	if c.StateRouteDecl.GetPayloadMember() != "" || c.StateRouteDecl.GetBodyKey() != "" {
+		return fmt.Errorf("%w: %s", errScanWithResource, c.Name)
+	}
+
+	if c.StateRouteDecl.GetEnvelopeState() {
+		return fmt.Errorf("%w: %s", errEnvelopeWithResource, c.Name)
+	}
+
+	element, err := c.stateListElement(options, named)
+	if err != nil {
+		return err
+	}
+
+	matches, err := c.stateScanMatches(&element)
+	if err != nil {
+		return err
+	}
+
+	c.StateRead = stateRead{
+		Tool: named, Message: element, Slots: slots, Query: query, Matches: matches,
+	}
+
+	return nil
+}
+
+// stateScanMatches resolves each declared pair against the element's fields
+// and the removal's own arguments.
+func (c *contract) stateScanMatches(element *goMessage) ([]stateReadMatch, error) {
+	declared := c.StateRouteDecl.GetMatch()
+	matches := make([]stateReadMatch, 0, len(declared))
+
+	for _, pair := range declared {
+		getter := element.goNameOf(pair.GetField())
+		if getter == "" {
+			return nil, fmt.Errorf("%w: %s matches on %s",
+				errMatchUnknownField, c.Name, pair.GetField())
+		}
+
+		if err := c.checkScanArgument(pair.GetArgument()); err != nil {
+			return nil, err
+		}
+
+		matches = append(matches, stateReadMatch{
+			Field: pair.GetField(), GoGetter: getter, Argument: pair.GetArgument(),
+		})
+	}
+
+	return matches, nil
+}
+
+// checkScanArgument holds one match's filler to being a validated, non-secret
+// argument, the same stance the slot and query fillers take.
+func (c *contract) checkScanArgument(argument string) error {
+	entry := c.previewArgument(argument)
+	if entry == nil {
+		return fmt.Errorf("%w: %s matches from %s",
+			errStateRouteSlotUnknownArgument, c.Name, argument)
+	}
+
+	if entry.Redact || namesSecret(argument) {
+		return fmt.Errorf("%w: %s matches from %s", errStateRouteQuerySecret, c.Name, argument)
+	}
+
+	return nil
+}
+
+// resolveStateEnvelope keeps the page envelope itself as the state: the
+// elements ride under "data" projected through the list's element, and the
+// API's total under "results".
+func (c *contract) resolveStateEnvelope(
+	options protoreflect.ProtoMessage, named string, slots []string, query []stateReadQuery,
+) error {
+	if c.StateRouteDecl.GetPayloadMember() != "" || c.StateRouteDecl.GetBodyKey() != "" {
+		return fmt.Errorf("%w: %s", errEnvelopeWithResource, c.Name)
+	}
+
+	element, err := c.stateListElement(options, named)
+	if err != nil {
+		return err
+	}
+
+	c.StateRead = stateRead{
+		Tool: named, Message: element, Slots: slots, Query: query, Envelope: true,
+	}
+
+	return nil
+}
+
+// stateListElement is the element message of the named list read, which is
+// what a scan matches on and an envelope projects its data through.
+func (c *contract) stateListElement(
+	options protoreflect.ProtoMessage, named string,
+) (goMessage, error) {
+	response := stringOption(options, linodev1.E_ToolResponse)
+	if response == "" {
+		return goMessage{}, fmt.Errorf("%w: %s reads through %s, which declares no response",
+			errStateRouteNoResponse, c.Name, named)
+	}
+
+	page, err := lookupGoMessage(protoreflect.FullName(response))
+	if err != nil {
+		return goMessage{}, err
+	}
+
+	element, isPage, err := pageElementMessage(&page)
+	if err != nil {
+		return goMessage{}, err
+	}
+
+	if !isPage {
+		return goMessage{}, fmt.Errorf("%w: %s reads through %s",
+			errStateReadNotList, c.Name, named)
+	}
+
+	return element, nil
 }
 
 // stateRouteQuery names the arguments that fill the read's query parameters,
@@ -366,4 +489,211 @@ func (c *contract) stateRouteFields(ordered []field) []field {
 	}
 
 	return filled
+}
+
+// The composite state read: more than one call, each keeping a declared field
+// subset, for the plan-hashing mutations whose state no single route answers.
+
+// compositeCall is one resolved read of a composite state.
+type compositeCall struct {
+	Message goMessage
+	Tool    string
+	Member  string
+	Fields  []string
+	Slots   []string
+	List    bool
+}
+
+// readStateComposite records the declared composite, holding it to a tool that
+// can act on it. Resolution waits for resolveStateComposite.
+func (c *contract) readStateComposite(options protoreflect.ProtoMessage) error {
+	if !proto.HasExtension(options, linodev1.E_StateComposite) {
+		return nil
+	}
+
+	declared, _ := proto.GetExtension(options, linodev1.E_StateComposite).(*linodev1.StateComposite)
+
+	if !c.Mode {
+		return fmt.Errorf("%w: %s", errCompositeUnstaged, c.Name)
+	}
+
+	if len(declared.GetCalls()) < compositeMinimumCalls {
+		return fmt.Errorf("%w: %s", errCompositeTooFew, c.Name)
+	}
+
+	c.CompositeDecl = declared
+
+	return nil
+}
+
+// compositeMinimumCalls is the fewest reads a composite may declare: one call
+// with a field subset is a state_route with a projection, not a composition.
+const compositeMinimumCalls = 2
+
+// resolveStateComposite resolves each declared call against the other tools:
+// the read it routes through, the member it lands under, and the fields kept.
+func (c *contract) resolveStateComposite(declared map[string]protoreflect.MessageDescriptor) error {
+	members := make(map[string]bool, len(c.CompositeDecl.GetCalls()))
+	calls := make([]compositeCall, 0, len(c.CompositeDecl.GetCalls()))
+
+	for _, entry := range c.CompositeDecl.GetCalls() {
+		call, err := c.resolveCompositeCall(entry, declared, members)
+		if err != nil {
+			return err
+		}
+
+		calls = append(calls, call)
+	}
+
+	c.Composite = calls
+
+	if prose := c.CompositeDecl.GetProseMember(); prose != "" {
+		if !members[prose] {
+			return fmt.Errorf("%w: %s reads its prose through %s",
+				errCompositeMember, c.Name, prose)
+		}
+
+		c.ProseMember = prose
+	}
+
+	// A staged tool declaring both reads two shapes for two questions: the
+	// route is what its preview reports, and the composite is what its plan
+	// hashes. Resolution of the route follows so the preview has its own.
+	if c.StateRouteDecl != nil {
+		return c.resolveStateRoute(declared)
+	}
+
+	return nil
+}
+
+// resolveCompositeCall resolves one read of the composite.
+func (c *contract) resolveCompositeCall(
+	entry *linodev1.StateCompositeCall,
+	declared map[string]protoreflect.MessageDescriptor,
+	members map[string]bool,
+) (compositeCall, error) {
+	if entry.GetMember() == "" || members[entry.GetMember()] {
+		return compositeCall{}, fmt.Errorf("%w: %s lands %s",
+			errCompositeMember, c.Name, entry.GetMember())
+	}
+
+	members[entry.GetMember()] = true
+
+	message, route, err := c.compositeReadRoute(entry.GetTool(), declared)
+	if err != nil {
+		return compositeCall{}, err
+	}
+
+	element, isList, err := compositeReadShape(message)
+	if err != nil {
+		return compositeCall{}, err
+	}
+
+	if fieldsErr := c.checkCompositeFields(entry, &element); fieldsErr != nil {
+		return compositeCall{}, fieldsErr
+	}
+
+	slots, err := c.compositeSlots(entry, route)
+	if err != nil {
+		return compositeCall{}, err
+	}
+
+	return compositeCall{
+		Tool:    entry.GetTool(),
+		Member:  entry.GetMember(),
+		Fields:  entry.GetFields(),
+		Message: element,
+		List:    isList,
+		Slots:   slots,
+	}, nil
+}
+
+// compositeReadRoute is the named read's options and route, held to a GET.
+func (c *contract) compositeReadRoute(
+	named string, declared map[string]protoreflect.MessageDescriptor,
+) (protoreflect.MessageDescriptor, *linodev1.ToolRoute, error) {
+	message, ok := declared[named]
+	if !ok {
+		return nil, nil, fmt.Errorf("%w: %s reads through %s",
+			errStateRouteUnknownTool, c.Name, named)
+	}
+
+	route, _ := proto.GetExtension(message.Options(), linodev1.E_ToolRoute).(*linodev1.ToolRoute)
+	if route.GetMethod() != http.MethodGet {
+		return nil, nil, fmt.Errorf("%w: %s reads through %s, which is %s",
+			errStateRouteNotRead, c.Name, named, route.GetMethod())
+	}
+
+	return message, route, nil
+}
+
+// compositeReadShape is the message one call's kept fields are checked
+// against: the page element for a list read, the response for a single one.
+func compositeReadShape(message protoreflect.MessageDescriptor) (goMessage, bool, error) {
+	response := stringOption(message.Options(), linodev1.E_ToolResponse)
+
+	answer, err := lookupGoMessage(protoreflect.FullName(response))
+	if err != nil {
+		return goMessage{}, false, err
+	}
+
+	element, isPage, err := pageElementMessage(&answer)
+	if err != nil {
+		return goMessage{}, false, err
+	}
+
+	if isPage {
+		return element, true, nil
+	}
+
+	return answer, false, nil
+}
+
+// checkCompositeFields holds the kept subset to fields the read declares.
+func (c *contract) checkCompositeFields(
+	entry *linodev1.StateCompositeCall, element *goMessage,
+) error {
+	if len(entry.GetFields()) == 0 {
+		return fmt.Errorf("%w: %s keeps nothing from %s",
+			errCompositeNoFields, c.Name, entry.GetTool())
+	}
+
+	for _, name := range entry.GetFields() {
+		if element.goNameOf(name) == "" {
+			return fmt.Errorf("%w: %s keeps %s from %s",
+				errCompositeUnknownField, c.Name, name, entry.GetTool())
+		}
+	}
+
+	return nil
+}
+
+// compositeSlots names the arguments that fill one call's route, by name with
+// the declared per-call exceptions, the same rule the state route slots have.
+func (c *contract) compositeSlots(
+	entry *linodev1.StateCompositeCall, route *linodev1.ToolRoute,
+) ([]string, error) {
+	mapped := make(map[string]string, len(entry.GetSlotArguments()))
+	for _, slot := range entry.GetSlotArguments() {
+		mapped[slot.GetReadSlot()] = slot.GetArgument()
+	}
+
+	wanted := routeSlots(route.GetPath())
+	slots := make([]string, 0, len(wanted))
+
+	for _, slot := range wanted {
+		argument := mapped[slot]
+		if argument == "" {
+			argument = slot
+		}
+
+		if c.previewArgument(argument) == nil {
+			return nil, fmt.Errorf("%w: %s fills %s from %s",
+				errStateRouteSlotUnknownArgument, c.Name, slot, argument)
+		}
+
+		slots = append(slots, argument)
+	}
+
+	return slots, nil
 }

@@ -87,7 +87,8 @@ func TestRefusesAGateTheTierDoesNotEmit(t *testing.T) {
 					messageOptions(withRoute(probeWriteMethod, "/domains/{domain_id}/clone"),
 						withCapability(readCapability), withResponse(probeResource),
 						withDescription("Reads a probe through a body."),
-						withErrorMessage("Failed to read probe: {error}")),
+						withErrorMessage("Failed to read probe: {error}"),
+						probeScopes(), probeCategories()),
 					pathInt("domain_id"), bodyString(probeDomainArg, 2),
 					probeField("confirm", 3, descriptorpb.FieldDescriptorProto_TYPE_BOOL,
 						fieldOptions(withLocation(localLocation)))))

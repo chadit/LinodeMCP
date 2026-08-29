@@ -219,10 +219,14 @@ async def test_plan_includes_dependency_walk(
 ) -> None:
     # A plan reads like a dry-run preview: the body carries the dependency
     # walk's output (a released public IP here), not just the state hash.
-    mock_linode_client.route_raw.return_value = _instance_state()
-    mock_linode_client.list_instance_ips.return_value = {
-        "ipv4": {"public": [{"address": "192.0.2.7"}]}
-    }
+    def routed(tool: str, *_values: object, **_kwargs: object) -> dict[str, object]:
+        if tool == "linode_instance_get":
+            return _instance_state()
+        if tool == "linode_instance_ip_list":
+            return {"ipv4": {"public": [{"address": "192.0.2.7"}]}}
+        return {}
+
+    mock_linode_client.route_raw.side_effect = routed
 
     store = PlanStore()
     token = set_plan_store(store)

@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from urllib.parse import urlencode
 
 from google.protobuf import json_format
@@ -67,6 +67,13 @@ from linodemcp.tools.proto_response import (
     serialize_list_response,
     serialize_struct_response,
 )
+from linodemcp.tools.transport import (
+    PresignPreview,
+    PresignTransfer,
+    TransportSpec,
+    preview_presign_source,
+    run_transport,
+)
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -79,6 +86,7 @@ if TYPE_CHECKING:
 
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+    from linodemcp.tools.preview import PreviewLines
 
 # The envelope field every mutation response carries alongside its payload.
 _MESSAGE_FIELD = "message"
@@ -159,6 +167,21 @@ class ListFilter:
     argument: str
     field: str
     mode: MatchMode = MatchMode.CONTAINS
+
+
+@dataclass(frozen=True)
+class PreviewStandIn:
+    """One member of a repeated argument's entries a preview reports text for.
+
+    ``redact_preview`` stands in for a whole member and would take the rest of
+    each entry with it. The security answers are declared this way because the
+    question ids beside them are what a caller checks before confirming.
+    ``WriteBody.StandingIn`` in go/internal/tools answers the same shape.
+    """
+
+    argument: str
+    member: str
+    text: str
 
 
 @dataclass(frozen=True)
@@ -371,14 +394,9 @@ async def _gated_read_opening(
     path_values: Mapping[str, object],
     error: str | None,
     preview_error: str | None,
-    side_effects: Sequence[str],
-    warnings: Sequence[str],
+    side_effects: PreviewLines,
+    warnings: PreviewLines,
     state_fetch: Callable[[RetryableClient], Awaitable[Any]] | None,
-    preview: Callable[
-        [Config, dict[str, Any], str, str, dict[str, Any] | None],
-        Awaitable[list[TextContent]],
-    ]
-    | None,
 ) -> list[TextContent] | None:
     """The two branches a gated read opens with, or None to make the call.
 
@@ -394,9 +412,6 @@ async def _gated_read_opening(
 
         route = route_for(tool)
         endpoint = route.preview_endpoint(*_path_values(tool, path_values))
-
-        if preview is not None:
-            return await preview(cfg, arguments, route.method, endpoint, None)
 
         # A read sends nothing, so the preview reports no request body.
         return await _derived_preview(
@@ -425,9 +440,7 @@ async def run_assembled_read_tool(
     arguments: dict[str, Any],
     *,
     tool: str,
-    execute: Callable[
-        [RetryableClient, tuple[object, ...]], Awaitable[Mapping[str, Any]]
-    ],
+    transport: TransportSpec,
     assembled: tuple[str, ...],
     echo_members: Mapping[str, object] | None = None,
     path_values: Mapping[str, object] | None = None,
@@ -435,10 +448,10 @@ async def run_assembled_read_tool(
     """Read through a route whose answer is not JSON.
 
     The OAuth client thumbnail arrives as raw PNG bytes, so there is nothing to
-    decode: the hook owns the transport and the encoding, and what it brings
-    back fills the members the response declares as assembled. Every other
-    member is placed here from the call, which is why the answer is built rather
-    than parsed.
+    decode: the declared transport owns the transfer and the encoding, and what
+    it brings back fills the members the response declares as assembled. Every
+    other member is placed here from the call, which is why the answer is built
+    rather than parsed.
 
     echo_members is keyed by the response member rather than by the argument,
     since nothing maps one to the other here: the caller resolved the alias.
@@ -447,7 +460,8 @@ async def run_assembled_read_tool(
     failure = _failure_text(tool, arguments, path_values or {})
 
     async def call(client: RetryableClient) -> dict[str, Any]:
-        filled = _assembled_values(tool, assembled, await execute(client, values))
+        moved = await run_transport(transport, client, tool, arguments, values, None)
+        filled = _assembled_values(tool, assembled, moved)
         return serialize_api_response(
             {**(echo_members or {}), **filled}, _new_response(tool)
         )
@@ -458,20 +472,20 @@ async def run_assembled_read_tool(
 def _assembled_values(
     tool: str, assembled: tuple[str, ...], answered: Mapping[str, Any]
 ) -> dict[str, Any]:
-    """Hold an execute hook's answer to the members the contract declares.
+    """Hold a transport's answer to the members the contract declares.
 
     Go's emitter reads these members off a typed response message, so its
     compiler refuses a name the response does not carry and leaves an unset one
     at its zero. Nothing types a dict, so the same two mistakes are caught here:
-    a member the hook forgot would serialize as a zero the caller reads as real,
-    and one it invented would be dropped without a word.
+    a member the transfer left unfilled would serialize as a zero the caller
+    reads as real, and one it invented would be dropped without a word.
     """
     missing = sorted(name for name in assembled if name not in answered)
     unknown = sorted(name for name in answered if name not in assembled)
 
     if missing or unknown:
         msg = (
-            f"{tool} execute hook answered members {sorted(answered)},"
+            f"{tool} transport answered members {sorted(answered)},"
             f" want exactly {sorted(assembled)}"
         )
         raise ValueError(msg)
@@ -491,14 +505,9 @@ async def run_get_tool(
     gated: bool = False,
     error: str | None = None,
     preview_error: str | None = None,
-    side_effects: Sequence[str] = (),
-    warnings: Sequence[str] = (),
+    side_effects: PreviewLines = (),
+    warnings: PreviewLines = (),
     state_fetch: Callable[[RetryableClient], Awaitable[Any]] | None = None,
-    preview: Callable[
-        [Config, dict[str, Any], str, str, dict[str, Any] | None],
-        Awaitable[list[TextContent]],
-    ]
-    | None = None,
 ) -> list[TextContent]:
     """Fetch one resource and answer with the message the contract names.
 
@@ -524,10 +533,6 @@ async def run_get_tool(
     learns nothing about whether their arguments would have been accepted. An
     ungated read passes none of the three and answers its own arguments where
     it reads them.
-
-    preview hands the whole dry-run answer to a read whose preview is
-    hand-written, receiving the call this driver resolved and no body, since a
-    read sends none.
     """
     if gated:
         answered = await _gated_read_opening(
@@ -540,7 +545,6 @@ async def run_get_tool(
             side_effects=side_effects,
             warnings=warnings,
             state_fetch=state_fetch,
-            preview=preview,
         )
         if answered is not None:
             return answered
@@ -591,16 +595,7 @@ async def run_body_read_tool(
     body: dict[str, Any],
     echo_args: Mapping[str, str | int] | None = None,
     path_values: Mapping[str, object] | None = None,
-    execute: Callable[
-        [
-            RetryableClient,
-            dict[str, Any],
-            tuple[object, ...],
-            dict[str, Any] | None,
-        ],
-        Awaitable[Mapping[str, Any] | None],
-    ]
-    | None = None,
+    transport: TransportSpec | None = None,
     assembled: tuple[str, ...] = (),
 ) -> list[TextContent]:
     """Read through a route that takes a request body.
@@ -617,7 +612,7 @@ async def run_body_read_tool(
     one: ParseDict reads a bare array, string or number as an empty message and
     reports success carrying no data, where Go's decode of the same body fails.
 
-    execute makes the live call in place of the routed request, for a route
+    transport makes the live call in place of the routed request, for a route
     whose answer no decode can place: the Object Storage download asks for a
     presigned URL and then follows it, so what the caller reads is the
     transfer's result rather than any member of the API's reply. The members it
@@ -628,7 +623,7 @@ async def run_body_read_tool(
     failure = _failure_text(tool, arguments, path_values or {})
     # An assembled answer has no decoded resource to place, so there is no
     # payload field to resolve and asking for one refuses the shape outright.
-    payload_field = None if execute is not None else resolve_payload_field(tool)
+    payload_field = None if transport is not None else resolve_payload_field(tool)
 
     def members(payload: Mapping[str, Any]) -> dict[str, str]:
         return _write_members(
@@ -652,9 +647,11 @@ async def run_body_read_tool(
     echo = _echo_values(tool, echo_args) if echo_args else {}
 
     async def call(client: RetryableClient) -> dict[str, Any]:
-        if execute is not None:
+        if transport is not None:
             filled = _assembled_values(
-                tool, assembled, await execute(client, arguments, values, body) or {}
+                tool,
+                assembled,
+                await run_transport(transport, client, tool, arguments, values, body),
             )
             return serialize_api_response(
                 {
@@ -1345,6 +1342,42 @@ def _redacted_body(body: dict[str, Any], names: Sequence[str]) -> dict[str, Any]
     }
 
 
+def _stood_in_body(
+    body: dict[str, Any], stand_ins: Sequence[PreviewStandIn]
+) -> dict[str, Any]:
+    """The body a preview reports, with one member of each entry stood in for.
+
+    The entries keep their order and every other member, so a caller still
+    reads the call the request would make. The live body is untouched;
+    go/internal/tools's WriteBody.StandingIn answers the same shape.
+    """
+    reported = body
+    for stand_in in stand_ins:
+        entries = reported.get(stand_in.argument)
+        if not isinstance(entries, list):
+            continue
+        reported = reported | {
+            stand_in.argument: [
+                _stood_in_entry(cast("dict[str, Any]", entry), stand_in)
+                if isinstance(entry, dict)
+                else entry
+                for entry in cast("Sequence[Any]", entries)
+            ]
+        }
+    return reported
+
+
+def _stood_in_entry(entry: dict[str, Any], stand_in: PreviewStandIn) -> dict[str, Any]:
+    """One entry as the preview reports it.
+
+    An entry carrying no such member is answered unchanged, which is what a
+    member the caller left out already means.
+    """
+    if stand_in.member not in entry:
+        return entry
+    return entry | {stand_in.member: stand_in.text}
+
+
 def _restore_member_nulls(
     serialized: dict[str, Any],
     payload: Mapping[str, Any],
@@ -1367,6 +1400,14 @@ def _restore_member_nulls(
     return serialized
 
 
+def _transfer_cautions(transfer: PresignPreview | None) -> list[str]:
+    """The guard's refusal as a warning, and nothing for a transfer it accepted."""
+    if transfer is None or not transfer.refusal:
+        return []
+
+    return [transfer.refusal]
+
+
 async def _derived_preview(
     cfg: Config,
     arguments: dict[str, Any],
@@ -1375,11 +1416,13 @@ async def _derived_preview(
     method: str,
     endpoint: str,
     body: dict[str, Any] | None,
-    side_effects: Sequence[str],
-    warnings: Sequence[str],
+    side_effects: PreviewLines,
+    warnings: PreviewLines,
     state_fetch: Callable[[RetryableClient], Awaitable[Any]] | None,
+    billing_delta: dict[str, Any] | None = None,
+    transfer: PresignPreview | None = None,
 ) -> list[TextContent]:
-    """The preview a tool gets when it hands over no hand-written one.
+    """The preview a tool's declarations give it.
 
     Without a state fetch it reports the request alone, which is the right
     shape for a create: there is no existing resource to compare against. With
@@ -1388,11 +1431,16 @@ async def _derived_preview(
 
     A declared line whose wordings could not be filled reports nothing, so the
     lines are filtered before they are reported.
-    """
-    effects = preview_reported_lines(side_effects)
-    cautions = preview_reported_lines(warnings)
 
+    transfer is what a presigned upload's guard measured, handed to the lines
+    that word it; a source the guard refused is reported ahead of them.
+    """
     if state_fetch is None:
+        effects = preview_reported_lines(side_effects, transfer)
+        cautions = _transfer_cautions(transfer) + preview_reported_lines(
+            warnings, transfer
+        )
+
         return build_dry_run_response(
             tool,
             arguments.get("environment", ""),
@@ -1402,14 +1450,19 @@ async def _derived_preview(
             request_body=body,
             side_effects=effects or None,
             warnings=cautions or None,
+            billing_delta=billing_delta,
         )
 
-    async def declared(_client: RetryableClient, _state: Any) -> DryRunDetails:
+    async def declared(_client: RetryableClient, state: Any) -> DryRunDetails:
         details: DryRunDetails = {}
-        if effects:
-            details["side_effects"] = effects
-        if cautions:
-            details["warnings"] = cautions
+        reported = preview_reported_lines(side_effects, state)
+        cautioned = preview_reported_lines(warnings, state)
+        if reported:
+            details["side_effects"] = reported
+        if cautioned:
+            details["warnings"] = cautioned
+        if billing_delta:
+            details["billing_delta"] = billing_delta
         return details
 
     return await execute_dry_run(
@@ -1430,16 +1483,12 @@ async def _write_preview(
     *,
     tool: str,
     endpoint: str,
-    reported: dict[str, Any],
     body: dict[str, Any] | None,
     preview_error: str | None,
-    side_effects: Sequence[str],
-    warnings: Sequence[str],
+    side_effects: PreviewLines,
+    warnings: PreviewLines,
+    billing_delta: dict[str, Any] | None,
     state_fetch: Callable[[RetryableClient], Awaitable[Any]] | None,
-    preview: Callable[
-        [Config, dict[str, Any], str, str, dict[str, Any]], Awaitable[list[TextContent]]
-    ]
-    | None,
 ) -> list[TextContent]:
     """A mutation's dry-run branch: the verdict first, then the reported call.
 
@@ -1451,9 +1500,6 @@ async def _write_preview(
 
     method = route_for(tool).method
 
-    if preview is not None:
-        return await preview(cfg, arguments, method, endpoint, reported)
-
     return await _derived_preview(
         cfg,
         arguments,
@@ -1464,6 +1510,7 @@ async def _write_preview(
         side_effects=side_effects,
         warnings=warnings,
         state_fetch=state_fetch,
+        billing_delta=billing_delta,
     )
 
 
@@ -1519,8 +1566,9 @@ async def run_write_tool(
     echo_args: Mapping[str, str | int] | None = None,
     error: str | None = None,
     preview_error: str | None = None,
-    side_effects: Sequence[str] = (),
-    warnings: Sequence[str] = (),
+    side_effects: PreviewLines = (),
+    warnings: PreviewLines = (),
+    billing_delta: dict[str, Any] | None = None,
     state_fetch: Callable[[RetryableClient], Awaitable[Any]] | None = None,
     preview_request_body: bool = True,
     redact_preview: Sequence[str] = (),
@@ -1528,10 +1576,6 @@ async def run_write_tool(
     invalid_response_subject: str = "",
     query: str = "",
     paged: bool = False,
-    preview: Callable[
-        [Config, dict[str, Any], str, str, dict[str, Any]], Awaitable[list[TextContent]]
-    ]
-    | None = None,
 ) -> list[TextContent]:
     """Run a create or update: preview it, gate it, call it, report it.
 
@@ -1550,11 +1594,6 @@ async def run_write_tool(
 
     preview_request_body is False for the updates whose preview predates the
     body echo and whose fixtures pin the shorter shape.
-
-    preview hands the whole dry-run answer to a tool whose preview is
-    hand-written: it receives the call this driver resolved and the body it was
-    given, so a hook never re-spells a route or rebuilds a body. Side-effect
-    prose is what such a tool actually owns, and no descriptor carries prose.
     """
     route = route_for(tool)
     reported = _redacted_body(body, redact_preview)
@@ -1571,13 +1610,12 @@ async def run_write_tool(
             endpoint=with_query(
                 route.preview_endpoint(*_path_values(tool, path_values or {})), query
             ),
-            reported=reported,
             body=reported if preview_request_body else None,
             preview_error=preview_error,
             side_effects=side_effects,
             warnings=warnings,
+            billing_delta=billing_delta,
             state_fetch=state_fetch,
-            preview=preview,
         )
 
     if arguments.get("confirm") is not True:
@@ -1682,24 +1720,12 @@ async def run_acknowledge_tool(
     error: str | None = None,
     preview_error: str | None = None,
     redact_preview: Sequence[str] = (),
-    side_effects: Sequence[str] = (),
-    warnings: Sequence[str] = (),
+    stand_in_preview: Sequence[PreviewStandIn] = (),
+    side_effects: PreviewLines = (),
+    warnings: PreviewLines = (),
     preview_request_body: bool = True,
-    preview: Callable[
-        [Config, dict[str, Any], str, str, dict[str, Any] | None],
-        Awaitable[list[TextContent]],
-    ]
-    | None = None,
-    execute: Callable[
-        [
-            RetryableClient,
-            dict[str, Any],
-            tuple[object, ...],
-            dict[str, Any] | None,
-        ],
-        Awaitable[Mapping[str, Any] | None],
-    ]
-    | None = None,
+    transport: TransportSpec | None = None,
+    preview_transfer: bool = False,
     assembled: tuple[str, ...] = (),
     state_fetch: Callable[[RetryableClient], Awaitable[Any]] | None = None,
     fetch_state: Callable[[RetryableClient], Awaitable[Any]] | None = None,
@@ -1721,19 +1747,26 @@ async def run_acknowledge_tool(
     redact_preview stands in for the named members when the preview reports the
     body. The tier a tool lands on is decided by the shape of its answer, and a
     secret in the request does not stop being one because the API answers with
-    nothing.
+    nothing. stand_in_preview reaches one member of a repeated argument's
+    entries instead, for the calls whose other members a caller checks before
+    confirming.
 
     Both branches report their argument failure before the route is built. A
     slot the caller left empty has no rendering the builder will accept, so
     building first would answer a missing id with a RouteError instead of the
     sentence the tool declares for it.
 
-    execute makes the live call in place of the routed JSON request, for a route
-    whose request is something else: the support-ticket attachment posts
+    transport makes the live call in place of the routed JSON request, for a
+    route whose request is something else: the support-ticket attachment posts
     multipart/form-data built from a local file. It receives the arguments the
     gate already accepted, the path values this driver resolved and the body it
-    was given, so a hook re-reads no argument and rebuilds no body. The dry-run
+    was given, so nothing re-reads an argument or rebuilds a body. The dry-run
     branch above never reaches it, because a preview makes no call.
+
+    preview_transfer says the declared prose reads what a presigned upload
+    would send: the dry run runs the transport's own guard against the source,
+    fills the presign body the way the live call does, hands the measurement to
+    the lines that word it, and reports a refused source as a warning.
 
     state_fetch is the preview's own read, which reports the resource the change
     lands on beside the request. It is separate from fetch_state below because
@@ -1760,7 +1793,7 @@ async def run_acknowledge_tool(
             body=body,
             path_values=path_values,
             error=error,
-            execute=execute,
+            transport=transport,
             fetch_state=fetch_state,
             dependency_walk=dependency_walk,
             capability=capability,
@@ -1778,11 +1811,13 @@ async def run_acknowledge_tool(
             path_values=path_values,
             preview_error=preview_error,
             redact_preview=redact_preview,
+            stand_in_preview=stand_in_preview,
             side_effects=side_effects,
             warnings=warnings,
             state_fetch=state_fetch,
             preview_request_body=preview_request_body,
-            preview=preview,
+            transport=transport,
+            preview_transfer=preview_transfer,
         )
 
     if arguments.get("confirm") is not True:
@@ -1796,7 +1831,7 @@ async def run_acknowledge_tool(
         arguments,
         "",
         _acknowledge_report(
-            tool, arguments, path_values, body, echo_args, execute, assembled
+            tool, arguments, path_values, body, echo_args, transport, assembled
         ),
         failure=_failure_text(tool, arguments, path_values or {}),
     )
@@ -1817,7 +1852,7 @@ async def _acknowledge_stage(
     body: dict[str, Any] | None,
     path_values: Mapping[str, object] | None,
     error: str | None,
-    execute: Any,
+    transport: TransportSpec | None,
     fetch_state: Callable[[RetryableClient], Awaitable[Any]],
     dependency_walk: Callable[[RetryableClient, Any], Awaitable[DryRunDetails]] | None,
     capability: Capability,
@@ -1845,7 +1880,7 @@ async def _acknowledge_stage(
         path=route.preview_endpoint(*_path_values(tool, path_values or {})),
         fetch_state=fetch_state,
         execute=_acknowledge_report(
-            tool, arguments, path_values, body, echo_args, execute
+            tool, arguments, path_values, body, echo_args, transport
         ),
         hash_ignore=hash_ignore_fields(contract_for(tool).resource_type),
         dependency_walk=dependency_walk,
@@ -1863,15 +1898,13 @@ async def _acknowledge_preview(
     path_values: Mapping[str, object] | None,
     preview_error: str | None,
     redact_preview: Sequence[str],
-    side_effects: Sequence[str],
-    warnings: Sequence[str],
+    stand_in_preview: Sequence[PreviewStandIn],
+    side_effects: PreviewLines,
+    warnings: PreviewLines,
     state_fetch: Callable[[RetryableClient], Awaitable[Any]] | None,
     preview_request_body: bool,
-    preview: Callable[
-        [Config, dict[str, Any], str, str, dict[str, Any] | None],
-        Awaitable[list[TextContent]],
-    ]
-    | None,
+    transport: TransportSpec | None,
+    preview_transfer: bool,
 ) -> list[TextContent]:
     """Report the call rather than making it, with the declared members stood
     in for."""
@@ -1879,10 +1912,17 @@ async def _acknowledge_preview(
         return error_response(preview_error)
 
     endpoint = route.preview_endpoint(*_path_values(tool, path_values or {}))
-    reported = _redacted_body(body, redact_preview) if body else body
+    reported = (
+        _stood_in_body(_redacted_body(body, redact_preview), stand_in_preview)
+        if body
+        else body
+    )
 
-    if preview is not None:
-        return await preview(cfg, arguments, route.method, endpoint, reported)
+    transfer = (
+        _previewed_transfer(cfg, arguments, reported, tool, transport)
+        if preview_transfer
+        else None
+    )
 
     return await _derived_preview(
         cfg,
@@ -1894,7 +1934,28 @@ async def _acknowledge_preview(
         side_effects=side_effects,
         warnings=warnings,
         state_fetch=state_fetch,
+        transfer=transfer,
     )
+
+
+def _previewed_transfer(
+    cfg: Config,
+    arguments: dict[str, Any],
+    body: dict[str, Any] | None,
+    tool: str,
+    transport: TransportSpec | None,
+) -> PresignPreview:
+    """The upload guard's measurement, for a tool whose prose reads it.
+
+    Only a presigned upload has a source to measure, and the emitter refuses
+    the placeholder on anything else, so reaching here with another transport
+    is a contract defect rather than a call to answer.
+    """
+    if not isinstance(transport, PresignTransfer) or not transport.up:
+        msg = f"{tool} previews a transfer it does not declare as a presigned upload"
+        raise TypeError(msg)
+
+    return preview_presign_source(cfg, arguments, body, transport.local_path_argument)
 
 
 def _acknowledge_report(
@@ -1903,11 +1964,7 @@ def _acknowledge_report(
     path_values: Mapping[str, object] | None,
     body: dict[str, Any] | None,
     echo_args: Mapping[str, object],
-    execute: Callable[
-        [RetryableClient, dict[str, Any], tuple[object, ...], dict[str, Any] | None],
-        Awaitable[Mapping[str, Any] | None],
-    ]
-    | None,
+    transport: TransportSpec | None,
     assembled: tuple[str, ...] = (),
 ) -> Callable[[RetryableClient], Awaitable[dict[str, Any]]]:
     """The live call and the answer it reports, for both the single-step path
@@ -1918,9 +1975,9 @@ def _acknowledge_report(
     argument the call was never given is a contract defect, and finding it
     afterwards would report a failure over a change that has already happened.
 
-    assembled names the members the hook fills rather than the call: an upload
-    reports the byte count and the ETag its transfer produced, which no argument
-    and no declared sentence carries.
+    assembled names the members the transport fills rather than the call: an
+    upload reports the byte count and the ETag its transfer produced, which no
+    argument and no declared sentence carries.
     """
     values = _path_values(tool, path_values or {})
     echo = _echo_values(tool, echo_args)
@@ -1928,11 +1985,13 @@ def _acknowledge_report(
 
     async def call(client: RetryableClient) -> dict[str, Any]:
         filled: Mapping[str, Any] = {}
-        if execute is None:
+        if transport is None:
             await _routed_acknowledge(client, tool, values, body)
         else:
             filled = _assembled_values(
-                tool, assembled, await execute(client, arguments, values, body) or {}
+                tool,
+                assembled,
+                await run_transport(transport, client, tool, arguments, values, body),
             )
         return serialize_api_response(
             {_MESSAGE_FIELD: text, **echo, **filled}, _new_response(tool)
@@ -2230,6 +2289,131 @@ async def read_collection_state(
 
     msg = f"collection holds no matching element: {tool} carries no id '{value}'"
     raise LookupError(msg)
+
+
+async def read_collection_scan(
+    client: RetryableClient, *values: object, tool: str, matches: dict[str, object]
+) -> DeclaredState:
+    """Page the whole named collection and answer the first element every
+    declared pair matches, projected the way a single-resource fetch is.
+
+    Unlike read_collection_state's one-page read, a scan pages to the end: the
+    resource is named by field values rather than an id, so no page holds a
+    derivable position. Go's FetchCollectionScan pages and words the not-found
+    sentence the same way.
+    """
+    element = _repeated_field(response_descriptor(tool))
+    bound = STANDARD_PAGE_SIZE_MAX
+    page_index = _COLLECTION_STATE_PAGE
+    while True:
+        raw = await client.route_raw(
+            tool, *values, query=pagination_query(page_index, bound)
+        )
+        page = _page_of(raw, list_envelope_for(tool))
+        data = cast("list[dict[str, Any]]", page.get("data", []))
+        for item in data:
+            if all(item.get(field) == value for field, value in matches.items()):
+                return project_declared_state(item, element.message_type)
+        if len(data) < bound:
+            wanted = ", ".join(f"{field}='{value}'" for field, value in matches.items())
+            msg = (
+                "collection holds no matching element: "
+                f"{tool} carries no element matching {wanted}"
+            )
+            raise LookupError(msg)
+        page_index += 1
+
+
+async def read_envelope_state(
+    client: RetryableClient, *values: object, tool: str, query: str = ""
+) -> DeclaredState:
+    """Read the named list once and answer the page envelope itself as the
+    state: the projected elements under "data" and the API's total under
+    "results".
+
+    The total rides along because a truncated first page must not understate
+    what the caller is about to touch. query is the read's own page controls,
+    empty for a read taken at the route's defaults: a replacement previews the
+    page its own call publishes, so the state and the answer describe one page.
+    Go's FetchEnvelopeState reads the same envelope and reports the same
+    members.
+    """
+    element = _repeated_field(response_descriptor(tool))
+    raw = (
+        await client.route_raw(tool, *values, query=query)
+        if query
+        else await client.route_raw(tool, *values)
+    )
+    page = _page_of(raw, list_envelope_for(tool))
+    data = [
+        project_declared_state(cast("dict[str, Any]", item), element.message_type)
+        for item in cast("list[Any]", page.get("data", []))
+        if isinstance(item, dict)
+    ]
+    results = page.get("results")
+    return DeclaredState(
+        {"data": data, "results": results if isinstance(results, int) else None}
+    )
+
+
+class CompositeCall(NamedTuple):
+    """One read of a composite state: the GET, its member, the fields kept."""
+
+    tool: str
+    member: str
+    fields: tuple[str, ...]
+    values: tuple[object, ...]
+    is_list: bool
+
+
+async def read_composite_state(
+    client: RetryableClient, calls: Sequence[CompositeCall]
+) -> DeclaredState:
+    """Perform each call in declaration order and assemble the projected state.
+
+    A failed call fails the fetch whole: a plan hashed over half a state would
+    refuse an apply for a change nobody made. Everything outside each call's
+    kept fields is dropped, which is what keeps a cosmetic field from refusing
+    an apply. Go's FetchCompositeState mirrors both rules.
+    """
+    state: dict[str, Any] = {}
+    for call in calls:
+        state[call.member] = await _composite_member(client, call)
+    return DeclaredState(state)
+
+
+async def _composite_member(client: RetryableClient, call: CompositeCall) -> Any:
+    """One composite call's answer, projected and cut to its kept fields."""
+    if not call.is_list:
+        resource = await read_route_state(client, *call.values, tool=call.tool)
+        return _kept_fields(resource, call.fields)
+
+    element = _repeated_field(response_descriptor(call.tool))
+    bound = STANDARD_PAGE_SIZE_MAX
+    kept: list[Any] = []
+    page_index = _COLLECTION_STATE_PAGE
+    while True:
+        raw = await client.route_raw(
+            call.tool, *call.values, query=pagination_query(page_index, bound)
+        )
+        page = _page_of(raw, list_envelope_for(call.tool))
+        data = cast("list[dict[str, Any]]", page.get("data", []))
+        kept.extend(
+            _kept_fields(
+                project_declared_state(item, element.message_type), call.fields
+            )
+            for item in data
+        )
+        if len(data) < bound:
+            return kept
+        page_index += 1
+
+
+def _kept_fields(projected: DeclaredState, fields: tuple[str, ...]) -> DeclaredState:
+    """Cut one projected state to the declared subset."""
+    return DeclaredState(
+        {name: projected.fields[name] for name in fields if name in projected.fields}
+    )
 
 
 async def run_destructive_tool(

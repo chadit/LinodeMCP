@@ -12,7 +12,14 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from linodemcp.audit.event import Capability, Event, Mode, Status
+from linodemcp.audit.event import (
+    Capability,
+    Event,
+    Mode,
+    Status,
+    event_timestamp,
+)
+from linodemcp.genlocal import record_audit_event
 
 _FIXTURE = (
     Path(__file__).resolve().parents[3] / "testdata" / "audit" / "event_fields.json"
@@ -21,18 +28,18 @@ _FIXTURE = (
 
 def test_event_wire_fields_match_shared_fixture() -> None:
     event = Event(
-        ts=datetime(2026, 7, 18, tzinfo=UTC),
+        ts=event_timestamp(datetime(2026, 7, 18, tzinfo=UTC)),
         ts_unix_ns=1,
         event_id="evt_test",
         tool="linode_instance_list",
-        tool_capability=Capability.READ,
+        tool_capability=Capability.READ.value,
         environment="default",
         profile="default",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
-        status=Status.SUCCESS,
+        status=Status.SUCCESS.value,
         latency_ms=1,
         result_summary="ok",
         error=None,
@@ -43,4 +50,6 @@ def test_event_wire_fields_match_shared_fixture() -> None:
 
     fixture = json.loads(_FIXTURE.read_text(encoding="utf-8"))
 
-    assert sorted(event.to_dict()) == sorted(fixture["fields"])
+    assert sorted(json.loads(record_audit_event(event, "", ""))) == sorted(
+        fixture["fields"]
+    )

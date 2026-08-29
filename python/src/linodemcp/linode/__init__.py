@@ -1,7 +1,6 @@
 """Linode API client."""
 
 import asyncio
-import base64
 import enum
 import functools
 import ipaddress
@@ -1825,30 +1824,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountSettings", e) from e
 
-    async def update_account_oauth_client_thumbnail(
-        self, client_id: str, thumbnail_png: bytes
-    ) -> dict[str, Any]:
-        """Update an OAuth client's thumbnail on the Linode account.
-
-        The API expects the raw PNG bytes as the request body with an
-        image/png content type, so the bytes travel through the content-type
-        route primitive rather than the JSON make_request path, mirroring the
-        Go client.
-        """
-        try:
-            response = await self.make_route_request_content_type(
-                "linode_account_oauth_client_thumbnail_update",
-                client_id,
-                content_type="image/png",
-                content=thumbnail_png,
-            )
-            if not response.content:
-                return {}
-            data: dict[str, Any] = response.json()
-            return data
-        except httpx.HTTPError as e:
-            raise NetworkError("UpdateAccountOAuthClientThumbnail", e) from e
-
     async def get_account_event(self, event_id: int) -> dict[str, Any]:
         """Get an event on the Linode account."""
         try:
@@ -1929,30 +1904,6 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountPaymentMethod", e) from e
-
-    async def get_account_oauth_client_thumbnail(
-        self, client_id: str
-    ) -> dict[str, str]:
-        """Get an OAuth client's PNG thumbnail by client ID.
-
-        The endpoint returns raw image/png bytes; they are base64-encoded under
-        thumbnail_png_base64. The tool handler adds client_id and serializes the
-        pair through the OAuthClientThumbnail proto so Go and Python emit the same
-        {client_id, thumbnail_png_base64} shape.
-        """
-        try:
-            response = await self.make_route_request_content_type(
-                "linode_account_oauth_client_thumbnail_get",
-                client_id,
-                accept="image/png",
-            )
-            return {
-                "thumbnail_png_base64": base64.b64encode(response.content).decode(
-                    "ascii"
-                ),
-            }
-        except httpx.HTTPError as e:
-            raise NetworkError("GetAccountOAuthClientThumbnail", e) from e
 
     async def get_account_user(self, username: str) -> dict[str, Any]:
         """Get an account user by username."""
@@ -2241,32 +2192,6 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("GetSupportTicket", e) from e
-
-    async def create_support_ticket_attachment(
-        self, ticket_id: int, file: str
-    ) -> dict[str, Any]:
-        """Create an attachment for a support ticket from a local file path."""
-        path = Path(file)
-        with path.open("rb") as file_obj:
-            # httpx's own multipart encoder renders the body, so the bytes and
-            # boundary header match what the files= upload always sent.
-            encoder = httpx.Request(
-                "POST",
-                "https://multipart.invalid",
-                files={"file": (path.name, file_obj)},
-            )
-            body = encoder.read()
-        try:
-            response = await self.make_route_request_content_type(
-                "linode_support_ticket_attachment_create",
-                ticket_id,
-                content_type=encoder.headers["Content-Type"],
-                content=body,
-            )
-            data: dict[str, Any] = response.json()
-            return data
-        except httpx.HTTPError as e:
-            raise NetworkError("CreateSupportTicketAttachment", e) from e
 
     async def get_nodebalancer(self, nodebalancer_id: int) -> NodeBalancer:
         """Get a specific NodeBalancer."""
@@ -3143,6 +3068,53 @@ class Client:
         """
         await self.make_route_request(tool, *values)
 
+    async def route_multipart(
+        self, tool: str, *values: object, part_name: str, file_path: str
+    ) -> None:
+        """Perform a tool's route with a multipart form framed from a local file.
+
+        The form is rendered by httpx's own encoder, so the bytes and the
+        boundary header match what a files= upload has always sent. Nothing is
+        decoded: the tool's answer is built from the arguments it was called
+        with.
+        """
+        path = Path(file_path)
+        with path.open("rb") as file_obj:
+            encoder = httpx.Request(
+                "POST",
+                "https://multipart.invalid",
+                files={part_name: (path.name, file_obj)},
+            )
+            body = encoder.read()
+
+        await self.make_route_request_content_type(
+            tool,
+            *values,
+            content_type=encoder.headers["Content-Type"],
+            content=body,
+        )
+
+    async def route_raw_body(
+        self, tool: str, *values: object, content_type: str, payload: bytes
+    ) -> None:
+        """Perform a tool's route with payload as the whole body, no JSON around it."""
+        await self.make_route_request_content_type(
+            tool, *values, content_type=content_type, content=payload
+        )
+
+    async def route_raw_body_read(
+        self, tool: str, *values: object, accept: str
+    ) -> bytes:
+        """Perform a tool's route and answer with the body as it arrived.
+
+        The route sends the resource itself rather than a JSON document, so
+        there is nothing to decode and the bytes are the answer.
+        """
+        response = await self.make_route_request_content_type(
+            tool, *values, accept=accept
+        )
+        return response.content
+
     def _handle_error_response(self, response: httpx.Response) -> None:
         """Handle error responses from the API."""
         try:
@@ -3709,6 +3681,63 @@ class RetryableClient:
         execute = self._execute_with_retry if retry else self._execute_without_retry
         await execute(self.client.route_call, tool, *values)
 
+    async def route_multipart(
+        self,
+        tool: str,
+        *values: object,
+        part_name: str,
+        file_path: str,
+        retry: bool = True,
+    ) -> None:
+        """Frame a local file as a form and send it, retrying by default.
+
+        The partial exists because the retry executor forwards positional
+        arguments only, and the form's own parameters are keyword-only on the
+        client side.
+        """
+        execute = self._execute_with_retry if retry else self._execute_without_retry
+        await execute(
+            functools.partial(
+                self.client.route_multipart,
+                tool,
+                *values,
+                part_name=part_name,
+                file_path=file_path,
+            )
+        )
+
+    async def route_raw_body(
+        self,
+        tool: str,
+        *values: object,
+        content_type: str,
+        payload: bytes,
+        retry: bool = True,
+    ) -> None:
+        """Send a bare body under one content type, retrying by default."""
+        execute = self._execute_with_retry if retry else self._execute_without_retry
+        await execute(
+            functools.partial(
+                self.client.route_raw_body,
+                tool,
+                *values,
+                content_type=content_type,
+                payload=payload,
+            )
+        )
+
+    async def route_raw_body_read(
+        self, tool: str, *values: object, accept: str, retry: bool = True
+    ) -> bytes:
+        """Read a route whose answer is the resource itself, retrying by default."""
+        execute = self._execute_with_retry if retry else self._execute_without_retry
+        result: bytes = await execute(
+            functools.partial(
+                self.client.route_raw_body_read, tool, *values, accept=accept
+            )
+        )
+        return result
+
     async def get_profile(self) -> Profile:
         """Get Linode user profile with retry."""
         result: Profile = await self._execute_with_retry(self.client.get_profile)
@@ -3789,14 +3818,6 @@ class RetryableClient:
         )
         return result
 
-    async def update_account_oauth_client_thumbnail(
-        self, client_id: str, thumbnail_png: bytes
-    ) -> dict[str, Any]:
-        """Update an account OAuth client thumbnail without replaying the write."""
-        return await self.client.update_account_oauth_client_thumbnail(
-            client_id, thumbnail_png
-        )
-
     async def get_account_event(self, event_id: int) -> dict[str, Any]:
         """Get an account event with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -3847,15 +3868,6 @@ class RetryableClient:
         """Get an account payment method by ID with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_account_payment_method, payment_method_id
-        )
-        return result
-
-    async def get_account_oauth_client_thumbnail(
-        self, client_id: str
-    ) -> dict[str, str]:
-        """Get an OAuth client's PNG thumbnail by client ID with retry."""
-        result: dict[str, str] = await self._execute_with_retry(
-            self.client.get_account_oauth_client_thumbnail, client_id
         )
         return result
 
@@ -4036,15 +4048,6 @@ class RetryableClient:
         """Get a support ticket with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.get_support_ticket, ticket_id
-        )
-        return result
-
-    async def create_support_ticket_attachment(
-        self, ticket_id: int, file: str
-    ) -> dict[str, Any]:
-        """Create a support ticket attachment with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
-            self.client.create_support_ticket_attachment, ticket_id, file
         )
         return result
 

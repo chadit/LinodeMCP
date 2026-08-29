@@ -12,7 +12,13 @@ from typing import Any
 
 import pytest
 
-from linodemcp.tools.helpers import trim_arguments, trim_list_drop_blank
+from linodemcp.tools.helpers import (
+    fold_int_list,
+    trim_arguments,
+    trim_list,
+    trim_list_drop_blank,
+    uppercase_arguments,
+)
 
 LABEL = "label"
 ADDRESS = "address"
@@ -82,3 +88,60 @@ def test_transforms_rewrite_every_name_they_are_given() -> None:
         IMAGES: ["a"],
         "tags": ["b"],
     }
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({IMAGES: ["  us-east  ", "eu-west"]}, {IMAGES: ["us-east", "eu-west"]}),
+        ({IMAGES: ["   ", "us-east"]}, {IMAGES: ["", "us-east"]}),
+        ({IMAGES: [" us-east ", 3]}, {IMAGES: ["us-east", 3]}),
+        ({IMAGES: "us-east"}, {IMAGES: "us-east"}),
+    ],
+)
+def test_trim_list_trims_entries_and_keeps_blanks(
+    arguments: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    trim_list(arguments, IMAGES)
+    assert arguments == expected
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({LABEL: "get"}, {LABEL: "GET"}),
+        ({LABEL: "Put"}, {LABEL: "PUT"}),
+        ({LABEL: 7}, {LABEL: 7}),
+        ({ADDRESS: "x"}, {ADDRESS: "x"}),
+    ],
+)
+def test_uppercase_arguments_folds_only_text(
+    arguments: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    uppercase_arguments(arguments, LABEL)
+    assert arguments == expected
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ({"linode_ids": [123, 456]}, {"entities": {"linodes": [123, 456]}}),
+        ({"linode_ids": [1.0]}, {"entities": {"linodes": [1]}}),
+        (
+            {"linode_ids": [123], "entities": {"volumes": [9]}},
+            {"entities": {"volumes": [9]}},
+        ),
+        ({"linode_ids": "123"}, {"linode_ids": "123"}),
+        ({"linode_ids": [True]}, {"linode_ids": [True]}),
+        (
+            {"linode_ids": [1], "entities": "linodes"},
+            {"linode_ids": [1], "entities": "linodes"},
+        ),
+        ({}, {}),
+    ],
+)
+def test_fold_int_list_folds_drops_and_refuses_like_the_hook(
+    arguments: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    fold_int_list(arguments, "linode_ids", "entities", "linodes")
+    assert arguments == expected

@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,19 +207,31 @@ func TestAuditExportReportsAFileItCannotWrite(t *testing.T) {
 	}
 }
 
-// TestAuditRecentAnswerStopsOnAClosedContext drives the answer directly, since
-// the generated shell's own cancellation check stands in front of it. The
-// answer keeps its own because audit.ReadRecent takes no context, so any caller
-// but the shell would otherwise walk the whole log after the caller left.
-func TestAuditRecentAnswerStopsOnAClosedContext(t *testing.T) {
+// TestAuditQueriesStopOnAClosedContext reads cancellation where the three
+// query tools answer it now: the generated handler, which checks before it
+// reads anything. The recent operation takes no context of its own, because
+// the log reader behind it takes none and the handler is its only caller.
+func TestAuditQueriesStopOnAClosedContext(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	request := createRequestWithArgs(t, nil)
+	_, _, recent := gentools.NewLinodeAuditRecentTool(&config.Config{})
+	_, _, summary := gentools.NewLinodeAuditSummaryTool(&config.Config{})
+	_, _, export := gentools.NewLinodeAuditExportTool(&config.Config{})
 
-	if _, err := tools.AuditRecentAnswer(ctx, &request, &config.Config{}); err == nil {
-		t.Error("err = nil, want a cancellation")
+	for name, handler := range map[string]tools.Handler{
+		"linode_audit_recent":  recent,
+		"linode_audit_summary": summary,
+		"linode_audit_export":  export,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := handler(ctx, mcp.CallToolRequest{}); !errors.Is(err, context.Canceled) {
+				t.Errorf("err = %v, want %v", err, context.Canceled)
+			}
+		})
 	}
 }

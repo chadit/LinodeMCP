@@ -44,16 +44,16 @@ func TestAuditMiddlewareWritesEventOnSuccess(t *testing.T) {
 		t.Fatal("helloEvent is nil")
 	}
 
-	if helloEvent.ToolCapability != audit.CapabilityMeta {
+	if helloEvent.ToolCapability != string(audit.CapabilityMeta) {
 		t.Errorf("helloEvent.ToolCapability = %v, want %v", helloEvent.ToolCapability, audit.CapabilityMeta)
 	}
 
-	if helloEvent.Status != audit.StatusSuccess {
+	if helloEvent.Status != string(audit.StatusSuccess) {
 		t.Errorf("helloEvent.Status = %v, want %v", helloEvent.Status, audit.StatusSuccess)
 	}
 
-	if helloEvent.LatencyMS < int64(0) {
-		t.Errorf("got %v, want >= %v", helloEvent.LatencyMS, int64(0))
+	if helloEvent.LatencyMs < int64(0) {
+		t.Errorf("got %v, want >= %v", helloEvent.LatencyMs, int64(0))
 	}
 
 	if helloEvent.Error != nil {
@@ -96,10 +96,10 @@ func TestSetAuditSinkNilRestoresNoop(t *testing.T) {
 // the assertion at the call site can use NotNil for the not-found
 // path. Pointer return avoids the gocritic hugeParam complaint that
 // returning an Event value would trigger.
-func findEventByTool(events []audit.Event, tool string) *audit.Event {
-	for i := range events {
-		if events[i].Tool == tool {
-			return &events[i]
+func findEventByTool(events []*audit.Event, tool string) *audit.Event {
+	for _, event := range events {
+		if event.Tool == tool {
+			return event
 		}
 	}
 

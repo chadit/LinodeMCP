@@ -4,6 +4,7 @@ package server_test
 const (
 	keyAddress                        = "address"
 	keyConfirm                        = "confirm"
+	keyPath                           = "path"
 	tcLinodeNodebalancerConfigGet     = "linode_nodebalancer_config_get"
 	tcLinodeNodebalancerConfigRebuild = "linode_nodebalancer_config_rebuild"
 	tcLinodeNodebalancerConfigDelete  = "linode_nodebalancer_config_delete"

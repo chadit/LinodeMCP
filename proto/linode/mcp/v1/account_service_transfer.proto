@@ -34,6 +34,8 @@ message AccountServiceTransferGetInput {
     path: "/account/service-transfers/{token}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEntityTransfer";
   option (linode.mcp.v1.tool_description) = "Gets one account service transfer request by token.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve service transfer {token}: {error}";
@@ -74,6 +76,8 @@ message AccountServiceTransferListInput {
     path: "/account/service-transfers"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferListResponse";
   option (linode.mcp.v1.tool_description) = "Lists account service transfer requests.";
 
@@ -95,6 +99,8 @@ message AccountServiceTransferDeleteInput {
     path: "/account/service-transfers/{token}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferActionResponse";
   option (linode.mcp.v1.tool_description) = "Cancels one account service transfer request by token.";
   // Neither sentence was declared before: Go named the tool in its failure and
@@ -154,6 +160,8 @@ message AccountServiceTransferAcceptInput {
     path: "/account/service-transfers/{token}/accept"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferActionResponse";
   option (linode.mcp.v1.tool_description) = "Accepts one account service transfer request by token.";
   option (linode.mcp.v1.confirm_message) = "This accepts an account service transfer. Set confirm=true to proceed.";
@@ -208,6 +216,8 @@ message AccountServiceTransferCreateInput {
     path: "/account/service-transfers"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates an account service transfer for the provided Linode IDs.";
   option (linode.mcp.v1.error_message) = "Failed to create service transfer: {error}";
@@ -216,11 +226,16 @@ message AccountServiceTransferCreateInput {
   // A replayed POST would open a second pending transfer for the same Linodes,
   // so neither language retried it before it was declared.
   option (linode.mcp.v1.retry_disabled) = true;
-  // normalize folds the linode_ids convenience form into entities, which is the
-  // only shape either language ever put on the wire. preview carries the
+  // The linode_ids convenience form folds into entities, the only shape the
+  // wire carries: a caller-supplied entities wins and linode_ids is dropped,
+  // so the body never carries both spellings of one fact. preview carries the
   // sentence Python had and Go did not: the transfer request is opened for the
   // listed Linodes.
-  option (linode.mcp.v1.tool_hooks) = "normalize";
+  option (linode.mcp.v1.normalize_fold) = {
+    source: "linode_ids"
+    target: "entities"
+    key: "linodes"
+  };
   // The request being opened for the listed Linodes, which the body implies
   // rather than says.
   option (linode.mcp.v1.preview_sentence) = {

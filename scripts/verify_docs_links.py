@@ -3,9 +3,15 @@
 
 Markdown links rot silently: a moved contract file or renamed doc page
 leaves a dead link no test notices. This walks every relative link target
-in README.md and docs/**/*.md (external URLs and pure #anchors excluded,
-anchors on internal links stripped before the existence check) and fails
-on the first pass listing every target that does not exist on disk.
+in README.md, docs/**/*.md, and the prose each tool project ships beside
+its code under tools/ (external URLs and pure #anchors excluded, anchors
+on internal links stripped before the existence check) and fails on the
+first pass listing every target that does not exist on disk.
+
+tools/ is in scope because a tool project's own wiki cross-links its
+chapters and points back at repo paths. Those links became movable the
+moment the wiki came in-repo, so leaving them unwalked would carve a hole
+in the one gate that notices.
 
 Stdlib only, so no venv is needed. Run via `make docs-links` (in `make check`).
 """
@@ -28,6 +34,7 @@ _EXTERNAL_PREFIXES = ("http://", "https://", "mailto:")
 def _doc_files() -> list[Path]:
     files = [_REPO_ROOT / "README.md"]
     files.extend(sorted((_REPO_ROOT / "docs").rglob("*.md")))
+    files.extend(sorted((_REPO_ROOT / "tools").rglob("*.md")))
     return files
 
 

@@ -14,12 +14,10 @@ import (
 // the preview, the confirm gate, and the bypass-dry-run gate are one order that
 // every destroy shares, and a per-tool body would be 44 chances to get it wrong.
 //
-// The one step a destroy cannot derive from its own route is fetch_state: the
-// contract says which route a delete calls, not which one reads the thing it is
-// about to delete. A removal declared beside a GET on that same route says it
-// after all, and those synthesize the fetch rather than name a hook. The rest
-// keep the hand-written hook, which is the families whose read answers through a
-// client method rather than a declared sibling.
+// The one step a destroy cannot derive from its own route is the state read:
+// the contract says which route a delete calls, not which one reads the thing
+// it is about to delete. A removal declared beside a GET on that same route
+// says it after all; the rest declare state_route or state_composite.
 func emitDestroy(out *source, tool *contract) error {
 	if tool.SuccessMessage == "" {
 		return fmt.Errorf("%w: %s", errNoSuccessMessage, tool.Name)
@@ -29,8 +27,8 @@ func emitDestroy(out *source, tool *contract) error {
 		return fmt.Errorf("%w: %s", errNoConfirmMessage, tool.Name)
 	}
 
-	if tool.Hooks.FetchState == "" && !tool.StateRead.declared() {
-		return fmt.Errorf("%w: %s", errNoFetchState, tool.Name)
+	if !tool.StateRead.declared() {
+		return fmt.Errorf("%w: %s", errNoStateRead, tool.Name)
 	}
 
 	ordered, err := tool.orderedPathFields()
@@ -45,12 +43,6 @@ func emitDestroy(out *source, tool *contract) error {
 	out.need(importContext, importFmt, importMCP, importProto, importConfig,
 		importGenpb, importLinode, importProfiles, importTools,
 		importToolschemas, importTwostage)
-
-	// Only where a hook is named: gofmt keeps an import nothing uses, so a file
-	// whose removals all synthesize their fetch would not compile.
-	if tool.Hooks.FetchState != "" || tool.Hooks.DependencyWalk != "" {
-		out.need(importToolhooks)
-	}
 
 	emitDestroyFactory(out, tool)
 
@@ -237,7 +229,7 @@ func readsRequest(rendered formatted) bool {
 // request accessor answers with rather than the proto's own.
 func pathLocalType(kind protoreflect.Kind) string {
 	if kind == protoreflect.Int32Kind || kind == protoreflect.Int64Kind {
-		return "int"
+		return typeWordInt
 	}
 
 	return textType
@@ -275,7 +267,7 @@ func emitDestroyByID(out *source, tool *contract, id *field) error {
 		return err
 	}
 
-	emitDependencyWalk(out, tool, id.GoLocal+" int", id.GoLocal)
+	emitDependencyWalk(out, tool, id.GoLocal+" int", []field{*id})
 
 	out.writef("\t\tHashIgnore:     twostage.HashIgnoreFields(%s),", goStringLiteral(tool.ResourceType))
 	out.writef("\t})")
@@ -286,65 +278,35 @@ func emitDestroyByID(out *source, tool *contract, id *field) error {
 }
 
 // emitDependencyWalk writes the walk the removal declares, reading the state
-// the fetch it is paired with produces.
-//
-// A declared fetch reports the projected state, so the walk is handed it as the
-// type that carries it: the hook signature stops compiling if the pair ever
-// falls out of step, where the assertion it replaces went on reporting an empty
-// walk. A hand-written fetch keeps handing its own answer straight through.
-func emitDependencyWalk(out *source, tool *contract, parsed, arguments string) {
-	if tool.Hooks.DependencyWalk == "" {
-		return
+// the fetch it is paired with produces. A removal that declares none writes no
+// closure: its preview carries the call and the state alone.
+func emitDependencyWalk(out *source, tool *contract, parsed string, ordered []field) {
+	// The seeded prose rides the same closure the walks do, so a removal that
+	// declares sentences and no walk still reports them on its plan.
+	if len(tool.DepWalks) > 0 || len(tool.PreviewSentences) > 0 || tool.BillingDecl != nil {
+		emitDeclaredWalks(out, tool, parsed, ordered)
 	}
-
-	if !tool.StateRead.declared() {
-		if parsed == "" {
-			out.writef("\t\tDependencyWalk: func(ctx context.Context, client *linode.Client, state any) (tools.DryRunDetails, error) {")
-			out.writef("\t\t\treturn toolhooks.%s(ctx, client, %s, state)", tool.Hooks.DependencyWalk, arguments)
-			out.writef("\t\t},")
-
-			return
-		}
-
-		out.writef("\t\tDependencyWalk: toolhooks.%s,", tool.Hooks.DependencyWalk)
-
-		return
-	}
-
-	signature := "ctx context.Context, client *linode.Client, state any"
-	if parsed != "" {
-		signature = "ctx context.Context, client *linode.Client, " + parsed + ", state any"
-	}
-
-	out.writef("\t\tDependencyWalk: func(%s) (tools.DryRunDetails, error) {", signature)
-	out.writef("\t\t\tdeclared, err := tools.DeclaredStateOf(state)")
-	out.writef("\t\t\tif err != nil {")
-	out.writef("\t\t\t\treturn tools.DryRunDetails{}, err")
-	out.writef("\t\t\t}")
-	out.writef("")
-	out.writef("\t\t\treturn toolhooks.%s(ctx, client, %s, declared)", tool.Hooks.DependencyWalk, arguments)
-	out.writef("\t\t},")
 }
 
 // emitDestroyByIDFetch writes the state fetch the single-id wrapper is handed,
 // which takes the id it parsed rather than closing over one.
 func emitDestroyByIDFetch(out *source, tool *contract, id *field) {
-	if !tool.StateRead.declared() {
-		out.writef("\t\tFetchState:     toolhooks.%s,", tool.Hooks.FetchState)
-
-		return
-	}
-
 	out.writef("\t\tFetchState: func(ctx context.Context, client *linode.Client, %s int) (any, error) {", id.GoLocal)
 	emitStateReadBody(out, tool, "[]any{"+id.GoLocal+"}")
 	out.writef("\t\t},")
 }
 
-// emitStateFetch writes what a removal's state fetch does: call the hook it
-// declares, or read the sibling it resolved.
+// emitStateFetch writes what a removal's state fetch does: read the sibling it
+// resolved.
 func emitStateFetch(out *source, tool *contract, ordered []field) {
-	if !tool.StateRead.declared() {
-		out.writef("\t\t\treturn toolhooks.%s(ctx, client, %s)", tool.Hooks.FetchState, localArguments(ordered))
+	if tool.StateRead.scan() {
+		emitScanStateRead(out, tool, ordered)
+
+		return
+	}
+
+	if tool.StateRead.Envelope {
+		emitEnvelopeStateRead(out, tool, ordered)
 
 		return
 	}
@@ -356,6 +318,62 @@ func emitStateFetch(out *source, tool *contract, ordered []field) {
 	}
 
 	emitStateReadBody(out, tool, pathValuesLiteral(tool.stateReadValues(ordered)))
+}
+
+// emitScanStateRead writes the whole-collection scan a declared match resolves
+// to: page the named list and answer the first element every pair selects,
+// with the pairs worded into the not-found sentence.
+func emitScanStateRead(out *source, tool *contract, ordered []field) {
+	out.need(importFmt)
+
+	element := "linodev1." + tool.StateRead.Message.TypeName
+
+	conditions := make([]string, 0, len(tool.StateRead.Matches))
+	wording := make([]string, 0, len(tool.StateRead.Matches))
+	locals := make([]string, 0, len(tool.StateRead.Matches))
+
+	for _, match := range tool.StateRead.Matches {
+		local := matchLocal(match.Argument, ordered)
+		conditions = append(conditions, "item.Get"+match.GoGetter+"() == "+local)
+		wording = append(wording, match.Field+"='%v'")
+		locals = append(locals, local)
+	}
+
+	out.writef("			return tools.FetchCollectionScan(ctx, client, %s, %s,",
+		goStringLiteral(tool.StateRead.Tool), stateFormValuesLiteral(tool, ordered))
+	out.writef("				func() *%s { return &%s{} },", element, element)
+	out.writef("				func(item *%s) bool { return %s },", element, strings.Join(conditions, " && "))
+	out.writef("				fmt.Sprintf(%s, %s))",
+		goStringLiteral(strings.Join(wording, ", ")), strings.Join(locals, ", "))
+}
+
+// stateFormValuesLiteral is the values a scan or envelope read's own slots
+// take, strictly from the declared slot fill: a slotless list takes none, and
+// the removal's path values must not leak into it.
+func stateFormValuesLiteral(tool *contract, ordered []field) string {
+	values := make([]string, 0, len(tool.StateRead.Slots))
+	for _, slot := range tool.StateRead.Slots {
+		values = append(values, matchLocal(slot, ordered))
+	}
+
+	return "[]any{" + strings.Join(values, ", ") + "}"
+}
+
+// matchLocal is the handler local one match argument was read into.
+func matchLocal(argument string, ordered []field) string {
+	for index := range ordered {
+		if ordered[index].ProtoName == argument {
+			return ordered[index].GoLocal
+		}
+	}
+
+	return argument
+}
+
+// emitEnvelopeStateRead writes the fetch that keeps the page envelope itself
+// as the state, results total included.
+func emitEnvelopeStateRead(out *source, tool *contract, ordered []field) {
+	emitEnvelopeFetch(out, tool, stateFormValuesLiteral(tool, ordered), "\t\t\t")
 }
 
 // emitStateReadBody writes the synthesized state fetch: the sibling read's
@@ -498,7 +516,7 @@ func emitDestroyHandler(out *source, tool *contract, ordered []field) error {
 
 	emitDestroyPreviewBody(out, tool)
 
-	emitDependencyWalk(out, tool, "", localArguments(ordered))
+	emitDependencyWalk(out, tool, "", ordered)
 
 	out.writef("\t\tHashIgnore:     twostage.HashIgnoreFields(%s),", goStringLiteral(tool.ResourceType))
 	out.writef("\t})")
@@ -583,16 +601,6 @@ func destroySuccessArguments(tool *contract, ordered []field) string {
 	}
 
 	return strings.Join(args, ", ")
-}
-
-// localArguments lists the path locals a hook is handed, in route order.
-func localArguments(ordered []field) string {
-	names := make([]string, 0, len(ordered))
-	for _, entry := range ordered {
-		names = append(names, entry.GoLocal)
-	}
-
-	return strings.Join(names, ", ")
 }
 
 // destroyPathPattern renders the route template as the Sprintf pattern the

@@ -67,6 +67,8 @@ message LKEClusterGetInput {
     path: "/lke/clusters/{cluster_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKECluster";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a single LKE cluster by its ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve LKE cluster: {error}";
@@ -88,6 +90,8 @@ message LKEClusterListInput {
     path: "/lke/clusters"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all Linode Kubernetes Engine (LKE) clusters. Can filter by label.";
 
@@ -129,6 +133,8 @@ message LKEClusterCreateInput {
     path: "/lke/clusters"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new LKE Kubernetes cluster. WARNING: This creates billable resources. Use linode_lke_version_list to find valid k8s_version values, linode_region_list for regions, and linode_lke_type_list for node types. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.error_message) = "Failed to create LKE cluster: {error}";
@@ -237,14 +243,35 @@ message LKEClusterUpdateInput {
     path: "/lke/clusters/{cluster_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an existing LKE cluster's label, Kubernetes version, tags, or high availability setting. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to modify LKE cluster {cluster_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This modifies the LKE cluster configuration. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "LKE cluster {cluster_id} modified successfully";
-  // The preview reads the cluster so the label and Kubernetes version a change
-  // starts from can be named; the request carries only the new values.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the cluster, whose label and Kubernetes version the request
+  // alone does not carry.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_lke_cluster_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Label changes from \"{state:label}\" to \"{label}\"."
+    template: "Label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "label"
+    argument: "label"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Kubernetes version changes from \"{state:k8s_version}\" to \"{k8s_version}\"; the control plane and nodes upgrade."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "k8s_version"
+    argument: "k8s_version"
+  };
   // proto3 collapses an absent int32 onto 0, so this one rule answers absent,
   // zero, and negative cluster_id alike.
   option (buf.validate.message).cel = {
@@ -281,6 +308,8 @@ message LKEClusterDeleteInput {
     path: "/lke/clusters/{cluster_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes an LKE cluster. WARNING: This is irreversible. All node pools, nodes, and associated resources will be deleted. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. All node pools, nodes, and associated resources will be deleted. Set confirm=true to proceed.";
@@ -293,8 +322,21 @@ message LKEClusterDeleteInput {
     tool: "linode_lke_cluster_get"
   };
   // The walk lists the cluster's node pools to count the nodes the delete
-  // destroys, which is an extra call no descriptor describes.
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // destroys; a cluster of empty pools lists them and says nothing.
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_lke_pool_list"
+    emit: {
+      kind: "node_pool"
+      id_field: "id"
+      action: "cascade_deleted"
+      note: "{count} node(s) of type {type}"
+    }
+    warnings: {
+      template: "Deleting this cluster destroys {count} node pool(s) and {sum:count} node(s); running workloads are lost."
+      when_positive: "sum:count"
+    }
+    list_error_warning: "Could not list node pools: {error}"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -322,6 +364,8 @@ message LKEClusterRecycleInput {
     path: "/lke/clusters/{cluster_id}/recycle"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterActionResponse";
   option (linode.mcp.v1.tool_description) = "Recycles all nodes in an LKE cluster. WARNING: This causes temporary disruption as all nodes are replaced. Pass dry_run=true to preview without recycling.";
   option (linode.mcp.v1.confirm_message) = "Recycles all nodes in the cluster. This causes temporary disruption. Set confirm=true to proceed.";
@@ -358,6 +402,8 @@ message LKEClusterRegenerateInput {
     path: "/lke/clusters/{cluster_id}/regenerate"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEClusterActionResponse";
   option (linode.mcp.v1.tool_description) = "Regenerates the service token for an LKE cluster. Existing tokens will stop working. Pass dry_run=true to preview without regenerating.";
   option (linode.mcp.v1.confirm_message) = "This regenerates the cluster service token. Existing tokens will stop working. Set confirm=true to proceed.";
@@ -395,6 +441,8 @@ message LKEServiceTokenDeleteInput {
     path: "/lke/clusters/{cluster_id}/servicetoken"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEServiceTokenDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes and regenerates the service token for an LKE cluster. Existing tokens will stop working. Pass dry_run=true to preview without regenerating. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes the service token. Existing tokens will stop working. Set confirm=true to proceed.";
@@ -473,6 +521,8 @@ message LKEACLGetInput {
     path: "/lke/clusters/{cluster_id}/control_plane_acl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEControlPlaneACL";
   option (linode.mcp.v1.tool_description) = "Retrieves the control plane ACL configuration for an LKE cluster";
   option (linode.mcp.v1.error_message) = "Failed to retrieve control plane ACL for cluster {cluster_id}: {error}";
@@ -502,6 +552,8 @@ message LKEACLUpdateInput {
     path: "/lke/clusters/{cluster_id}/control_plane_acl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEACLWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the control plane ACL for an LKE cluster. Controls which IP addresses can access the cluster's API server. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to modify control plane ACL for cluster {cluster_id}: {error}";
@@ -565,6 +617,8 @@ message LKEACLDeleteInput {
     path: "/lke/clusters/{cluster_id}/control_plane_acl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEACLDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes the control plane ACL for an LKE cluster. This removes all IP restrictions from the API server. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.error_message) = "Failed to remove control plane ACL for cluster {cluster_id}: {error}";

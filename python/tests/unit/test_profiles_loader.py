@@ -33,26 +33,48 @@ def _synthetic_registry() -> list[ToolDescriptor]:
     """
     return [
         # Core and read tools (always included in every built-in).
-        ToolDescriptor("hello", Capability.Meta),
-        ToolDescriptor("version", Capability.Meta),
-        ToolDescriptor("linode_profile_get", Capability.Read),
-        ToolDescriptor("linode_account_get", Capability.Read),
+        ToolDescriptor("hello", Capability.Meta, categories=("core",)),
+        ToolDescriptor("version", Capability.Meta, categories=("core",)),
+        ToolDescriptor("linode_profile_get", Capability.Read, categories=("core",)),
+        ToolDescriptor("linode_account_get", Capability.Read, categories=("core",)),
         # Compute.
-        ToolDescriptor("linode_instance_list", Capability.Read),
-        ToolDescriptor("linode_instance_get", Capability.Read),
-        ToolDescriptor("linode_instance_create", Capability.Write),
-        ToolDescriptor("linode_instance_delete", Capability.Destroy),
+        ToolDescriptor(
+            "linode_instance_list", Capability.Read, categories=("compute",)
+        ),
+        ToolDescriptor("linode_instance_get", Capability.Read, categories=("compute",)),
+        ToolDescriptor(
+            "linode_instance_create", Capability.Write, categories=("compute",)
+        ),
+        ToolDescriptor(
+            "linode_instance_delete", Capability.Destroy, categories=("compute",)
+        ),
         # Block storage. Mix of read and mutate so wildcards have real tools
         # to match against.
-        ToolDescriptor("linode_volume_list", Capability.Read),
-        ToolDescriptor("linode_volume_get", Capability.Read),
-        ToolDescriptor("linode_volume_clone", Capability.Write),
-        ToolDescriptor("linode_volume_create", Capability.Write),
-        ToolDescriptor("linode_volume_update", Capability.Write),
-        ToolDescriptor("linode_volume_delete", Capability.Destroy),
+        ToolDescriptor(
+            "linode_volume_list", Capability.Read, categories=("block_storage",)
+        ),
+        ToolDescriptor(
+            "linode_volume_get", Capability.Read, categories=("block_storage",)
+        ),
+        ToolDescriptor(
+            "linode_volume_clone", Capability.Write, categories=("block_storage",)
+        ),
+        ToolDescriptor(
+            "linode_volume_create", Capability.Write, categories=("block_storage",)
+        ),
+        ToolDescriptor(
+            "linode_volume_update", Capability.Write, categories=("block_storage",)
+        ),
+        ToolDescriptor(
+            "linode_volume_delete", Capability.Destroy, categories=("block_storage",)
+        ),
         # Networking. Used by the "non-builtin override is ignored" test.
-        ToolDescriptor("linode_firewall_list", Capability.Read),
-        ToolDescriptor("linode_firewall_create", Capability.Write),
+        ToolDescriptor(
+            "linode_firewall_list", Capability.Read, categories=("networking",)
+        ),
+        ToolDescriptor(
+            "linode_firewall_create", Capability.Write, categories=("networking",)
+        ),
     ]
 
 

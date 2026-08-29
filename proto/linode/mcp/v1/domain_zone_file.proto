@@ -19,6 +19,8 @@ message DomainZoneFileGetInput {
     path: "/domains/{domain_id}/zone-file"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DOMAINS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DNS};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DomainZoneFile";
   option (linode.mcp.v1.tool_description) = "Gets the rendered zone file for a specific domain by its ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve zone file for domain {domain_id}: {error}";

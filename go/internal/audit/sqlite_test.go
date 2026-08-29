@@ -37,23 +37,23 @@ func TestSQLiteSinkInsertsAndReadsBack(t *testing.T) {
 	sink := openTestSQLiteSink(t)
 
 	ts := time.Date(2026, time.May, 20, 12, 0, 0, 0, time.UTC)
-	evt := audit.Event{
-		TS:             ts,
-		TSUnixNS:       ts.UnixNano(),
-		EventID:        "evt_sqlite_one",
+	evt := &audit.Event{
+		Ts:             audit.EventTimestamp(ts),
+		TsUnixNs:       ts.UnixNano(),
+		EventId:        "evt_sqlite_one",
 		Tool:           "linode_instance_create",
-		ToolCapability: audit.CapabilityWrite,
+		ToolCapability: string(audit.CapabilityWrite),
 		Environment:    "prod",
 		Profile:        "operator",
-		Mode:           audit.ModeNormal,
+		Mode:           string(audit.ModeNormal),
 		Args:           map[string]any{argKeyLabel: "web-1", keyRegion: valUSEast},
 		ArgsRedacted:   []string{argKeyToken},
-		Status:         audit.StatusSuccess,
-		LatencyMS:      42,
+		Status:         string(audit.StatusSuccess),
+		LatencyMs:      42,
 		ResultSummary:  "created",
 	}
 
-	sink.Write(t.Context(), &evt)
+	sink.Write(t.Context(), evt)
 
 	var (
 		tool       string
@@ -68,7 +68,7 @@ func TestSQLiteSinkInsertsAndReadsBack(t *testing.T) {
 		t.Context(),
 		`SELECT tool, tool_capability, status, latency_ms, args_json, args_redacted_json
 		 FROM events WHERE event_id = ?`,
-		evt.EventID,
+		evt.EventId,
 	)
 	if err := row.Scan(&tool, &capability, &status, &latencyMS, &argsJSON, &redacted); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -128,15 +128,15 @@ func TestSQLiteSinkIgnoresDuplicateEventID(t *testing.T) {
 	sink := openTestSQLiteSink(t)
 
 	evt := makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, day(20, 9))
-	evt.EventID = "evt_dup"
+	evt.EventId = "evt_dup"
 
-	sink.Write(t.Context(), &evt)
-	sink.Write(t.Context(), &evt)
+	sink.Write(t.Context(), evt)
+	sink.Write(t.Context(), evt)
 
 	var count int
 
 	row := sink.DB().QueryRowContext(t.Context(),
-		`SELECT COUNT(*) FROM events WHERE event_id = ?`, evt.EventID)
+		`SELECT COUNT(*) FROM events WHERE event_id = ?`, evt.EventId)
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -154,16 +154,16 @@ func TestSQLiteSinkStoresNullsForAbsentOptionals(t *testing.T) {
 	sink := openTestSQLiteSink(t)
 
 	evt := makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, day(20, 10))
-	evt.EventID = "evt_nulls"
-	evt.PlanID = nil
+	evt.EventId = "evt_nulls"
+	evt.PlanId = nil
 	evt.Error = nil
 
-	sink.Write(t.Context(), &evt)
+	sink.Write(t.Context(), evt)
 
 	var planID, errCol sql.NullString
 
 	row := sink.DB().QueryRowContext(t.Context(),
-		`SELECT plan_id, error FROM events WHERE event_id = ?`, evt.EventID)
+		`SELECT plan_id, error FROM events WHERE event_id = ?`, evt.EventId)
 	if err := row.Scan(&planID, &errCol); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

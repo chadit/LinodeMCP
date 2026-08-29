@@ -60,6 +60,8 @@ message ImageShareGroupGetInput {
     path: "/images/sharegroups/{sharegroup_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroup";
   // The API sends these as an explicit null, and the serializer drops them, so
   // a caller cannot tell an empty value from one the API said nothing about.
@@ -87,6 +89,8 @@ message ImageShareGroupByTokenGetInput {
     path: "/images/sharegroups/tokens/{token_uuid}/sharegroup"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroup";
   // The API sends these as an explicit null, and the serializer drops them, so
   // a caller cannot tell an empty value from one the API said nothing about.
@@ -132,6 +136,8 @@ message ImageShareGroupListInput {
     path: "/images/sharegroups"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupListResponse";
   option (linode.mcp.v1.tool_description) = "Lists owned image share groups with optional pagination.";
 
@@ -152,6 +158,8 @@ message ImageShareGroupByImageListInput {
     path: "/images/{image_id}/sharegroups"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupListResponse";
   option (linode.mcp.v1.tool_description) = "Lists owned image share groups that currently include a private image.";
 
@@ -199,6 +207,8 @@ message ImageShareGroupUpdateInput {
     path: "/images/sharegroups/{sharegroup_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an image share group's label or description.";
   option (linode.mcp.v1.error_message) = "Failed to update image share group: {error}";
@@ -273,6 +283,8 @@ message ImageShareGroupDeleteInput {
     path: "/images/sharegroups/{sharegroup_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes an owned image share group by ID. WARNING: members lose access to images in the group. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the image share group";
@@ -312,6 +324,8 @@ message ImageShareGroupImageListInput {
     path: "/images/sharegroups/{sharegroup_id}/images"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
   option (linode.mcp.v1.tool_description) = "Lists images shared in an owned image share group.";
 
@@ -338,6 +352,8 @@ message ImageShareGroupImageUpdateInput {
     path: "/images/sharegroups/{sharegroup_id}/images/{image_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a shared image's label or description within an image share group.";
   option (linode.mcp.v1.error_message) = "Failed to update shared image: {error}";
@@ -420,6 +436,8 @@ message ImageShareGroupImageDeleteInput {
     path: "/images/sharegroups/{sharegroup_id}/images/{image_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupImageDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Revokes access to one shared image in an owned image share group. Pass dry_run=true to preview without removing.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to remove the shared image";
@@ -468,6 +486,8 @@ message ImageShareGroupCreateInput {
     path: "/images/sharegroups"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a share group for sharing images with other users.";
   option (linode.mcp.v1.error_message) = "Failed to create image share group: {error}";
@@ -531,6 +551,8 @@ message ImageShareGroupImageAddInput {
     path: "/images/sharegroups/{sharegroup_id}/images"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
   option (linode.mcp.v1.tool_description) = "Adds one or more private images to an image share group.";
   option (linode.mcp.v1.error_message) = "Failed to add image to share group: {error}";

@@ -288,6 +288,26 @@ func (c *contract) foldLiteral(name, kind, absent string) (string, error) {
 	return goStringLiteral(absent), nil
 }
 
+// foldDefault is the value a wording reports for a folded argument the call did
+// not carry: the one its own fold declares as absent, "" for an argument no
+// fold defaults.
+//
+// The default is stated once, in the fold, and the body sends exactly this
+// value; reporting anything else here would describe a request the tool does
+// not make. A flag's default never reaches prose, since a wording naming a
+// bool argument is refused before this is asked.
+func (c *contract) foldDefault(argument string) string {
+	for _, decl := range c.FoldDecls {
+		for _, source := range decl.GetSource() {
+			if source.GetArgument() == argument {
+				return source.GetAbsent()
+			}
+		}
+	}
+
+	return ""
+}
+
 // foldKind names the reader one folded argument is held to, and whether its
 // declared kind has one at all.
 func foldKind(kind protoreflect.Kind) (string, bool) {

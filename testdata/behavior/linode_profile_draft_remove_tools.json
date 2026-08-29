@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_draft_remove_tools",
-  "description": "CapMeta builder tool removing tools from a draft (no Linode API call). Pins the two refusals: an absent name and a name the registry does not hold.",
+  "description": "CapMeta builder tool removing tools from a draft (no Linode API call). Pins the two refusals (an absent name and a name the registry does not hold) and the success path, which setup_calls reaches by creating the draft and adding the tools it then removes. Patterns match the draft's own tools, not the catalog, so removing one of two leaves the other.",
   "cases": [
     {
       "name": "refuses an absent name",
@@ -20,6 +20,39 @@
         ]
       },
       "expect_error": "draft not found: no-such-draft"
+    },
+    {
+      "name": "removes only the tools the pattern matches",
+      "setup_calls": [
+        {
+          "tool": "linode_profile_draft_new",
+          "args": {
+            "name": "seam-fixture"
+          }
+        },
+        {
+          "tool": "linode_profile_draft_add_tools",
+          "args": {
+            "name": "seam-fixture",
+            "tools": [
+              "linode_vlan_list",
+              "linode_region_list"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "name": "seam-fixture",
+        "tools": [
+          "linode_vlan_*"
+        ]
+      },
+      "expect_result": {
+        "name": "seam-fixture",
+        "removed": [
+          "linode_vlan_list"
+        ]
+      }
     }
   ]
 }

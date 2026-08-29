@@ -30,6 +30,8 @@ message DatabaseEngineGetInput {
     path: "/databases/engines/{engine_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseEngine";
   option (linode.mcp.v1.tool_description) = "Retrieves a single Managed Database engine by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Managed Database engine: {error}";
@@ -77,6 +79,8 @@ message DatabaseEngineListInput {
     path: "/databases/engines"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseEngineListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Managed Database engines with optional pagination.";
 

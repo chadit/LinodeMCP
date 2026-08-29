@@ -89,6 +89,35 @@
         "name": "www"
       },
       "expect_error": "target is required"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "domain_id": 5,
+        "type": "A",
+        "name": "www",
+        "target": "8.8.8.8",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_domain_record_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/domains/5/records",
+          "body": {
+            "type": "A",
+            "name": "www",
+            "target": "8.8.8.8"
+          }
+        },
+        "side_effects": [
+          "A new A record will be created in domain 5 for host \"www\" targeting \"8.8.8.8\"."
+        ],
+        "current_state": null,
+        "dependencies": [],
+        "warnings": []
+      }
     }
   ]
 }

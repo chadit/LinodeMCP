@@ -135,10 +135,10 @@ func writeSQLiteAuditEvents(t *testing.T, dbPath string) time.Time {
 
 	for seq, ts := range []time.Time{oldest, oldest.Add(48 * time.Hour)} {
 		event := auditEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, seq)
-		event.EventID = "evt_sqlite_" + ts.Format("20060102")
-		event.TS = ts
-		event.TSUnixNS = ts.UnixNano()
-		sink.Write(t.Context(), &event)
+		event.EventId = "evt_sqlite_" + ts.Format("20060102")
+		event.Ts = audit.EventTimestamp(ts)
+		event.TsUnixNs = ts.UnixNano()
+		sink.Write(t.Context(), event)
 	}
 
 	if closeErr := sink.Close(); closeErr != nil {

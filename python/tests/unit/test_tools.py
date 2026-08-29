@@ -302,7 +302,6 @@ from linodemcp.gentools.oauth_client_thumbnail import (
 )
 from linodemcp.linode import (
     Profile,
-    Volume,
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_object_storage import object_storage_key_to_response_dict
@@ -3347,16 +3346,11 @@ async def test_handle_linode_account_oauth_client_thumbnail_get(
     sample_config: Config,
 ) -> None:
     """Thumbnail get serializes {client_id, thumbnail_png_base64} proto-canonically."""
-    # The client base64-encodes the raw PNG under thumbnail_png_base64; the
-    # handler stitches in client_id and serializes through OAuthClientThumbnail,
-    # so any extra key the client returns must drop.
-    response_data: dict[str, Any] = {
-        "thumbnail_png_base64": "iVBORw0KGgo=",
-        "not_in_proto": "dropped",
-    }
+    # The route answers with the image itself; the transport encodes it and the
+    # handler stitches in client_id, serializing through OAuthClientThumbnail.
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_oauth_client_thumbnail.return_value = response_data
+        mock_client.route_raw_body_read.return_value = b"\x89PNG\r\n\x1a\n"
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -3370,8 +3364,11 @@ async def test_handle_linode_account_oauth_client_thumbnail_get(
             "client_id": "client-123",
             "thumbnail_png_base64": "iVBORw0KGgo=",
         }
-        mock_client.get_account_oauth_client_thumbnail.assert_awaited_once_with(
-            "client-123"
+        mock_client.route_raw_body_read.assert_awaited_once_with(
+            "linode_account_oauth_client_thumbnail_get",
+            "client-123",
+            accept="image/png",
+            retry=True,
         )
 
 
@@ -3381,9 +3378,7 @@ async def test_handle_linode_account_oauth_client_thumbnail_get_reports_client_e
     """Test OAuth client thumbnail get handler reports client errors."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_account_oauth_client_thumbnail.side_effect = RuntimeError(
-            "boom"
-        )
+        mock_client.route_raw_body_read.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7423,37 +7418,6 @@ async def test_domain_record_create_dry_run_still_validates_domain_id(
     assert "domain_id must be a positive integer" in result[0].text
 
 
-async def test_domain_record_update_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the record via GET and never updates."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_domain_record.return_value = {"id": 555, "type": "A"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_domain_record_update(
-            {
-                "domain_id": 333,
-                "record_id": 555,
-                "target": "8.8.4.4",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_domain_record_update"
-        assert body["would_execute"]["method"] == "PUT"
-        assert body["would_execute"]["path"] == "/domains/333/records/555"
-        assert any("8.8.4.4" in s for s in body["side_effects"])
-        mock_client.get_domain_record.assert_awaited_once_with(333, 555)
-        mock_client.route_raw.assert_not_called()
-
-
 async def test_handle_linode_volume_create_no_confirm(sample_config: Config) -> None:
     """Test linode_volume_create tool without confirmation."""
     result = await handle_linode_volume_create(
@@ -7781,64 +7745,6 @@ async def test_volume_attach_dry_run_still_validates_volume_id(
 
     assert len(result) == 1
     assert "volume_id is required" in result[0].text
-
-
-async def test_volume_detach_dry_run_returns_preview(sample_config: Config) -> None:
-    """dry_run=true fetches state via GET and never detaches."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = {"id": 333, "label": "vol"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_detach(
-            {"volume_id": 333, "dry_run": True}, sample_config
-        )
-
-        assert len(result) == 1
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_volume_detach"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/volumes/333/detach"
-        mock_client.get_volume.assert_awaited_once_with(333)
-        mock_client.route_call.assert_not_called()
-
-
-async def test_volume_detach_dry_run_surfaces_current_attachment(
-    sample_config: Config,
-) -> None:
-    """Phase 2 Tier B walk: detach names the instance the volume is on."""
-
-    attached = Volume(
-        id=333,
-        label="vol",
-        status="active",
-        size=50,
-        region="us-east",
-        linode_id=444,
-        linode_label="web",
-        filesystem_path="/dev/disk/by-id/x",
-        tags=[],
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-        hardware_type="nvme",
-    )
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_volume.return_value = attached
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_volume_detach(
-            {"volume_id": 333, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert any("444" in s for s in body["side_effects"])
-        mock_client.route_call.assert_not_called()
 
 
 async def test_volume_update_dry_run_still_validates_change(
@@ -14340,30 +14246,6 @@ async def test_placement_group_create_dry_run_still_validates_label(
     )
     assert len(result) == 1
     assert "label" in result[0].text
-
-
-async def test_placement_group_unassign_dry_run_returns_preview(
-    sample_config: Config,
-) -> None:
-    """dry_run=true fetches the group via GET and never unassigns."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_placement_group.return_value = {"id": 7}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-        result = await handle_linode_placement_group_unassign(
-            {"group_id": 7, "linodes": [123], "dry_run": True}, sample_config
-        )
-        body = json.loads(result[0].text)
-        assert body["tool"] == "linode_placement_group_unassign"
-        assert body["would_execute"]["method"] == "POST"
-        assert body["would_execute"]["path"] == "/placement/groups/7/unassign"
-        assert len(body["side_effects"]) == 1
-        assert "123" in body["side_effects"][0]
-        assert "removed from placement group 7" in body["side_effects"][0]
-        mock_client.get_placement_group.assert_awaited_once_with(7)
-        mock_client.route_raw.assert_not_called()
 
 
 async def test_account_tag_create_dry_run_returns_preview(

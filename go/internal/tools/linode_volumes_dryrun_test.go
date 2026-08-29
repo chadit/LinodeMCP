@@ -511,20 +511,25 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 	})
 }
 
-// TestLinodeVolumeDeleteToolDryRunDependencies exercises the Phase 2 Tier A
-// walk: a volume attached to an instance surfaces that instance as a
-// detached dependency, read straight from the volume state (no extra GET).
+// TestLinodeVolumeDeleteToolDryRunDependencies exercises the declared walk: a
+// volume attached to an instance surfaces that instance as a detached
+// dependency, with the enrichment read beside the state fetch.
 func TestLinodeVolumeDeleteToolDryRunDependencies(t *testing.T) {
 	t.Parallel()
 
 	linodeID := 456
 	attachedLabel := "attached-host"
 
-	cfg, methods := dryRunGetStateServer(t, "/volumes/789", linode.Volume{
-		ID:          789,
-		Label:       testVolumeLabel,
-		LinodeID:    &linodeID,
-		LinodeLabel: &attachedLabel,
+	cfg, methods := dryRunRouteServer(t, map[string]any{
+		"/volumes/789": linode.Volume{
+			ID:          789,
+			Label:       testVolumeLabel,
+			LinodeID:    &linodeID,
+			LinodeLabel: &attachedLabel,
+		},
+		"/linode/instances/456": map[string]any{
+			keySupportTicketID: 456, managedServiceLabelParam: attachedLabel,
+		},
 	})
 
 	_, _, handler := gentools.NewLinodeVolumeDeleteTool(cfg)
@@ -576,7 +581,7 @@ func TestLinodeVolumeDeleteToolDryRunDependencies(t *testing.T) {
 		t.Error("warnings is empty")
 	}
 
-	if !reflect.DeepEqual(*methods, []string{http.MethodGet}) {
-		t.Errorf("*methods = %v, want %v", *methods, []string{http.MethodGet})
+	if !reflect.DeepEqual(*methods, []string{http.MethodGet, http.MethodGet}) {
+		t.Errorf("*methods = %v, want two reads", *methods)
 	}
 }

@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from linodemcp.config import Config
 
+
 logger = logging.getLogger(__name__)
 
 # strconv.Atoi's legal set, which is what Go reads a string id with.
@@ -350,7 +351,11 @@ async def execute_tool(
             response = await callback(client)
             return [TextContent(type="text", text=json.dumps(response, indent=2))]
     except Exception as e:
-        if isinstance(e, (EnvironmentNotFoundError, ValueError)):
+        # A decode failure is the read's failure, not the caller's: it takes
+        # the dry-run wording Go gives it rather than the argument-error one.
+        if isinstance(e, (EnvironmentNotFoundError, ValueError)) and not isinstance(
+            e, json.JSONDecodeError
+        ):
             return [TextContent(type="text", text=f"Error: {e}")]
         reported = (
             failure.format(error=e) if failure else f"Failed to {error_action}: {e}"
@@ -432,7 +437,11 @@ async def execute_dry_run(
                 **details,
             )
     except Exception as e:
-        if isinstance(e, (EnvironmentNotFoundError, ValueError)):
+        # A decode failure is the read's failure, not the caller's: it takes
+        # the dry-run wording Go gives it rather than the argument-error one.
+        if isinstance(e, (EnvironmentNotFoundError, ValueError)) and not isinstance(
+            e, json.JSONDecodeError
+        ):
             return [TextContent(type="text", text=f"Error: {e}")]
         if isinstance(e, (APIError, NetworkError, httpx.HTTPError)):
             return [
@@ -470,7 +479,11 @@ async def execute_tool_list(
             response = await callback(client)
             return [TextContent(type="text", text=json.dumps(response, indent=2))]
     except Exception as e:
-        if isinstance(e, (EnvironmentNotFoundError, ValueError)):
+        # A decode failure is the read's failure, not the caller's: it takes
+        # the dry-run wording Go gives it rather than the argument-error one.
+        if isinstance(e, (EnvironmentNotFoundError, ValueError)) and not isinstance(
+            e, json.JSONDecodeError
+        ):
             return [TextContent(type="text", text=f"Error: {e}")]
         if isinstance(e, (APIError, NetworkError, httpx.HTTPError)):
             return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
@@ -943,6 +956,86 @@ def trim_list_drop_blank(arguments: dict[str, Any], *names: str) -> None:
             ]
 
 
+def trim_list(arguments: dict[str, Any], *names: str) -> None:
+    """Trim every text entry of the named list arguments in place, keep blanks.
+
+    Mirrors Go's TrimList. An entry that was only padding becomes the blank the
+    rule refuses by name rather than silently disappearing; entries that are
+    not text are left for the type refusal.
+    """
+    for name in names:
+        value = arguments.get(name)
+        if not isinstance(value, list):
+            continue
+
+        entries = cast("list[object]", value)
+        arguments[name] = [
+            entry.strip() if isinstance(entry, str) else entry for entry in entries
+        ]
+
+
+def uppercase_arguments(arguments: dict[str, Any], *names: str) -> None:
+    """Fold the named text arguments to upper case in place.
+
+    Mirrors Go's UppercaseArguments: a value the API reads as an upper-case
+    vocabulary reaches the rules that way however the caller spelled it.
+    """
+    for name in names:
+        value = arguments.get(name)
+        if isinstance(value, str):
+            arguments[name] = value.upper()
+
+
+def fold_int_list(
+    arguments: dict[str, Any], source: str, target: str, key: str
+) -> None:
+    """Fold a convenience integer-list argument into a member of an object one.
+
+    Mirrors Go's FoldIntList: a caller-supplied non-empty target wins and the
+    source is dropped, so the wire never carries both spellings of one fact; a
+    target or source no reader can parse is left alone so the rules and the
+    body builder refuse it by name. Integral floats fold the way every body
+    number does, since a JSON-RPC number reaches Go as one.
+    """
+    target_value = arguments.get(target)
+    if target_value is not None and not isinstance(target_value, dict):
+        return
+
+    if target_value:
+        arguments.pop(source, None)
+        return
+
+    if source not in arguments:
+        return
+
+    values = _positive_int_entries(arguments[source])
+    if values is None:
+        return
+
+    arguments[target] = {key: values}
+    del arguments[source]
+
+
+def _positive_int_entries(raw: object) -> list[int] | None:
+    """The positive integers a fold source holds, or None when it is unusable.
+
+    ``type(entry) is int`` rather than ``isinstance`` because bool subclasses
+    int; a float passes only when exactly integral, matching the body reader.
+    """
+    if not isinstance(raw, list) or not raw:
+        return None
+
+    values: list[int] = []
+    for entry in cast("list[object]", raw):
+        if type(entry) is int and entry > 0:
+            values.append(entry)
+        elif isinstance(entry, float) and entry.is_integer() and entry > 0:
+            values.append(int(entry))
+        else:
+            return None
+    return values
+
+
 # The named format readers, one body per member, reached from generated code
 # through the argument_reader each field declares. Go spells the same three in
 # tools/format_readers.go.
@@ -1066,22 +1159,38 @@ def _non_blank_text(
     return value, ""
 
 
-def parse_optional_time(value: str, param: str = "") -> datetime | None:
-    """Parse an RFC 3339 timestamp, or None for an empty value.
+# The RFC 3339 grammar Go's time.Parse accepts for the audit window bounds:
+# uppercase T and Z, whole seconds, an optional fraction, or a numeric offset.
+_RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
 
-    Raises ``ValueError`` for a non-empty but unparseable value, naming
-    ``param`` when the caller gave one: the recent and summary tools have always
-    said which of their two bounds failed and the export tool has not.
+
+def read_optional_time(value: str) -> tuple[datetime | None, str]:
+    """Parse an RFC 3339 timestamp, answering the cause rather than raising.
+
+    The cause names what the value got wrong and nothing else, because the
+    sentence around it belongs to whichever tool read the bound.
+
+    fromisoformat alone would take spellings Go's time.Parse(time.RFC3339, ...)
+    refuses, such as a bare date or a space separator, so the same window
+    argument answered events in one language and a refusal in the other. The
+    pattern is the RFC 3339 grammar Go accepts: an uppercase T, whole seconds,
+    an optional fraction, and Z or a numeric offset.
     """
     if not value:
-        return None
+        return None, ""
+
+    if not _RFC3339.fullmatch(value):
+        return None, _timestamp_cause(value, "not RFC 3339")
 
     try:
-        return datetime.fromisoformat(value)
+        return datetime.fromisoformat(value), ""
     except ValueError as exc:
-        named = f" '{param}'" if param else ""
-        msg = f"invalid{named} timestamp: expected RFC 3339, got {value!r}: {exc}"
-        raise ValueError(msg) from exc
+        return None, _timestamp_cause(value, str(exc))
+
+
+def _timestamp_cause(value: str, reason: str) -> str:
+    """What a malformed bound got wrong, without naming the bound."""
+    return f"expected RFC 3339, got {value!r}: {reason}"
 
 
 # Tag-validation messages, held identical to Go's ErrTagsMustBeJSONStringArray

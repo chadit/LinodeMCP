@@ -47,15 +47,39 @@ def test_parse_pat_scopes_preserves_wildcard() -> None:
     assert parse_pat_scopes("*") == [Scope.Wildcard]
 
 
-def test_parse_pat_scopes_skips_unknown() -> None:
-    """Unknown scope strings are skipped (loader logs them as excess).
+def test_parse_pat_scopes_keeps_scopes_outside_the_catalog() -> None:
+    """Scope strings the catalog does not name parse through unchanged.
 
-    A future Linode scope the catalog doesn't yet recognize must not
-    crash the parser. The token still works at runtime against the
-    API; we just can't compare it.
+    A PAT can carry them legitimately: child_account:* is real, future
+    Linode scopes arrive unannounced, and the per-tool contract declares
+    families the token catalog does not spell. Dropping them here made a
+    token read as under-scoped for values it genuinely carries.
     """
-    got = parse_pat_scopes("linodes:read_only future:unknown_perm")
-    assert got == [Scope.LinodesReadOnly]
+    got = parse_pat_scopes("linodes:read_only child_account:read_write")
+    assert got == ["child_account:read_write", "linodes:read_only"]
+
+
+def test_parse_pat_scopes_keeps_declared_family_values() -> None:
+    """Values the built-in profile unions require survive the parse.
+
+    Every built-in union names events:read_only and friends, so a
+    least-privilege PAT spells them; the comparison can only see what
+    the parse keeps.
+    """
+    got = parse_pat_scopes("events:read_only monitor:read_write")
+    assert got == ["events:read_only", "monitor:read_write"]
+
+
+def test_compare_scopes_matches_scopes_outside_the_catalog() -> None:
+    """A required scope the catalog does not name is satisfied by a
+    token carrying it, which is what a user-defined profile relies on."""
+    comparison = compare_scopes(
+        ["child_account:read_write"],
+        parse_pat_scopes("child_account:read_write"),
+    )
+
+    assert not comparison.has_missing
+    assert not comparison.has_excess
 
 
 def test_flatten_grants_nil() -> None:

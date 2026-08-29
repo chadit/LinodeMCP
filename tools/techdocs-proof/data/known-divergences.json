@@ -1,0 +1,443 @@
+[
+  {
+    "category": "header_parameter",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "GET",
+    "shape": "/account/oauth-clients/{}/thumbnail",
+    "location": "path",
+    "parameter": "accept",
+    "reason": "Accept is an HTTP header the documentation renders inside the path table, not a request parameter."
+  },
+  {
+    "category": "header_parameter",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "GET",
+    "shape": "/monitor/services/{}/metric-definitions",
+    "location": "path",
+    "parameter": "x_filter",
+    "reason": "X-Filter is an HTTP header the documentation renders inside the path table, not a request parameter."
+  },
+  {
+    "category": "collection_pagination_on_single_get",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "GET",
+    "shape": "/databases/engines/{}",
+    "location": "query",
+    "parameter": "page",
+    "reason": "Single-item GET; the documentation page renders the collection pagination block for the sibling list route."
+  },
+  {
+    "category": "collection_pagination_on_single_get",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "GET",
+    "shape": "/databases/engines/{}",
+    "location": "query",
+    "parameter": "page_size",
+    "reason": "Single-item GET; the documentation page renders the collection pagination block for the sibling list route."
+  },
+  {
+    "category": "collection_pagination_on_single_get",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "GET",
+    "shape": "/volumes/{}",
+    "location": "query",
+    "parameter": "page",
+    "reason": "Single-item GET; the documentation page renders the collection pagination block for the sibling list route."
+  },
+  {
+    "category": "collection_pagination_on_single_get",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "GET",
+    "shape": "/volumes/{}",
+    "location": "query",
+    "parameter": "page_size",
+    "reason": "Single-item GET; the documentation page renders the collection pagination block for the sibling list route."
+  },
+  {
+    "category": "repo_enum_superset",
+    "kind": "parameter_enum_mismatch",
+    "method": "POST",
+    "shape": "/nodebalancers/{}/configs",
+    "location": "body",
+    "parameter": "algorithm",
+    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
+  },
+  {
+    "category": "repo_enum_superset",
+    "kind": "parameter_enum_mismatch",
+    "method": "POST",
+    "shape": "/nodebalancers/{}/configs",
+    "location": "body",
+    "parameter": "protocol",
+    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
+  },
+  {
+    "category": "repo_enum_superset",
+    "kind": "parameter_enum_mismatch",
+    "method": "POST",
+    "shape": "/nodebalancers/{}/configs",
+    "location": "body",
+    "parameter": "stickiness",
+    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
+  },
+  {
+    "category": "repo_enum_superset",
+    "kind": "parameter_enum_mismatch",
+    "method": "PUT",
+    "shape": "/nodebalancers/{}/configs/{}",
+    "location": "body",
+    "parameter": "algorithm",
+    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
+  },
+  {
+    "category": "repo_enum_superset",
+    "kind": "parameter_enum_mismatch",
+    "method": "PUT",
+    "shape": "/nodebalancers/{}/configs/{}",
+    "location": "body",
+    "parameter": "protocol",
+    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
+  },
+  {
+    "category": "repo_enum_superset",
+    "kind": "parameter_enum_mismatch",
+    "method": "PUT",
+    "shape": "/nodebalancers/{}/configs/{}",
+    "location": "body",
+    "parameter": "stickiness",
+    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "POST",
+    "shape": "/domains/{}/clone",
+    "location": "path",
+    "parameter": "domain_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "GET",
+    "shape": "/domains/{}/zone-file",
+    "location": "path",
+    "parameter": "domain_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "DELETE",
+    "shape": "/linode/stackscripts/{}",
+    "location": "path",
+    "parameter": "stackscript_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "GET",
+    "shape": "/linode/stackscripts/{}",
+    "location": "path",
+    "parameter": "stackscript_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "PUT",
+    "shape": "/linode/stackscripts/{}",
+    "location": "path",
+    "parameter": "stackscript_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "DELETE",
+    "shape": "/nodebalancers/{}/configs/{}/nodes/{}",
+    "location": "path",
+    "parameter": "node_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "GET",
+    "shape": "/nodebalancers/{}/configs/{}/nodes/{}",
+    "location": "path",
+    "parameter": "node_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "techdocs_path_type_inconsistent",
+    "kind": "parameter_type_mismatch",
+    "method": "PUT",
+    "shape": "/nodebalancers/{}/configs/{}/nodes/{}",
+    "location": "path",
+    "parameter": "node_id",
+    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/domains",
+    "location": "query",
+    "parameter": "domain_contains",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/domains",
+    "location": "query",
+    "parameter": "type",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/domains/{}/records",
+    "location": "query",
+    "parameter": "name_contains",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/domains/{}/records",
+    "location": "query",
+    "parameter": "type",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/images",
+    "location": "query",
+    "parameter": "is_public",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/images",
+    "location": "query",
+    "parameter": "type",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/images",
+    "location": "query",
+    "parameter": "deprecated",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/linode/instances",
+    "location": "query",
+    "parameter": "status",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/linode/stackscripts",
+    "location": "query",
+    "parameter": "is_public",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/linode/stackscripts",
+    "location": "query",
+    "parameter": "label_contains",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/linode/stackscripts",
+    "location": "query",
+    "parameter": "mine",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/linode/types",
+    "location": "query",
+    "parameter": "class",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/lke/clusters",
+    "location": "query",
+    "parameter": "label",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/networking/firewalls",
+    "location": "query",
+    "parameter": "label_contains",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/networking/firewalls",
+    "location": "query",
+    "parameter": "status",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/nodebalancers",
+    "location": "query",
+    "parameter": "label_contains",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/nodebalancers",
+    "location": "query",
+    "parameter": "region",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/profile/sshkeys",
+    "location": "query",
+    "parameter": "label_contains",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/regions",
+    "location": "query",
+    "parameter": "capability",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/regions",
+    "location": "query",
+    "parameter": "country",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/volumes",
+    "location": "query",
+    "parameter": "label_contains",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/volumes",
+    "location": "query",
+    "parameter": "region",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/vpcs",
+    "location": "query",
+    "parameter": "label",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "repo_local_filter",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "GET",
+    "shape": "/vpcs",
+    "location": "query",
+    "parameter": "region",
+    "reason": "Repo convenience filter applied through the X-Filter header or client side, not a documented query parameter."
+  },
+  {
+    "category": "owner_ruled_out_of_surface",
+    "kind": "route_missing_from_proto",
+    "method": "POST",
+    "shape": "/marketplace",
+    "location": "",
+    "parameter": "",
+    "reason": "The owner ruled the marketplace contact submission out of the tool surface on 2026-08-08 because it files a person's contact details with a legal consent flag."
+  },
+  {
+    "category": "body_constant_fixed_value",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "POST",
+    "shape": "/linode/instances",
+    "location": "body",
+    "parameter": "interface_generation",
+    "reason": "The tool synthesizes a linode-generation interfaces element and pins interface_generation via the body_constant option, so a caller-settable legacy_config would contradict the body it builds."
+  },
+  {
+    "category": "doc_template_artifact",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "PUT",
+    "shape": "/iam/delegation/default-role-permissions",
+    "location": "body",
+    "parameter": "add",
+    "reason": "The route replaces the whole permission set and its structured siblings leave no shape a bare scalar add could carry; the identical unnamed string on the sibling route marks one doc template artifact."
+  },
+  {
+    "category": "doc_template_artifact",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "PUT",
+    "shape": "/iam/users/{}/role-permissions",
+    "location": "body",
+    "parameter": "add",
+    "reason": "The route replaces the whole permission set and its structured siblings leave no shape a bare scalar add could carry; the identical unnamed string on the sibling route marks one doc template artifact."
+  },
+  {
+    "category": "deliberate_absence_one_way",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "PUT",
+    "shape": "/profile",
+    "location": "body",
+    "parameter": "ip_whitelist_enabled",
+    "reason": "profile.proto records the field as deliberately absent: the API marks it deprecated and one-way, so a caller who disabled the allowlist through the tool could never re-enable it."
+  }
+]

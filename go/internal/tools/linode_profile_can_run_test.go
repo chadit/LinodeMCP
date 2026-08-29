@@ -1,7 +1,11 @@
 package tools_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -9,7 +13,6 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -63,9 +66,11 @@ func canRunCall(toolName, env string) map[string]any {
 func callCanRun(t *testing.T, profile func() profiles.Profile, calls []any) map[string]any {
 	t.Helper()
 
-	state := builderState(builder.NewRegistry(), canRunFixtureCatalog(), profile)
+	state := builderState(builder.NewRegistry(), canRunFixtureCatalog(), profile, emptyConfig())
 
-	return builderBody(t, callAnswer(t, state, tools.ProfileCanRunAnswer, nil, map[string]any{"calls": calls}))
+	handler := generatedBuilder(gentools.NewLinodeProfileCanRunTool, nil)
+
+	return builderBody(t, callBuilder(t, state, handler, map[string]any{tcCalls: calls}))
 }
 
 // canRunResults extracts the typed results slice (checked, for forcetypeassert).
@@ -111,8 +116,8 @@ func TestLinodeProfileCanRunToolSchemaAndCapability(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
 	}
 
-	if !strings.Contains(string(tool.RawInputSchema), "calls") {
-		t.Errorf("tool.RawInputSchema missing key %v", "calls")
+	if !strings.Contains(string(tool.RawInputSchema), tcCalls) {
+		t.Errorf("tool.RawInputSchema missing key %v", tcCalls)
 	}
 }
 
@@ -362,5 +367,142 @@ func TestLinodeProfileCanRunToolRemediesMatchThePythonWording(t *testing.T) {
 
 	if _, present := results[0]["remedy"]; present {
 		t.Errorf("results[0] carries a remedy %v, want none on an allowed call", results[0]["remedy"])
+	}
+}
+
+// canRunSharedFixture mirrors testdata/profile/can_run_verdicts.json, the
+// fixture the Python suite asserts against too.
+type canRunSharedFixture struct {
+	Profile struct {
+		Name                string   `json:"name"`
+		AllowedTools        []string `json:"allowed_tools"`
+		AllowedEnvironments []string `json:"allowed_environments"`
+	} `json:"profile"`
+	ExpectResult map[string]any `json:"expect_result"`
+	Catalog      []struct {
+		Tool       string `json:"tool"`
+		Capability string `json:"capability"`
+	} `json:"catalog"`
+	Calls []map[string]any `json:"calls"`
+}
+
+// canRunCapabilities maps the fixture's capability spellings onto the tags the
+// pre-check reads. The fixture names them the way a profile file does.
+func canRunCapabilities() map[string]profiles.Capability {
+	return map[string]profiles.Capability{
+		capabilityRead:    profiles.CapRead,
+		tcCapabilityWrite: profiles.CapWrite,
+		"destroy":         profiles.CapDestroy,
+	}
+}
+
+// readCanRunSharedFixture loads the shared verdict fixture.
+func readCanRunSharedFixture(t *testing.T) *canRunSharedFixture {
+	t.Helper()
+
+	raw, err := os.ReadFile(filepath.Join(
+		"..", "..", "..", "testdata", "profile", "can_run_verdicts.json",
+	))
+	if err != nil {
+		t.Fatalf("read shared fixture: %v", err)
+	}
+
+	fixture := new(canRunSharedFixture)
+	if err := json.Unmarshal(raw, fixture); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(fixture.Calls) == 0 {
+		t.Fatal("the shared fixture names no calls, so this test measures nothing")
+	}
+
+	return fixture
+}
+
+// TestCanRunVerdictsMatchSharedFixture holds every reason and remedy the
+// pre-check answers to the shared cross-language fixture.
+//
+// A can_run reason is a member of a successful answer rather than a refusal, so
+// no declaration words it and each language keeps its own copy. The behavior
+// fixtures run under full-access, which permits every tool in every
+// environment, so three of the four blocked categories are unreachable there:
+// this fixture is what stops a one-sided reword.
+func TestCanRunVerdictsMatchSharedFixture(t *testing.T) {
+	t.Parallel()
+
+	fixture := readCanRunSharedFixture(t)
+	tags := canRunCapabilities()
+
+	catalog := make([]profiles.ToolDescriptor, 0, len(fixture.Catalog))
+
+	for _, entry := range fixture.Catalog {
+		capability, known := tags[entry.Capability]
+		if !known {
+			t.Fatalf("fixture capability %q is outside the pre-check's vocabulary", entry.Capability)
+		}
+
+		catalog = append(catalog, profiles.ToolDescriptor{Name: entry.Tool, Capability: capability})
+	}
+
+	calls := make([]any, 0, len(fixture.Calls))
+	for _, call := range fixture.Calls {
+		calls = append(calls, call)
+	}
+
+	profile := profiles.Profile{
+		Name:                fixture.Profile.Name,
+		AllowedTools:        fixture.Profile.AllowedTools,
+		AllowedEnvironments: fixture.Profile.AllowedEnvironments,
+	}
+
+	state := builderState(
+		builder.NewRegistry(), catalog,
+		func() profiles.Profile { return profile }, emptyConfig(),
+	)
+	handler := generatedBuilder(gentools.NewLinodeProfileCanRunTool, nil)
+	body := builderBody(t, callBuilder(t, state, handler, map[string]any{tcCalls: calls}))
+
+	want := canRunFixtureJSON(t, fixture.ExpectResult)
+	if got := canRunFixtureJSON(t, body); got != want {
+		t.Errorf("answer = %s, want %s", got, want)
+	}
+}
+
+// canRunFixtureJSON is one answer as key-sorted JSON, so the comparison reads
+// values rather than the order two decoders happened to build a map in.
+func canRunFixtureJSON(t *testing.T, value any) string {
+	t.Helper()
+
+	encoded, err := json.Marshal(canRunNumbersAsText(value))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	return string(encoded)
+}
+
+// canRunNumbersAsText rewrites every number as its text, because the fixture
+// decodes counts as float64 and the answer decodes them the same way only by
+// accident of both going through JSON.
+func canRunNumbersAsText(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, member := range typed {
+			out[key] = canRunNumbersAsText(member)
+		}
+
+		return out
+	case []any:
+		out := make([]any, 0, len(typed))
+		for _, member := range typed {
+			out = append(out, canRunNumbersAsText(member))
+		}
+
+		return out
+	case float64:
+		return strconv.FormatFloat(typed, 'g', -1, 64)
+	default:
+		return value
 	}
 }

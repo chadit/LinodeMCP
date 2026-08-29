@@ -2,13 +2,19 @@ package audit_test
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
+
+// errFixtureHandler stands for whatever a handler answered, so the outcome case
+// can name the failure it planted rather than matching on text.
+var errFixtureHandler = errors.New("handler refused the call")
 
 const (
 	// fixtureTool is the tool name reused across happy-path tests.
@@ -47,15 +53,15 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		false,
 	)
 
-	if evt.TS.IsZero() {
-		t.Error("evt.TS.IsZero() = true, want false")
+	if evt.Ts == "" {
+		t.Error("evt.Ts is empty, want a timestamp")
 	}
 
-	if evt.TSUnixNS == 0 {
-		t.Errorf("evt.TSUnixNS = %v, want non-zero", evt.TSUnixNS)
+	if evt.TsUnixNs == 0 {
+		t.Errorf("evt.TsUnixNs = %v, want non-zero", evt.TsUnixNs)
 	}
 
-	if !strings.HasPrefix(evt.EventID, audit.EventIDPrefix) {
+	if !strings.HasPrefix(evt.EventId, audit.EventIDPrefix) {
 		t.Error("expected condition to be true")
 	}
 
@@ -63,7 +69,7 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		t.Errorf("evt.Tool = %v, want %v", evt.Tool, fixtureTool)
 	}
 
-	if evt.ToolCapability != audit.CapabilityDestroy {
+	if evt.ToolCapability != string(audit.CapabilityDestroy) {
 		t.Errorf("evt.ToolCapability = %v, want %v", evt.ToolCapability, audit.CapabilityDestroy)
 	}
 
@@ -75,12 +81,12 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		t.Errorf("evt.Profile = %v, want %v", evt.Profile, fixtureProfile)
 	}
 
-	if evt.Mode != audit.ModeNormal {
+	if evt.Mode != string(audit.ModeNormal) {
 		t.Errorf("evt.Mode = %v, want %v", evt.Mode, audit.ModeNormal)
 	}
 
-	if evt.PlanID != nil {
-		t.Errorf("evt.PlanID = %v, want nil", evt.PlanID)
+	if evt.PlanId != nil {
+		t.Errorf("evt.PlanId = %v, want nil", evt.PlanId)
 	}
 
 	if !reflect.DeepEqual(evt.Args[argLinodeID], args[argLinodeID]) {
@@ -91,12 +97,12 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		t.Errorf("evt.ArgsRedacted = %v, want empty", evt.ArgsRedacted)
 	}
 
-	if evt.Status != audit.StatusSuccess {
+	if evt.Status != string(audit.StatusSuccess) {
 		t.Errorf("evt.Status = %v, want %v", evt.Status, audit.StatusSuccess)
 	}
 
-	if evt.LatencyMS != 0 {
-		t.Errorf("evt.LatencyMS = %v, want zero", evt.LatencyMS)
+	if evt.LatencyMs != 0 {
+		t.Errorf("evt.LatencyMs = %v, want zero", evt.LatencyMs)
 	}
 
 	if evt.ResultSummary != "" {
@@ -111,8 +117,8 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 		t.Errorf("evt.LinodemcpVersion = %v, want %v", evt.LinodemcpVersion, fixtureVersion)
 	}
 
-	if evt.SessionID != fixtureSession {
-		t.Errorf("evt.SessionID = %v, want %v", evt.SessionID, fixtureSession)
+	if evt.SessionId != fixtureSession {
+		t.Errorf("evt.SessionId = %v, want %v", evt.SessionId, fixtureSession)
 	}
 
 	if evt.CredentialGeneration != uint64(3) {
@@ -127,16 +133,15 @@ func TestNewEventPopulatesEveryField(t *testing.T) {
 func TestFinalizeWritesOutcomeFields(t *testing.T) {
 	t.Parallel()
 
-	evt := newFixtureEvent(t)
+	evt := audit.Finalize(newFixtureEvent(t), audit.StatusError,
+		250*time.Millisecond, "API returned 500", "instance update failed")
 
-	evt.Finalize(audit.StatusError, 250*time.Millisecond, "API returned 500", "instance update failed")
-
-	if evt.Status != audit.StatusError {
+	if evt.Status != string(audit.StatusError) {
 		t.Errorf("evt.Status = %v, want %v", evt.Status, audit.StatusError)
 	}
 
-	if evt.LatencyMS != int64(250) {
-		t.Errorf("evt.LatencyMS = %v, want %v", evt.LatencyMS, int64(250))
+	if evt.LatencyMs != int64(250) {
+		t.Errorf("evt.LatencyMs = %v, want %v", evt.LatencyMs, int64(250))
 	}
 
 	if evt.ResultSummary != "instance update failed" {
@@ -158,11 +163,10 @@ func TestFinalizeWritesOutcomeFields(t *testing.T) {
 func TestFinalizeWithEmptyErrorMessageLeavesErrorNil(t *testing.T) {
 	t.Parallel()
 
-	evt := newFixtureEvent(t)
+	evt := audit.Finalize(newFixtureEvent(t), audit.StatusSuccess,
+		100*time.Millisecond, "", "ok")
 
-	evt.Finalize(audit.StatusSuccess, 100*time.Millisecond, "", "ok")
-
-	if evt.Status != audit.StatusSuccess {
+	if evt.Status != string(audit.StatusSuccess) {
 		t.Errorf("evt.Status = %v, want %v", evt.Status, audit.StatusSuccess)
 	}
 
@@ -177,39 +181,140 @@ func TestFinalizeWithEmptyErrorMessageLeavesErrorNil(t *testing.T) {
 func TestSetModePopulatesPlanID(t *testing.T) {
 	t.Parallel()
 
-	evt := newFixtureEvent(t)
+	planned := audit.SetMode(newFixtureEvent(t), audit.ModeApply, "plan_01H...")
 
-	evt.SetMode(audit.ModeApply, "plan_01H...")
-
-	if evt.PlanID == nil {
-		t.Fatal("evt.PlanID is nil")
+	if planned.PlanId == nil {
+		t.Fatal("planned.PlanId is nil")
 	}
 
-	if *evt.PlanID != "plan_01H..." {
-		t.Errorf("*evt.PlanID = %v, want %v", *evt.PlanID, "plan_01H...")
+	if *planned.PlanId != "plan_01H..." {
+		t.Errorf("*planned.PlanId = %v, want %v", *planned.PlanId, "plan_01H...")
 	}
 
-	evt.SetMode(audit.ModeNormal, "")
+	reverted := audit.SetMode(planned, audit.ModeNormal, "")
 
-	if evt.PlanID != nil {
-		t.Errorf("evt.PlanID = %v, want nil", evt.PlanID)
+	if reverted.PlanId != nil {
+		t.Errorf("reverted.PlanId = %v, want nil", reverted.PlanId)
 	}
 }
 
-// TestMarshalJSONSerializesEmptyCollectionsAsArrays guards against
-// the standard encoder's nil-map / nil-slice fallback to `null`. The
-// JSONL consumers downstream of this expect `{}` and `[]` so the
-// alias-and-substitute pattern in MarshalJSON has to actually fire.
-func TestMarshalJSONSerializesEmptyCollectionsAsArrays(t *testing.T) {
+// TestEventTimestampSpellsTheInstantTheRecordCarries pins the two forms a ts
+// member takes. A record written by an EARLIER version carries the whole-second
+// form, so an instant that lands on a second has to come back without a
+// fractional part; anything finer carries microseconds with their zeros kept.
+// One spelling for both would read the same on this batch's own fixtures and
+// move a timestamp the SQLite store reconstructs.
+func TestEventTimestampSpellsTheInstantTheRecordCarries(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		instant time.Time
+		want    string
+	}{
+		{
+			name:    "an instant on a whole second carries no fraction",
+			instant: time.Date(2026, time.May, 19, 12, 0, 0, 0, time.UTC),
+			want:    "2026-05-19T12:00:00Z",
+		},
+		{
+			name:    "a quarter second carries its zeros",
+			instant: time.Date(2026, time.May, 19, 11, 30, 0, 250000000, time.UTC),
+			want:    "2026-05-19T11:30:00.250000Z",
+		},
+		{
+			name:    "a microsecond carries every digit",
+			instant: time.Date(2026, time.May, 19, 11, 30, 0, 1000, time.UTC),
+			want:    "2026-05-19T11:30:00.000001Z",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := audit.EventTimestamp(testCase.instant); got != testCase.want {
+				t.Errorf("EventTimestamp = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestOutcomeReadsTheStatusOffWhatTheHandlerAnswered covers both arms of the
+// one place the middleware does not already know the status: an error the
+// handler returned becomes the error status carrying its own sentence, and no
+// error becomes success. A call audited as a success it did not have is the
+// failure this exists to stop.
+func TestOutcomeReadsTheStatusOffWhatTheHandlerAnswered(t *testing.T) {
+	t.Parallel()
+
+	answered := audit.Outcome(newFixtureEvent(t), 250*time.Millisecond, errFixtureHandler)
+
+	if answered.Status != string(audit.StatusError) {
+		t.Errorf("answered.Status = %v, want %v", answered.Status, audit.StatusError)
+	}
+
+	if answered.Error == nil {
+		t.Fatal("answered.Error is nil")
+	}
+
+	if *answered.Error != errFixtureHandler.Error() {
+		t.Errorf("*answered.Error = %v, want %v", *answered.Error, errFixtureHandler)
+	}
+
+	clean := audit.Outcome(newFixtureEvent(t), 250*time.Millisecond, nil)
+
+	if clean.Status != string(audit.StatusSuccess) {
+		t.Errorf("clean.Status = %v, want %v", clean.Status, audit.StatusSuccess)
+	}
+
+	if clean.Error != nil {
+		t.Errorf("clean.Error = %v, want nil", clean.Error)
+	}
+
+	if clean.LatencyMs != int64(250) {
+		t.Errorf("clean.LatencyMs = %v, want %v", clean.LatencyMs, int64(250))
+	}
+}
+
+// TestFinalizeLeavesTheEventItWasHandedAlone is the half a rebuild adds that a
+// write into the old record never had: the capture middleware holds the entry
+// event while the outcome one is written, so a Finalize that mutated would
+// change what an earlier caller still holds.
+func TestFinalizeLeavesTheEventItWasHandedAlone(t *testing.T) {
+	t.Parallel()
+
+	entry := newFixtureEvent(t)
+
+	audit.Finalize(entry, audit.StatusError, time.Second, "boom", "failed")
+	audit.SetMode(entry, audit.ModeApply, "plan_01H...")
+
+	if entry.Status != string(audit.StatusSuccess) {
+		t.Errorf("entry.Status = %v, want %v", entry.Status, audit.StatusSuccess)
+	}
+
+	if entry.LatencyMs != 0 {
+		t.Errorf("entry.LatencyMs = %v, want zero", entry.LatencyMs)
+	}
+
+	if entry.PlanId != nil {
+		t.Errorf("entry.PlanId = %v, want nil", entry.PlanId)
+	}
+}
+
+// TestRecordSerializesEmptyCollectionsAsArrays guards against a nil map or
+// slice reaching the log as null. The JSONL consumers downstream expect `{}`
+// and `[]`, which is the array-over-null contract the record writer keeps.
+func TestRecordSerializesEmptyCollectionsAsArrays(t *testing.T) {
 	t.Parallel()
 
 	evt := audit.Event{
-		EventID: "evt_test",
+		EventId: "evt_test",
 		Tool:    fixtureTool,
 		// Args and ArgsRedacted left at zero values.
 	}
 
-	body, err := evt.MarshalJSON()
+	body, err := genlocal.RecordAuditEvent(&evt, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -281,7 +386,7 @@ func TestEventIDsAreUnique(t *testing.T) {
 // outcome tests can mutate. Extracted so the field-population test
 // (which uses its own args) doesn't share a fixture with the
 // outcome tests.
-func newFixtureEvent(t *testing.T) audit.Event {
+func newFixtureEvent(t *testing.T) *audit.Event {
 	t.Helper()
 
 	return audit.NewEvent(

@@ -8,10 +8,10 @@ the two renderings agree: one declaration, two renderer arms, identical text.
 It is not diffing two hand-written copies any more, because there are none left
 to diff.
 
-That is why both trees are scanned. The generated tree is where the sentences
-live; the hand-written tree is still read for whatever has not migrated yet, so
-a tool that goes back to being hand-written cannot slip past by leaving the
-scanned surface.
+Only the generated trees are scanned. The hand-written tool trees contribute
+zero extractions (docs/contracts/handwritten-tools.txt is empty and the
+generated-tools gate holds it there), so a confirm sentence has no hand tree to
+live in and scanning one proved nothing.
 
 The behavior fixtures pin the confirm messages someone wrote a case for; this
 gate covers EVERY extractable one, so a text drift on a branch no fixture
@@ -69,22 +69,12 @@ def _compare() -> tuple[int, list[str]]:
     """
     go_map = _extract(
         "_msg_extract_go.py",
-        ",".join(
-            (
-                str(_REPO_ROOT / "go" / "internal" / "tools"),
-                str(_REPO_ROOT / "go" / "internal" / "gentools"),
-            )
-        ),
+        str(_REPO_ROOT / "go" / "internal" / "gentools"),
         str(_REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"),
     )
     py_map = _extract(
         "_msg_extract_py.py",
-        ",".join(
-            (
-                str(_REPO_ROOT / "python" / "src" / "linodemcp" / "tools"),
-                str(_REPO_ROOT / "python" / "src" / "linodemcp" / "gentools"),
-            )
-        ),
+        str(_REPO_ROOT / "python" / "src" / "linodemcp" / "gentools"),
     )
 
     compared = sorted(set(go_map) & set(py_map))

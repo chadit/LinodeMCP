@@ -27,6 +27,19 @@ type renderer interface {
 	// message they were just looking at.
 	renderGroup(group string, tools []*contract) (emittedFile, error)
 
+	// renderAnswers emits the file holding the value type each declared answer
+	// shape fills and the projection that turns one into a plain body, plus the
+	// failure vocabulary and the subsystem type each generated operation is
+	// served through. It is a tree of its own because the engine builds these
+	// values and implements those types, and the tool tree already reads the
+	// engine, so the three cannot live in one package.
+	renderAnswers(shapes []answerShape, operations []localOperation) (emittedFile, error)
+
+	// renderOperations emits the arm behind each generated operation, which
+	// lands with the handlers that call it: an arm reaches the engine's outcome
+	// as well as the answer, and the tool tree already reads both.
+	renderOperations(operations []localOperation) ([]emittedFile, error)
+
 	// renderRegistry emits the file the server reads to register the cohort. A
 	// tool that nothing registers passes every gate that reads the contract and
 	// is still missing from the running server, so registration is emitted from
@@ -51,7 +64,9 @@ type renderer interface {
 }
 
 // renderTree turns the contract model into one language's file set.
-func renderTree(lang renderer, contracts []contract) (map[string]string, error) {
+func renderTree(
+	lang renderer, contracts []contract, operations []localOperation,
+) (map[string]string, error) {
 	grouped := make(map[string][]*contract, len(contracts))
 
 	for i := range contracts {
@@ -76,6 +91,15 @@ func renderTree(lang renderer, contracts []contract) (map[string]string, error) 
 	}
 
 	files[registry.Name] = registry.Text
+
+	written, err := lang.renderOperations(operations)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range written {
+		files[file.Name] = file.Text
+	}
 
 	return files, nil
 }

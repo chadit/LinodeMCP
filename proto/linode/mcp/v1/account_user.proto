@@ -61,6 +61,8 @@ message AccountUserGetInput {
     path: "/account/users/{username}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUser";
   option (linode.mcp.v1.tool_description) = "Gets one account user by username.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve account user {username}: {error}";
@@ -158,6 +160,8 @@ message AccountUserListInput {
     path: "/account/users"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserListResponse";
   option (linode.mcp.v1.tool_description) = "Lists users on the account.";
 
@@ -181,6 +185,8 @@ message AccountUserGrantsGetInput {
     path: "/account/users/{username}/grants"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrants";
   option (linode.mcp.v1.tool_description) = "Gets grants for one account user by username.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve grants for account user {username}: {error}";
@@ -206,6 +212,8 @@ message AccountUserCreateInput {
     path: "/account/users"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a user on the account.";
   option (linode.mcp.v1.error_message) = "Failed to create the account user: {error}";
@@ -214,9 +222,19 @@ message AccountUserCreateInput {
   // A replayed attempt would file a second user and a second email invite, so
   // neither language retried this POST before it was declared.
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview names the user and the restriction it is created with, which
-  // no declared string can interpolate.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The preview names the user and the restriction it is created with. The
+  // flag selects the wording rather than being spelled into one, which is what
+  // keeps the two languages from rendering the same bool two ways; an absent
+  // one words false, the way the API reads it.
+  option (linode.mcp.v1.preview_sentence) = {
+    chosen_by: {
+      argument: "restricted"
+      when_true: "A new account user \"{username}\" will be created with restricted=true."
+      when_false: "A new account user \"{username}\" will be created with restricted=false."
+      when_absent: "A new account user \"{username}\" will be created with restricted=false."
+    }
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -252,6 +270,8 @@ message AccountUserUpdateInput {
     path: "/account/users/{username}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates one account user by username.";
   option (linode.mcp.v1.error_message) = "Failed to update account user: {error}";
@@ -317,6 +337,8 @@ message AccountUserDeleteInput {
     path: "/account/users/{username}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one account user by username.";
   option (linode.mcp.v1.error_message) = "Failed to delete account user: {error}";
@@ -382,6 +404,8 @@ message AccountUserGrantsUpdateInput {
     path: "/account/users/{username}/grants"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrantsWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates grants for one account user by username.";
   option (linode.mcp.v1.error_message) = "Failed to update account user grants: {error}";

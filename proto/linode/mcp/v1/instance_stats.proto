@@ -16,6 +16,11 @@ message InstanceStatsGetInput {
     path: "/linode/instances/{linode_id}/stats"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceStats";
   option (linode.mcp.v1.tool_description) = "Gets daily CPU, IO, IPv4, and IPv6 statistics for a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to get stats for instance {linode_id}: {error}";
@@ -38,6 +43,11 @@ message InstanceStatsMonthGetInput {
     path: "/linode/instances/{linode_id}/stats/{year}/{month}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceStats";
   option (linode.mcp.v1.tool_description) = "Retrieves CPU, IO, IPv4, and IPv6 statistics for a Linode instance for a specific month.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve statistics for instance {linode_id} in {year}-{month:02}: {error}";

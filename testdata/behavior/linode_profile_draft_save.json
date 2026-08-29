@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_draft_save",
-  "description": "CapMeta builder tool writing a draft into the config file (no Linode API call). Pins every refusal that answers before the file is touched, in the order the handler asks them: name, confirm, built-in name, then the registry lookup.",
+  "description": "CapMeta builder tool writing a draft into the config file (no Linode API call). Pins every refusal that answers before the file is touched, in the order the handler asks them (name, confirm, built-in name, registry lookup), and the success path. The success case runs in the stateful lane, where the config path is redirected into a directory the case owns, so it writes a real file without reaching the operator's own config.",
   "cases": [
     {
       "name": "refuses an absent name",
@@ -31,6 +31,62 @@
         "confirm": true
       },
       "expect_error": "draft not found: no-such-draft"
+    },
+    {
+      "name": "writes a new profile and answers the diff",
+      "setup_calls": [
+        {
+          "tool": "linode_profile_draft_new",
+          "args": {
+            "name": "seam-fixture"
+          }
+        },
+        {
+          "tool": "linode_profile_draft_add_tools",
+          "args": {
+            "name": "seam-fixture",
+            "tools": [
+              "linode_vlan_list",
+              "linode_region_list"
+            ]
+          }
+        },
+        {
+          "tool": "linode_profile_draft_set",
+          "args": {
+            "name": "seam-fixture",
+            "allowed_environments": [
+              "staging"
+            ],
+            "allow_yolo": true
+          }
+        }
+      ],
+      "args": {
+        "name": "seam-fixture",
+        "confirm": true
+      },
+      "expect_result": {
+        "name": "seam-fixture",
+        "is_new": true,
+        "added_tools": [
+          "linode_region_list",
+          "linode_vlan_list"
+        ],
+        "removed_tools": [],
+        "changed_fields": {
+          "allow_yolo": {
+            "old": false,
+            "new": true
+          },
+          "allowed_environments": {
+            "old": [],
+            "new": [
+              "staging"
+            ]
+          }
+        }
+      }
     }
   ]
 }

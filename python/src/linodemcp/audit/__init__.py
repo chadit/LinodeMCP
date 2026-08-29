@@ -14,8 +14,11 @@ from linodemcp.audit.event import (
     Event,
     Mode,
     Status,
+    event_timestamp,
+    finalize,
     new_event,
     new_event_id,
+    set_mode,
 )
 from linodemcp.audit.export import (
     DEFAULT_EXPORT_MAX_RECORDS,
@@ -26,11 +29,11 @@ from linodemcp.audit.export import (
     UnknownExportFormatError,
     encode_events,
     export_events,
+    export_to_file,
+    resolve_max_records,
 )
 from linodemcp.audit.health import (
-    HealthReport,
-    SQLiteHealth,
-    collect_health,
+    health,
 )
 from linodemcp.audit.jsonl import (
     ACTIVE_LOG_FILE_NAME,
@@ -58,6 +61,10 @@ from linodemcp.audit.redact import (
     redaction_fields,
     redaction_fields_pii,
 )
+from linodemcp.audit.report import (
+    ReportDefinitionError,
+    report,
+)
 from linodemcp.audit.retention import (
     DEFAULT_AUDIT_RETENTION_DAYS,
     DEFAULT_RETENTION_SWEEP_INTERVAL_SECONDS,
@@ -65,12 +72,17 @@ from linodemcp.audit.retention import (
 )
 from linodemcp.audit.sink import CapturingSink, MultiSink, NoopSink, Sink
 from linodemcp.audit.sqlite import SQLiteSink
+from linodemcp.audit.store import (
+    read_with_fallback,
+    resolve_sqlite_path,
+    store_warning,
+)
 from linodemcp.audit.summary import (
     SummaryQuery,
-    SummaryRow,
     UnknownGroupByColumnError,
     load_window,
     summarize,
+    summary_over,
     validate_group_by,
 )
 
@@ -92,37 +104,45 @@ __all__ = [
     "Capability",
     "CapturingSink",
     "Event",
-    "HealthReport",
     "JSONLSink",
     "JSONLSinkClosedError",
     "Mode",
     "MultiSink",
     "NoopSink",
     "RecentQuery",
+    "ReportDefinitionError",
     "RetentionSweeper",
-    "SQLiteHealth",
     "SQLiteSink",
     "Sink",
     "Status",
     "SummaryQuery",
-    "SummaryRow",
     "UnknownExportFormatError",
     "UnknownGroupByColumnError",
-    "collect_health",
     "encode_events",
+    "event_timestamp",
     "export_events",
+    "export_to_file",
+    "finalize",
+    "health",
     "is_redacted",
     "load_window",
     "new_event",
     "new_event_id",
     "read_recent",
+    "read_with_fallback",
     "redact",
     "redact_with_pii",
     "redaction_field_set",
     "redaction_field_set_pii",
     "redaction_fields",
     "redaction_fields_pii",
+    "report",
     "resolve_default_audit_dir",
+    "resolve_max_records",
+    "resolve_sqlite_path",
+    "set_mode",
+    "store_warning",
     "summarize",
+    "summary_over",
     "validate_group_by",
 ]

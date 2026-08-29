@@ -18,8 +18,10 @@ from linodemcp.audit import (
     JSONLSink,
     JSONLSinkClosedError,
     Status,
+    finalize,
     new_event,
 )
+from linodemcp.genlocal import record_audit_event
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -66,11 +68,11 @@ def test_jsonl_sink_appends_one_line_per_event(tmp_path: Path) -> None:
     sink = JSONLSink(str(tmp_path))
     try:
         event1 = _make_event("linode_instance_list", Capability.READ)
-        event1.finalize(Status.SUCCESS, 12, "", "5 instances")
+        event1 = finalize(event1, Status.SUCCESS, 12, "", "5 instances")
         sink.write(event1)
 
         event2 = _make_event("linode_instance_create", Capability.WRITE)
-        event2.finalize(Status.ERROR, 45, "boom", "")
+        event2 = finalize(event2, Status.ERROR, 45, "boom", "")
         sink.write(event2)
     finally:
         sink.close()
@@ -90,6 +92,30 @@ def test_jsonl_sink_appends_one_line_per_event(tmp_path: Path) -> None:
     assert got2["error"] == "boom"
 
 
+def test_jsonl_sink_writes_the_record_itself(tmp_path: Path) -> None:
+    """Pin the line the sink appends to the record writer's own text.
+
+    Writing anything else would carry the members in this module's own order
+    rather than the message's, which is the divergence the record direction
+    exists to close and which every other case here reads through key lookups
+    that cannot see it.
+    """
+    sink = JSONLSink(str(tmp_path))
+    try:
+        event = _make_event("linode_instance_list", Capability.READ)
+        sink.write(event)
+    finally:
+        sink.close()
+
+    lines = [
+        line
+        for line in (tmp_path / "audit.log").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+    assert lines == [record_audit_event(event, "", "")]
+
+
 def test_jsonl_sink_rotates_on_day_boundary(tmp_path: Path) -> None:
     """Crossing UTC midnight rotates the prior day to audit-DATE.log.gz."""
     day1 = datetime(2026, 5, 18, 23, 59, 0, tzinfo=UTC)
@@ -99,11 +125,11 @@ def test_jsonl_sink_rotates_on_day_boundary(tmp_path: Path) -> None:
     sink = JSONLSink(str(tmp_path), clock=clock)
     try:
         day1_event = _make_event("linode_instance_list", Capability.READ)
-        day1_event.finalize(Status.SUCCESS, 10, "", "day-1-event")
+        day1_event = finalize(day1_event, Status.SUCCESS, 10, "", "day-1-event")
         sink.write(day1_event)
 
         day2_event = _make_event("linode_instance_get", Capability.READ)
-        day2_event.finalize(Status.SUCCESS, 11, "", "day-2-event")
+        day2_event = finalize(day2_event, Status.SUCCESS, 11, "", "day-2-event")
         sink.write(day2_event)
     finally:
         sink.close()
@@ -134,7 +160,7 @@ def test_jsonl_sink_write_after_close_drops_event(tmp_path: Path) -> None:
     sink.close()  # idempotent
 
     event = _make_event("linode_instance_list", Capability.READ)
-    event.finalize(Status.SUCCESS, 1, "", "")
+    event = finalize(event, Status.SUCCESS, 1, "", "")
     sink.write(event)
 
     assert len(captured) == 1

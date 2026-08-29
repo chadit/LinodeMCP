@@ -339,6 +339,64 @@
         ],
         "warnings": []
       }
+    },
+    {
+      "name": "dry_run_preview reports the folded defaults a caller named neither of",
+      "args": {
+        "label": "web-fw",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/firewalls",
+          "body": {
+            "label": "web-fw",
+            "rules": {
+              "inbound_policy": "ACCEPT",
+              "outbound_policy": "ACCEPT"
+            }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new Cloud Firewall \"web-fw\" will be created with inbound policy ACCEPT and outbound policy ACCEPT."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "dry_run_preview reports both policies the caller did name",
+      "args": {
+        "label": "web-fw",
+        "inbound_policy": "DROP",
+        "outbound_policy": "DROP",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/firewalls",
+          "body": {
+            "label": "web-fw",
+            "rules": {
+              "inbound_policy": "DROP",
+              "outbound_policy": "DROP"
+            }
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new Cloud Firewall \"web-fw\" will be created with inbound policy DROP and outbound policy DROP."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -12,8 +12,17 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from linodemcp.audit import Capability, Event, Mode, Status
+from linodemcp.audit import (
+    Capability,
+    Event,
+    Mode,
+    Status,
+    event_timestamp,
+)
 from linodemcp.config import Config
+from linodemcp.genlocal import (
+    record_audit_event,
+)
 from linodemcp.gentools import (
     create_linode_audit_recent_tool,
     handle_linode_audit_recent,
@@ -30,18 +39,18 @@ def _event(tool: str, capability: Capability, second: int) -> Event:
     """Build an event at a distinct second so write order equals time order."""
     ts = datetime(2026, 5, 20, 0, 0, second, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id="evt_" + tool,
         tool=tool,
         tool_capability=capability,
         environment="default",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
-        status=Status.SUCCESS,
+        status=Status.SUCCESS.value,
         latency_ms=0,
         result_summary="",
         error=None,
@@ -88,7 +97,7 @@ async def test_returns_events_meta_excluded(
         _event("linode_audit_recent", Capability.META, 2),
         _event("linode_instance_delete", Capability.DESTROY, 3),
     ]
-    body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
+    body = "".join(record_audit_event(event, "", "") + "\n" for event in events)
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
     result = await handle_linode_audit_recent({}, Config())

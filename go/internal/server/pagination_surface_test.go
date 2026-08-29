@@ -134,7 +134,7 @@ func TestEveryPaginatedToolRejectsBadPagination(t *testing.T) {
 
 		before := requests
 
-		isError, text := callServerTool(t, srv, info.Name, args)
+		isError, text := callServerTool(t, srv, nil, info.Name, args)
 
 		if !isError {
 			t.Errorf("%s: page=%q accepted, want a validation error", info.Name, args[pageArg])

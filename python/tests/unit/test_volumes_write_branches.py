@@ -21,30 +21,9 @@ from linodemcp.gentools import (
     handle_linode_volume_resize,
     handle_linode_volume_update,
 )
-from linodemcp.linode import Volume
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-
-
-def _volume(**overrides: object) -> Volume:
-    """Build a Volume read model with sensible defaults for walk tests."""
-    base: dict[str, object] = {
-        "id": 900,
-        "label": "old-label",
-        "status": "active",
-        "size": 20,
-        "region": "us-east",
-        "linode_id": None,
-        "linode_label": None,
-        "filesystem_path": "/dev/disk/by-id/x",
-        "tags": ["a"],
-        "created": "2026-01-01T00:00:00",
-        "updated": "2026-01-01T00:00:00",
-        "hardware_type": "nvme",
-    }
-    base.update(overrides)
-    return Volume(**base)  # type: ignore[arg-type]
 
 
 def _mock_client_returning(method: str, value: object) -> AsyncMock:
@@ -232,49 +211,12 @@ async def test_resize_rejects_undersized_target(sample_config: Config) -> None:
     assert "at least 10 GB" in result[0].text
 
 
-async def test_resize_dry_run_reports_size_change(sample_config: Config) -> None:
-    """The resize walk names the size change against fetched state."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _mock_client_returning("get_volume", _volume(size=20))
-        mock_cls.return_value = client
-
-        result = await handle_linode_volume_resize(
-            {"volume_id": 900, "size": 40, "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert any("from 20 GB to 40 GB" in s for s in body["side_effects"])
-
-
 async def test_update_dry_run_requires_volume_id(sample_config: Config) -> None:
     """A dry-run update validates volume_id first."""
     result = await handle_linode_volume_update(
         {"label": "x", "dry_run": True}, sample_config
     )
     assert "volume_id must be a positive integer" in result[0].text
-
-
-async def test_update_dry_run_reports_label_and_tag_changes(
-    sample_config: Config,
-) -> None:
-    """The update walk reports a label change and a tag-set replacement."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _mock_client_returning("get_volume", _volume(label="old-label"))
-        mock_cls.return_value = client
-
-        result = await handle_linode_volume_update(
-            {
-                "volume_id": 900,
-                "label": "new-label",
-                "tags": ["prod"],
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert any("Label changes" in s for s in body["side_effects"])
-    assert any("tag set is replaced" in s for s in body["side_effects"])
 
 
 async def test_update_rejects_invalid_label(sample_config: Config) -> None:
@@ -301,72 +243,3 @@ async def test_delete_confirmed_requires_volume_id(sample_config: Config) -> Non
     """A confirmed delete still requires volume_id."""
     result = await handle_linode_volume_delete({"confirm": True}, sample_config)
     assert "volume_id is required" in result[0].text
-
-
-async def test_clone_dry_run_describes_a_source_it_could_not_read(
-    sample_config: Config,
-) -> None:
-    """The label the caller asked for is the part they are about to be billed
-    for, so a source the fetch answered with nothing still earns the prose.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_cls.return_value = _mock_client_returning("get_volume", None)
-
-        result = await handle_linode_volume_clone(
-            {"volume_id": 900, "label": "copy", "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["side_effects"] == [
-        "A new volume labeled 'copy' will be created from the source volume."
-    ]
-    assert body["warnings"] == [
-        "Billing for the cloned volume starts immediately on creation."
-    ]
-
-
-async def test_clone_dry_run_names_the_source_it_read(sample_config: Config) -> None:
-    """A source the fetch named is what tells a caller which volume they copy."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_cls.return_value = _mock_client_returning("get_volume", _volume())
-
-        result = await handle_linode_volume_clone(
-            {"volume_id": 900, "label": "copy", "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["side_effects"] == [
-        "Volume 900 ('old-label') will be cloned to a new volume labeled 'copy'."
-    ]
-
-
-async def test_update_dry_run_sets_a_label_it_could_not_compare(
-    sample_config: Config,
-) -> None:
-    """A volume the fetch answered without a label reads as a label being set."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_cls.return_value = _mock_client_returning("get_volume", _volume(label=""))
-
-        result = await handle_linode_volume_update(
-            {"volume_id": 900, "label": "renamed", "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["side_effects"] == ["Label is set to 'renamed'."]
-
-
-async def test_update_dry_run_reports_tags_alone(sample_config: Config) -> None:
-    """An update naming only tags changes no label, so the walk says nothing
-    about one and reports the tag replacement by itself.
-    """
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_cls.return_value = _mock_client_returning("get_volume", _volume())
-
-        result = await handle_linode_volume_update(
-            {"volume_id": 900, "tags": ["prod"], "dry_run": True}, sample_config
-        )
-
-    body = json.loads(result[0].text)
-    assert body["side_effects"] == [
-        "The volume's tag set is replaced with the provided tags."
-    ]

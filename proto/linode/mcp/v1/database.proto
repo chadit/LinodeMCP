@@ -48,6 +48,8 @@ message DatabaseTypeGetInput {
     path: "/databases/types/{type_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseType";
   option (linode.mcp.v1.tool_description) = "Retrieves a single Managed Database node type by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve Managed Database type: {error}";
@@ -79,6 +81,8 @@ message DatabaseTypeListInput {
     path: "/databases/types"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseTypeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Managed Database node types with optional pagination.";
 
@@ -99,6 +103,8 @@ message DatabaseMySQLConfigGetInput {
     path: "/databases/mysql/config"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_description) = "Lists MySQL Managed Database advanced parameters.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve MySQL Managed Database advanced parameters: {error}";
 
@@ -115,6 +121,8 @@ message DatabasePostgreSQLConfigGetInput {
     path: "/databases/postgresql/config"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_description) = "Lists PostgreSQL Managed Database advanced parameters.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve PostgreSQL Managed Database advanced parameters: {error}";
 

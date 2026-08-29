@@ -14,7 +14,6 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -37,10 +36,16 @@ const (
 // filter assertions exercise both inclusion and exclusion paths.
 func fixtureCatalog() []profiles.ToolDescriptor {
 	return []profiles.ToolDescriptor{
-		{Name: toolInstanceBoot, Capability: profiles.CapWrite},
-		{Name: tcLinodeDomainGet, Capability: profiles.CapRead},
-		{Name: "hello", Capability: profiles.CapMeta},
+		{Name: toolInstanceBoot, Capability: profiles.CapWrite, Categories: []string{"compute"}},
+		{Name: tcLinodeDomainGet, Capability: profiles.CapRead, Categories: []string{dnsCategory}},
+		{Name: "hello", Capability: profiles.CapMeta, Categories: []string{"core"}},
 	}
+}
+
+// listToolsHandler is the generated catalog handler, which is the only seam
+// the listing has now that its whole body is declared.
+func listToolsHandler() builderHandler {
+	return generatedBuilder(gentools.NewLinodeProfileListToolsTool, nil)
 }
 
 // callListTools is a thin helper that invokes the list_tools handler
@@ -50,7 +55,7 @@ func fixtureCatalog() []profiles.ToolDescriptor {
 func callListTools(t *testing.T, args map[string]any) []map[string]any {
 	t.Helper()
 
-	result := callAnswer(t, catalogState(fixtureCatalog()), tools.ProfileListToolsAnswer, nil, args)
+	result := callBuilder(t, catalogState(fixtureCatalog()), listToolsHandler(), args)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	if !ok {
@@ -130,9 +135,9 @@ func TestListToolsReturnsAllEntriesUnfiltered(t *testing.T) {
 	}
 }
 
-// TestListToolsCategoriesPopulated verifies the categories field is
-// the resolved profiles.Categories() output, not an empty array. The
-// model relies on this to drive follow-up `category=` filters.
+// TestListToolsCategoriesPopulated verifies the categories field is the
+// catalog's declared category list, not an empty array. The model relies on
+// this to drive follow-up `category=` filters.
 func TestListToolsCategoriesPopulated(t *testing.T) {
 	t.Parallel()
 
@@ -213,7 +218,7 @@ func TestListToolsCapabilityFilterLongForm(t *testing.T) {
 func TestListToolsCapabilityFilterShortForm(t *testing.T) {
 	t.Parallel()
 
-	entries := callListTools(t, map[string]any{argCapability: "write"})
+	entries := callListTools(t, map[string]any{argCapability: tcCapabilityWrite})
 
 	if len(entries) != 1 {
 		t.Errorf("len(entries) = %d, want %d", len(entries), 1)
@@ -257,7 +262,7 @@ func TestListToolsCombinedFilters(t *testing.T) {
 	// dns + Read matches linode_domain_get.
 	matchEntries := callListTools(t, map[string]any{
 		argCategory:   dnsCategory,
-		argCapability: "read",
+		argCapability: capabilityRead,
 	})
 	if len(matchEntries) != 1 {
 		t.Errorf("len(matchEntries) = %d, want %d", len(matchEntries), 1)
@@ -270,7 +275,7 @@ func TestListToolsCombinedFilters(t *testing.T) {
 	// dns + Write matches nothing (no DNS write tools in the fixture).
 	missEntries := callListTools(t, map[string]any{
 		argCategory:   dnsCategory,
-		argCapability: "write",
+		argCapability: tcCapabilityWrite,
 	})
 	if len(missEntries) != 0 {
 		t.Errorf("missEntries = %v, want empty", missEntries)
@@ -284,7 +289,7 @@ func TestListToolsCombinedFilters(t *testing.T) {
 func TestListToolsEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
 
-	result := callAnswer(t, catalogState(nil), tools.ProfileListToolsAnswer, nil, nil)
+	result := callBuilder(t, catalogState(nil), listToolsHandler(), nil)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	if !ok {
@@ -362,7 +367,8 @@ func TestListCategoriesRegistration(t *testing.T) {
 func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 	t.Parallel()
 
-	result := callAnswer(t, catalogState(fixtureCatalog()), tools.ProfileListCategoriesAnswer, nil, nil)
+	result := callBuilder(t, catalogState(fixtureCatalog()),
+		generatedBuilder(gentools.NewLinodeProfileListCategoriesTool, nil), nil)
 
 	textContent, ok := result.Content[0].(mcp.TextContent)
 	if !ok {
@@ -431,7 +437,8 @@ func TestListToolsSortedByName(t *testing.T) {
 func TestListCategoriesSortedByName(t *testing.T) {
 	t.Parallel()
 
-	result := callAnswer(t, catalogState(fixtureCatalog()), tools.ProfileListCategoriesAnswer, nil, nil)
+	result := callBuilder(t, catalogState(fixtureCatalog()),
+		generatedBuilder(gentools.NewLinodeProfileListCategoriesTool, nil), nil)
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
 
@@ -466,7 +473,8 @@ func TestListCategoriesSortedByName(t *testing.T) {
 func TestListCategoriesEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
 
-	result := callAnswer(t, catalogState(nil), tools.ProfileListCategoriesAnswer, nil, nil)
+	result := callBuilder(t, catalogState(nil),
+		generatedBuilder(gentools.NewLinodeProfileListCategoriesTool, nil), nil)
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
 

@@ -31,6 +31,11 @@ message InstanceDiskGetInput {
     path: "/linode/instances/{linode_id}/disks/{disk_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDisk";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a specific disk on a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve disk {disk_id} for instance {linode_id}: {error}";
@@ -62,6 +67,11 @@ message InstanceDiskListInput {
     path: "/linode/instances/{linode_id}/disks"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all disks attached to a Linode instance.";
 
@@ -87,6 +97,11 @@ message InstanceDiskCreateInput {
     path: "/linode/instances/{linode_id}/disks"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new disk on a Linode instance. WARNING: This modifies the instance's storage allocation.";
   option (linode.mcp.v1.error_message) = "Failed to create disk for instance {linode_id}: {error}";
@@ -207,6 +222,11 @@ message InstanceDiskUpdateInput {
     path: "/linode/instances/{linode_id}/disks/{disk_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the label of a disk on a Linode instance.";
   option (linode.mcp.v1.error_message) = "Failed to modify disk {disk_id} on instance {linode_id}: {error}";
@@ -252,6 +272,11 @@ message InstanceDiskDeleteInput {
     path: "/linode/instances/{linode_id}/disks/{disk_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a disk from a Linode instance. WARNING: This is irreversible and all data on the disk will be lost. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This is irreversible. All data on the disk will be permanently deleted. Set confirm=true to proceed.";
@@ -260,12 +285,30 @@ message InstanceDiskDeleteInput {
   // A replay would report a disk the first attempt already erased as one the
   // instance never had.
   option (linode.mcp.v1.retry_disabled) = true;
-  // The walk lists the configuration profiles whose device slots point at it,
-  // which is an extra call no descriptor describes.
   option (linode.mcp.v1.state_route) = {
     tool: "linode_instance_disk_get"
   };
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // The walk lists the configuration profiles whose device slots point at it,
+  // matched through the typed device map by the call's own disk_id.
+  option (linode.mcp.v1.dependency_walk) = {
+    list_tool: "linode_instance_config_list"
+    filter: {
+      field: "devices.*.disk_id"
+      argument: "disk_id"
+    }
+    emit: {
+      kind: "instance_config"
+      id_field: "id"
+      label_field: "label"
+      action: "removed"
+      note: "References this disk; its device slot is cleared when the disk is deleted."
+    }
+    warnings: {
+      template: "Config profiles reference this disk; deleting it leaves those slots empty."
+      when_any: true
+    }
+    list_error_warning: "Could not list instance configs: {error}"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -296,15 +339,26 @@ message InstanceDiskCloneInput {
     path: "/linode/instances/{linode_id}/disks/{disk_id}/clone"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskWriteResponse";
   option (linode.mcp.v1.tool_description) = "Clones a disk on a Linode instance. The instance must have enough unallocated storage for the clone.";
   option (linode.mcp.v1.error_message) = "Failed to clone disk {disk_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This clones a disk, consuming additional storage on the instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Disk {disk_id} cloned to new disk {id} on instance {linode_id}";
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview reads the disk so its label and size name the storage the
-  // clone consumes.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the disk being copied, since its size is the storage the clone
+  // consumes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_disk_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Disk \"{state:label}\" ({state:size} MB) is cloned to a new disk on the same instance, consuming {state:size} MB of additional storage."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   option (buf.validate.message).cel = {
     id: "instance_disk_clone.linode_id.positive"
@@ -340,14 +394,31 @@ message InstanceDiskResizeInput {
     path: "/linode/instances/{linode_id}/disks/{disk_id}/resize"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskResizeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resizes a disk on a Linode instance. The instance must be powered off to resize. Growing a disk requires sufficient unallocated storage. Shrinking requires the data to fit in the new size.";
   option (linode.mcp.v1.error_message) = "Failed to resize disk {disk_id} on instance {linode_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This resizes the disk. The instance must be powered off. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Disk {disk_id} on instance {linode_id} resize initiated to {size} MB";
-  // The preview reads the disk so the size it grows or shrinks from is
-  // reported beside the size it is headed for.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the disk the resize starts from.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_instance_disk_get"
+  };
+  // A read answering no size leaves the starting size out rather than naming a
+  // zero.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Disk resizes from {state:size} MB to {size} MB."
+    template: "Disk resizes to {size} MB."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The instance must be powered off to resize a disk."
+    line: PREVIEW_LINE_WARNING
+  };
 
   option (buf.validate.message).cel = {
     id: "instance_disk_resize.linode_id.positive"
@@ -394,6 +465,11 @@ message InstanceDiskPasswordResetInput {
     path: "/linode/instances/{linode_id}/disks/{disk_id}/password"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {
+    category: TOOL_CATEGORY_COMPUTE_DEEP
+    category: TOOL_CATEGORY_COMPUTE
+  };
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDiskActionResponse";
   option (linode.mcp.v1.tool_description) = "Resets the root password for a disk on a Linode instance. The instance must be powered off.";
   option (linode.mcp.v1.error_message) = "Failed to reset password for disk {disk_id} on instance {linode_id}: {error}";

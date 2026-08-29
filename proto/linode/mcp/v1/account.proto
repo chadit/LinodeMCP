@@ -59,6 +59,8 @@ message AccountGetInput {
     path: "/account"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_CORE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Account";
   option (linode.mcp.v1.tool_description) = "Retrieves the authenticated user's Linode account information including billing details and capabilities";
   option (linode.mcp.v1.error_message) = "Failed to retrieve the account: {error}";
@@ -87,6 +89,8 @@ message AccountAgreementsListInput {
     path: "/account/agreements"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountAgreements";
   option (linode.mcp.v1.tool_description) = "Lists account agreements and whether each has been acknowledged";
   option (linode.mcp.v1.error_message) = "Failed to list account agreements: {error}";
@@ -115,6 +119,8 @@ message AccountSettingsGetInput {
     path: "/account/settings"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountSettings";
   option (linode.mcp.v1.tool_description) = "Retrieves account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy";
   option (linode.mcp.v1.error_message) = "Failed to retrieve account settings: {error}";
@@ -156,6 +162,8 @@ message AccountTransferGetInput {
     path: "/account/transfer"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountTransfer";
   option (linode.mcp.v1.tool_description) = "Retrieves the authenticated account's network transfer usage and quota by region.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve the account transfer pool: {error}";
@@ -180,6 +188,8 @@ message AccountInvoiceGetInput {
     path: "/account/invoices/{invoice_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoice";
   option (linode.mcp.v1.tool_description) = "Gets one account invoice by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve invoice {invoice_id}: {error}";
@@ -220,6 +230,8 @@ message AccountLoginGetInput {
     path: "/account/logins/{login_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLogin";
   option (linode.mcp.v1.tool_description) = "Gets one account login by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve account login {login_id}: {error}";
@@ -250,6 +262,8 @@ message ProfileLoginGetInput {
     path: "/profile/logins/{login_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLogin";
   option (linode.mcp.v1.tool_description) = "Gets one login for the authenticated profile by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve profile login {login_id}: {error}";
@@ -280,6 +294,8 @@ message ProfileLoginListInput {
     path: "/profile/logins"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileLoginListResponse";
   option (linode.mcp.v1.tool_description) = "Lists login history for the authenticated profile.";
 
@@ -306,6 +322,8 @@ message AccountPaymentGetInput {
     path: "/account/payments/{payment_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPayment";
   option (linode.mcp.v1.tool_description) = "Gets one payment made on the authenticated account by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve payment {payment_id}: {error}";
@@ -389,6 +407,8 @@ message AccountOAuthClientGetInput {
     path: "/account/oauth-clients/{client_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClient";
   option (linode.mcp.v1.tool_description) = "Gets one OAuth client registered on the account. OAuth client secrets are not returned by this tool.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve OAuth client {client_id}: {error}";
@@ -543,6 +563,8 @@ message MaintenancePolicyListInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MaintenancePolicyListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Linode maintenance policies.";
 
@@ -711,6 +733,8 @@ message AccountAgreementsAcknowledgeInput {
     path: "/account/agreements"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Acknowledges one or more account agreements.";
   option (linode.mcp.v1.error_message) = "Failed to acknowledge account agreements: {error}";
@@ -773,6 +797,8 @@ message AccountCancelInput {
     path: "/account/cancel"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountCancelWriteResponse";
   option (linode.mcp.v1.tool_description) = "Cancels the active account and returns the exit survey link.";
   option (linode.mcp.v1.error_message) = "Failed to cancel account: {error}";
@@ -812,6 +838,8 @@ message AccountChildAccountGetInput {
     path: "/account/child-accounts/{euuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ChildAccount";
   option (linode.mcp.v1.tool_description) = "Gets one child-level account the authenticated account can access.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve child account {euuid}: {error}";
@@ -838,6 +866,8 @@ message AccountChildAccountListInput {
     path: "/account/child-accounts"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ChildAccountListResponse";
   option (linode.mcp.v1.tool_description) = "Lists child-level accounts the authenticated account can access.";
 
@@ -863,6 +893,8 @@ message AccountChildAccountTokenCreateInput {
     path: "/account/child-accounts/{euuid}/token"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountChildAccountTokenWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a short-lived proxy user token for one child-level account.";
   option (linode.mcp.v1.error_message) = "Failed to create child account token: {error}";
@@ -904,6 +936,8 @@ message AccountInvoiceItemListInput {
     path: "/account/invoices/{invoice_id}/items"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoiceItemListResponse";
   option (linode.mcp.v1.tool_description) = "Lists line items for one account invoice by ID.";
 
@@ -929,6 +963,8 @@ message AccountInvoiceListInput {
     path: "/account/invoices"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoiceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists invoices for the authenticated account.";
 
@@ -948,6 +984,8 @@ message AccountLoginListInput {
     path: "/account/logins"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLoginListResponse";
   option (linode.mcp.v1.tool_description) = "Lists user logins for the account.";
 
@@ -968,6 +1006,8 @@ message AccountMaintenanceListInput {
     path: "/account/maintenance"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountMaintenanceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists maintenance records visible to the authenticated account.";
 
@@ -988,6 +1028,8 @@ message AccountNotificationListInput {
     path: "/account/notifications"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountNotificationListResponse";
   option (linode.mcp.v1.tool_description) = "Lists active notifications for the authenticated account.";
 
@@ -1009,6 +1051,8 @@ message AccountOAuthClientCreateInput {
     path: "/account/oauth-clients"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientCreateWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates an account OAuth client. WARNING: The secret is only shown once in the response and cannot be retrieved later.";
   option (linode.mcp.v1.error_message) = "Failed to create OAuth client: {error}";
@@ -1060,6 +1104,8 @@ message AccountOAuthClientDeleteInput {
     path: "/account/oauth-clients/{client_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientIDResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one account OAuth client by ID.";
   option (linode.mcp.v1.error_message) = "Failed to delete account OAuth client: {error}";
@@ -1116,6 +1162,8 @@ message AccountOAuthClientListInput {
     path: "/account/oauth-clients"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientListResponse";
   option (linode.mcp.v1.tool_description) = "Lists OAuth clients registered on the account.";
 
@@ -1136,6 +1184,8 @@ message AccountOAuthClientSecretResetInput {
     path: "/account/oauth-clients/{client_id}/reset-secret"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientSecretResetWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resets one account OAuth client secret by ID. WARNING: The new secret is only shown once in the response and cannot be retrieved later.";
   option (linode.mcp.v1.error_message) = "Failed to reset the secret for OAuth client {client_id}: {error}";
@@ -1180,6 +1230,8 @@ message AccountOAuthClientUpdateInput {
     path: "/account/oauth-clients/{client_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates label, redirect URI, or public setting for one account OAuth client.";
   option (linode.mcp.v1.error_message) = "Failed to update OAuth client {client_id}: {error}";
@@ -1241,6 +1293,8 @@ message AccountPaymentCreateInput {
     path: "/account/payments"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentWriteResponse";
   option (linode.mcp.v1.tool_description) = "Makes a payment on the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to create the payment: {error}";
@@ -1249,10 +1303,14 @@ message AccountPaymentCreateInput {
   // A replayed attempt would charge the account twice, so neither language
   // retried this POST before it was declared.
   option (linode.mcp.v1.retry_disabled) = true;
-  // normalize trims usd, which is the value both languages have always put on
-  // the wire. preview carries the sentence Python had and Go did not: the money
-  // leaves the account.
-  option (linode.mcp.v1.tool_hooks) = "normalize";
+  // usd is the value both languages have always put on the wire, trimmed. An
+  // explicit-null payment_method_id is omitted by the body builder, which is
+  // what Python's hand-written body used to do. preview carries the sentence
+  // Python had and Go did not: the money leaves the account.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "usd"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
   // The money leaving is the consequence; the request carries only an amount.
   option (linode.mcp.v1.preview_sentence) = {
     template: "A payment is created on the Linode account."
@@ -1301,6 +1359,8 @@ message AccountPaymentListInput {
     path: "/account/payments"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentListResponse";
   option (linode.mcp.v1.tool_description) = "Lists payments made on the authenticated account.";
 
@@ -1322,6 +1382,8 @@ message AccountPaymentMethodDeleteInput {
     path: "/account/payment-methods/{payment_method_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodIDResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a payment method from the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to delete account payment method: {error}";
@@ -1370,6 +1432,8 @@ message AccountPaymentMethodCreateInput {
     path: "/account/payment-methods"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodWriteResponse";
   option (linode.mcp.v1.tool_description) = "Adds a payment method to the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to create the payment method: {error}";
@@ -1445,6 +1509,8 @@ message AccountPaymentMethodGetInput {
     path: "/account/payment-methods/{payment_method_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethod";
   option (linode.mcp.v1.tool_description) = "Gets one payment method for the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve payment method {payment_method_id}: {error}";
@@ -1467,6 +1533,8 @@ message AccountPaymentMethodListInput {
     path: "/account/payment-methods"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodListResponse";
   option (linode.mcp.v1.tool_description) = "Lists payment methods for the authenticated account.";
 
@@ -1487,6 +1555,8 @@ message AccountPaymentMethodMakeDefaultInput {
     path: "/account/payment-methods/{payment_method_id}/make-default"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodIDResponse";
   option (linode.mcp.v1.tool_description) = "Sets a payment method as the authenticated account default.";
   option (linode.mcp.v1.error_message) = "Failed to make payment method {payment_method_id} the default: {error}";
@@ -1527,6 +1597,8 @@ message AccountPromoCreditAddInput {
     path: "/account/promo-codes"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPromoResponse";
   option (linode.mcp.v1.tool_description) = "Applies a promo credit to the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to apply the promo code: {error}";
@@ -1576,6 +1648,8 @@ message AccountSettingsManagedEnableInput {
     path: "/account/settings/managed-enable"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
   option (linode.mcp.v1.tool_description) = "Enables Linode Managed for the account. Pass dry_run=true to preview without enabling.";
   option (linode.mcp.v1.error_message) = "Failed to enable Linode Managed: {error}";
@@ -1622,6 +1696,8 @@ message AccountSettingsUpdateInput {
     expression: "!has(this.interfaces_for_new_linodes) || this.interfaces_for_new_linodes in ['legacy_config_only','legacy_config_default_but_linode_allowed','linode_default_but_legacy_config_allowed','linode_only']"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountSettingsWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy.";
   option (linode.mcp.v1.error_message) = "Failed to update account settings: {error}";
@@ -1710,6 +1786,8 @@ message AccountUpdateInput {
     path: "/account"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates account billing and contact information. Pass dry_run=true to preview without updating.";
   option (linode.mcp.v1.error_message) = "Failed to update account: {error}";

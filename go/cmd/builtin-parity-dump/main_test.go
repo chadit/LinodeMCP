@@ -77,8 +77,8 @@ func TestDumpCarriesBothHalvesOfTheContract(t *testing.T) {
 		allowed[profile.Name] = profile.AllowedTools
 	}
 
-	if len(allowed) != 8 {
-		t.Errorf("resolved %d profiles, want the 8 built-ins", len(allowed))
+	if len(allowed) != 9 {
+		t.Errorf("resolved %d profiles, want the 9 built-ins", len(allowed))
 	}
 
 	if !slices.Contains(allowed["storage-admin"], "linode_volume_create") {

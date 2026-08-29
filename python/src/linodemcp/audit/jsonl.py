@@ -8,13 +8,14 @@ event to ``audit.log`` and rotates the file to
 from __future__ import annotations
 
 import gzip
-import json
 import logging
 import shutil
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
+
+from linodemcp.genlocal import record_audit_event
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -122,7 +123,10 @@ class JSONLSink:
                     )
 
             try:
-                line = json.dumps(event.to_dict(), separators=(",", ":"))
+                # The record's own canonical text rather than this language's
+                # dict order, which is what puts every sink's line in the
+                # contract's order.
+                line = record_audit_event(event, "", "")
             except (TypeError, ValueError) as exc:
                 self._on_write_error(
                     ValueError(f"audit: marshal event: {exc}"),

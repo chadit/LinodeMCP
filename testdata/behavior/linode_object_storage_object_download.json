@@ -93,12 +93,30 @@
         "name": "releases/app.tar.gz",
         "size_bytes": 22,
         "etag": "5eb63bbbe01eeed093cb22bb8f5acdc3"
-      }
+      },
+      "expect_requests": [
+        {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "method": "GET",
+            "content_type": "application/octet-stream",
+            "expires_in": 3600
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/artifacts/releases/app.tar.gz?sig=fixture"
+        }
+      ]
     },
     {
       "name": "refuses an existing destination without overwrite and makes no call",
       "files": {
-        "occupied.bin": { "content": "already here" }
+        "occupied.bin": {
+          "content": "already here"
+        }
       },
       "args": {
         "region": "us-east",

@@ -193,6 +193,126 @@
       },
       "api_response": 7,
       "expect_api_error": "domain"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "domain_id": 5,
+        "status": "disabled",
+        "soa_email": "ops@example.com",
+        "description": "new desc",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /domains/5": {
+          "id": 5,
+          "domain": "example.com",
+          "type": "master",
+          "status": "active",
+          "description": "",
+          "group": "",
+          "soa_email": "admin@example.com",
+          "retry_sec": 0,
+          "master_ips": [],
+          "axfr_ips": [],
+          "expire_sec": 0,
+          "refresh_sec": 0,
+          "ttl_sec": 0,
+          "tags": [],
+          "created": "",
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_domain_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/domains/5"
+        },
+        "current_state": {
+          "id": 5,
+          "domain": "example.com",
+          "type": "master",
+          "status": "active",
+          "description": "",
+          "group": "",
+          "soa_email": "admin@example.com",
+          "retry_sec": 0,
+          "master_ips": [],
+          "axfr_ips": [],
+          "expire_sec": 0,
+          "refresh_sec": 0,
+          "ttl_sec": 0,
+          "tags": [],
+          "created": "",
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Domain status changes from \"active\" to \"disabled\".",
+          "SOA email is set to \"ops@example.com\".",
+          "The domain description is updated."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "dry_run_preview_soa_already_set",
+      "args": {
+        "domain_id": 5,
+        "soa_email": "admin@example.com",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /domains/5": {
+          "id": 5,
+          "domain": "example.com",
+          "type": "master",
+          "status": "active",
+          "description": "",
+          "group": "",
+          "soa_email": "admin@example.com",
+          "retry_sec": 0,
+          "master_ips": [],
+          "axfr_ips": [],
+          "expire_sec": 0,
+          "refresh_sec": 0,
+          "ttl_sec": 0,
+          "tags": [],
+          "created": "",
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_domain_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/domains/5"
+        },
+        "current_state": {
+          "id": 5,
+          "domain": "example.com",
+          "type": "master",
+          "status": "active",
+          "description": "",
+          "group": "",
+          "soa_email": "admin@example.com",
+          "retry_sec": 0,
+          "master_ips": [],
+          "axfr_ips": [],
+          "expire_sec": 0,
+          "refresh_sec": 0,
+          "ttl_sec": 0,
+          "tags": [],
+          "created": "",
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

@@ -210,6 +210,64 @@
         "status": "paused"
       },
       "expect_error": "status must be one of: enabled, disabled"
+    },
+    {
+      "name": "dry_run_preview_status_enabled",
+      "args": {
+        "firewall_id": 123,
+        "status": "enabled",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /networking/firewalls/123": {
+          "id": 123,
+          "label": "web-fw",
+          "status": "disabled",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-01T00:00:00",
+          "tags": [
+            "prod"
+          ],
+          "rules": {
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT",
+            "inbound": [],
+            "outbound": []
+          }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/networking/firewalls/123",
+          "body": {
+            "status": "enabled"
+          }
+        },
+        "current_state": {
+          "id": 123,
+          "label": "web-fw",
+          "status": "disabled",
+          "created": "2026-01-01T00:00:00",
+          "updated": "2026-01-01T00:00:00",
+          "tags": [
+            "prod"
+          ],
+          "rules": {
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT",
+            "inbound": [],
+            "outbound": []
+          }
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Firewall status changes to \"enabled\"; this immediately starts enforcing its rules."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

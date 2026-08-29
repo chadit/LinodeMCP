@@ -88,7 +88,9 @@
     {
       "name": "previews the transfer without making it",
       "files": {
-        "small.bin": { "content": "hello object storage" }
+        "small.bin": {
+          "content": "hello object storage"
+        }
       },
       "args": {
         "region": "us-east",
@@ -119,9 +121,82 @@
       }
     },
     {
+      "name": "previews the refusal of a file above the single-part ceiling",
+      "files": {
+        "big.bin": {
+          "size": 2048,
+          "fill": "a"
+        }
+      },
+      "config": {
+        "object_storage": {
+          "max_single_part_bytes": 1024
+        }
+      },
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "{{file:big.bin}}",
+        "dry_run": true
+      },
+      "expect_result": {
+        "tool": "linode_object_storage_object_upload",
+        "dry_run": true,
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "content_type": "application/octet-stream",
+            "expires_in": 3600,
+            "method": "PUT"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": [
+          "source_path is above the single-part upload ceiling: 2048 bytes exceeds the 1024 byte ceiling, and multipart upload is not implemented yet"
+        ]
+      }
+    },
+    {
+      "name": "previews the refusal of a source path with no file behind it",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "/nonexistent/upload-fixture-missing.bin",
+        "dry_run": true
+      },
+      "expect_result": {
+        "tool": "linode_object_storage_object_upload",
+        "dry_run": true,
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "content_type": "application/octet-stream",
+            "expires_in": 3600,
+            "method": "PUT"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": [
+          "source_path names no readable file: /nonexistent/upload-fixture-missing.bin"
+        ]
+      }
+    },
+    {
       "name": "uploads a small object and reports what landed",
       "files": {
-        "small.bin": { "content": "hello object storage" }
+        "small.bin": {
+          "content": "hello object storage"
+        }
       },
       "args": {
         "region": "us-east",
@@ -148,15 +223,36 @@
         "size_bytes": 20,
         "etag": "5eb63bbbe01eeed093cb22bb8f5acdc3",
         "upload_mode": "single"
-      }
+      },
+      "expect_requests": [
+        {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "method": "PUT",
+            "content_type": "application/octet-stream",
+            "expires_in": 3600
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/artifacts/releases/app.tar.gz?sig=fixture"
+        }
+      ]
     },
     {
       "name": "refuses a file above the single-part ceiling",
       "files": {
-        "big.bin": { "size": 2048, "fill": "a" }
+        "big.bin": {
+          "size": 2048,
+          "fill": "a"
+        }
       },
       "config": {
-        "object_storage": { "max_single_part_bytes": 1024 }
+        "object_storage": {
+          "max_single_part_bytes": 1024
+        }
       },
       "args": {
         "region": "us-east",
@@ -191,7 +287,9 @@
     {
       "name": "rejects a presign response that is not an object",
       "files": {
-        "small.bin": { "content": "hello object storage" }
+        "small.bin": {
+          "content": "hello object storage"
+        }
       },
       "args": {
         "region": "us-east",

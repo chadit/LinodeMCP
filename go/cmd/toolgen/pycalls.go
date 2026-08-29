@@ -122,17 +122,13 @@ func pyGetExtras(tool *pyTool) ([]string, error) {
 
 	lines = append(lines, pyDeclaredPreview(tool)...)
 
-	if tool.hook(hookKindPreview) != "" {
-		lines = append(lines, "        preview="+tool.hook(hookKindPreview)+",")
-	}
-
 	return lines, nil
 }
 
-// pyAssembledReadCall is the assembled-read driver call: the hook that fetches,
-// and what it fills. The route answers with something no decode can place, so
-// the hook owns the transport and the driver places its one member beside the
-// ids the call was addressed by.
+// pyAssembledReadCall is the assembled-read driver call: the transport that
+// fetches, and what it fills. The route answers with something no decode can
+// place, so the declared transport owns the transfer and the driver places its
+// one member beside the ids the call was addressed by.
 func pyAssembledReadCall(tool *pyTool) ([]string, error) {
 	members := make([]string, 0, len(tool.c.Assembled))
 	for _, name := range tool.assembledNames() {
@@ -144,7 +140,7 @@ func pyAssembledReadCall(tool *pyTool) ([]string, error) {
 		pyDriverConfigLine,
 		pyDriverArgumentsLine,
 		"        tool=" + pyQuote(tool.c.Name) + ",",
-		"        execute=" + tool.hook(hookKindExecute) + ",",
+		pyTransportLine(tool),
 		"        assembled=(" + strings.Join(members, ", ") + ",),",
 	}
 
@@ -200,10 +196,6 @@ func pyWriteCall(tool *pyTool) ([]string, error) {
 
 	lines = append(lines, pyDeclaredPreview(tool)...)
 
-	if tool.hook(hookKindPreview) != "" {
-		lines = append(lines, "        preview="+tool.hook(hookKindPreview)+",")
-	}
-
 	if len(tool.c.Query) > 0 {
 		lines = append(lines, "        query=query,")
 	}
@@ -243,10 +235,10 @@ func pyBodyReadCall(tool *pyTool) ([]string, error) {
 		lines = append(lines, "        path_values={"+pyPathValuesLiteral(tool)+"},")
 	}
 
-	// The hook stands in for the routed call, the same way it does on the
+	// The transport stands in for the routed call, the same way it does on the
 	// acknowledge tier; the driver keeps everything around it.
-	if tool.hook(hookKindExecute) != "" {
-		lines = append(lines, "        execute="+tool.hook(hookKindExecute)+",")
+	if tool.c.transported() {
+		lines = append(lines, pyTransportLine(tool))
 
 		if len(tool.c.Assembled) > 0 {
 			lines = append(lines, "        assembled=("+pyQuotedJoin(tool.assembledNames())+",),")
@@ -286,16 +278,13 @@ func pyAcknowledgeCall(tool *pyTool) ([]string, error) {
 		lines = append(lines, "        redact_preview=("+redacted+",),")
 	}
 
+	lines = append(lines, pyStandInMembers(tool)...)
 	lines = append(lines, pyDeclaredPreview(tool)...)
 
-	if tool.hook(hookKindPreview) != "" {
-		lines = append(lines, "        preview="+tool.hook(hookKindPreview)+",")
-	}
-
-	// The hook stands in for the live call alone: everything the driver does
-	// around it, the gate included, is what the tier already emits.
-	if tool.hook(hookKindExecute) != "" {
-		lines = append(lines, "        execute="+tool.hook(hookKindExecute)+",")
+	// The transport stands in for the live call alone: everything the driver
+	// does around it, the gate included, is what the tier already emits.
+	if tool.c.transported() {
+		lines = append(lines, pyTransportLine(tool))
 
 		if len(tool.c.Assembled) > 0 {
 			lines = append(lines, "        assembled=("+pyQuotedJoin(tool.assembledNames())+",),")
@@ -305,7 +294,7 @@ func pyAcknowledgeCall(tool *pyTool) ([]string, error) {
 	if tool.c.Mode {
 		lines = append(lines, "        fetch_state=fetch_state,")
 
-		if tool.hook(hookKindDependencyWalk) != "" {
+		if tool.walksDependencies() {
 			lines = append(lines, "        dependency_walk=dependency_walk,")
 		}
 
@@ -322,8 +311,8 @@ func pyAcknowledgeCall(tool *pyTool) ([]string, error) {
 	return append(lines, "    )"), nil
 }
 
-// pyDestroyArguments reads the ids, notes a missing one, and hands the hooks
-// their closures.
+// pyDestroyArguments reads the ids, notes a missing one, and hands the driver
+// its closures.
 //
 // The missing-id sentence is noted rather than answered: when it surfaces is
 // the driver's job and differs by branch, ahead of a plan or a preview and
@@ -338,15 +327,8 @@ func pyDestroyArguments(tool *pyTool) ([]string, error) {
 		lines = append(lines, pyDestroyPathRead(tool, slot))
 	}
 
-	lines = append(lines, "    error = "+pyConstraintCall(tool)+" or None", "    if not error:")
-
-	branch := pyBranchIf
-
-	for _, slot := range tool.c.Slots {
-		lines = append(lines, pyDestroyIDBranch(tool, slot, branch)...)
-
-		branch = pyBranchElif
-	}
+	lines = append(lines, "    error = "+pyConstraintCall(tool)+" or None")
+	lines = append(lines, pyDestroySlotChecks(tool)...)
 
 	// A removal that is a rebuild rather than a delete sends what it was given,
 	// and an unusable member is noted beside a missing id so both surface under
@@ -362,9 +344,6 @@ func pyDestroyArguments(tool *pyTool) ([]string, error) {
 	ids := pyDestroyIDs(tool)
 
 	fetch := pyStateFetch(tool, ids)
-	if tool.hook(hookKindFetchState) != "" {
-		fetch = "await " + tool.hook(hookKindFetchState) + "(client, " + ids + ")"
-	}
 
 	lines = append(lines,
 		"",
@@ -373,7 +352,7 @@ func pyDestroyArguments(tool *pyTool) ([]string, error) {
 		"",
 	)
 
-	lines = append(lines, pyDependencyWalk(tool, ids)...)
+	lines = append(lines, pyDependencyWalk(tool)...)
 
 	return lines, nil
 }
@@ -382,35 +361,15 @@ func pyDestroyArguments(tool *pyTool) ([]string, error) {
 // fetch it is paired with produces.
 //
 // A declared fetch reports the projected state, so the walk is handed it as the
-// type that carries it: the annotated hook stops type-checking if the pair ever
+// type that carries it: the annotation stops type-checking if the pair ever
 // falls out of step, where the shape check it replaces went on reporting an
 // empty walk.
-func pyDependencyWalk(tool *pyTool, arguments string) []string {
-	if tool.hook(hookKindDependencyWalk) == "" {
-		return nil
+func pyDependencyWalk(tool *pyTool) []string {
+	if len(tool.c.DepWalks) > 0 || len(tool.c.PreviewSentences) > 0 || tool.c.BillingDecl != nil {
+		return pyDeclaredWalks(tool)
 	}
 
-	if !tool.c.StateRead.declared() {
-		return []string{
-			"    async def dependency_walk(",
-			"        client: RetryableClient, state: Any",
-			"    ) -> DryRunDetails:",
-			"        return await " + tool.hook(hookKindDependencyWalk) + "(",
-			"            client, " + arguments + ", state",
-			"        )",
-			"",
-		}
-	}
-
-	return []string{
-		"    async def dependency_walk(",
-		"        client: RetryableClient, state: Any",
-		"    ) -> DryRunDetails:",
-		"        return await " + tool.hook(hookKindDependencyWalk) + "(",
-		"            client, " + arguments + ", declared_state_of(state)",
-		"        )",
-		"",
-	}
+	return nil
 }
 
 // pyStateReadIDs is the removal's path arguments in the order the state read
@@ -450,6 +409,43 @@ func pyStatePayload(tool *pyTool) string {
 	return ", payload=" + pyQuote(tool.c.StateRead.Payload)
 }
 
+// pyDestroySlotChecks is the id chain a removal refuses on. A lone slot folds
+// into the error guard, since a single nested if under it is the shape the
+// linter refuses; several keep the guarded if/elif chain.
+func pyDestroySlotChecks(tool *pyTool) []string {
+	if len(tool.c.Slots) == 1 {
+		return pyDestroySoleIDCheck(tool, tool.c.Slots[0])
+	}
+
+	lines := []string{"    if not error:"}
+	branch := pyBranchIf
+
+	for _, slot := range tool.c.Slots {
+		lines = append(lines, pyDestroyIDBranch(tool, slot, branch)...)
+
+		branch = pyBranchElif
+	}
+
+	return lines
+}
+
+// pyDestroySoleIDCheck is the one-slot chain with the error guard folded in.
+func pyDestroySoleIDCheck(tool *pyTool, slot string) []string {
+	local := pyLocal(slot)
+
+	if tool.pathArg(slot).numeric {
+		return []string{
+			"    if not error and " + local + "_error:",
+			"        error = " + local + "_error",
+		}
+	}
+
+	return []string{
+		"    if not error and not " + local + ":",
+		"        error = " + pyQuote(slot+" is required"),
+	}
+}
+
 // pyDestroyIDBranch is one arm of the chain a removal notes its first unusable
 // id in. An integer id carries the sentence its reader already answered; a
 // label reads as blank when absent, which is the only thing there is to say.
@@ -470,8 +466,8 @@ func pyDestroyIDBranch(tool *pyTool, slot, branch string) []string {
 }
 
 // pyDestroyIDs is the value each path id reaches the route, the echo, and the
-// hooks under. All three read the same expression, so a delete cannot address
-// one resource and report another.
+// closures under. All three read the same expression, so a delete cannot
+// address one resource and report another.
 func pyDestroyIDs(tool *pyTool) string {
 	values := make([]string, 0, len(tool.c.Slots))
 	for _, slot := range tool.c.Slots {
@@ -505,6 +501,15 @@ func pyDestroyPathRead(tool *pyTool, slot string) string {
 // names the element rather than the collection, and the same id is what selects
 // the element out of the page.
 func pyStateFetch(tool *pyTool, ids string) string {
+	if tool.c.StateRead.scan() {
+		return pyScanFetch(tool)
+	}
+
+	if tool.c.StateRead.Envelope {
+		return "await read_envelope_state(client" + pyStateFormValues(tool) +
+			", tool=" + pyQuote(tool.c.StateRead.Tool) + ")"
+	}
+
 	if !tool.c.StateRead.collection() {
 		return "await read_route_state(client, " + pyStateReadIDs(tool, ids) +
 			", tool=" + pyQuote(tool.c.StateRead.Tool) + pyStateMember(tool) +
@@ -521,6 +526,78 @@ func pyStateFetch(tool *pyTool, ids string) string {
 	return "await read_collection_state(client, " + strings.Join(parents, ", ") +
 		", tool=" + pyQuote(tool.c.StateRead.Tool) +
 		", member=" + pyQuote(elementIDField) + ", value=" + trailing + ")"
+}
+
+// pyScanFetch is the whole-collection scan a declared match resolves to, with
+// the pairs handed over in declaration order for the not-found sentence.
+func pyScanFetch(tool *pyTool) string {
+	pairs := make([]string, 0, len(tool.c.StateRead.Matches))
+	for _, match := range tool.c.StateRead.Matches {
+		pairs = append(pairs, pyQuote(match.Field)+": "+pyLocal(match.Argument))
+	}
+
+	return "await read_collection_scan(client" + pyStateFormValues(tool) +
+		", tool=" + pyQuote(tool.c.StateRead.Tool) +
+		", matches={" + strings.Join(pairs, ", ") + "})"
+}
+
+// pyStateFormValues is the positional values that fill a scan or envelope
+// read's own slots, empty when the list takes none.
+func pyStateFormValues(tool *pyTool) string {
+	// A slot renders as ", " plus a short local name, comfortably under this.
+	const slotRenderBytes = 16
+
+	var values strings.Builder
+
+	values.Grow(len(tool.c.StateRead.Slots) * slotRenderBytes)
+
+	for _, slot := range tool.c.StateRead.Slots {
+		values.WriteString(", ")
+		values.WriteString(pyDestroyID(tool, slot))
+	}
+
+	return values.String()
+}
+
+// pyCompositeFetch is the declared multi-call state read: each call in
+// declaration order, keeping the declared field subset.
+func pyCompositeFetch(tool *pyTool) []string {
+	lines := []string{"        return await read_composite_state(client, ["}
+
+	for index := range tool.c.Composite {
+		call := &tool.c.Composite[index]
+
+		values := make([]string, 0, len(call.Slots))
+		for _, slot := range call.Slots {
+			values = append(values, pyLocal(slot))
+		}
+
+		fields := make([]string, 0, len(call.Fields))
+		for _, name := range call.Fields {
+			fields = append(fields, pyQuote(name))
+		}
+
+		lines = append(lines,
+			"            CompositeCall(",
+			"                tool="+pyQuote(call.Tool)+",",
+			"                member="+pyQuote(call.Member)+",",
+			"                fields=("+strings.Join(fields, ", ")+",),",
+			"                values=("+strings.Join(values, ", ")+",),",
+			"                is_list="+pyLiteralBool(call.List)+",",
+			"            ),",
+		)
+	}
+
+	return append(lines, "        ])")
+}
+
+// pyLiteralBool is one Go bool spelled the way Python reads it.
+func pyLiteralBool(value bool) string {
+	if value {
+		return pyTrue
+	}
+
+	return pyFalse
 }
 
 // pyDestroyCall is the destroy driver call, named with what the contract cannot
@@ -555,11 +632,19 @@ func pyDestroyCall(tool *pyTool) ([]string, error) {
 		}
 	}
 
-	if tool.hook(hookKindDependencyWalk) != "" {
+	if tool.walksDependencies() {
 		lines = append(lines, "        dependency_walk=dependency_walk,")
 	}
 
 	return append(lines, "        error=error,", "    )"), nil
+}
+
+// walksDependencies reports whether the tool hands the driver a walk closure:
+// one it declares, or the seeded prose and estimate a plan reports through the
+// same closure.
+func (t *pyTool) walksDependencies() bool {
+	return len(t.c.DepWalks) > 0 ||
+		len(t.c.PreviewSentences) > 0 || t.c.BillingDecl != nil
 }
 
 // pyRedactedMembers is the body members a preview stands in for rather than

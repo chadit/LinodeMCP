@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
 
 // SummaryQuery filters and groups a summary aggregation. Since bounds
@@ -18,13 +20,6 @@ type SummaryQuery struct {
 	Since       time.Time
 	GroupBy     []string
 	IncludeMeta bool
-}
-
-// SummaryRow is one aggregated bucket: the grouped column values and
-// the count of events in that bucket.
-type SummaryRow struct {
-	Groups map[string]string `json:"groups"`
-	Count  int               `json:"count"`
 }
 
 // Column names shared between the summary group-by allowlist and the
@@ -42,9 +37,9 @@ func summaryColumnAccessor(name string) (func(*Event) string, bool) {
 	case columnTool:
 		return func(e *Event) string { return e.Tool }, true
 	case columnStatus:
-		return func(e *Event) string { return string(e.Status) }, true
+		return func(e *Event) string { return e.Status }, true
 	case "capability":
-		return func(e *Event) string { return string(e.ToolCapability) }, true
+		return func(e *Event) string { return e.ToolCapability }, true
 	case "profile":
 		return func(e *Event) string { return e.Profile }, true
 	case "environment":
@@ -76,7 +71,7 @@ func ValidateGroupBy(groupBy []string) ([]string, error) {
 // given columns. groupBy must already be validated. Rows are sorted by
 // count descending, then by their grouped values, for reproducible
 // output.
-func Summarize(events []Event, groupBy []string) []SummaryRow {
+func Summarize(events []*Event, groupBy []string) []*genlocal.AuditSummaryRow {
 	counts := make(map[string]int, len(events))
 	groupsByKey := make(map[string]map[string]string, len(events))
 
@@ -86,7 +81,7 @@ func Summarize(events []Event, groupBy []string) []SummaryRow {
 
 		for col, name := range groupBy {
 			accessor, _ := summaryColumnAccessor(name)
-			value := accessor(&events[idx])
+			value := accessor(events[idx])
 			values[col] = value
 			groups[name] = value
 		}
@@ -99,9 +94,9 @@ func Summarize(events []Event, groupBy []string) []SummaryRow {
 		}
 	}
 
-	rows := make([]SummaryRow, 0, len(counts))
+	rows := make([]*genlocal.AuditSummaryRow, 0, len(counts))
 	for key, count := range counts {
-		rows = append(rows, SummaryRow{Groups: groupsByKey[key], Count: count})
+		rows = append(rows, genlocal.NewAuditSummaryRow(groupsByKey[key], count))
 	}
 
 	sortSummaryRows(rows, groupBy)
@@ -111,7 +106,7 @@ func Summarize(events []Event, groupBy []string) []SummaryRow {
 
 // sortSummaryRows orders rows by count descending, breaking ties by
 // the grouped column values in groupBy order so output is stable.
-func sortSummaryRows(rows []SummaryRow, groupBy []string) {
+func sortSummaryRows(rows []*genlocal.AuditSummaryRow, groupBy []string) {
 	sort.Slice(rows, func(left, right int) bool {
 		if rows[left].Count != rows[right].Count {
 			return rows[left].Count > rows[right].Count
@@ -127,12 +122,36 @@ func sortSummaryRows(rows []SummaryRow, groupBy []string) {
 	})
 }
 
+// SummaryOver counts a window of events into the buckets groupBy names, read
+// through the configured database where one answers and through the JSONL log
+// otherwise.
+//
+// groupBy must already be validated, because an unusable column is the caller's
+// own condition rather than a failed read. A configured database that will not
+// open leaves the log standing behind a warning.
+func SummaryOver(
+	ctx context.Context, sqlitePath, jsonlDir string,
+	since time.Time, groupBy []string, includeMeta bool,
+) (*genlocal.AuditSummaryResponse, error) {
+	events, warnings, err := ReadWithFallback(sqlitePath,
+		func(store string) ([]*Event, error) {
+			return LoadWindow(ctx, store, jsonlDir, since, includeMeta)
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return genlocal.NewAuditSummaryResponse(
+		len(events), Summarize(events, groupBy), warnings,
+	), nil
+}
+
 // LoadWindow returns events at or after since (zero = all), honoring
 // includeMeta. When sqlitePath is non-empty it reads from the SQLite
 // database (a fresh read-only-style connection opened and closed per
 // call); otherwise it scans the JSONL directory. Shared by the summary
 // and export query tools.
-func LoadWindow(ctx context.Context, sqlitePath, jsonlDir string, since time.Time, includeMeta bool) ([]Event, error) {
+func LoadWindow(ctx context.Context, sqlitePath, jsonlDir string, since time.Time, includeMeta bool) ([]*Event, error) {
 	if sqlitePath != "" {
 		return loadWindowSQLite(ctx, sqlitePath, since, includeMeta)
 	}
@@ -144,7 +163,7 @@ func LoadWindow(ctx context.Context, sqlitePath, jsonlDir string, since time.Tim
 // SELECT lists fixed columns with a parameterized lower-bound on
 // ts_unix_ns, so there is no dynamic SQL. Meta filtering happens in Go
 // to keep the statement static.
-func loadWindowSQLite(ctx context.Context, path string, since time.Time, includeMeta bool) ([]Event, error) {
+func loadWindowSQLite(ctx context.Context, path string, since time.Time, includeMeta bool) ([]*Event, error) {
 	db, err := sql.Open(sqliteDriverName, "file:"+path)
 	if err != nil {
 		return nil, fmt.Errorf("audit: open sqlite %s: %w", path, err)
@@ -164,7 +183,7 @@ func loadWindowSQLite(ctx context.Context, path string, since time.Time, include
 
 	defer func() { _ = rows.Close() }()
 
-	var events []Event
+	var events []*Event
 
 	for rows.Next() {
 		var (
@@ -179,12 +198,12 @@ func loadWindowSQLite(ctx context.Context, path string, since time.Time, include
 			return nil, fmt.Errorf("audit: sqlite window scan: %w", err)
 		}
 
-		event.TSUnixNS = tsUnixNS
-		if !includeMeta && event.ToolCapability == CapabilityMeta {
+		event.TsUnixNs = tsUnixNS
+		if !includeMeta && event.ToolCapability == string(CapabilityMeta) {
 			continue
 		}
 
-		events = append(events, event)
+		events = append(events, &event)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -198,11 +217,11 @@ func loadWindowSQLite(ctx context.Context, path string, since time.Time, include
 // since, honoring includeMeta. Reuses the reader's file ordering and
 // per-file decode; unlike ReadRecent it applies no count limit because
 // aggregation needs the whole window.
-func loadWindowJSONL(dir string, since time.Time, includeMeta bool) ([]Event, error) {
+func loadWindowJSONL(dir string, since time.Time, includeMeta bool) ([]*Event, error) {
 	root, err := openReadRoot(dir)
 	if err != nil {
 		if errors.Is(err, errAuditDirMissing) {
-			return []Event{}, nil
+			return []*Event{}, nil
 		}
 
 		return nil, err
@@ -215,7 +234,7 @@ func loadWindowJSONL(dir string, since time.Time, includeMeta bool) ([]Event, er
 		return nil, fmt.Errorf("audit: list audit dir %s: %w", dir, err)
 	}
 
-	var events []Event
+	var events []*Event
 
 	for _, name := range files {
 		fileEvents, err := readEventsFromFile(root, name)
@@ -223,17 +242,16 @@ func loadWindowJSONL(dir string, since time.Time, includeMeta bool) ([]Event, er
 			return nil, err
 		}
 
-		for idx := range fileEvents {
-			event := &fileEvents[idx]
-			if !includeMeta && event.ToolCapability == CapabilityMeta {
+		for _, event := range fileEvents {
+			if !includeMeta && event.ToolCapability == string(CapabilityMeta) {
 				continue
 			}
 
-			if !since.IsZero() && event.TS.Before(since) {
+			if event.TsUnixNs < sinceUnixNano(since) {
 				continue
 			}
 
-			events = append(events, *event)
+			events = append(events, event)
 		}
 	}
 

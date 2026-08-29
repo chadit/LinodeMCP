@@ -144,6 +144,20 @@ type stateRead struct {
 	// Query names the read's query parameters and the argument each is filled
 	// from, for the reads a query addresses rather than a path alone.
 	Query []stateReadQuery
+	// Matches is the pairs a collection scan selects the resource by. A scan
+	// pages the whole collection; every other fetch leaves this empty.
+	Matches []stateReadMatch
+	// Envelope is true when the page envelope itself, results total included,
+	// is the state rather than any one element of it.
+	Envelope bool
+}
+
+// stateReadMatch is one resolved scan pair: the element member, the Go getter
+// that reads it, and the removal's argument holding the value.
+type stateReadMatch struct {
+	Field    string
+	GoGetter string
+	Argument string
 }
 
 // stateReadQuery is one query parameter of a declared read and the argument
@@ -158,6 +172,12 @@ type stateReadQuery struct {
 // select before it can report.
 func (s *stateRead) collection() bool {
 	return s.Select != ""
+}
+
+// scan reports whether the fetch is a declared whole-collection scan, which
+// selects by field values rather than a trailing id.
+func (s *stateRead) scan() bool {
+	return len(s.Matches) > 0
 }
 
 // declared reports whether a removal resolved a sibling to read its state
@@ -194,10 +214,10 @@ type contract struct {
 	// WarningField is the response member the declared warning_message is
 	// reported in, "" when the response declares none.
 	WarningField string
-	// Assembled is the response members an execute-backed tool fills from what
-	// its hook brought back, empty for every tool whose answer is decoded. The
-	// hook answers the response message carrying them; the emitter copies only
-	// these, so a member the hook fills that is not one of them is dropped.
+	// Assembled is the response members an execute-backed tool fills from its
+	// declared transport, empty for every tool whose answer is decoded. The
+	// transport answers the response message carrying them; the emitter copies
+	// only these, so a member it fills that is not one of them is dropped.
 	Assembled []assembledMember
 	// WrapperField is the member of a tool's own response envelope that the
 	// API body decodes into, "" when the response is the API body itself.
@@ -210,18 +230,21 @@ type contract struct {
 	Surface      string
 	PathTemplate string
 	ResourceType string
-	Hooks        toolHooks
-	// StateRead is the sibling this removal synthesizes its state fetch from,
-	// zero for every tool that names a fetch_state hook of its own.
-	StateRead stateRead
 	// StateRouteDecl is the read this removal declares its state fetch through,
-	// nil when it derives one or names a hook. It is kept raw until the other
-	// tools are in scope to resolve the named one against.
+	// nil when it derives one. It is kept raw until the other tools are in
+	// scope to resolve the named one against.
 	StateRouteDecl *linodev1.StateRoute
 	Slots          []string
 	// ExplicitNulls names the payload fields the API sends as an explicit null
 	// that the serializer drops, restored from the raw body after the marshal.
 	ExplicitNulls []string
+	// Scopes is the declared OAuth scope strings the tool requires, resolved
+	// from the tool_scopes members at read time, empty for a declared none.
+	Scopes []string
+	// Categories is the declared profile categories in declaration order,
+	// empty on a declared none. Order is preserved: the catalog TUI groups a
+	// tool under its first category.
+	Categories []string
 	// ResponseBody names the response members the API's answer fills rather
 	// than the call, which is what makes the declared envelope the message the
 	// body decodes into.
@@ -232,6 +255,23 @@ type contract struct {
 	// not declare is still visible.
 	Refused       *linodev1.RefuseArguments
 	RefuseUnknown *linodev1.RefuseUnknownArguments
+	// CompositeDecl holds the declared multi-call state read until the other
+	// tools are in scope to resolve each call against.
+	CompositeDecl *linodev1.StateComposite
+	// Transport is the declared execute_transport, nil for every tool whose
+	// live call is the derived JSON request.
+	Transport *transportSpec
+	// LocalAnswer is the declared local_answer resolved against the operation
+	// it names, nil for every tool that answers some other way.
+	LocalAnswer *localAnswer
+	// WalkDecls and BillingDecl hold the declared dependency walks and the
+	// billing estimate until the resolve pass; Walks is the resolved form.
+	WalkDecls   []*linodev1.DependencyWalk
+	BillingDecl *linodev1.BillingDelta
+	DepWalks    []resolvedWalk
+	// BillingRead is the pricing read's response message, resolved beside
+	// the walks.
+	BillingRead goMessage
 	// AllArguments is every argument the input message names, in field order,
 	// system params included. It is the allowlist RefuseUnknown is measured
 	// against, so a caller may still send dry_run beside the settings they are
@@ -270,14 +310,30 @@ type contract struct {
 	AnyOf *anyOfCheck
 	// Normalizes is the declared rewrites the tool's arguments get before
 	// anything reads them, in declaration order because that is the order they
-	// run in. Empty for a tool whose arguments are read as they arrived, and for
-	// the few that still answer their whole map through a normalize hook.
+	// run in. Empty for a tool whose arguments are read as they arrived.
 	Normalizes []normalizeRewrite
+	// Fold is the declared convenience-into-object rewrite, nil for the tools
+	// that declare none. It runs after the transforms above, though no tool
+	// declares both today.
+	Fold *normalizeFold
+	// ProseMember is the composite member the declared prose reads its state
+	// placeholders through, "" for a tool whose prose reads the whole
+	// projection or reads no composite at all.
+	ProseMember string
+	// Composite is the resolved multi-call state read, empty for the tools
+	// that declare none.
+	Composite []compositeCall
 	// PreviewSentences is the prose the tool's dry run reports, in declaration
 	// order because that is the order a preview lists it in. Empty for a tool
-	// whose preview reports the call alone, and for the ones still answering
-	// through a preview hook.
+	// whose preview reports the call alone.
 	PreviewSentences []previewSentence
+	// PreviewUnchanged is the state readings the prose reports only where they
+	// differ from the argument the call would set.
+	PreviewUnchanged []previewUnchanged
+	// PreviewStandIns is the members of a repeated argument's entries the dry
+	// run reports fixed text for, in declaration order because that is the
+	// order the reported body is built in.
+	PreviewStandIns []previewStandIn
 	// Local is the tool's own domain arguments, which reach no request at all.
 	// Only a meta tool declares any: its answer is built from local state, and
 	// these are what it is built from.
@@ -287,9 +343,13 @@ type contract struct {
 	Forwarded []field
 	// Echoed names the forwarded arguments a marker-paged answer reports it was
 	// narrowed by, which is every one of them except the cursor controls.
-	Echoed        []field
-	Filters       []listFilter
-	Echoes        []destroyEcho
+	Echoed  []field
+	Filters []listFilter
+	Echoes  []destroyEcho
+	// StateRead is the sibling this removal synthesizes its state fetch from.
+	// It sits at the tail of the pointer fields because its own last member is
+	// a scalar.
+	StateRead     stateRead
 	Tier          tier
 	Capability    linodev1.ToolCapability
 	RetryDisabled bool
@@ -355,10 +415,10 @@ type anyOfCheck struct {
 // the count whose derived sentence joins with a plain "or" instead of a list.
 const anyOfMinimumFields = 2
 
-// assembledMember is one response member an execute hook fills. The hook
-// answers the tool's own response message, so the pair is what the emitter
-// copies across: nothing else in that message is read, since every other member
-// is either the declared sentence or an echo the call already holds.
+// assembledMember is one response member a declared transport fills. The pair
+// is what the emitter copies across: nothing else in that message is read, since
+// every other member is either the declared sentence or an echo the call already
+// holds.
 type assembledMember struct {
 	// GoName is the response struct field, "ThumbnailPngBase64".
 	GoName string
@@ -535,27 +595,39 @@ func readContracts(
 			return nil, readErr
 		}
 
+		if walkErr := built.resolveDependencyWalks(declared); walkErr != nil {
+			return nil, walkErr
+		}
+
+		if proseErr := built.resolvePreviewState(); proseErr != nil {
+			return nil, proseErr
+		}
+
 		found = append(found, built)
 	}
 
 	return found, nil
 }
 
-// resolveStateRead names the read a removal that declares no fetch_state hook
+// resolveStateRead names the read a removal that declares no state_route
 // synthesizes its state fetch from: the tool declared beside it that GETs the
 // same route.
 //
-// A per-tool hook for this would be a hand-written line per delete, which is
+// A per-tool body for this would be a hand-written line per delete, which is
 // what the generator exists to remove, while a removal with no state fetch at
 // all would preview and hash an empty resource. The contract already says both
 // halves: the delete names its route, and a read on that same route names the
 // message its answer decodes into.
 func (c *contract) resolveStateRead(declared map[string]protoreflect.MessageDescriptor) error {
+	if c.CompositeDecl != nil {
+		return c.resolveStateComposite(declared)
+	}
+
 	if c.StateRouteDecl != nil {
 		return c.resolveStateRoute(declared)
 	}
 
-	if !c.removesResource() || c.Hooks.FetchState != "" {
+	if !c.removesResource() {
 		return nil
 	}
 
@@ -616,7 +688,7 @@ func (c *contract) resolveCollectionStateRead(declared map[string]protoreflect.M
 	trailing := ordered[len(ordered)-1]
 	if element.goNameOf(elementIDField) == "" || element.kinds[elementIDField] != trailing.Kind {
 		return fmt.Errorf("%w: %s selects by %s (%s), which %s does not carry",
-			errNoFetchState, c.Name, elementIDField, trailing.Kind, element.FullName)
+			errNoStateRead, c.Name, elementIDField, trailing.Kind, element.FullName)
 	}
 
 	c.StateRead = stateRead{Tool: sibling, Message: element, Select: element.goNameOf(elementIDField)}
@@ -807,7 +879,16 @@ func declaredToolName(message protoreflect.MessageDescriptor) string {
 
 // walkMessages hands every top-level message of this repo's proto package to
 // visit, stopping early when visit returns false.
+//
+// The messages are collected under the registry's read lock and visited after
+// it is released. A visitor reads message options, whose lazy unmarshal takes
+// that same lock again, and a read lock is not reentrant: once any goroutine
+// queues for the write lock, the second acquire blocks behind it and the first
+// never releases. That is a deadlock the parallel emitter tests reach, where a
+// probe registering a synthesized message is the writer.
 func walkMessages(visit func(message protoreflect.MessageDescriptor) bool) {
+	found := make([]protoreflect.MessageDescriptor, 0, walkedMessages)
+
 	protoregistry.GlobalFiles.RangeFiles(func(file protoreflect.FileDescriptor) bool {
 		if file.Package() != protoPackage {
 			return true
@@ -815,14 +896,22 @@ func walkMessages(visit func(message protoreflect.MessageDescriptor) bool) {
 
 		messages := file.Messages()
 		for i := range messages.Len() {
-			if !visit(messages.Get(i)) {
-				return false
-			}
+			found = append(found, messages.Get(i))
 		}
 
 		return true
 	})
+
+	for _, message := range found {
+		if !visit(message) {
+			return
+		}
+	}
 }
+
+// walkedMessages is roughly how many top-level messages the contract declares,
+// which only sizes the collection the walk builds.
+const walkedMessages = 1024
 
 // buildContract reads one tool's whole declaration.
 func buildContract(name string, message protoreflect.MessageDescriptor, docs schemaDocs) (contract, error) {
@@ -875,12 +964,12 @@ func buildContract(name string, message protoreflect.MessageDescriptor, docs sch
 		return contract{}, fmt.Errorf("%w: %s", errNoDescription, name)
 	}
 
-	hooks, err := readHooks(name, options)
-	if err != nil {
+	// Read ahead of the fields and the response because both consult it: a
+	// FIELD_LOCATION_TOOL argument is only placeable on a transported tool, and
+	// an assembled member is only fillable by one.
+	if err := built.readExecuteTransport(options); err != nil {
 		return contract{}, err
 	}
-
-	built.Hooks = hooks
 
 	if err := built.readFields(message, docs); err != nil {
 		return contract{}, err
@@ -901,35 +990,62 @@ func buildContract(name string, message protoreflect.MessageDescriptor, docs sch
 
 	built.deriveTier()
 
-	if err := built.checkReaderHookExclusion(); err != nil {
+	if err := built.readTierDeclarations(options); err != nil {
 		return contract{}, err
 	}
 
-	if err := built.readArgumentDeclarations(options); err != nil {
+	if err := built.readScopes(options); err != nil {
 		return contract{}, err
 	}
 
-	if err := built.checkTwoStage(); err != nil {
-		return contract{}, err
-	}
-
-	if err := built.readExplicitNulls(options); err != nil {
-		return contract{}, err
-	}
-
-	if err := built.readStateRoute(options); err != nil {
-		return contract{}, err
-	}
-
-	if err := built.readPreviewSentences(options); err != nil {
-		return contract{}, err
-	}
-
-	if err := built.derivePaging(); err != nil {
+	if err := built.readCategories(options); err != nil {
 		return contract{}, err
 	}
 
 	return built, nil
+}
+
+// readTierDeclarations reads everything that needs the tier settled first: an
+// argument's reader, the state a preview or a removal fetches, the walks it
+// reports, and the page controls the query arguments turn out to be.
+func (c *contract) readTierDeclarations(options protoreflect.ProtoMessage) error {
+	if err := c.readArgumentDeclarations(options); err != nil {
+		return err
+	}
+
+	if err := c.checkTransportNames(); err != nil {
+		return err
+	}
+
+	if err := c.readStateComposite(options); err != nil {
+		return err
+	}
+
+	if err := c.readDependencyWalks(options); err != nil {
+		return err
+	}
+
+	if err := c.checkTwoStage(); err != nil {
+		return err
+	}
+
+	if err := c.readExplicitNulls(options); err != nil {
+		return err
+	}
+
+	if err := c.readStateRoute(options); err != nil {
+		return err
+	}
+
+	if err := c.readPreviewSentences(options); err != nil {
+		return err
+	}
+
+	if err := c.readLocalAnswer(options); err != nil {
+		return err
+	}
+
+	return c.derivePaging()
 }
 
 // derivePaging settles what the tool's query arguments mean, which is the last
@@ -1027,12 +1143,12 @@ func (c *contract) readFields(message protoreflect.MessageDescriptor, docs schem
 			c.Mode = c.Mode || name == modeArgument
 			c.PlanID = c.PlanID || name == planIDArgument
 		case linodev1.FieldLocation_FIELD_LOCATION_TOOL:
-			// The meta tier places one, and so does a tool whose hook owns the
-			// call: an upload's source path names bytes the hook reads and the
-			// request never carries. Every other routed tier builds its request
-			// out of PATH, QUERY and BODY, so a domain argument declared there
-			// would be advertised in the schema and dropped before the call.
-			if !c.Meta && c.Hooks.Execute == "" {
+			// The meta tier places one, and so does a tool with a declared
+			// transport: an upload's source path names bytes the transfer reads
+			// and the request never carries. Every other routed tier builds its
+			// request out of PATH, QUERY and BODY, so a domain argument declared
+			// there would be advertised in the schema and dropped before the call.
+			if !c.Meta && !c.transported() {
 				return fmt.Errorf("%w: %s field %s", errRoutedToolArgument, c.Name, name)
 			}
 
@@ -1200,10 +1316,6 @@ func (c *contract) readAnyOf(options protoreflect.ProtoMessage) error {
 		return fmt.Errorf("%w: %s", errAnyOfTier, c.Name)
 	}
 
-	if c.Hooks.Validate != "" {
-		return fmt.Errorf("%w: %s", errAnyOfWithValidate, c.Name)
-	}
-
 	names := declared.GetFields()
 	if len(names) < anyOfMinimumFields {
 		return fmt.Errorf("%w: %s names %v", errAnyOfTooFew, c.Name, names)
@@ -1229,37 +1341,9 @@ func (c *contract) readAnyOf(options protoreflect.ProtoMessage) error {
 	return nil
 }
 
-// checkReaderHookExclusion refuses a declared reader beside a validate hook.
-//
-// The two cannot both be honored: a hook owns the whole argument check, so Go
-// writes no path reads at all for a tool that declares one, and a reader
-// declared beside it is silently dropped there while Python still acts it. A
-// declaration that means one thing in one language and nothing in the other is
-// worse than either answer, so the pair fails the build the way require_any_of
-// beside a hook does. Retiring a hook and declaring its readers stays one
-// change, which is how every migration has landed.
-func (c *contract) checkReaderHookExclusion() error {
-	if c.Hooks.Validate == "" || len(c.Readers) == 0 {
-		return nil
-	}
-
-	named := make([]string, 0, len(c.Readers))
-	for name := range c.Readers {
-		named = append(named, name)
-	}
-
-	slices.Sort(named)
-
-	return fmt.Errorf("%w: %s declares one on %v", errReaderWithValidate, c.Name, named)
-}
-
 // readRefusals resolves the two whole-map refusals a tool declares: the
 // argument names it answers for rather than sends, and whether it takes any
 // name its input message does not declare.
-//
-// Both are refused beside a validate hook for the reason require_any_of is: a
-// tool declaring one owns its whole argument check, so a second answer here
-// would be one nothing holds to the hook's wording.
 func (c *contract) readRefusals(options protoreflect.ProtoMessage) error {
 	refused, _ := proto.GetExtension(options, linodev1.E_RefuseArguments).(*linodev1.RefuseArguments)
 	if refused != nil && (len(refused.GetFields()) > 0 || refused.GetMessage() != "") {
@@ -1277,10 +1361,6 @@ func (c *contract) readRefusals(options protoreflect.ProtoMessage) error {
 		return nil
 	}
 
-	if c.Hooks.Validate != "" {
-		return fmt.Errorf("%w: %s", errRefuseUnknownWithValidate, c.Name)
-	}
-
 	c.RefuseUnknown = unknown
 
 	return nil
@@ -1295,10 +1375,6 @@ func (c *contract) acceptRefusal(names []string, sentence string, unnamed error)
 		return fmt.Errorf("%w: %s", unnamed, c.Name)
 	}
 
-	if c.Hooks.Validate != "" {
-		return fmt.Errorf("%w: %s", errRefuseWithValidate, c.Name)
-	}
-
 	for _, name := range names {
 		if slices.Contains(c.AllArguments, name) {
 			return fmt.Errorf("%w: %s names %s", errRefuseDeclaredField, c.Name, name)
@@ -1309,7 +1385,8 @@ func (c *contract) acceptRefusal(names []string, sentence string, unnamed error)
 }
 
 // anyOfSentence is the refusal a require_any_of derives from its field names,
-// spelled the way the hooks it replaces already spelled it: a plain "or" for
+// spelled the way the hand-written checks it replaced already spelled it: a
+// plain "or" for
 // two fields, a comma list for more.
 func anyOfSentence(names []string) string {
 	if len(names) == anyOfMinimumFields {
@@ -1613,10 +1690,10 @@ func (c *contract) readResponse(options protoreflect.ProtoMessage) error {
 		return c.readWriteEnvelope(&response)
 	}
 
-	// Ahead of the guard because an execute hook IS the assembly step: the route
-	// answers with something no decode can place, so one member is what the hook
-	// brings back rather than a member the API filled.
-	if c.Hooks.Execute != "" {
+	// Ahead of the guard because a declared transport IS the assembly step: the
+	// route answers with something no decode can place, so one member is what
+	// the transfer brings back rather than a member the API filled.
+	if c.transported() {
 		return c.readAssembledRead(&response)
 	}
 
@@ -1627,18 +1704,18 @@ func (c *contract) readResponse(options protoreflect.ProtoMessage) error {
 	return c.readEnvelope(&response)
 }
 
-// readAssembledRead records the answer of a read whose call a hook makes: the
-// OAuth client thumbnail route sends raw PNG bytes, so nothing decodes into the
-// response and the whole answer is built here.
+// readAssembledRead records the answer of a read whose call the declared
+// transport makes: the OAuth client thumbnail route sends raw PNG bytes, so
+// nothing decodes into the response and the whole answer is built here.
 //
-// The LOCAL members carry what the hook brought back, declared LOCAL because no
+// The LOCAL members carry what the transport brought back, declared LOCAL because no
 // other declaration separates them from a member the API fills. The rest echo
 // the arguments the call was addressed by, resolved by the same rule an
 // acknowledged mutation's echoes are, so a response naming a value the call was
 // never given fails the run rather than reaching a client as a blank.
 func (c *contract) readAssembledRead(response *goMessage) error {
 	if len(response.messageFields())+len(response.repeatedFields()) > 0 {
-		return fmt.Errorf("%w: %s answers with %s, which carries a message no hook can fill",
+		return fmt.Errorf("%w: %s answers with %s, which carries a message no transport can fill",
 			errNotAnAssembledRead, c.Name, response.FullName)
 	}
 
@@ -1647,24 +1724,25 @@ func (c *contract) readAssembledRead(response *goMessage) error {
 	}
 
 	if len(c.Assembled) == 0 {
-		return fmt.Errorf("%w: %s answers with %s, which declares no member for the hook to fill",
+		return fmt.Errorf("%w: %s answers with %s, which declares no member for the transport to fill",
 			errNotAnAssembledRead, c.Name, response.FullName)
 	}
 
 	return c.readWriteScalars(response)
 }
 
-// assembles reports whether one response field is filled by the tool's hook
-// rather than by an argument or the declared sentence.
+// assembles reports whether one response field is filled by the tool's declared
+// transport rather than by an argument or the declared sentence.
 func (c *contract) assembles(goName string) bool {
 	return slices.ContainsFunc(c.Assembled, func(member assembledMember) bool {
 		return member.GoName == goName
 	})
 }
 
-// claimAssembled records every LOCAL scalar the hook fills. A repeated one is
-// refused because the hook answers the response message and the emitter copies
-// member by member, which no slice share survives without aliasing the hook's.
+// claimAssembled records every LOCAL scalar the transport fills. A repeated one
+// is refused because the transport answers the response message and the emitter
+// copies member by member, which no slice share survives without aliasing the
+// transport's.
 func (c *contract) claimAssembled(response *goMessage) error {
 	for _, entry := range response.scalarFields() {
 		if !entry.local {
@@ -1688,9 +1766,9 @@ func (c *contract) claimAssembled(response *goMessage) error {
 // readMetaResponse records the one thing the emitter needs from a meta tool's
 // answer: the member its declared sentence is reported in.
 //
-// Nothing else is read, because nothing else is assembled. A meta tool with an
-// answer hook builds its whole result from local state and hands it back, and
-// the readers below all describe a request's answer: which member the API body
+// Nothing else is read, because nothing else is assembled. A meta tool builds
+// its whole result from local state and hands it back, and the readers below
+// all describe a request's answer: which member the API body
 // decodes into, which scalar echoes an argument the call carried. Running them
 // over a response no call fills reads AuditHealthResponse as an envelope
 // wrapping its optional SQLite section, and the tool would answer with that
@@ -2117,9 +2195,9 @@ func (c *contract) readWriteScalars(response *goMessage) error {
 			continue
 		}
 
-		// The members no argument fills are the ones a hook brought back, already
-		// claimed. Any other LOCAL scalar reaches here on a tier with nothing to
-		// fill it.
+		// The members no argument fills are the ones the transport brought back,
+		// already claimed. Any other LOCAL scalar reaches here on a tier with
+		// nothing to fill it.
 		if c.assembles(entry.goName) {
 			continue
 		}
@@ -2483,10 +2561,10 @@ func countPresence(countField string) string {
 func (c *contract) readAcknowledgeEnvelope(response *goMessage, messageField string) error {
 	c.MessageField = messageField
 
-	// Only a hook can fill a LOCAL member here, so the claim is gated on one
-	// being declared: without it the member reaches readWriteScalars, which
+	// Only a transport can fill a LOCAL member here, so the claim is gated on
+	// one being declared: without it the member reaches readWriteScalars, which
 	// refuses it as a value nothing on this tier fills.
-	if c.Hooks.Execute != "" {
+	if c.transported() {
 		if err := c.claimAssembled(response); err != nil {
 			return err
 		}

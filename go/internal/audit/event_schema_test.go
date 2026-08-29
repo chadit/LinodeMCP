@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
 
 // TestEventFieldsMatchSharedFixture pins the JSONL wire schema to
@@ -15,6 +16,9 @@ import (
 // against too. The audit readers and any external log pipeline parse these
 // keys, so a field renamed or added in one language would fork the on-disk
 // schema; this test turns that into a per-language failure instead.
+//
+// The record writer is what answers now, so this reads the same bytes a log
+// line carries rather than a second encoding of the same value.
 func TestEventFieldsMatchSharedFixture(t *testing.T) {
 	t.Parallel()
 
@@ -32,9 +36,9 @@ func TestEventFieldsMatchSharedFixture(t *testing.T) {
 		t.Fatalf("parse shared fixture: %v", parseErr)
 	}
 
-	marshaled, err := json.Marshal(audit.Event{})
+	marshaled, err := genlocal.RecordAuditEvent(&audit.Event{}, "", "")
 	if err != nil {
-		t.Fatalf("marshal zero event: %v", err)
+		t.Fatalf("write zero record: %v", err)
 	}
 
 	var decoded map[string]any

@@ -91,6 +91,8 @@ message LockListInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LockListResponse";
   option (linode.mcp.v1.tool_description) = "Lists the resource locks on the account.";
   option (linode.mcp.v1.error_message) = "Failed to list resource locks: {error}";
@@ -108,6 +110,8 @@ message LockGetInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Lock";
   option (linode.mcp.v1.tool_description) = "Gets one resource lock by lock_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve resource lock {lock_id}: {error}";
@@ -135,6 +139,8 @@ message LockCreateInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LockWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a resource lock that blocks deletion of one resource. Requires confirm=true. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a resource lock. Set confirm=true to proceed.";
@@ -187,9 +193,9 @@ message LockCreateInput {
 
 // LockDeleteInput is the input contract for linode_lock_delete.
 //
-// It declares no fetch_state hook: the get above reads the same route, so the
-// preview and the plan hash read the lock through that rather than through a
-// hand-written step per removal.
+// It declares state_route rather than leaving the read undeclared: the get
+// above reads the same route, so the preview and the plan hash read the
+// lock through that.
 message LockDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_lock_delete"
@@ -198,6 +204,8 @@ message LockDeleteInput {
   };
   option (linode.mcp.v1.tool_api_surface) = API_SURFACE_V4BETA;
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LockDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes one resource lock by lock_id, which lets the resource it protected be deleted again. Requires confirm=true. Pass dry_run=true to preview without deleting.";
   option (linode.mcp.v1.confirm_message) = "This deletes a resource lock and lets the resource it protected be deleted. Set confirm=true to proceed.";

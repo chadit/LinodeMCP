@@ -42,14 +42,6 @@ type SupportTicket struct {
 	Closable    bool                      `json:"closable"`
 }
 
-// CreateSupportTicketAttachmentRequest carries the local file path uploaded to
-// POST /support/tickets/{ticket_id}/attachments. The endpoint consumes
-// multipart/form-data, so File is read from disk and streamed as the "file"
-// form field rather than marshaled into a JSON body.
-type CreateSupportTicketAttachmentRequest struct {
-	File string `json:"file"`
-}
-
 // SupportTicketReply represents one reply returned by GET /support/tickets/{ticket_id}/replies.
 type SupportTicketReply struct {
 	Created     string `json:"created"`

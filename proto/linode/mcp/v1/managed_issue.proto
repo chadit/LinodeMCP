@@ -38,6 +38,8 @@ message ManagedIssueGetInput {
     path: "/managed/issues/{issue_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedIssue";
   option (linode.mcp.v1.tool_description) = "Gets one issue detected by Linode Managed service monitors.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve managed issue {issue_id}: {error}";
@@ -59,6 +61,8 @@ message ManagedIssueListInput {
     path: "/managed/issues"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedIssueListResponse";
   option (linode.mcp.v1.tool_description) = "Lists recent and ongoing issues detected by Linode Managed service monitors.";
 

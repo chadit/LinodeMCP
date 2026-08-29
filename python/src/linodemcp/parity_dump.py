@@ -3,9 +3,9 @@
 The dump mirrors go/cmd/parity-dump: one record per registered tool with its
 name, capability tier, input parameter types, required set, and required
 OAuth scopes. Descriptions are excluded because wording may differ across
-implementations. Scopes are included because the tool-to-scope mapping is
-hand-written per language, so without this field a one-sided scope change
-passes every gate.
+implementations. Scopes are included because the declared tool-to-scope
+table is rendered per language, so without this field a one-sided rendering
+change passes every gate.
 
 scripts/verify_tool_parity.py runs every dumper registered in
 docs/contracts/languages.txt (this module is the Python entry) and diffs the surfaces,
@@ -20,7 +20,7 @@ import json
 import sys
 from typing import Any, cast
 
-from linodemcp.profiles.scope import required_scopes
+from linodemcp.gentools import scopes_for
 from linodemcp.server import get_tool_registry
 
 
@@ -46,10 +46,7 @@ def dump_records() -> list[dict[str, Any]]:
                 "capability": entry.capability.name,
                 "params": params,
                 "required": schema.get("required", []),
-                "scopes": sorted(
-                    str(scope)
-                    for scope in required_scopes(entry.name, entry.capability)
-                ),
+                "scopes": sorted(scopes_for(entry.name)),
             }
         )
 

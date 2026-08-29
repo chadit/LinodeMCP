@@ -17,7 +17,7 @@ def test_get_version_info() -> None:
     info = get_version_info()
     assert info.version == "0.1.0"
     assert info.api_version == "0.1.0"
-    assert info.git_commit == "dev"
+    assert info.git_commit == "unknown"
     assert info.git_branch == "main"
     assert info.build_date == "unknown"
     assert info.python_version

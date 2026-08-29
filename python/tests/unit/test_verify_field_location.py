@@ -159,21 +159,21 @@ def test_the_system_param_parser_reads_annotated_field_lines() -> None:
     ]
 
 
-def _declaration(*hooks: str) -> object:
-    """Stand in for one routed message's declaration with a fixed hook set."""
+def _declaration(*, transported: bool = False) -> object:
+    """Stand in for one routed message's declaration."""
     return reader.ToolDeclaration(
         message=_MESSAGE,
         route_tool="linode_tag_get",
         meta_tool="",
         capability="TOOL_CAPABILITY_READ",
-        hooks=hooks,
+        transported=transported,
     )
 
 
-def test_a_tool_argument_without_an_execute_hook_fails(
+def test_a_tool_argument_without_a_declared_transport_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A routed TOOL field with no hook is advertised and then dropped.
+    """A routed TOOL field with no transport is advertised and then dropped.
 
     Nothing on a routed tier places one, so the caller reads an argument in the
     schema that the request never carries and the tool silently ignores.
@@ -182,16 +182,16 @@ def test_a_tool_argument_without_an_execute_hook_fails(
     located = {_MESSAGE: {"label": _PATH, "source_path": _TOOL}}
 
     assert gate.tool_argument_mismatches(located) == [
-        "TagGetInput.source_path: TOOL on a routed message with no execute hook"
+        "TagGetInput.source_path: TOOL on a routed message with no execute_transport"
     ]
 
 
-def test_a_tool_argument_with_an_execute_hook_is_accepted(
+def test_a_tool_argument_with_a_declared_transport_is_accepted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The hook owns the call, so it is what reads the local path."""
+    """The transport owns the call, so it is what reads the local path."""
     monkeypatch.setattr(
-        gate._toolroutes, "declarations", lambda: [_declaration("execute")]
+        gate._toolroutes, "declarations", lambda: [_declaration(transported=True)]
     )
     located = {_MESSAGE: {"label": _PATH, "source_path": _TOOL}}
 

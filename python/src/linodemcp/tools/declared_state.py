@@ -57,17 +57,30 @@ class DeclaredState:
         value = self.fields.get(name)
         return value if isinstance(value, str) else ""
 
+    def object(self, name: str) -> DeclaredState:
+        """The object the named singular member carries, empty when none."""
+        value = self.fields.get(name)
+        if isinstance(value, DeclaredState):
+            return value
+        if isinstance(value, dict):
+            return DeclaredState(cast("dict[str, Any]", value))
+        return DeclaredState({})
+
     def objects(self, name: str) -> list[DeclaredState]:
         """The objects the named repeated member carries, each read this way."""
         value = self.fields.get(name)
         if not isinstance(value, list):
             return []
         items = list(cast("Sequence[Any]", value))
-        return [
-            DeclaredState(cast("dict[str, Any]", item))
-            for item in items
-            if isinstance(item, dict)
-        ]
+        # An envelope state's elements arrive already projected, so both the
+        # raw dict and the projected shape read as one kind of object.
+        objects: list[DeclaredState] = []
+        for item in items:
+            if isinstance(item, DeclaredState):
+                objects.append(item)
+            elif isinstance(item, dict):
+                objects.append(DeclaredState(cast("dict[str, Any]", item)))
+        return objects
 
 
 def declared_state_of(state: Any) -> DeclaredState:

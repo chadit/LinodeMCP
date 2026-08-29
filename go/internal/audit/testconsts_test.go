@@ -5,6 +5,9 @@ package audit_test
 // literals across the package.
 const (
 	tcProfile = "profile"
+	// notADatabase is what a case leaves at the store path so the driver
+	// refuses to open it, which is the store fallback's own trigger.
+	notADatabase = "this is not a sqlite database"
 	// toolOK is the surviving-event tool name the reader's skip tests
 	// reuse. Extracted to satisfy goconst.
 	toolOK = "tool_ok"

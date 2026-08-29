@@ -18,17 +18,20 @@ import (
 const (
 	probeMetaResponse = "linode.mcp.v1.AuditHealthResponse"
 	metaCapability    = linodev1.ToolCapability_TOOL_CAPABILITY_META
+	probeMetaSentence = "Probe is healthy"
 )
 
 // metaOptions is a tool that reaches no route and answers from local state.
 func metaOptions(sets ...func(*descriptorpb.MessageOptions)) *descriptorpb.MessageOptions {
-	declared := make([]func(*descriptorpb.MessageOptions), 0, 5+len(sets))
+	declared := make([]func(*descriptorpb.MessageOptions), 0, 6+len(sets))
 	declared = append(declared,
 		withMeta(),
 		withCapability(metaCapability),
 		withResponse(probeMetaResponse),
 		withDescription("Reports the probe's own state."),
-		withHooks("answer"),
+		withSuccessMessage(probeMetaSentence),
+		// Categories are required on meta tools too, unlike scopes.
+		withCategories(&linodev1.ToolCategories{None: true}),
 	)
 
 	return messageOptions(append(declared, sets...)...)
@@ -51,30 +54,14 @@ func TestRefusesAMetaToolThatCannotAnswer(t *testing.T) {
 
 	runRefusals(t, []refusalCase{
 		{
-			name:    "no answer hook and no sentence",
+			name:    "neither a local answer nor a sentence",
 			refusal: "errNoMetaAnswer",
-			build:   metaProbe("ProbeMetaNoAnswerInput", withHooks()),
-		},
-		{
-			name:    "an answer hook beside a sentence",
-			refusal: "errMetaTwoAnswers",
-			build:   metaProbe("ProbeMetaTwoAnswersInput", withSuccessMessage("Probe is healthy")),
+			build:   metaProbe("ProbeMetaNoAnswerInput", withoutSuccessMessage),
 		},
 		{
 			name:    "a sentence the response cannot report",
 			refusal: "errNoMetaMessageField",
-			build: metaProbe("ProbeMetaNoMessageFieldInput", withHooks(),
-				withResponse(probeResource), withSuccessMessage("Probe is healthy")),
-		},
-		{
-			name:    "a hook kind the tier never runs",
-			refusal: "errUnservedMetaHook",
-			build:   metaProbe("ProbeMetaUnservedHookInput", withHooks("answer", "preview")),
-		},
-		{
-			name:    "an answer hook on a tool that reaches a route",
-			refusal: "errUngatedAnswer",
-			build:   writeProbe("ProbeRoutedAnswerInput", withHooks("answer")),
+			build:   metaProbe("ProbeMetaNoMessageFieldInput", withResponse(probeResource)),
 		},
 	})
 }

@@ -41,6 +41,8 @@ message NodeBalancerStatsGetInput {
     path: "/nodebalancers/{nodebalancer_id}/stats"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_NODEBALANCERS_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerStats";
   option (linode.mcp.v1.tool_description) = "Gets traffic and connection statistics for a specific NodeBalancer by its ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve NodeBalancer {nodebalancer_id} stats: {error}";

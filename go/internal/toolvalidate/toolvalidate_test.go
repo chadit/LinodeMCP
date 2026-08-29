@@ -429,6 +429,13 @@ func TestCheckIgnoresUndeclaredArguments(t *testing.T) {
 // package hand a violation's message straight to a caller. A rule declaring
 // none would answer with protovalidate's own wording, putting words in front of
 // a caller that no tool chose.
+//
+// Two rule shapes carry it in two places. A rule whose expression answers a
+// bool declares the sentence as its message. A rule whose expression answers a
+// string builds the sentence itself, so it can name the value it read, and
+// protovalidate prints that result rather than the message: the message would
+// be dead text, and buf lint reports one. Each shape is required to carry the
+// sentence in its own place and nowhere else.
 func TestEveryDeclaredRuleNamesItsSentence(t *testing.T) {
 	t.Parallel()
 
@@ -453,7 +460,7 @@ func TestEveryDeclaredRuleNamesItsSentence(t *testing.T) {
 }
 
 // assertRulesNameTheirSentence reports how many rules one message declares,
-// failing for any that names no sentence or no id.
+// failing for any that names no sentence, names it twice, or names no id.
 func assertRulesNameTheirSentence(t *testing.T, message protoreflect.MessageDescriptor) int {
 	t.Helper()
 
@@ -463,9 +470,7 @@ func assertRulesNameTheirSentence(t *testing.T, message protoreflect.MessageDesc
 	}
 
 	for _, rule := range rules.GetCel() {
-		if rule.GetMessage() == "" {
-			t.Errorf("%s rule %q names no sentence", message.FullName(), rule.GetId())
-		}
+		assertRuleNamesItsSentence(t, message.FullName(), rule)
 
 		if rule.GetId() == "" {
 			t.Errorf("%s declares a rule with no id", message.FullName())
@@ -473,4 +478,31 @@ func assertRulesNameTheirSentence(t *testing.T, message protoreflect.MessageDesc
 	}
 
 	return len(rules.GetCel())
+}
+
+// assertRuleNamesItsSentence fails when one rule's sentence is missing from the
+// place its expression shape puts it, or is declared in both places at once.
+func assertRuleNamesItsSentence(t *testing.T, owner protoreflect.FullName, rule *validate.Rule) {
+	t.Helper()
+
+	if answersString(rule.GetExpression()) {
+		if rule.GetMessage() != "" {
+			t.Errorf("%s rule %q answers a string and also declares a message, which is never read",
+				owner, rule.GetId())
+		}
+
+		return
+	}
+
+	if rule.GetMessage() == "" {
+		t.Errorf("%s rule %q names no sentence", owner, rule.GetId())
+	}
+}
+
+// answersString reports whether one expression answers a sentence rather than a
+// bool. protovalidate reads the empty string as "this value is fine", so a rule
+// that builds its own sentence returns ” on the passing arm of a conditional,
+// which is the shape read here.
+func answersString(expression string) bool {
+	return strings.Contains(strings.ReplaceAll(expression, " ", ""), "?'':")
 }

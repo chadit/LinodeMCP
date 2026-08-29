@@ -9,15 +9,15 @@ import httpx
 import pytest
 
 from linodemcp.gentools import (
+    categories_for,
     create_linode_longview_client_get_tool,
     create_linode_longview_client_update_tool,
     handle_linode_longview_client_get,
     handle_linode_longview_client_update,
+    scopes_for,
 )
 from linodemcp.linode import Client, NetworkError, RetryableClient
-from linodemcp.profiles import Capability, Scope
-from linodemcp.profiles.builtin import categories
-from linodemcp.profiles.scope import required_scopes
+from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.version import FEATURE_TOOLS_LIST
 
@@ -145,10 +145,8 @@ def test_linode_longview_client_update_in_version_features() -> None:
 
 
 def test_linode_longview_client_update_profile_metadata() -> None:
-    assert categories("linode_longview_client_update") == ["longview"]
-    assert required_scopes("linode_longview_client_update", Capability.Write) == [
-        Scope.LongviewReadWrite
-    ]
+    assert categories_for("linode_longview_client_update") == ["longview"]
+    assert scopes_for("linode_longview_client_update") == ["longview:read_write"]
 
 
 def test_create_linode_longview_client_get_tool_schema() -> None:
@@ -174,7 +172,5 @@ def test_linode_longview_client_get_in_version_features() -> None:
 
 
 def test_linode_longview_client_get_profile_metadata() -> None:
-    assert categories("linode_longview_client_get") == ["longview"]
-    assert required_scopes("linode_longview_client_get", Capability.Read) == [
-        Scope.LongviewReadOnly
-    ]
+    assert categories_for("linode_longview_client_get") == ["longview"]
+    assert scopes_for("linode_longview_client_get") == ["longview:read_only"]

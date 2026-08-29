@@ -63,23 +63,38 @@ func fixtureSourceProfile() profiles.Profile {
 	}
 }
 
-// cloneState carries the registry plus the catalog the clone resolves against.
+// cloneState carries the registry, the catalog the clone resolves against, and
+// the configuration the clone source is looked up in.
 func cloneState(reg *builder.Registry) *tools.BuilderState {
-	return builderState(reg, cloneFixtureCatalog(), noProfile)
+	return builderState(reg, cloneFixtureCatalog(), noProfile, cloneFixtureConfig())
 }
 
-// callDraftAnswer invokes the given answer with the state attached and returns
-// the parsed JSON object. cfg is nil for every answer but draft_new's.
-func callDraftAnswer(
+// callDraftHandler invokes one generated draft handler with the state attached
+// and returns the parsed JSON object.
+func callDraftHandler(
 	t *testing.T,
 	state *tools.BuilderState,
-	answer builderAnswer,
-	cfg *config.Config,
+	handler builderHandler,
 	args map[string]any,
 ) map[string]any {
 	t.Helper()
 
-	return builderBody(t, callAnswer(t, state, answer, cfg, args))
+	return builderBody(t, callBuilder(t, state, handler, args))
+}
+
+// draftNewHandler, draftShowHandler and draftDiscardHandler are the generated
+// handlers the three lifecycle tools answer through, which is where their whole
+// body sits now that each declares its answer.
+func draftNewHandler() builderHandler {
+	return generatedBuilder(gentools.NewLinodeProfileDraftNewTool, nil)
+}
+
+func draftShowHandler() builderHandler {
+	return generatedBuilder(gentools.NewLinodeProfileDraftShowTool, nil)
+}
+
+func draftDiscardHandler() builderHandler {
+	return generatedBuilder(gentools.NewLinodeProfileDraftDiscardTool, nil)
 }
 
 // TestDraftNewRegistration locks in the static contract: the tool's
@@ -114,7 +129,7 @@ func TestDraftNewCreatesEmptyDraft(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	out := callDraftAnswer(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+	out := callDraftHandler(t, cloneState(reg), draftNewHandler(),
 		map[string]any{keyName: draftFixtureName})
 
 	if !reflect.DeepEqual(out[keyName], draftFixtureName) {
@@ -149,7 +164,7 @@ func TestDraftNewClonesFromSource(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	out := callDraftAnswer(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+	out := callDraftHandler(t, cloneState(reg), draftNewHandler(),
 		map[string]any{
 			keyName:      draftFixtureName,
 			"clone_from": cloneSourceName,
@@ -178,7 +193,7 @@ func TestDraftNewRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+	wantRefusal(t, cloneState(reg), draftNewHandler(),
 		nil, wantDraftNameMissing)
 }
 
@@ -189,7 +204,7 @@ func TestDraftNewRefusesUnknownCloneSource(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	wantAnswerRefusal(t, cloneState(reg), tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+	wantRefusal(t, cloneState(reg), draftNewHandler(),
 		map[string]any{
 			keyName:      draftFixtureName,
 			"clone_from": "nonexistent-profile",
@@ -210,10 +225,10 @@ func TestDraftNewRefusesDuplicateName(t *testing.T) {
 	reg := builder.NewRegistry()
 	state := cloneState(reg)
 
-	_ = callDraftAnswer(t, state, tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+	_ = callDraftHandler(t, state, draftNewHandler(),
 		map[string]any{keyName: draftFixtureName})
 
-	wantAnswerRefusal(t, state, tools.ProfileDraftNewAnswer, cloneFixtureConfig(),
+	wantRefusal(t, state, draftNewHandler(),
 		map[string]any{keyName: draftFixtureName}, "draft already exists: dns-readall")
 }
 
@@ -231,7 +246,7 @@ func TestDraftShowReturnsLiveDraftState(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	out := callDraftAnswer(t, draftState(reg), tools.ProfileDraftShowAnswer, nil,
+	out := callDraftHandler(t, draftState(reg), draftShowHandler(),
 		map[string]any{keyName: draftFixtureName})
 
 	for key, want := range map[string]any{
@@ -251,7 +266,7 @@ func TestDraftShowReturnsLiveDraftState(t *testing.T) {
 func TestDraftShowRefusesUnknown(t *testing.T) {
 	t.Parallel()
 
-	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftShowAnswer, nil,
+	wantRefusal(t, draftState(builder.NewRegistry()), draftShowHandler(),
 		map[string]any{keyName: draftNonexistent}, "draft not found: nonexistent-draft")
 }
 
@@ -259,7 +274,7 @@ func TestDraftShowRefusesUnknown(t *testing.T) {
 func TestDraftShowRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
-	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftShowAnswer, nil,
+	wantRefusal(t, draftState(builder.NewRegistry()), draftShowHandler(),
 		nil, wantDraftNameMissing)
 }
 
@@ -276,7 +291,7 @@ func TestDraftDiscardRemovesDraft(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	out := callDraftAnswer(t, draftState(reg), tools.ProfileDraftDiscardAnswer, nil,
+	out := callDraftHandler(t, draftState(reg), draftDiscardHandler(),
 		map[string]any{keyName: draftFixtureName})
 
 	if !reflect.DeepEqual(out[keyName], draftFixtureName) {
@@ -300,7 +315,7 @@ func TestDraftDiscardIdempotent(t *testing.T) {
 	t.Parallel()
 
 	reg := builder.NewRegistry()
-	out := callDraftAnswer(t, draftState(reg), tools.ProfileDraftDiscardAnswer, nil,
+	out := callDraftHandler(t, draftState(reg), draftDiscardHandler(),
 		map[string]any{keyName: draftNonexistent})
 
 	if !reflect.DeepEqual(out[keyName], draftNonexistent) {
@@ -316,7 +331,7 @@ func TestDraftDiscardIdempotent(t *testing.T) {
 func TestDraftDiscardRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
-	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftDiscardAnswer, nil,
+	wantRefusal(t, draftState(builder.NewRegistry()), draftDiscardHandler(),
 		nil, wantDraftNameMissing)
 }
 

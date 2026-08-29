@@ -7,6 +7,7 @@
 package linoderoute
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -269,12 +270,12 @@ func ValidateAll(inputs map[string][]string, declared []Declaration, routes []Ro
 }
 
 // ValidateContract is Validate over supplied inputs. Exported for the same
-// reason server.ValidateGeneratedSchemas is: `make tool-capability` and `make
-// field-location` reject a bad declaration or template before generation, so
-// neither failure can come out of the shipped descriptors and proving the checks
-// still bite means handing them a broken contract directly. Declarations run
-// first because a message naming no tool, or two, is what makes the route half's
-// reading of the same contract meaningless.
+// reason server.ValidateGeneratedSchemas is: `make field-location` rejects a bad
+// template before generation and every build runs these declaration checks at
+// startup, so neither failure can come out of the shipped descriptors and
+// proving the checks still bite means handing them a broken contract directly.
+// Declarations run first because a message naming no tool, or two, is what
+// makes the route half's reading of the same contract meaningless.
 func ValidateContract(declared []Declaration, routes []Route) error {
 	if err := validateDeclarations(declared); err != nil {
 		return err
@@ -374,6 +375,10 @@ func slotText(value any) (string, error) {
 		return strconv.FormatInt(int64(typed), 10), nil
 	case int64:
 		return strconv.FormatInt(typed, 10), nil
+	case json.Number:
+		// Declared state spells numbers this way, and a walk enrichment
+		// fills its slot straight off the fetched state.
+		return typed.String(), nil
 	}
 
 	return "", fmt.Errorf("%w: %T", ErrValueType, value)

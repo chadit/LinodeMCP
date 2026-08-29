@@ -59,6 +59,8 @@ message SupportTicketGetInput {
     path: "/support/tickets/{ticket_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicket";
   option (linode.mcp.v1.tool_description) = "Gets one support ticket by ticket_id.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve support ticket {ticket_id}: {error}";
@@ -125,6 +127,8 @@ message SupportTicketListInput {
     path: "/support/tickets"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketListResponse";
   option (linode.mcp.v1.tool_description) = "Lists support tickets for the authenticated account.";
 
@@ -146,6 +150,8 @@ message SupportTicketCreateInput {
     path: "/support/tickets"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketWriteResponse";
   option (linode.mcp.v1.tool_description) = "Opens a support ticket for the authenticated account.";
   option (linode.mcp.v1.error_message) = "Failed to create support ticket: {error}";
@@ -303,6 +309,8 @@ message SupportTicketCloseInput {
     path: "/support/tickets/{ticket_id}/close"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketIDResponse";
   option (linode.mcp.v1.tool_description) = "Closes one support ticket by ID. Pass dry_run=true to preview without closing.";
   option (linode.mcp.v1.error_message) = "Failed to close support ticket {ticket_id}: {error}";
@@ -347,6 +355,8 @@ message SupportTicketReplyListInput {
     path: "/support/tickets/{ticket_id}/replies"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketReplyListResponse";
   option (linode.mcp.v1.tool_description) = "Lists replies for one support ticket by ticket_id.";
 
@@ -372,6 +382,8 @@ message SupportTicketReplyCreateInput {
     path: "/support/tickets/{ticket_id}/replies"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketReplyWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a reply on an existing support ticket.";
   option (linode.mcp.v1.error_message) = "Failed to create support ticket reply: {error}";
@@ -432,6 +444,8 @@ message SupportTicketAttachmentCreateInput {
     path: "/support/tickets/{ticket_id}/attachments"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketIDResponse";
   option (linode.mcp.v1.tool_description) = "Creates an attachment on an existing support ticket.";
   option (linode.mcp.v1.error_message) = "Failed to create support ticket attachment: {error}";
@@ -455,7 +469,15 @@ message SupportTicketAttachmentCreateInput {
     template: "A file attachment will be uploaded to support ticket {ticket_id}."
     line: PREVIEW_LINE_SIDE_EFFECT
   };
-  option (linode.mcp.v1.tool_hooks) = "execute";
+  // The route consumes multipart/form-data assembled from the file's CONTENTS,
+  // so the derived JSON body advertises the path without ever being what
+  // travels.
+  option (linode.mcp.v1.execute_transport) = {
+    multipart {
+      file_argument: "file"
+      part_name: "file"
+    }
+  };
 
   // Ordered: the ticket before the file, then the file's presence before its
   // shape, so a caller hears about one thing at a time in the order they would

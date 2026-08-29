@@ -71,12 +71,14 @@ func (d Declaration) defects() []string {
 	if d.RouteTool != "" && d.MetaTool != "" {
 		found = append(found, fmt.Sprintf(
 			"%s: names %s as a routed tool and %s as a meta tool, and a tool is one or the other",
-			d.Message, d.RouteTool, d.MetaTool))
+			d.Message, d.RouteTool, d.MetaTool,
+		))
 	}
 
 	if d.RouteTool == "" && d.MetaTool == "" {
 		found = append(found, fmt.Sprintf(
-			"%s: declares %s but no marker names its tool", d.Message, d.Capability))
+			"%s: declares %s but no marker names its tool", d.Message, d.Capability,
+		))
 	}
 
 	found = append(found, d.surfaceDefects()...)
@@ -94,14 +96,16 @@ func (d Declaration) surfaceDefects() []string {
 
 	if d.RouteTool == "" {
 		return []string{fmt.Sprintf(
-			"%s: declares %s but no tool_route", d.Message, d.Surface)}
+			"%s: declares %s but no tool_route", d.Message, d.Surface,
+		)}
 	}
 
 	if d.Surface == linodev1.ApiSurface_API_SURFACE_UNSPECIFIED ||
 		d.Surface == linodev1.ApiSurface_API_SURFACE_V4 {
 		return []string{fmt.Sprintf(
 			"%s: declares %s, which is the default an unannotated tool already gets",
-			d.Message, d.Surface)}
+			d.Message, d.Surface,
+		)}
 	}
 
 	return nil
@@ -113,19 +117,22 @@ func (d Declaration) surfaceDefects() []string {
 func (d Declaration) tierDefects() []string {
 	if d.Capability == unspecified {
 		return []string{fmt.Sprintf(
-			"%s: names %s but declares no capability", d.Message, d.Name())}
+			"%s: names %s but declares no capability", d.Message, d.Name(),
+		)}
 	}
 
 	if d.MetaTool != "" && d.Capability != meta {
 		return []string{fmt.Sprintf(
 			"%s: %s carries a meta marker but declares %s",
-			d.Message, d.MetaTool, d.Capability)}
+			d.Message, d.MetaTool, d.Capability,
+		)}
 	}
 
 	if d.RouteTool != "" && d.Capability == meta {
 		return []string{fmt.Sprintf(
 			"%s: %s declares a route and %s, and a meta tool reaches no route",
-			d.Message, d.RouteTool, d.Capability)}
+			d.Message, d.RouteTool, d.Capability,
+		)}
 	}
 
 	return nil
@@ -167,7 +174,8 @@ func validateDeclarations(declared []Declaration) error {
 		name := entry.Name()
 		if first, taken := claimed[name]; name != "" && taken {
 			defects = append(defects, fmt.Sprintf(
-				"%s: names %s, which %s already declares", entry.Message, name, first))
+				"%s: names %s, which %s already declares", entry.Message, name, first,
+			))
 		}
 
 		claimed[name] = entry.Message
@@ -299,7 +307,8 @@ func ValidateArguments(inputs map[string][]string) error {
 
 			defects = append(defects, fmt.Sprintf(
 				"%s: declares argument %q, and the API surface is a per-tool"+
-					" declaration rather than an argument", message, argument))
+					" declaration rather than an argument", message, argument,
+			))
 		}
 	}
 

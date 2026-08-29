@@ -182,7 +182,7 @@ _CASES = [
     pytest.param(
         handle_linode_tag_delete,
         {"tag_label": "prod"},
-        "list_tagged_objects",
+        "route_raw",
         {"data": [], "page": 1, "pages": 1, "results": 0},
         "route_call",
         "deleted",
@@ -297,9 +297,12 @@ async def test_vlan_plan_then_apply(
     """VLAN delete resolves its state through the list endpoint (no single GET),
     so it is exercised on its own rather than via the shared single-key table.
     """
-    mock_linode_client.list_vlans.return_value = [
-        {"region": "us-east", "label": "vl-app", "linodes": []}
-    ]
+    mock_linode_client.route_raw.return_value = {
+        "data": [{"region": "us-east", "label": "vl-app", "linodes": []}],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
     delete = mock_linode_client.route_call
 
     store = PlanStore()

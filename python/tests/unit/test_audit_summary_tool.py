@@ -11,14 +11,22 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from linodemcp.audit import Capability, Event, Mode, Status
+from linodemcp.audit import (
+    Capability,
+    Event,
+    Mode,
+    Status,
+    event_timestamp,
+)
 from linodemcp.config import Config
+from linodemcp.genlocal import (
+    record_audit_event,
+)
 from linodemcp.gentools import (
     create_linode_audit_summary_tool,
     handle_linode_audit_summary,
 )
 from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -30,14 +38,14 @@ def _event(tool: str, capability: Capability, status: Status, second: int) -> Ev
     """Build an event at a distinct second."""
     ts = datetime(2026, 5, 20, 0, 0, second, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id=f"evt_{second}",
         tool=tool,
         tool_capability=capability,
         environment="prod",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
@@ -69,7 +77,6 @@ async def test_counts_by_tool_status(
 ) -> None:
     """The handler groups by tool+status and excludes meta by default."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")  # force the JSONL path
 
     audit_dir = tmp_path / "linodemcp"
     audit_dir.mkdir(parents=True)
@@ -80,7 +87,7 @@ async def test_counts_by_tool_status(
         _event("linode_instance_delete", Capability.DESTROY, Status.ERROR, 3),
         _event("linode_audit_recent", Capability.META, Status.SUCCESS, 4),
     ]
-    body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
+    body = "".join(record_audit_event(event, "", "") + "\n" for event in events)
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
     result = await handle_linode_audit_summary({}, Config())

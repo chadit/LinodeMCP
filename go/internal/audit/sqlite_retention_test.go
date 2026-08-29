@@ -13,9 +13,9 @@ func writeEventAt(t *testing.T, sink *audit.SQLiteSink, eventID string, ts time.
 	t.Helper()
 
 	evt := makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, ts)
-	evt.EventID = eventID
-	evt.TSUnixNS = ts.UnixNano()
-	sink.Write(t.Context(), &evt)
+	evt.EventId = eventID
+	evt.TsUnixNs = ts.UnixNano()
+	sink.Write(t.Context(), evt)
 }
 
 // countRows returns the total number of audit rows in the sink's DB.

@@ -28,6 +28,8 @@ message LKEVersionGetInput {
     path: "/lke/versions/{version}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEVersion";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a specific Kubernetes version available for LKE";
   option (linode.mcp.v1.error_message) = "Failed to retrieve LKE version '{version}': {error}";
@@ -59,6 +61,8 @@ message LKEVersionListInput {
     path: "/lke/versions"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LKE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_LKE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEVersionListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Kubernetes versions for LKE clusters";
 

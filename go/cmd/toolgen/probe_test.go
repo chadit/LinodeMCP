@@ -61,6 +61,14 @@ const mapEntryFlag = true
 // cannot be spelled where the field is built.
 const probeMapMarker = "map<string, Value>"
 
+// probeItemMarker stands in for a typed list's item message for the same reason
+// probeMapMarker stands in for a map entry, and probeItemMember is the one
+// member those entries carry.
+const (
+	probeItemMarker = "message<Item>"
+	probeItemMember = "note"
+)
+
 // probeMessage compiles one synthesized input message and answers its
 // descriptor.
 func probeMessage(
@@ -84,7 +92,7 @@ func probeMessage(
 		MessageType: []*descriptorpb.DescriptorProto{{
 			Name:       new(name),
 			Field:      fields,
-			NestedType: mapEntries(name, fields),
+			NestedType: append(mapEntries(name, fields), itemMessages(name, fields)...),
 			Options:    options,
 		}},
 	}
@@ -126,6 +134,39 @@ func mapEntries(
 	return nested
 }
 
+// itemMessages is the nested item message each marked typed-list field needs,
+// and rewrites those fields to name it. A stand-in is declared over a member of
+// that message, which is the shape a free-form list cannot carry.
+func itemMessages(
+	message string, fields []*descriptorpb.FieldDescriptorProto,
+) []*descriptorpb.DescriptorProto {
+	nested := make([]*descriptorpb.DescriptorProto, 0, len(fields))
+
+	for _, entry := range fields {
+		if entry.GetTypeName() != probeItemMarker {
+			continue
+		}
+
+		name := itemMessageName(entry.GetName())
+		nested = append(nested, &descriptorpb.DescriptorProto{
+			Name: new(name),
+			Field: []*descriptorpb.FieldDescriptorProto{
+				probeField(probeItemMember, 1, descriptorpb.FieldDescriptorProto_TYPE_STRING, nil),
+			},
+		})
+
+		entry.TypeName = new("." + probePackage + "." + message + "." + name)
+	}
+
+	return nested
+}
+
+// itemMessageName is the message one typed list's entries are declared as,
+// derived from the field so two lists in one probe cannot collide.
+func itemMessageName(field string) string {
+	return camelName(field) + "Item"
+}
+
 // mapValueField is the free-form value half of a map entry.
 func mapValueField() *descriptorpb.FieldDescriptorProto {
 	value := probeField("value", 2, descriptorpb.FieldDescriptorProto_TYPE_MESSAGE, nil)
@@ -137,6 +178,11 @@ func mapValueField() *descriptorpb.FieldDescriptorProto {
 // mapEntryName is the message proto nests a map field's entries in, which is
 // the field name in camel case with Entry after it.
 func mapEntryName(field string) string {
+	return camelName(field) + "Entry"
+}
+
+// camelName is a field name as a nested message spells it.
+func camelName(field string) string {
 	parts := strings.Split(field, "_")
 	for i, part := range parts {
 		if part != "" {
@@ -144,7 +190,7 @@ func mapEntryName(field string) string {
 		}
 	}
 
-	return strings.Join(parts, "") + "Entry"
+	return strings.Join(parts, "")
 }
 
 // probeRegistered is probeMessage plus a message type in the global registry,

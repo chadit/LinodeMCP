@@ -20,7 +20,7 @@ from linodemcp.profiles.loader import (
     resolve_active_profile,
 )
 from linodemcp.profiles.profile import Profile
-from linodemcp.profiles.scope import Scope, required_scopes
+from linodemcp.profiles.scope import Scope
 from linodemcp.profiles.scopecheck import (
     ScopeComparison,
     compare_scopes,
@@ -61,7 +61,6 @@ __all__ = [
     "lookup_profile",
     "parse_pat_scopes",
     "profile_is_elevated",
-    "required_scopes",
     "resolve_active_profile",
     "validate_scopes",
 ]

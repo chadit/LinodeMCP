@@ -106,10 +106,14 @@ FEATURE_TOOLS_LIST = (
 
 def get_version_info(
     build_date: str = "unknown",
-    git_commit: str = "dev",
+    git_commit: str = "unknown",
     git_branch: str = "main",
 ) -> VersionInfo:
-    """Get version information."""
+    """Get version information.
+
+    A development build knows no commit, so it says so rather than naming a
+    build type nobody chose; Go's appinfo has always spelled it that way.
+    """
     return VersionInfo(
         version=VERSION,
         api_version=API_VERSION,

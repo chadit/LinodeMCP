@@ -613,14 +613,16 @@ func readMarkerCursor(
 	if raw, ok := envelope[markerTruncatedKey]; ok && len(raw) > 0 {
 		if err := json.Unmarshal(raw, &cursor.IsTruncated); err != nil {
 			return ListMarkerPage{}, fmt.Errorf(
-				"failed to unmarshal %s list envelope: %w", operation, err)
+				"failed to unmarshal %s list envelope: %w", operation, err,
+			)
 		}
 	}
 
 	if raw, ok := envelope[markerNextKey]; ok && len(raw) > 0 {
 		if err := json.Unmarshal(raw, &cursor.NextMarker); err != nil {
 			return ListMarkerPage{}, fmt.Errorf(
-				"failed to unmarshal %s list envelope: %w", operation, err)
+				"failed to unmarshal %s list envelope: %w", operation, err,
+			)
 		}
 	}
 

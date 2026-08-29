@@ -2,26 +2,13 @@
 
 LinodeMCP runs as a stdio MCP server. Any MCP host can talk to it: there is no host-specific binary, and the profile system, write confirmations, and audit log all live inside the server itself. What changes per host is the *config glue*: how the host launches the server, where its config lives, and what convenience wrappers fit the host's workflow.
 
-This directory holds working examples per host. They are not the only way to wire things up; they are a starting point that's been used and verified.
+Three per-topic pages hold working command wrappers, each with a Claude Code section and a Claude Desktop section:
 
-## Layout
+- [profiles.md](./profiles.md): a `/profile` slash command and shell aliases for switching profiles.
+- [audit.md](./audit.md): `/audit` slash commands, ask-Claude patterns, and terminal queries.
+- [two-stage.md](./two-stage.md): `/plan` and `/apply` wrappers and the conversation script for destructive calls.
 
-```text
-docs/host-integrations/
-├── README.md            # this file
-├── claude-code/
-│   └── commands/
-│       ├── profile.md     # slash command for profile management
-│       ├── audit.md       # slash commands for audit queries
-│       └── two-stage.md   # /plan and /apply slash commands
-└── claude-desktop/
-    └── commands/
-        ├── profile.md     # shell wrappers for profiles (no native slash commands)
-        ├── audit.md       # jq-based audit queries + ask-Claude patterns
-        └── two-stage.md   # plan/apply conversation instructions
-```
-
-Each host directory is self-contained. Pick the one that matches your environment and read its `commands/profile.md` for the integration walk-through; `commands/audit.md` then adds the audit-log query shortcuts (depends on the server already being registered).
+They are not the only way to wire things up; they are a starting point that's been used and verified. On another host (Cline, Continue, etc.) the patterns transfer: the registration shape below is the same, and only the slash-command or alias mechanism differs.
 
 ## What the host needs to know
 
@@ -35,33 +22,100 @@ The MCP host itself doesn't manage profiles. It just runs the server. Profile ma
 
 ```bash
 linodemcp profile list                 # what's available
-linodemcp profile show readonly        # what it lets the AI do
+linodemcp profile show readonly-full   # what it lets the AI do
 linodemcp profile use compute-admin    # switch
 ```
 
 The host picks up the change on the next tool registration cycle (a few hundred ms).
 
-## Profile lifecycle in plain terms
+## Registering the server
 
-The server holds three pieces of state that interact:
+One registration per host, shown once here; the per-topic pages assume it is done. The examples use `/usr/local/bin/linodemcp`; substitute your build's absolute path (`.../LinodeMCP/go/bin/linodemcp` for the Go build, `.../LinodeMCP/python/.venv/bin/linodemcp` for the Python one). Pass the token via `LINODEMCP_LINODE_TOKEN`, or leave `env` empty and keep the token in the config file.
 
-- **Built-in profiles** ship in the binary. Eight of them, covering read-only through full admin. Built-ins can be disabled via config but never deleted.
-- **User-defined profiles** live in the config file under `profiles:`. They can shadow built-ins by name.
-- **Active profile** is one name set under `active_profile:` in the config, resolved against built-ins plus user-defined at startup and on every config-file change.
+### Claude Code
 
-A successful `linodemcp profile use <name>` writes the active name back to the config file atomically. The file watcher sees the rename and triggers `Server.ReloadProfile`, which diffs the old and new allowed tool sets and patches the MCP tool registry in place. The host's tool list updates without restart.
+The fastest way is the `claude mcp add` helper, which writes to your Claude Code settings:
 
-If the config file ends up malformed, the server keeps running with its previous profile and logs the failure. The user sees a stale tool list, not a crash.
+```bash
+claude mcp add linodemcp -- /usr/local/bin/linodemcp
+```
 
-## When to look at the per-host docs
+Add `--scope user` to make it available across all your projects. For team sharing, drop a `.mcp.json` in the project root:
 
-- You want a `/profile` slash command in Claude Code: read `claude-code/commands/profile.md`.
-- You want `/audit` slash commands in Claude Code: read `claude-code/commands/audit.md`.
-- You're on Claude Desktop and want shell aliases or a wrapper script: read `claude-desktop/commands/profile.md`.
-- You're on Claude Desktop and want audit-log queries from the terminal: read `claude-desktop/commands/audit.md`.
-- You want `/plan` and `/apply` slash commands in Claude Code for the two-stage write flow: read `claude-code/commands/two-stage.md`.
-- You're on Claude Desktop and want the plan/apply instructions for destructive calls: read `claude-desktop/commands/two-stage.md`.
-- You're on another host (Cline, Continue, etc.): these patterns transfer. The MCP server registration shape is the same; only the slash-command or alias mechanism differs.
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "/usr/local/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "${LINODEMCP_LINODE_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Set the `LINODEMCP_LINODE_TOKEN` env var in your shell, and Claude Code picks it up. Restart Claude Code after registering; from here on, profile changes hot-reload and only the initial registration needs a host restart.
+
+### Claude Desktop
+
+Edit `claude_desktop_config.json`. On macOS the file is at `~/Library/Application Support/Claude/claude_desktop_config.json`; on Windows, `%APPDATA%\Claude\claude_desktop_config.json`. Add an entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "/usr/local/bin/linodemcp",
+      "args": [],
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+Quit Claude Desktop fully (Cmd+Q on macOS, not just close the window) and reopen it. The MCP server starts on launch. For a non-default config path, add `"LINODEMCP_CONFIG_PATH": "/path/to/config.yml"` to the `env` block.
+
+### Gemini CLI
+
+Add the same `mcpServers` entry to `~/.gemini/settings.json`. Gemini CLI uses `$VAR` syntax (no curly braces) for environment variable references:
+
+```json
+{
+  "mcpServers": {
+    "linodemcp": {
+      "command": "/usr/local/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "$LINODEMCP_LINODE_TOKEN"
+      }
+    }
+  }
+}
+```
+
+### GitHub Copilot (VS Code)
+
+Create a `.vscode/mcp.json` in your workspace. Note the top-level key is `servers`, not `mcpServers`:
+
+```json
+{
+  "servers": {
+    "linodemcp": {
+      "command": "/usr/local/bin/linodemcp",
+      "env": {
+        "LINODEMCP_LINODE_TOKEN": "${input:linode-token}"
+      }
+    }
+  }
+}
+```
+
+VS Code prompts you for the token value on first use through the `${input:linode-token}` pattern and caches it for the session.
+
+### Cursor / Windsurf
+
+Both use the same `.mcp.json` format as Claude Code; drop the file from the [Claude Code](#claude-code) section in your project root.
 
 ## Security notes for the docs in this directory
 

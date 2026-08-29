@@ -64,7 +64,7 @@ func TestLinodeRegionAvailabilityListToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true}}}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": typeG6Standard1, statusAvailable: true}}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -99,8 +99,8 @@ func TestLinodeRegionAvailabilityListToolSuccess(t *testing.T) {
 		t.Errorf("listResponseCount = %d, want 1", got)
 	}
 
-	if !strings.Contains(textContent.Text, "g6-standard-1") {
-		t.Errorf("textContent.Text does not contain %v", "g6-standard-1")
+	if !strings.Contains(textContent.Text, typeG6Standard1) {
+		t.Errorf("textContent.Text does not contain %v", typeG6Standard1)
 	}
 }
 
@@ -204,7 +204,7 @@ func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
 
 		// The per-region availability route answers with a bare array, unlike
 		// the paginated cross-region list.
-		if err := json.NewEncoder(w).Encode([]map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true, keyNotInProto: valNotInProto}}); err != nil {
+		if err := json.NewEncoder(w).Encode([]map[string]any{{keyRegion: regionUSEast, "plan": typeG6Standard1, statusAvailable: true, keyNotInProto: valNotInProto}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -239,8 +239,8 @@ func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
 		t.Errorf("listResponseCount = %d, want 1", got)
 	}
 
-	if !strings.Contains(textContent.Text, "g6-standard-1") {
-		t.Errorf("textContent.Text does not contain %v", "g6-standard-1")
+	if !strings.Contains(textContent.Text, typeG6Standard1) {
+		t.Errorf("textContent.Text does not contain %v", typeG6Standard1)
 	}
 
 	if !strings.Contains(textContent.Text, regionUSEast) {

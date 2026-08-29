@@ -91,20 +91,6 @@ func TestRefusesAWalkTheArgumentsCannotAnswer(t *testing.T) {
 				Field: []string{probeListArg}, Empty: "interfaces must not be empty",
 			}),
 		},
-		{
-			name:    "walk beside the hook that owns the whole check",
-			refusal: "errWalkWithValidate",
-			build: func(t *testing.T) *toolgen.ProbeRun {
-				t.Helper()
-
-				return goProbe(probeMessage(t, "ProbeWalkValidateInput",
-					writeOptions(withHooks("validate"), withWalk(&linodev1.ObjectWalk{
-						Field: []string{probeObjectArg}, Unusable: "devices must be an object",
-					})),
-					bodyString(probeDomainArg, 1), objectField(probeLocalNumber),
-					listField(probeListArg, 3)))
-			},
-		},
 	})
 }
 

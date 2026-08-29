@@ -142,6 +142,7 @@ func New(cfg *config.Config) (*Server, error) {
 		Drafts:        srv.draftRegistry,
 		Catalog:       srv.ToolCatalog,
 		ActiveProfile: srv.ActiveProfile,
+		Config:        cfg,
 	}
 
 	srv.allEntries = collectAllToolEntries(cfg)
@@ -259,6 +260,8 @@ func (s *Server) ToolCatalog() []profiles.ToolDescriptor {
 		out[i] = profiles.ToolDescriptor{
 			Name:       s.allEntries[i].tool.Name,
 			Capability: s.allEntries[i].capability,
+			Scopes:     gentools.ScopesFor(s.allEntries[i].tool.Name),
+			Categories: gentools.CategoriesFor(s.allEntries[i].tool.Name),
 		}
 	}
 
@@ -604,7 +607,7 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 		start := time.Now()
 
 		mode, yoloAllowed := s.executionMode(&req)
-		evt.SetMode(mode, "")
+		evt = audit.SetMode(evt, mode, "")
 
 		if yoloAllowed {
 			ctx = tools.WithYoloAllowed(ctx)
@@ -617,8 +620,8 @@ func (s *Server) addTool(tool *mcp.Tool, capability profiles.Capability, handler
 		result, err := handler(ctx, req)
 
 		s.metrics.RecordToolCall(ctx, toolName, time.Since(start), err)
-		finalizeAuditEvent(&evt, start, err)
-		s.auditSink.Write(context.WithoutCancel(ctx), &evt)
+		s.auditSink.Write(context.WithoutCancel(ctx),
+			audit.Outcome(evt, time.Since(start), err))
 
 		return result, err
 	}
@@ -639,7 +642,7 @@ func (s *Server) newAuditEvent(
 	toolName string,
 	capability audit.Capability,
 	req *mcp.CallToolRequest,
-) audit.Event {
+) *audit.Event {
 	args := req.GetArguments()
 	environment, _ := args["environment"].(string)
 
@@ -710,24 +713,11 @@ func (s *Server) writeRefusalAuditEvent(
 	req *mcp.CallToolRequest,
 	refusalErr error,
 ) {
-	evt := s.newAuditEvent(toolName, capability, req)
-	evt.Finalize(audit.StatusRefused, 0, refusalErr.Error(), "")
-	s.auditSink.Write(context.WithoutCancel(ctx), &evt)
-}
-
-// finalizeAuditEvent sets status/latency/error based on handler
-// outcome. Success when err is nil; Error otherwise. Result-summary
-// generation lands in Phase 2; for Phase 1b it stays empty.
-func finalizeAuditEvent(evt *audit.Event, start time.Time, err error) {
-	latency := time.Since(start)
-
-	if err == nil {
-		evt.Finalize(audit.StatusSuccess, latency, "", "")
-
-		return
-	}
-
-	evt.Finalize(audit.StatusError, latency, err.Error(), "")
+	evt := audit.Finalize(
+		s.newAuditEvent(toolName, capability, req),
+		audit.StatusRefused, 0, refusalErr.Error(), "",
+	)
+	s.auditSink.Write(context.WithoutCancel(ctx), evt)
 }
 
 // profilesCapabilityToAudit translates the profiles capability tag
@@ -880,6 +870,8 @@ func (s *Server) resolveProfileLocked(cfg *config.Config) (profiles.Profile, err
 		registry[i] = profiles.ToolDescriptor{
 			Name:       s.allEntries[i].tool.Name,
 			Capability: s.allEntries[i].capability,
+			Scopes:     gentools.ScopesFor(s.allEntries[i].tool.Name),
+			Categories: gentools.CategoriesFor(s.allEntries[i].tool.Name),
 		}
 	}
 
@@ -905,6 +897,8 @@ func ToolDescriptors(cfg *config.Config) []profiles.ToolDescriptor {
 		out[i] = profiles.ToolDescriptor{
 			Name:       entries[i].tool.Name,
 			Capability: entries[i].capability,
+			Scopes:     gentools.ScopesFor(entries[i].tool.Name),
+			Categories: gentools.CategoriesFor(entries[i].tool.Name),
 		}
 	}
 

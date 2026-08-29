@@ -90,6 +90,24 @@ func TestCatalogEntriesUncategorized(t *testing.T) {
 	}
 }
 
+// TestCatalogEntriesFilesEntityListUnderIam checks the IAM helper sits under
+// the iam node with its linode_iam_ siblings instead of the "other" bucket.
+func TestCatalogEntriesFilesEntityListUnderIam(t *testing.T) {
+	t.Parallel()
+
+	entries := cli.CatalogEntries([]server.ToolInfo{
+		{Name: "linode_entity_list", Capability: profiles.CapRead},
+	})
+
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %v", len(entries), entries)
+	}
+
+	if entries[0].Category != "iam" {
+		t.Errorf("linode_entity_list category = %q, want iam", entries[0].Category)
+	}
+}
+
 // TestBuildFormFieldSpecsSkipsSafetyControls checks the form builder drops
 // the safety-control properties (dry_run, confirm, mode, plan_id,
 // environment, yolo, confirmed_dry_run) so they render as dedicated

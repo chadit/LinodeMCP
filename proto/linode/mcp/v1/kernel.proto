@@ -35,6 +35,8 @@ message KernelGetInput {
     path: "/linode/kernels/{kernel_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Kernel";
   option (linode.mcp.v1.tool_description) = "Gets one Linode kernel by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve kernel: {error}";
@@ -70,6 +72,8 @@ message KernelListInput {
     path: "/linode/kernels"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.KernelListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Linode kernels with optional pagination.";
 

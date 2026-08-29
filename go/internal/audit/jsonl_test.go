@@ -3,7 +3,6 @@ package audit_test
 import (
 	"bufio"
 	"compress/gzip"
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
 
 // testProfile is the profile name reused across audit tests. Lifted
@@ -35,31 +35,31 @@ func TestJSONLSinkAppendsOneLinePerEvent(t *testing.T) {
 	}
 
 	defer func() {
-		if err := sink.Close(); err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if closeErr := sink.Close(); closeErr != nil {
+			t.Fatalf("unexpected error: %v", closeErr)
 		}
 	}()
 
 	event1 := makeEvent("linode_instance_list", audit.CapabilityRead)
-	event1.Finalize(audit.StatusSuccess, 12*time.Millisecond, "", "5 instances")
-	sink.Write(t.Context(), &event1)
+	event1 = audit.Finalize(event1, audit.StatusSuccess, 12*time.Millisecond, "", "5 instances")
+	sink.Write(t.Context(), event1)
 
 	event2 := makeEvent("linode_instance_create", audit.CapabilityWrite)
-	event2.Finalize(audit.StatusError, 45*time.Millisecond, "boom", "")
-	sink.Write(t.Context(), &event2)
+	event2 = audit.Finalize(event2, audit.StatusError, 45*time.Millisecond, "boom", "")
+	sink.Write(t.Context(), event2)
 
 	lines := readLines(t, sink.Path())
 	if len(lines) != 2 {
 		t.Fatalf("len(lines) = %d, want %d", len(lines), 2)
 	}
 
-	var got1, got2 audit.Event
-
-	if err := json.Unmarshal([]byte(lines[0]), &got1); err != nil {
+	got1, err := genlocal.AuditEventFromRecord([]byte(lines[0]))
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if err := json.Unmarshal([]byte(lines[1]), &got2); err != nil {
+	got2, err := genlocal.AuditEventFromRecord([]byte(lines[1]))
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -67,19 +67,19 @@ func TestJSONLSinkAppendsOneLinePerEvent(t *testing.T) {
 		t.Errorf("got1.Tool = %v, want %v", got1.Tool, tcLinodeInstanceList)
 	}
 
-	if got1.Status != audit.StatusSuccess {
+	if got1.Status != string(audit.StatusSuccess) {
 		t.Errorf("got1.Status = %v, want %v", got1.Status, audit.StatusSuccess)
 	}
 
-	if got1.LatencyMS != int64(12) {
-		t.Errorf("got1.LatencyMS = %v, want %v", got1.LatencyMS, int64(12))
+	if got1.LatencyMs != int64(12) {
+		t.Errorf("got1.LatencyMs = %v, want %v", got1.LatencyMs, int64(12))
 	}
 
 	if got2.Tool != tcLinodeInstanceCreate {
 		t.Errorf("got2.Tool = %v, want %v", got2.Tool, tcLinodeInstanceCreate)
 	}
 
-	if got2.Status != audit.StatusError {
+	if got2.Status != string(audit.StatusError) {
 		t.Errorf("got2.Status = %v, want %v", got2.Status, audit.StatusError)
 	}
 
@@ -89,6 +89,45 @@ func TestJSONLSinkAppendsOneLinePerEvent(t *testing.T) {
 
 	if *got2.Error != tcBoom {
 		t.Errorf("*got2.Error = %v, want %v", *got2.Error, tcBoom)
+	}
+}
+
+// TestJSONLSinkWritesTheRecordItself pins the line the sink appends to the
+// record writer's own bytes. Writing the projection instead would carry the
+// same eighteen members in this language's map order rather than the message's,
+// which is the divergence the record direction exists to close and which every
+// other case here reads through key lookups that cannot see it.
+func TestJSONLSinkWritesTheRecordItself(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	sink, err := audit.NewJSONLSink(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer func() {
+		if closeErr := sink.Close(); closeErr != nil {
+			t.Fatalf("unexpected error: %v", closeErr)
+		}
+	}()
+
+	event := makeEvent("linode_instance_list", audit.CapabilityRead)
+	sink.Write(t.Context(), event)
+
+	want, err := genlocal.RecordAuditEvent(event, "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	lines := readLines(t, sink.Path())
+	if len(lines) != 1 {
+		t.Fatalf("len(lines) = %d, want %d", len(lines), 1)
+	}
+
+	if lines[0] != string(want) {
+		t.Errorf("the sink wrote\n %s\nwant %s", lines[0], want)
 	}
 }
 
@@ -119,12 +158,12 @@ func TestJSONLSinkRotatesOnDayBoundary(t *testing.T) {
 	}()
 
 	day1Event := makeEvent("linode_instance_list", audit.CapabilityRead)
-	day1Event.Finalize(audit.StatusSuccess, 10*time.Millisecond, "", "day-1-event")
-	sink.Write(t.Context(), &day1Event)
+	day1Event = audit.Finalize(day1Event, audit.StatusSuccess, 10*time.Millisecond, "", "day-1-event")
+	sink.Write(t.Context(), day1Event)
 
 	day2Event := makeEvent("linode_instance_get", audit.CapabilityRead)
-	day2Event.Finalize(audit.StatusSuccess, 11*time.Millisecond, "", "day-2-event")
-	sink.Write(t.Context(), &day2Event)
+	day2Event = audit.Finalize(day2Event, audit.StatusSuccess, 11*time.Millisecond, "", "day-2-event")
+	sink.Write(t.Context(), day2Event)
 
 	rotatedPath := filepath.Join(dir, "audit-2026-05-18.log.gz")
 
@@ -203,8 +242,8 @@ func TestJSONLSinkWriteAfterCloseDropsEvent(t *testing.T) {
 	}
 
 	event := makeEvent("linode_instance_list", audit.CapabilityRead)
-	event.Finalize(audit.StatusSuccess, time.Millisecond, "", "")
-	sink.Write(t.Context(), &event)
+	event = audit.Finalize(event, audit.StatusSuccess, time.Millisecond, "", "")
+	sink.Write(t.Context(), event)
 
 	handlerMu.Lock()
 	gotErr := handlerErr
@@ -260,7 +299,7 @@ func TestJSONLSinkCloseReturnsNilWhenHealthy(t *testing.T) {
 // makeEvent builds an Event with the fields tests don't care about
 // already populated, so each test only has to pick the tool and
 // capability that matter.
-func makeEvent(tool string, capability audit.Capability) audit.Event {
+func makeEvent(tool string, capability audit.Capability) *audit.Event {
 	return audit.NewEvent(
 		tool,
 		capability,

@@ -1502,7 +1502,7 @@ func twoStageUnchangedStateCases() []twoStageUnchangedStateCase {
 
 				return h
 			},
-			args:      map[string]any{"tag_label": "prod"},
+			args:      map[string]any{"tag_label": canRunEnvProd},
 			baseState: map[string]any{keyData: []any{}},
 		},
 		{
@@ -1512,9 +1512,9 @@ func twoStageUnchangedStateCases() []twoStageUnchangedStateCase {
 
 				return h
 			},
-			args: map[string]any{keyRegionID: placementGroupCreateRegion, keyLabel: "vl-app"},
+			args: map[string]any{keyRegionID: placementGroupCreateRegion, keyLabel: scanVLANLabel},
 			baseState: map[string]any{
-				keyData: []any{map[string]any{keyRegion: placementGroupCreateRegion, keyLabel: "vl-app", keyVLANLinodes: []any{}}},
+				keyData: []any{map[string]any{keyRegion: placementGroupCreateRegion, keyLabel: scanVLANLabel, keyVLANLinodes: []any{}}},
 			},
 		},
 		{
@@ -1545,7 +1545,7 @@ func twoStageUnchangedStateCases() []twoStageUnchangedStateCase {
 				return h
 			},
 			args:      map[string]any{keyKeyID: float64(123)},
-			baseState: map[string]any{keyLabel: "ci-key", "access_key": "AK", "id": float64(123)},
+			baseState: map[string]any{keyLabel: "ci-key", "access_key": "AK", keySupportTicketID: float64(123)},
 		},
 	}
 }

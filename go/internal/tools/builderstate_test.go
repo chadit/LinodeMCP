@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
@@ -22,17 +23,26 @@ const (
 	wantDraftNameMissing = "name argument is required"
 )
 
-// builderState is what the server attaches to a call: the draft registry plus
-// the catalog and active-profile readers. The profile arrives as its reader so
-// a case can swap what the next call sees.
+// builderState is what the server attaches to a call: the draft registry, the
+// catalog and active-profile readers, and the configuration a clone source
+// resolves against. The profile arrives as its reader so a case can swap what
+// the next call sees.
 func builderState(
-	reg *builder.Registry, catalog []profiles.ToolDescriptor, active func() profiles.Profile,
+	reg *builder.Registry, catalog []profiles.ToolDescriptor,
+	active func() profiles.Profile, cfg *config.Config,
 ) *tools.BuilderState {
 	return &tools.BuilderState{
 		Drafts:        reg,
 		Catalog:       func() []profiles.ToolDescriptor { return catalog },
 		ActiveProfile: active,
+		Config:        cfg,
 	}
+}
+
+// emptyConfig is the configuration the tools that resolve no profile name read.
+// Present rather than nil because a partial state is treated as no state.
+func emptyConfig() *config.Config {
+	return &config.Config{}
 }
 
 // noProfile is the active-profile reader for the tools that never read one.
@@ -42,65 +52,55 @@ func noProfile() profiles.Profile {
 
 // draftState is the state for the tools that read the registry alone.
 func draftState(reg *builder.Registry) *tools.BuilderState {
-	return builderState(reg, nil, noProfile)
+	return builderState(reg, nil, noProfile, emptyConfig())
 }
 
 // catalogState is the state for the tools that read the catalog alone.
 func catalogState(catalog []profiles.ToolDescriptor) *tools.BuilderState {
-	return builderState(builder.NewRegistry(), catalog, noProfile)
+	return builderState(builder.NewRegistry(), catalog, noProfile, emptyConfig())
 }
 
 // builderHandler is the shape every hand-written builder factory's third
 // return value has.
 type builderHandler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
-// builderAnswer is the shape of the answer functions the generated builder
-// tools reach through their hooks.
-type builderAnswer func(
-	ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config,
-) (*mcp.CallToolResult, error)
+// builderFactory is the shape of a generated builder tool's factory.
+type builderFactory func(*config.Config) (mcp.Tool, profiles.Capability, tools.Handler)
 
-// callAnswer runs one builder answer with the given state attached. cfg is nil
-// for every answer but draft_new's, which resolves its clone source from it.
-func callAnswer(
-	t *testing.T, state *tools.BuilderState, answer builderAnswer,
-	cfg *config.Config, args map[string]any,
-) *mcp.CallToolResult {
-	t.Helper()
+// generatedBuilder is the handler one generated factory builds. A tool whose
+// answer is declared rather than hooked keeps its whole body there, so this is
+// the only seam a case can reach it through.
+func generatedBuilder(factory builderFactory, cfg *config.Config) builderHandler {
+	_, _, handler := factory(cfg)
 
-	req := &mcp.CallToolRequest{}
-	req.Params.Arguments = args
-
-	result, err := answer(tools.WithBuilderState(t.Context(), state), req, cfg)
-	if err != nil {
-		t.Fatalf("unexpected answer error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("expected non-nil answer result")
-	}
-
-	return result
+	return handler
 }
 
-// callSaveAnswer invokes the save answer with the state attached and returns
-// the parsed response.
+// callSaveAnswer invokes the save through its generated handler with the state
+// attached and returns the parsed response.
 func callSaveAnswer(
 	t *testing.T, state *tools.BuilderState, args map[string]any,
 ) map[string]any {
 	t.Helper()
 
-	return builderBody(t, callAnswer(t, state, tools.ProfileDraftSaveAnswer, nil, args))
+	return builderBody(t, callBuilder(t, state, saveHandler(), args))
 }
 
-// wantAnswerRefusal asserts a builder answer refused with exactly the sentence.
-func wantAnswerRefusal(
-	t *testing.T, state *tools.BuilderState, answer builderAnswer,
-	cfg *config.Config, args map[string]any, want string,
+// saveHandler is the generated save handler, which is the only seam the save
+// has now that its whole body is declared.
+func saveHandler() builderHandler {
+	return generatedBuilder(gentools.NewLinodeProfileDraftSaveTool, &config.Config{})
+}
+
+// wantBuilderRefusal asserts a builder handler refused with exactly the
+// sentence.
+func wantBuilderRefusal(
+	t *testing.T, state *tools.BuilderState, handler builderHandler,
+	args map[string]any, want string,
 ) {
 	t.Helper()
 
-	if got := refusalText(t, callAnswer(t, state, answer, cfg, args)); got != want {
+	if got := refusalText(t, callBuilder(t, state, handler, args)); got != want {
 		t.Errorf("refusal = %q, want %q", got, want)
 	}
 }
@@ -180,34 +180,48 @@ func wantRefusal(
 }
 
 // TestBuilderToolsRefuseWithoutState covers what no fixture can see: a builder
-// answer reached with no state attached refuses rather than reading from
-// nothing. Production attaches the state on every call, so this is the shape a
-// broken wiring change would take. All ten are here now that the class is
-// generated; the separate answers-only case it used to share this file with
-// went away with the last hand-written factory.
+// tool reached with no state attached refuses rather than reading from nothing.
+// Production attaches the state on every call, so this is the shape a broken
+// wiring change would take.
+//
+// Driven through the generated handler rather than an answer function because
+// four of the ten no longer have one: their state read is written by the
+// declaration. Each row sends the name its contract requires, since the rule
+// check runs ahead of the state read and would otherwise answer first.
 func TestBuilderToolsRefuseWithoutState(t *testing.T) {
 	t.Parallel()
 
-	answers := map[string]builderAnswer{
-		"linode_profile_list_tools":         tools.ProfileListToolsAnswer,
-		"linode_profile_list_categories":    tools.ProfileListCategoriesAnswer,
-		"linode_profile_can_run":            tools.ProfileCanRunAnswer,
-		"linode_profile_draft_new":          tools.ProfileDraftNewAnswer,
-		"linode_profile_draft_show":         tools.ProfileDraftShowAnswer,
-		"linode_profile_draft_discard":      tools.ProfileDraftDiscardAnswer,
-		"linode_profile_draft_add_tools":    tools.ProfileDraftAddToolsAnswer,
-		"linode_profile_draft_remove_tools": tools.ProfileDraftRemoveToolsAnswer,
-		"linode_profile_draft_set":          tools.ProfileDraftSetAnswer,
-		"linode_profile_draft_save":         tools.ProfileDraftSaveAnswer,
-	}
+	named := map[string]any{keyName: draftFixtureName}
+	// Save is gated, and the generated handler asks the gate ahead of the state
+	// read, so the row has to clear it to reach what the case measures.
+	confirmed := map[string]any{keyName: draftFixtureName, "confirm": true}
 
-	for name, answer := range answers {
+	for name, testCase := range map[string]struct {
+		factory builderFactory
+		args    map[string]any
+	}{
+		"linode_profile_list_tools":         {factory: gentools.NewLinodeProfileListToolsTool},
+		"linode_profile_list_categories":    {factory: gentools.NewLinodeProfileListCategoriesTool},
+		"linode_profile_can_run":            {factory: gentools.NewLinodeProfileCanRunTool},
+		"linode_profile_draft_new":          {factory: gentools.NewLinodeProfileDraftNewTool, args: named},
+		"linode_profile_draft_show":         {factory: gentools.NewLinodeProfileDraftShowTool, args: named},
+		"linode_profile_draft_discard":      {factory: gentools.NewLinodeProfileDraftDiscardTool, args: named},
+		"linode_profile_draft_add_tools":    {factory: gentools.NewLinodeProfileDraftAddToolsTool, args: named},
+		"linode_profile_draft_remove_tools": {factory: gentools.NewLinodeProfileDraftRemoveToolsTool, args: named},
+		"linode_profile_draft_set":          {factory: gentools.NewLinodeProfileDraftSetTool, args: named},
+		"linode_profile_draft_save":         {factory: gentools.NewLinodeProfileDraftSaveTool, args: confirmed},
+	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			result, err := answer(t.Context(), &mcp.CallToolRequest{}, &config.Config{})
+			request := mcp.CallToolRequest{}
+			request.Params.Arguments = testCase.args
+
+			handler := generatedBuilder(testCase.factory, &config.Config{})
+
+			result, err := handler(t.Context(), request)
 			if err != nil {
-				t.Fatalf("unexpected answer error: %v", err)
+				t.Fatalf("unexpected handler error: %v", err)
 			}
 
 			if got := refusalText(t, result); got != wantBuilderUnconfigured {
@@ -241,10 +255,11 @@ func TestDraftSurvivesAcrossCalls(t *testing.T) {
 	t.Parallel()
 
 	state := draftState(builder.NewRegistry())
+	named := map[string]any{keyName: draftFixtureName}
 
-	callAnswer(t, state, tools.ProfileDraftNewAnswer, &config.Config{}, map[string]any{keyName: draftFixtureName})
+	callBuilder(t, state, generatedBuilder(gentools.NewLinodeProfileDraftNewTool, &config.Config{}), named)
 
-	result := callAnswer(t, state, tools.ProfileDraftShowAnswer, nil, map[string]any{keyName: draftFixtureName})
+	result := callBuilder(t, state, generatedBuilder(gentools.NewLinodeProfileDraftShowTool, nil), named)
 	if result.IsError {
 		t.Fatalf("show after new refused: %s", refusalText(t, result))
 	}
@@ -264,29 +279,52 @@ func TestCanRunReadsTheProfileAtCallTime(t *testing.T) {
 		Drafts:        builder.NewRegistry(),
 		Catalog:       func() []profiles.ToolDescriptor { return catalog },
 		ActiveProfile: func() profiles.Profile { return active },
+		Config:        emptyConfig(),
 	}
 
-	req := &mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]any{"calls": []any{map[string]any{"tool": toolInstanceBoot}}}
-	ctx := tools.WithBuilderState(t.Context(), state)
+	args := map[string]any{tcCalls: []any{map[string]any{"tool": toolInstanceBoot}}}
+	handler := generatedBuilder(gentools.NewLinodeProfileCanRunTool, nil)
 
-	before, err := tools.ProfileCanRunAnswer(ctx, req, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got := builderBody(t, before)["active_profile"]; got != "before" {
+	before := builderBody(t, callBuilder(t, state, handler, args))
+	if got := before["active_profile"]; got != "before" {
 		t.Errorf("active_profile = %v, want %q", got, "before")
 	}
 
 	active = profiles.Profile{Name: "after", AllowedTools: []string{toolInstanceBoot}}
 
-	after, err := tools.ProfileCanRunAnswer(ctx, req, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got := builderBody(t, after)["active_profile"]; got != "after" {
+	after := builderBody(t, callBuilder(t, state, handler, args))
+	if got := after["active_profile"]; got != "after" {
 		t.Errorf("active_profile = %v, want %q", got, "after")
+	}
+}
+
+// ghostDraftName is the draft every hostile-shape case names; no draft by that
+// name is ever registered, so the refusal comes from the registry lookup.
+const ghostDraftName = "ghost"
+
+// TestDraftToolPatternsSurviveHostileShapes drives the shared string-array
+// reader through every shape a caller can send: an absent key, a value that
+// is not a list, and a list mixing types, each parsing to what the draft
+// registry then words as its own refusal.
+func TestDraftToolPatternsSurviveHostileShapes(t *testing.T) {
+	t.Parallel()
+
+	for name, arguments := range map[string]map[string]any{
+		"tools key absent":     {managedContactNameParam: ghostDraftName},
+		"tools not a list":     {managedContactNameParam: ghostDraftName, "tools": "linode_domain_*"},
+		"tools of mixed types": {managedContactNameParam: ghostDraftName, "tools": []any{1, "linode_domain_*"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			result := callBuilder(t,
+				draftState(builder.NewRegistry()),
+				generatedBuilder(gentools.NewLinodeProfileDraftAddToolsTool, &config.Config{}),
+				arguments)
+
+			if !result.IsError {
+				t.Fatal("result.IsError = false, want the draft-not-found refusal")
+			}
+		})
 	}
 }

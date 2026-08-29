@@ -26,18 +26,6 @@ func TestRefusesAStateRouteDeclarationThatCannotLand(t *testing.T) {
 
 	runRefusals(t, []refusalCase{
 		{
-			name:    "declaration beside a fetch_state hook",
-			refusal: "errStateRouteWithHook",
-			build: stateRouteProbe("ProbeStateRouteWithHookInput",
-				&linodev1.StateRoute{Tool: probeStateReadTool}, withHooks("fetch_state")),
-		},
-		{
-			name:    "declaration beside a preview hook",
-			refusal: "errStateRouteWithPreviewHook",
-			build: stateRouteProbe("ProbeStateRouteWithPreviewHookInput",
-				&linodev1.StateRoute{Tool: probeStateReadTool}, withHooks("preview")),
-		},
-		{
 			name:    "declaration on a tool that neither removes nor previews",
 			refusal: "errStateRouteWithNoReader",
 			build: func(t *testing.T) *toolgen.ProbeRun {
@@ -176,7 +164,8 @@ func stateRouteQueryProbe(
 			withRoute("GET", probeStateReadPath),
 			withResponse("linode.mcp.v1.Domain"),
 			withCapability(linodev1.ToolCapability_TOOL_CAPABILITY_READ),
-			withDescription("Reads a probe."))
+			withDescription("Reads a probe."),
+		)
 
 		// A parameter spelled like the path slot replaces it rather than sitting
 		// beside it: one message cannot declare the field name twice, and the
@@ -262,5 +251,192 @@ func stateRouteBesideProbe(
 func withStateRoute(declared *linodev1.StateRoute) func(*descriptorpb.MessageOptions) {
 	return func(options *descriptorpb.MessageOptions) {
 		proto.SetExtension(options, linodev1.E_StateRoute, declared)
+	}
+}
+
+// The scan, envelope, and composite state-form refusals.
+
+// probePageResponse is a real list envelope whose element the scan cases match
+// against, and probeGetResponse a real single resource with no page in it.
+const (
+	probePageResponse = "linode.mcp.v1.VLANListResponse"
+	probeGetResponse  = "linode.mcp.v1.VLAN"
+	// compositeMemberOne and Two are the two members the composite cases land.
+	compositeMemberOne = "one"
+	compositeMemberTwo = "two"
+)
+
+func TestRefusesAStateFormThatCannotLand(t *testing.T) {
+	t.Parallel()
+
+	runRefusals(t, []refusalCase{
+		{
+			name:    "match beside a single-resource declaration",
+			refusal: "errScanWithResource",
+			build: stateRouteBesideProbe("ProbeScanWithResourceInput",
+				&linodev1.StateRoute{
+					Tool: probeStateReadTool, PayloadMember: "domain",
+					Match: []*linodev1.StateRouteMatch{{Field: probeBodyArg, Argument: probeDeleteArg}},
+				},
+				withRoute("GET", probeStateReadPath), withResponse(probePageResponse)),
+		},
+		{
+			name:    "envelope beside a match",
+			refusal: "errEnvelopeWithResource",
+			build: stateRouteBesideProbe("ProbeEnvelopeWithMatchInput",
+				&linodev1.StateRoute{
+					Tool:          probeStateReadTool,
+					EnvelopeState: true,
+					Match:         []*linodev1.StateRouteMatch{{Field: probeBodyArg, Argument: probeDeleteArg}},
+				},
+				withRoute("GET", probeStateReadPath), withResponse(probePageResponse)),
+		},
+		{
+			name:    "envelope beside a single-resource declaration",
+			refusal: "errEnvelopeWithResource",
+			build: stateRouteBesideProbe("ProbeEnvelopeWithResourceInput",
+				&linodev1.StateRoute{
+					Tool: probeStateReadTool, BodyKey: "domain", EnvelopeState: true,
+				},
+				withRoute("GET", probeStateReadPath), withResponse(probePageResponse)),
+		},
+		{
+			name:    "scan of a read that answers no page",
+			refusal: "errStateReadNotList",
+			build: stateRouteBesideProbe("ProbeScanNotListInput",
+				&linodev1.StateRoute{
+					Tool:  probeStateReadTool,
+					Match: []*linodev1.StateRouteMatch{{Field: probeBodyArg, Argument: probeDeleteArg}},
+				},
+				withRoute("GET", probeStateReadPath), withResponse(probeGetResponse)),
+		},
+		{
+			name:    "match on a field the element does not declare",
+			refusal: "errMatchUnknownField",
+			build: stateRouteBesideProbe("ProbeMatchUnknownFieldInput",
+				&linodev1.StateRoute{
+					Tool:  probeStateReadTool,
+					Match: []*linodev1.StateRouteMatch{{Field: probeAbsentName, Argument: probeDeleteArg}},
+				},
+				withRoute("GET", probeStateReadPath), withResponse(probePageResponse)),
+		},
+	})
+}
+
+func TestRefusesACompositeThatCannotLand(t *testing.T) {
+	t.Parallel()
+
+	runRefusals(t, []refusalCase{
+		{
+			name:    "composite on a tool that advertises no plan",
+			refusal: "errCompositeUnstaged",
+			build:   compositeProbe("ProbeCompositeUnstagedInput", false, validComposite()),
+		},
+		{
+			name:    "composite of one call",
+			refusal: "errCompositeTooFew",
+			build: compositeProbe("ProbeCompositeTooFewInput", true,
+				withComposite(&linodev1.StateComposite{
+					Calls: []*linodev1.StateCompositeCall{
+						{Tool: probeStateReadTool, Member: compositeMemberOne, Fields: []string{probeBodyArg}},
+					},
+				})),
+		},
+		{
+			name:    "composite landing one member twice",
+			refusal: "errCompositeMember",
+			build: compositeBesideProbe("ProbeCompositeMemberInput",
+				&linodev1.StateComposite{
+					Calls: []*linodev1.StateCompositeCall{
+						{Tool: probeStateReadTool, Member: compositeMemberOne, Fields: []string{probeBodyArg}},
+						{Tool: probeStateReadTool, Member: compositeMemberOne, Fields: []string{probeBodyArg}},
+					},
+				}),
+		},
+		{
+			name:    "composite call keeping nothing",
+			refusal: "errCompositeNoFields",
+			build: compositeBesideProbe("ProbeCompositeNoFieldsInput",
+				&linodev1.StateComposite{
+					Calls: []*linodev1.StateCompositeCall{
+						{Tool: probeStateReadTool, Member: compositeMemberOne},
+						{Tool: probeStateReadTool, Member: compositeMemberTwo, Fields: []string{probeBodyArg}},
+					},
+				}),
+		},
+		{
+			name:    "composite keeping a field the read does not declare",
+			refusal: "errCompositeUnknownField",
+			build: compositeBesideProbe("ProbeCompositeUnknownFieldInput",
+				&linodev1.StateComposite{
+					Calls: []*linodev1.StateCompositeCall{
+						{Tool: probeStateReadTool, Member: compositeMemberOne, Fields: []string{probeAbsentName}},
+						{Tool: probeStateReadTool, Member: compositeMemberTwo, Fields: []string{probeBodyArg}},
+					},
+				}),
+		},
+	})
+}
+
+// validComposite is a two-call declaration whose refusal comes from what sits
+// beside it rather than from its own calls.
+func validComposite() func(*descriptorpb.MessageOptions) {
+	return withComposite(&linodev1.StateComposite{
+		Calls: []*linodev1.StateCompositeCall{
+			{Tool: probeStateReadTool, Member: compositeMemberOne, Fields: []string{probeBodyArg}},
+			{Tool: probeStateReadTool, Member: compositeMemberTwo, Fields: []string{"region"}},
+		},
+	})
+}
+
+// compositeProbe is a mutation carrying a composite declaration, staged when
+// the case needs the plan arguments in place.
+func compositeProbe(
+	message string, staged bool, sets ...func(*descriptorpb.MessageOptions),
+) func(t *testing.T) *toolgen.ProbeRun {
+	return func(t *testing.T) *toolgen.ProbeRun {
+		t.Helper()
+
+		fields := []*descriptorpb.FieldDescriptorProto{bodyString(probeDomainArg, 1)}
+		if staged {
+			fields = append(fields,
+				probeField("mode", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING,
+					fieldOptions(withLocation(localLocation))),
+				probeField("plan_id", 3, descriptorpb.FieldDescriptorProto_TYPE_STRING,
+					fieldOptions(withLocation(localLocation))),
+				probeField("dry_run", 4, descriptorpb.FieldDescriptorProto_TYPE_BOOL,
+					fieldOptions(withLocation(localLocation))))
+		}
+
+		sets = append(sets, withResponse("linode.mcp.v1.MessageResponse"))
+
+		return goProbe(probeMessage(t, message, writeOptions(sets...), fields...))
+	}
+}
+
+// compositeBesideProbe is a staged mutation whose composite resolves against a
+// real read declared beside it, so the refusal comes from the calls.
+func compositeBesideProbe(
+	message string, declared *linodev1.StateComposite,
+) func(t *testing.T) *toolgen.ProbeRun {
+	return func(t *testing.T) *toolgen.ProbeRun {
+		t.Helper()
+
+		sibling := probeMessage(t, message+"Read",
+			messageOptions(withRoute("GET", "/domains"),
+				withResponse(probeGetResponse),
+				withCapability(linodev1.ToolCapability_TOOL_CAPABILITY_READ),
+				withDescription("Reads a probe.")))
+
+		run := compositeProbe(message, true, withComposite(declared))(t)
+		run.Beside = map[string]protoreflect.MessageDescriptor{probeStateReadTool: sibling}
+
+		return run
+	}
+}
+
+func withComposite(declared *linodev1.StateComposite) func(*descriptorpb.MessageOptions) {
+	return func(options *descriptorpb.MessageOptions) {
+		proto.SetExtension(options, linodev1.E_StateComposite, declared)
 	}
 }

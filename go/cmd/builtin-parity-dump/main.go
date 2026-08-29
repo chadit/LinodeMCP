@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -67,9 +68,14 @@ func run() error {
 			return fmt.Errorf("tool %q: %w", entry.Name, capErr)
 		}
 
+		// Scopes and categories come from this language's generated registry
+		// tables rather than the fixture, so the gate witnesses each
+		// rendering's own tables.
 		catalog = append(catalog, profiles.ToolDescriptor{
 			Name:       entry.Name,
 			Capability: capability,
+			Scopes:     gentools.ScopesFor(entry.Name),
+			Categories: gentools.CategoriesFor(entry.Name),
 		})
 	}
 
@@ -80,7 +86,11 @@ func run() error {
 
 	categories := make(map[string][]string, len(catalog))
 	for _, descriptor := range catalog {
-		categories[descriptor.Name] = profiles.Categories(descriptor.Name)
+		// Copied into a non-nil slice: the retired resolver answered an empty
+		// list for an uncategorized tool, and the JSON must keep reading [].
+		cats := make([]string, 0, len(descriptor.Categories))
+		cats = append(cats, descriptor.Categories...)
+		categories[descriptor.Name] = cats
 	}
 
 	out, err := json.MarshalIndent(dump{Profiles: resolved, Categories: categories}, "", "  ")

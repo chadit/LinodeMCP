@@ -76,6 +76,8 @@ message VolumeGetInput {
     path: "/volumes/{volume_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VOLUMES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeGetResponse";
   option (linode.mcp.v1.tool_description) = "Gets details for a single block storage volume by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve volume {volume_id}: {error}";
@@ -95,6 +97,8 @@ message VolumeListInput {
     path: "/volumes"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VOLUMES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists all block storage volumes for the authenticated user with optional filtering by region or label";
 
@@ -118,6 +122,8 @@ message VolumeTypeListInput {
     path: "/volumes/types"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {none: true};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeTypeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists available Linode block storage volume types and pricing";
 
@@ -135,6 +141,8 @@ message VolumeCreateInput {
     path: "/volumes"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VOLUMES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a new block storage volume. WARNING: Billing starts immediately. Use linode_region_list to find valid regions.";
   option (linode.mcp.v1.error_message) = "Failed to create volume: {error}";
@@ -248,6 +256,8 @@ message VolumeCloneInput {
     path: "/volumes/{volume_id}/clone"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VOLUMES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Clones an existing block storage volume. WARNING: Billing starts immediately for the cloned volume. Pass dry_run=true to preview without cloning.";
   option (linode.mcp.v1.error_message) = "Failed to clone volume {volume_id}: {error}";
@@ -256,8 +266,27 @@ message VolumeCloneInput {
   // A clone POST mints a new volume with its own id, so replaying it after a
   // transient failure leaves a second billable copy nobody asked for.
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview reads the source volume so it can price the copy.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the source volume, which the request carries only as an id. It
+  // answers a wrapper around the body the API sends, so the fetch projects
+  // through that member.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_volume_get"
+    payload_member: "volume"
+  };
+  // A volume carrying no id is one the read did not name, whatever the reason,
+  // so the copy is described without a source that does not exist.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Volume {state:id} (\"{state:label}\") will be cloned to a new volume labeled \"{label}\"."
+    template: "A new volume labeled \"{label}\" will be created from the source volume."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Billing for the cloned volume starts immediately on creation."
+    line: PREVIEW_LINE_WARNING
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
 
   // Both rules hold their peace until the id is usable and the label is
   // non-empty, because those two are the readers' to answer: an unusable id
@@ -304,6 +333,11 @@ message VolumeAttachInput {
     path: "/volumes/{volume_id}/attach"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_VOLUMES_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_WRITE
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Attaches a block storage volume to a Linode instance. The volume and instance must be in the same region.";
   option (linode.mcp.v1.error_message) = "Failed to attach volume {volume_id} to Linode {linode_id}: {error}";
@@ -360,14 +394,29 @@ message VolumeDetachInput {
     path: "/volumes/{volume_id}/detach"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {
+    scope: TOOL_SCOPE_VOLUMES_READ_WRITE
+    scope: TOOL_SCOPE_LINODES_READ_WRITE
+  };
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeDetachResponse";
   option (linode.mcp.v1.tool_description) = "Detaches a block storage volume from a Linode instance. The volume data is preserved. Pass dry_run=true to preview without detaching.";
   option (linode.mcp.v1.error_message) = "Failed to detach volume {volume_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This detaches a block storage volume from an instance. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume {volume_id} detached successfully";
-  // The preview reads the volume and says which instance it comes off, which
-  // is prose over fetched state and nothing a descriptor carries.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the volume, since the attachment is the part a caller cannot
+  // see from a request naming only the volume.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_volume_get"
+    payload_member: "volume"
+  };
+  // A state carrying no attachment reads as unattached whatever the reason: the
+  // read has already failed loudly if it failed at all.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Volume {state:id} detaches from instance {state:linode_id}; its data is preserved and billing continues."
+    template: "Volume is not attached to any instance; detach is a no-op."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -389,14 +438,33 @@ message VolumeResizeInput {
     path: "/volumes/{volume_id}/resize"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VOLUMES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resizes a block storage volume. WARNING: Volumes can only be resized UP. This operation may incur additional billing.";
   option (linode.mcp.v1.error_message) = "Failed to resize volume {volume_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume {volume_id} resize to {size} GB initiated successfully";
-  // The preview reads the volume so it can say what the resize costs over the
-  // size it already has.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the volume, whose current size is what says whether the resize
+  // grows it at all.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_volume_get"
+    payload_member: "volume"
+  };
+  // A read answering no size leaves the starting size out rather than naming a
+  // zero.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Volume resizes from {state:size} GB to {size} GB."
+    template: "Volume resizes to {size} GB."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A volume can only grow; the new size must be larger than the current size."
+    line: PREVIEW_LINE_WARNING
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
 
   option (buf.validate.message).cel = {
     id: "volume_resize.volume_id.required"
@@ -440,6 +508,8 @@ message VolumeUpdateInput {
     path: "/volumes/{volume_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VOLUMES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a block storage volume's label or tags.";
   // Go and Python worded this failure differently before the contract carried
@@ -449,9 +519,30 @@ message VolumeUpdateInput {
   option (linode.mcp.v1.error_message) = "Failed to update volume {volume_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a block storage volume. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Volume {volume_id} updated successfully";
-  // The preview reads the volume so it can say which label and tags are being
-  // replaced.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the volume, whose label the request alone does not carry. It
+  // answers a wrapper around the body the API sends, so the fetch projects
+  // through that member.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_volume_get"
+    payload_member: "volume"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Label changes from \"{state:label}\" to \"{label}\"."
+    template: "Label is set to \"{label}\"."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_unchanged) = {
+    state: "label"
+    argument: "label"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The volume's tag set is replaced with the provided tags."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    when_present: "tags"
+  };
+  // This preview predates the request echo and its callers still read the
+  // shorter shape.
+  option (linode.mcp.v1.preview_omits_body) = true;
   // An update naming neither field would change nothing, and only the
   // argument map can see that tags was supplied: an empty array clears the
   // volume's tags, which is a change worth making, and presence on a repeated
@@ -504,6 +595,8 @@ message VolumeDeleteInput {
     path: "/volumes/{volume_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_VOLUMES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_BLOCK_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. Set confirm=true to proceed.";
@@ -519,8 +612,29 @@ message VolumeDeleteInput {
     payload_member: "volume"
   };
   // The walk names the instance the data comes off, which is what makes an
-  // irreversible delete worth previewing.
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  // irreversible delete worth previewing. The enrichment reads the instance
+  // for the label the volume record sometimes omits, filling its slot off
+  // the fetched state's linode_id.
+  option (linode.mcp.v1.dependency_walk) = {
+    state_scalar: "linode_id"
+    emit: {
+      kind: "instance"
+      id_field: "linode_id"
+      label_field: "linode_label"
+      label_fallback: "{enrich:label}"
+      action: "detached"
+      note: "Volume is attached; it detaches from this instance before deletion."
+    }
+    warnings: {
+      template: "Volume is currently attached to an instance; it will be detached as part of deletion."
+      when_any: true
+    }
+    enrich: {
+      tool: "linode_instance_get"
+      fields: "label"
+      slot_arguments: { read_slot: "instance_id", argument: "linode_id" }
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -549,6 +663,8 @@ message InstanceVolumeListInput {
     path: "/linode/instances/{linode_id}/volumes"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeListResponse";
   option (linode.mcp.v1.tool_description) = "Lists volumes attached to a Linode instance with optional pagination.";
 

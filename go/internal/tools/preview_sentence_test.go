@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -304,5 +305,256 @@ func TestStateReadQueryLeavesOutWhatTheCallDidNotCarry(t *testing.T) {
 				t.Errorf("StateReadQuery = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestPreviewStateReadersReportWhatTheResourceCarries: a wording naming the
+// resource reads a member of it, one level down for a composite projection, and
+// reads nothing at all from an answer some other fetch produced.
+func TestPreviewStateReadersReportWhatTheResourceCarries(t *testing.T) {
+	t.Parallel()
+
+	state := tools.DeclaredState{
+		keyLabel: nodeBalancerNodeLabelWeb1,
+		keySize:  json.Number("20"),
+		keyCount: json.Number("0"),
+		tcInstance: tools.DeclaredState{
+			argType: "g6-standard-1",
+		},
+	}
+
+	cases := []struct {
+		state any
+		name  string
+		path  string
+		text  string
+		whole string
+	}{
+		{name: "a member of the resource", state: state, path: keyLabel, text: nodeBalancerNodeLabelWeb1},
+		{name: "a member one level down", state: state, path: tcInstance + "." + argType, text: "g6-standard-1"},
+		{name: "a whole number", state: state, path: keySize, whole: "20"},
+		{name: "a zero reads as no value", state: state, path: keyCount},
+		{name: "a member the resource does not carry", state: state, path: "nobody"},
+		{name: "an answer some other fetch produced", state: "not a declared state", path: keyLabel},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tools.PreviewStateText(testCase.state, testCase.path); got != testCase.text {
+				t.Errorf("PreviewStateText(%q) = %q, want %q", testCase.path, got, testCase.text)
+			}
+
+			if got := tools.PreviewStateNumber(testCase.state, testCase.path); got != testCase.whole {
+				t.Errorf("PreviewStateNumber(%q) = %q, want %q", testCase.path, got, testCase.whole)
+			}
+		})
+	}
+}
+
+// TestPreviewChangedReadsAMatchingReadingAsAbsent: the rule that turns "Label
+// changes from X to Y" into "Label is set to Y" is one comparison, so it is
+// pinned here rather than through every family that declares the pair.
+func TestPreviewChangedReadsAMatchingReadingAsAbsent(t *testing.T) {
+	t.Parallel()
+
+	if got := tools.PreviewChanged(previewPriorValue, "new"); got != previewPriorValue {
+		t.Errorf("PreviewChanged(old, new) = %q, want %q", got, previewPriorValue)
+	}
+
+	if got := tools.PreviewChanged("same", "same"); got != "" {
+		t.Errorf("PreviewChanged(same, same) = %q, want %q", got, "")
+	}
+}
+
+// TestPreviewGuardReadsCarriedRatherThanEmpty: a guarded line asks whether the
+// call sent the argument, so a zero and an empty list still report while an
+// argument nobody sent drops the line.
+func TestPreviewGuardReadsCarriedRatherThanEmpty(t *testing.T) {
+	t.Parallel()
+
+	request := createRequestWithArgs(t, map[string]any{
+		keyCount: float64(0),
+		keyTags:  []any{},
+	})
+
+	for _, name := range []string{keyCount, keyTags} {
+		if !tools.PreviewCarried(&request, name) {
+			t.Errorf("PreviewCarried(%q) = false, want true", name)
+		}
+	}
+
+	if tools.PreviewCarried(&request, keyLabel) {
+		t.Errorf("PreviewCarried(%q) = true, want false", keyLabel)
+	}
+
+	if got := tools.PreviewCarriedNumber(&request, keyCount); got != "0" {
+		t.Errorf("PreviewCarriedNumber(%q) = %q, want %q", keyCount, got, "0")
+	}
+
+	if got := tools.PreviewCarriedNumber(&request, keyLabel); got != "" {
+		t.Errorf("PreviewCarriedNumber(%q) = %q, want %q", keyLabel, got, "")
+	}
+
+	if got := tools.PreviewGuarded(true, "reported"); got != "reported" {
+		t.Errorf("PreviewGuarded(true) = %q, want %q", got, "reported")
+	}
+
+	if got := tools.PreviewGuarded(false, "reported"); got != "" {
+		t.Errorf("PreviewGuarded(false) = %q, want %q", got, "")
+	}
+}
+
+// previewPriorValue is the value a resource already holds in the change tables
+// below, named so the three rows read as one subject.
+const previewPriorValue = "old"
+
+// TestPreviewDiffersReportsOnlyARealChange: a line naming only the new value
+// has nothing to say when the call carries none, and nothing to say when the
+// resource already holds what the call would set.
+func TestPreviewDiffersReportsOnlyARealChange(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		reading  string
+		argument string
+		want     bool
+	}{
+		{name: "a value the resource does not hold", reading: previewPriorValue, argument: "new", want: true},
+		{name: "a value the resource already holds", reading: "same", argument: "same"},
+		{name: "no value at all", reading: previewPriorValue, argument: ""},
+		{name: "a first value on a resource holding none", reading: "", argument: "new", want: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tools.PreviewDiffers(testCase.reading, testCase.argument); got != testCase.want {
+				t.Errorf("PreviewDiffers(%q, %q) = %v, want %v",
+					testCase.reading, testCase.argument, got, testCase.want)
+			}
+		})
+	}
+}
+
+// TestPreviewMatchedSelectsTheArmTheValueNames: the arms are a shortlist, so a
+// value none of them names falls to the wording that answers the rest, and an
+// empty one drops the line.
+func TestPreviewMatchedSelectsTheArmTheValueNames(t *testing.T) {
+	t.Parallel()
+
+	arms := map[string]string{"disabled": "stops {status}"}
+	values := map[string]string{keyStatus: "disabled"}
+
+	if got := tools.PreviewMatched(values, "disabled", arms, "starts {status}"); got != "stops disabled" {
+		t.Errorf("PreviewMatched(disabled) = %q, want %q", got, "stops disabled")
+	}
+
+	named := map[string]string{keyStatus: "enabled"}
+	if got := tools.PreviewMatched(named, "enabled", arms, "starts {status}"); got != "starts enabled" {
+		t.Errorf("PreviewMatched(enabled) = %q, want %q", got, "starts enabled")
+	}
+
+	if got := tools.PreviewMatched(named, "enabled", arms, ""); got != "" {
+		t.Errorf("PreviewMatched with no otherwise = %q, want %q", got, "")
+	}
+}
+
+// TestPreviewOrReportsTheValueTheFoldWouldSend: a folded argument the call
+// omitted still travels, as the value its own fold declares, so the wording
+// reports that rather than dropping the line over a request the tool is going
+// to make anyway. The firewall create's two policies are the case.
+func TestPreviewOrReportsTheValueTheFoldWouldSend(t *testing.T) {
+	t.Parallel()
+
+	if got := tools.PreviewOr("DROP", "ACCEPT"); got != "DROP" {
+		t.Errorf("PreviewOr with a supplied value = %q, want the value the call carried", got)
+	}
+
+	if got := tools.PreviewOr("", "ACCEPT"); got != "ACCEPT" {
+		t.Errorf("PreviewOr with no value = %q, want the fold's declared default", got)
+	}
+}
+
+// TestPreviewFoldedSelectsAnArmWhateverTheAPISpelled: a resource spells its own
+// vocabularies, so a status the API sends as "Running" has to reach the arm
+// declared for "running". The rescue warning is the case: its wording is chosen
+// by a reading rather than by an argument, and an argument keeps the exact
+// comparison this one deliberately does not.
+func TestPreviewFoldedSelectsAnArmWhateverTheAPISpelled(t *testing.T) {
+	t.Parallel()
+
+	arms := map[string]string{statusRunning: "reboots {label}"}
+	values := map[string]string{keyLabel: "web-1"}
+
+	for _, reading := range []string{statusRunning, "Running", "RUNNING"} {
+		folded := tools.PreviewFolded(reading)
+
+		if got := tools.PreviewMatched(values, folded, arms, ""); got != "reboots web-1" {
+			t.Errorf("PreviewMatched(PreviewFolded(%q)) = %q, want %q", reading, got, "reboots web-1")
+		}
+	}
+
+	// A reading no arm names still drops the line, which is what an empty
+	// otherwise means: folding widens which values match, not how many.
+	if got := tools.PreviewMatched(values, tools.PreviewFolded("Offline"), arms, ""); got != "" {
+		t.Errorf("PreviewMatched(offline) = %q, want the line dropped", got)
+	}
+}
+
+// TestPreviewElementsReadsEveryEntryShape: the entries a wording writes over
+// are text or whole numbers, so a list carrying anything else drops that entry
+// rather than spelling it a way the other language would not.
+func TestPreviewElementsReadsEveryEntryShape(t *testing.T) {
+	t.Parallel()
+
+	request := createRequestWithArgs(t, map[string]any{
+		keyTags:   []any{"prod", float64(42), true, 1.5, tcStaging},
+		keyLabel:  caseNotAList,
+		keyRegion: []any{},
+	})
+
+	joined := tools.PreviewJoined(&request, keyTags, ", ")
+	if want := "prod, 42, staging"; joined != want {
+		t.Errorf("PreviewJoined = %q, want %q", joined, want)
+	}
+
+	if got := tools.PreviewJoined(&request, keyLabel, ", "); got != "" {
+		t.Errorf("PreviewJoined over a value that is no list = %q, want %q", got, "")
+	}
+
+	if got := tools.PreviewJoined(&request, keyRegion, ", "); got != "" {
+		t.Errorf("PreviewJoined over an empty list = %q, want %q", got, "")
+	}
+
+	if got := tools.PreviewJoined(&request, keyCount, ", "); got != "" {
+		t.Errorf("PreviewJoined over an absent list = %q, want %q", got, "")
+	}
+}
+
+// TestPreviewPerElementWritesALinePerEntry: a per-entry line binds the entry
+// itself and reads the tool's other arguments the way any wording does, and a
+// list the call did not send writes nothing at all.
+func TestPreviewPerElementWritesALinePerEntry(t *testing.T) {
+	t.Parallel()
+
+	request := createRequestWithArgs(t, map[string]any{
+		keyTags: []any{float64(456), float64(789)},
+	})
+	values := map[string]string{keyCount: "7"}
+	template := "Linode {element} joins group {count}."
+
+	got := tools.PreviewPerElement(&request, keyTags, values, template)
+	want := []string{"Linode 456 joins group 7.", "Linode 789 joins group 7."}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("PreviewPerElement = %v, want %v", got, want)
+	}
+
+	if lines := tools.PreviewPerElement(&request, keyRegion, values, template); len(lines) != 0 {
+		t.Errorf("PreviewPerElement over an absent list = %v, want none", lines)
 	}
 }

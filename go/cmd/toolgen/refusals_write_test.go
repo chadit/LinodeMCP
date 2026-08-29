@@ -26,7 +26,7 @@ const (
 // writeOptions is a mutation that emits, which the cases perturb one
 // declaration at a time.
 func writeOptions(sets ...func(*descriptorpb.MessageOptions)) *descriptorpb.MessageOptions {
-	declared := make([]func(*descriptorpb.MessageOptions), 0, 7+len(sets))
+	declared := make([]func(*descriptorpb.MessageOptions), 0, 8+len(sets))
 	declared = append(declared,
 		withRoute(probeWriteMethod, probeWritePath),
 		withCapability(writeCapability),
@@ -35,6 +35,8 @@ func writeOptions(sets ...func(*descriptorpb.MessageOptions)) *descriptorpb.Mess
 		withErrorMessage("Failed to create probe: {error}"),
 		withConfirmMessage("This creates a probe. Set confirm=true to proceed."),
 		withSuccessMessage("Probe created successfully"),
+		probeScopes(),
+		probeCategories(),
 	)
 
 	return messageOptions(append(declared, sets...)...)
@@ -108,12 +110,6 @@ func TestRefusesADeclaredCheckNothingRuns(t *testing.T) {
 				withAnyOf(&linodev1.RequireAnyOf{Fields: []string{probeDomainArg, probeDomainArg}})),
 		},
 		{
-			name:    "require_any_of beside the hook that owns the check",
-			refusal: "errAnyOfWithValidate",
-			build: writeProbe("ProbeAnyOfValidateInput", withHooks("validate"),
-				withAnyOf(&linodev1.RequireAnyOf{Fields: []string{probeDomainArg, "other"}})),
-		},
-		{
 			name:    "require_any_of on a tier that runs no body checks",
 			refusal: "errAnyOfTier",
 			build: func(t *testing.T) *toolgen.ProbeRun {
@@ -140,42 +136,23 @@ func TestRefusesADeclaredCheckNothingRuns(t *testing.T) {
 					Fields: []string{probeDomainArg}, Message: "domain is not accepted here",
 				})),
 		},
-		{
-			name:    "refuse_arguments beside the hook that owns the check",
-			refusal: "errRefuseWithValidate",
-			build: writeProbe("ProbeRefuseValidateInput", withHooks("validate"),
-				withRefuse(&linodev1.RefuseArguments{
-					Fields: []string{"gone"}, Message: "gone is not accepted here",
-				})),
-		},
-		{
-			name:    "refuse_unknown_arguments beside the hook that owns the check",
-			refusal: "errRefuseUnknownWithValidate",
-			build: writeProbe("ProbeRefuseUnknownValidateInput", withHooks("validate"),
-				withRefuseUnknown(&linodev1.RefuseUnknownArguments{Message: "{name} is not accepted"})),
-		},
 	})
 }
 
-// TestRefusesAHookTheTierCannotRun covers the steps a tool hands work to.
-func TestRefusesAHookTheTierCannotRun(t *testing.T) {
+// TestRefusesAPlanDeclarationTheTierCannotRun covers what a tool advertising
+// no plan may not declare.
+func TestRefusesAPlanDeclarationTheTierCannotRun(t *testing.T) {
 	t.Parallel()
 
 	runRefusals(t, []refusalCase{
 		{
-			name:    "hook kind nothing reads",
-			refusal: "errUnknownHookKind",
-			build:   writeProbe("ProbeUnknownHookInput", withHooks("sing")),
-		},
-		{
-			name:    "one hook kind declared twice",
-			refusal: "errRepeatedHookKind",
-			build:   writeProbe("ProbeRepeatedHookInput", withHooks("preview", "preview")),
-		},
-		{
-			name:    "plan hook on a tool advertising no plan",
-			refusal: "errUnstagedHook",
-			build:   writeProbe("ProbeUnstagedHookInput", withHooks("dependency_walk")),
+			name:    "dependency walk on a tool advertising no plan",
+			refusal: "errUnstagedWalk",
+			build: writeProbe("ProbeUnstagedWalkInput",
+				withWalks(&linodev1.DependencyWalk{
+					ListTool: probeStateReadTool, Emit: validEmit(),
+					ListErrorWarning: "Could not list: {error}",
+				})),
 		},
 	})
 }
@@ -250,12 +227,6 @@ func withoutResponse(options *descriptorpb.MessageOptions) {
 	proto.ClearExtension(options, linodev1.E_ToolResponse)
 }
 
-func withHooks(kinds ...string) func(*descriptorpb.MessageOptions) {
-	return func(options *descriptorpb.MessageOptions) {
-		proto.SetExtension(options, linodev1.E_ToolHooks, kinds)
-	}
-}
-
 func withAnyOf(check *linodev1.RequireAnyOf) func(*descriptorpb.MessageOptions) {
 	return func(options *descriptorpb.MessageOptions) {
 		proto.SetExtension(options, linodev1.E_RequireAnyOf, check)
@@ -265,12 +236,6 @@ func withAnyOf(check *linodev1.RequireAnyOf) func(*descriptorpb.MessageOptions) 
 func withRefuse(check *linodev1.RefuseArguments) func(*descriptorpb.MessageOptions) {
 	return func(options *descriptorpb.MessageOptions) {
 		proto.SetExtension(options, linodev1.E_RefuseArguments, check)
-	}
-}
-
-func withRefuseUnknown(check *linodev1.RefuseUnknownArguments) func(*descriptorpb.MessageOptions) {
-	return func(options *descriptorpb.MessageOptions) {
-		proto.SetExtension(options, linodev1.E_RefuseUnknownArguments, check)
 	}
 }
 

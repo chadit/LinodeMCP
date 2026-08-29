@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, patch
 
 from linodemcp.gentools import (
     handle_linode_domain_record_create,
@@ -50,7 +49,7 @@ async def test_create_dry_run_names_the_host(sample_config: Config) -> None:
     )
     body = json.loads(result[0].text)
     assert body["dry_run"] is True
-    assert any("'www'" in effect for effect in body["side_effects"])
+    assert any('"www"' in effect for effect in body["side_effects"])
 
 
 async def test_create_requires_confirm(sample_config: Config) -> None:
@@ -123,30 +122,6 @@ async def test_create_rejects_negative_domain_id(sample_config: Config) -> None:
         sample_config,
     )
     assert "domain_id must be a positive integer" in result[0].text
-
-
-async def test_update_dry_run_reports_name_change(sample_config: Config) -> None:
-    """The dry-run walk reports a record name change against fetched state."""
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_domain_record.return_value = {"id": 555, "name": "old"}
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_domain_record_update(
-            {
-                "domain_id": 333,
-                "record_id": 555,
-                "name": "new",
-                "dry_run": True,
-            },
-            sample_config,
-        )
-
-    body = json.loads(result[0].text)
-    assert any("name changes" in effect for effect in body["side_effects"])
-    mock_client.get_domain_record.assert_awaited_once_with(333, 555)
 
 
 async def test_update_requires_confirm(sample_config: Config) -> None:

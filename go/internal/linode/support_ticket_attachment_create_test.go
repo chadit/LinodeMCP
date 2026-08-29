@@ -35,10 +35,8 @@ func writeTempAttachment(t *testing.T) string {
 	return path
 }
 
-func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
+func TestCallRouteMultipartUploadsTheFileContents(t *testing.T) {
 	t.Parallel()
-
-	created := linode.SupportTicketAttachment{ID: 654, Filename: supportTicketAttachmentFilename, Size: 128}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -89,7 +87,7 @@ func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(created); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{"id": 654}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -97,29 +95,16 @@ func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: writeTempAttachment(t)})
-	if err != nil {
+	// Nothing is read out of the answer: the tool reports the ticket it was
+	// addressed by, and the API confirms the upload by status.
+	if err := client.CallRouteMultipart(
+		t.Context(), attachmentTool, []any{123}, "file", writeTempAttachment(t),
+	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got == nil {
-		t.Fatal("got is nil")
-	}
-
-	if got.ID != created.ID {
-		t.Errorf("got.ID = %v, want %v", got.ID, created.ID)
-	}
-
-	if got.Filename != created.Filename {
-		t.Errorf("got.Filename = %v, want %v", got.Filename, created.Filename)
-	}
-
-	if got.Size != created.Size {
-		t.Errorf("got.Size = %v, want %v", got.Size, created.Size)
 	}
 }
 
-func TestClientCreateSupportTicketAttachmentAPIError(t *testing.T) {
+func TestCallRouteMultipartReportsAnAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,13 +127,11 @@ func TestClientCreateSupportTicketAttachmentAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: writeTempAttachment(t)})
+	err := client.CallRouteMultipart(
+		t.Context(), attachmentTool, []any{123}, "file", writeTempAttachment(t),
+	)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
-	}
-
-	if got != nil {
-		t.Errorf("got = %v, want nil", got)
 	}
 
 	apiErr, ok := errors.AsType[*linode.APIError](err)
@@ -161,7 +144,7 @@ func TestClientCreateSupportTicketAttachmentAPIError(t *testing.T) {
 	}
 }
 
-func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testing.T) {
+func TestCallRouteMultipartHonorsTheDeclaredRetryPolicy(t *testing.T) {
 	t.Parallel()
 
 	var requestCount atomic.Int32
@@ -187,7 +170,9 @@ func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testin
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	_, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: writeTempAttachment(t)})
+	err := client.CallRouteMultipart(
+		t.Context(), attachmentTool, []any{123}, "file", writeTempAttachment(t),
+	)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

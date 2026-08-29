@@ -8,7 +8,6 @@ and corrupt-line contracts.
 from __future__ import annotations
 
 import gzip
-import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -21,7 +20,11 @@ from linodemcp.audit import (
     Mode,
     RecentQuery,
     Status,
+    event_timestamp,
     read_recent,
+)
+from linodemcp.genlocal import (
+    record_audit_event,
 )
 
 if TYPE_CHECKING:
@@ -36,14 +39,14 @@ def _event_at(
 ) -> Event:
     """Build an event at an explicit timestamp."""
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id="evt_" + tool,
         tool=tool,
         tool_capability=capability,
         environment="default",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
@@ -65,7 +68,7 @@ def _event(tool: str, capability: Capability, status: Status, hour: int) -> Even
 
 def _write_jsonl(path: Path, gzipped: bool, events: list[Event]) -> None:
     """Write events as one JSON line each, oldest-first."""
-    body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
+    body = "".join(record_audit_event(event, "", "") + "\n" for event in events)
     if gzipped:
         with gzip.open(path, "wt", encoding="utf-8") as handle:
             handle.write(body)
@@ -169,7 +172,7 @@ def test_read_recent_missing_dir_returns_empty(tmp_path: Path) -> None:
 def test_read_recent_skips_corrupt_lines(tmp_path: Path) -> None:
     """A malformed JSON line is skipped, not fatal."""
     good = _event("tool_ok", Capability.READ, Status.SUCCESS, 8)
-    content = "{ this is not json\n" + json.dumps(good.to_dict()) + "\n"
+    content = "{ this is not json\n" + record_audit_event(good, "", "") + "\n"
     (tmp_path / "audit.log").write_text(content, encoding="utf-8")
 
     got = read_recent(str(tmp_path), RecentQuery())
@@ -183,7 +186,7 @@ def test_read_recent_skips_corrupt_gzip_header(tmp_path: Path) -> None:
     events."""
     good = _event("tool_ok", Capability.READ, Status.SUCCESS, 8)
     (tmp_path / "audit.log").write_text(
-        json.dumps(good.to_dict()) + "\n", encoding="utf-8"
+        record_audit_event(good, "", "") + "\n", encoding="utf-8"
     )
     (tmp_path / "audit-2026-05-18.log.gz").write_bytes(b"not gzip data")
 
@@ -199,7 +202,9 @@ def test_read_recent_surfaces_truncated_rotated_file(tmp_path: Path) -> None:
     failure while reading an opened file surfaces.
     """
     lines = "".join(
-        json.dumps(_event(f"tool_{i}", Capability.READ, Status.SUCCESS, 8).to_dict())
+        record_audit_event(
+            _event(f"tool_{i}", Capability.READ, Status.SUCCESS, 8), "", ""
+        )
         + "\n"
         for i in range(500)
     )

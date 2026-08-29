@@ -322,10 +322,6 @@ class Contract:
     # spelled out per language until the contract could carry them.
     description: str
     error_message: str
-    # The steps of the handler that are hand-written rather than derived, named
-    # by kind. Each language implements a declared kind under a name it derives
-    # from the tool and the kind, so a hook is bound with nothing written out.
-    hooks: tuple[str, ...]
     # Fields of the message the raw API body decodes into that the API sends as
     # an explicit null, which the serializer drops and the answer writes back.
     explicit_null_fields: tuple[str, ...]
@@ -358,7 +354,6 @@ def _contract_from(descriptor: Descriptor) -> Contract | None:
         retry_disabled=bool(declared.Extensions[options.retry_disabled]),
         description=str(declared.Extensions[options.tool_description]),
         error_message=str(declared.Extensions[options.error_message]),
-        hooks=tuple(str(kind) for kind in declared.Extensions[options.tool_hooks]),
         explicit_null_fields=tuple(
             str(name) for name in declared.Extensions[options.explicit_null_fields]
         ),
@@ -669,9 +664,9 @@ def validate_declarations(declared: Iterable[Declaration]) -> None:
     """Report every message that does not name one tool at one tier.
 
     Public for the same reason index_routes is: none of the contradictions it
-    reports can come out of the shipped descriptors, since `make
-    tool-capability` rejects them before they can be generated, so proving the
-    check still bites means handing it a broken declaration directly.
+    reports can survive in the shipped descriptors, since this check runs at
+    server startup in every language, so proving it still bites means handing
+    it a broken declaration directly.
     """
     defects: list[str] = []
     claimed: dict[str, str] = {}

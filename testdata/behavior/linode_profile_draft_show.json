@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_draft_show",
-  "description": "CapMeta builder tool reading one draft (no Linode API call). Pins the two refusals: an absent name and a name the registry does not hold.",
+  "description": "CapMeta builder tool reading one draft (no Linode API call). Pins the two refusals (an absent name and a name the registry does not hold) and the success path, which setup_calls reaches by creating and populating the draft against the same server first.",
   "cases": [
     {
       "name": "refuses an absent name",
@@ -13,6 +13,58 @@
         "name": "no-such-draft"
       },
       "expect_error": "draft not found: no-such-draft"
+    },
+    {
+      "name": "answers the state an earlier call built",
+      "setup_calls": [
+        {
+          "tool": "linode_profile_draft_new",
+          "args": {
+            "name": "seam-fixture"
+          }
+        },
+        {
+          "tool": "linode_profile_draft_add_tools",
+          "args": {
+            "name": "seam-fixture",
+            "tools": [
+              "linode_vlan_list",
+              "linode_region_list"
+            ]
+          }
+        },
+        {
+          "tool": "linode_profile_draft_set",
+          "args": {
+            "name": "seam-fixture",
+            "allowed_environments": [
+              "staging"
+            ],
+            "required_token_scopes": [
+              "linodes:read_only"
+            ],
+            "allow_yolo": true
+          }
+        }
+      ],
+      "args": {
+        "name": "seam-fixture"
+      },
+      "expect_result": {
+        "name": "seam-fixture",
+        "description": "",
+        "allowed_tools": [
+          "linode_region_list",
+          "linode_vlan_list"
+        ],
+        "allowed_environments": [
+          "staging"
+        ],
+        "required_token_scopes": [
+          "linodes:read_only"
+        ],
+        "allow_yolo": true
+      }
     }
   ]
 }

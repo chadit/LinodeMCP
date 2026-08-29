@@ -24,29 +24,31 @@ func (c *contract) checkTwoStage() error {
 	}
 
 	if !c.Mode {
-		return c.checkUnstagedHooks()
+		return c.checkUnstagedWalks()
 	}
 
 	if c.Tier != tierAcknowledge {
 		return fmt.Errorf("%w: %s", errNoTwoStageDriver, c.Name)
 	}
 
-	if c.Hooks.FetchState == "" {
-		return fmt.Errorf("%w: %s", errNoFetchState, c.Name)
+	if c.CompositeDecl == nil {
+		return fmt.Errorf("%w: %s", errNoStateRead, c.Name)
 	}
 
 	return nil
 }
 
-// checkUnstagedHooks refuses the mirror of the hole above: a state read or a
-// dependency walk on a tool that advertises no plan is a hook resolved, named in
-// the generated file, and never called.
-func (c *contract) checkUnstagedHooks() error {
-	if c.Hooks.FetchState == "" && c.Hooks.DependencyWalk == "" {
+// checkUnstagedWalks refuses the mirror of the hole above: a dependency walk on
+// a tool that advertises no plan is a declaration resolved, written into the
+// generated file, and never reached.
+func (c *contract) checkUnstagedWalks() error {
+	// The deliberately-unknown estimate is the one of these an unstaged tool
+	// can act: it reads no state and rides the preview rather than a walk.
+	if len(c.WalkDecls) == 0 && (c.BillingDecl == nil || billingUnpriced(c.BillingDecl)) {
 		return nil
 	}
 
-	return fmt.Errorf("%w: %s", errUnstagedHook, c.Name)
+	return fmt.Errorf("%w: %s", errUnstagedWalk, c.Name)
 }
 
 // emitTwoStage writes the plan/apply branch a staged mutation's handler tries
@@ -80,7 +82,7 @@ func emitTwoStage(out *source, tool *contract) error {
 		return err
 	}
 
-	out.need(importLinode, importProto, importToolhooks, importTwostage)
+	out.need(importLinode, importProto, importTwostage)
 
 	name := twoStageName(tool.Name)
 
@@ -114,7 +116,6 @@ func emitTwoStage(out *source, tool *contract) error {
 // goes, what it sends, what a plan hashes, and the answer an apply reports.
 func emitTwoStageAction(out *source, tool *contract, ordered []field, path string, success formatted) {
 	values := pathValuesLiteral(ordered)
-	args := pathArgList(ordered)
 
 	out.writef("\tstaged, handled := tools.RunTwoStageWrite(ctx, request, cfg, &tools.DestructiveAction{")
 	out.writef("\t\tToolName:   %s,", goStringLiteral(tool.Name))
@@ -122,7 +123,7 @@ func emitTwoStageAction(out *source, tool *contract, ordered []field, path strin
 	out.writef("\t\tMethod:     %s,", goStringLiteral(tool.Method))
 	out.writef("\t\tPath:       %s,", path)
 	out.writef("\t\tFetchState: func(ctx context.Context, client *linode.Client) (any, error) {")
-	out.writef("\t\t\treturn toolhooks.%s(ctx, client%s)", tool.Hooks.FetchState, args)
+	emitTwoStageFetchBody(out, tool, ordered)
 	out.writef("\t\t},")
 
 	call, sent := twoStageCall(tool)
@@ -145,11 +146,7 @@ func emitTwoStageAction(out *source, tool *contract, ordered []field, path strin
 	out.writef("\t\t\t}")
 	out.writef("\t\t},")
 
-	if tool.Hooks.DependencyWalk != "" {
-		out.writef("\t\tDependencyWalk: func(ctx context.Context, client *linode.Client, state any) (tools.DryRunDetails, error) {")
-		out.writef("\t\t\treturn toolhooks.%s(ctx, client, request, state)", tool.Hooks.DependencyWalk)
-		out.writef("\t\t},")
-	}
+	emitTwoStageWalk(out, tool, ordered)
 
 	out.writef("\t\tHashIgnore: twostage.HashIgnoreFields(%s),", goStringLiteral(tool.ResourceType))
 	out.writef("\t})")
@@ -168,22 +165,53 @@ func twoStageCall(tool *contract) (string, string) {
 	return "CallRouteBody", ", body"
 }
 
-// pathArgList renders the path locals a state hook is handed, leading comma
-// included, which is what lets a tool addressed by nothing hand over none.
-func pathArgList(ordered []field) string {
-	if len(ordered) == 0 {
-		return ""
-	}
-
-	names := make([]string, 0, len(ordered))
-	for _, entry := range ordered {
-		names = append(names, entry.GoLocal)
-	}
-
-	return ", " + strings.Join(names, ", ")
-}
-
 // twoStageName is the branch a staged tool's handler tries first.
 func twoStageName(tool string) string {
 	return "twoStage" + exportedToolName(tool)
+}
+
+// emitCompositeFetch writes the declared multi-call state read: each call in
+// declaration order, keeping the declared field subset, assembled under the
+// declared members.
+func emitCompositeFetch(out *source, tool *contract, ordered []field) {
+	out.need(importProto)
+	out.writef("\t\t\treturn tools.FetchCompositeState(ctx, client, []tools.CompositeCall{")
+
+	for index := range tool.Composite {
+		call := &tool.Composite[index]
+		element := "linodev1." + call.Message.TypeName
+
+		values := make([]string, 0, len(call.Slots))
+		for _, slot := range call.Slots {
+			values = append(values, matchLocal(slot, ordered))
+		}
+
+		out.writef("\t\t\t\t{")
+		out.writef("\t\t\t\t\tTool:   %s,", goStringLiteral(call.Tool))
+		out.writef("\t\t\t\t\tMember: %s,", goStringLiteral(call.Member))
+		out.writef("\t\t\t\t\tFields: []string{%s},", goNameList(call.Fields))
+		out.writef("\t\t\t\t\tValues: []any{%s},", strings.Join(values, ", "))
+		out.writef("\t\t\t\t\tList:   %t,", call.List)
+		out.writef("\t\t\t\t\tNew:    func() proto.Message { return &%s{} },", element)
+		out.writef("\t\t\t\t},")
+	}
+
+	out.writef("\t\t\t})")
+}
+
+// emitTwoStageFetchBody writes the staged fetch's body: the declared composite
+// the tool carries.
+func emitTwoStageFetchBody(out *source, tool *contract, ordered []field) {
+	emitCompositeFetch(out, tool, ordered)
+}
+
+// emitTwoStageWalk writes the staged walk, which reads the state the declared
+// composite produced.
+func emitTwoStageWalk(out *source, tool *contract, ordered []field) {
+	// A tool with no walks still reports its declared prose on the plan, which
+	// is what the seeded lines are: the same sentences the preview reports,
+	// worded against the state the plan read.
+	if len(tool.DepWalks) > 0 || len(tool.PreviewSentences) > 0 || tool.BillingDecl != nil {
+		emitDeclaredWalks(out, tool, "", ordered)
+	}
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -60,6 +61,7 @@ def wired(request: pytest.FixtureRequest) -> Iterator[None]:
             drafts=Registry(),
             catalog=_fixture_catalog,
             active_profile=lambda: _fixture_profile(environments),
+            config=Config(),
         )
     )
     yield
@@ -137,6 +139,22 @@ async def test_summary_buckets_and_invariant(wired: None) -> None:
     assert sum(buckets.values()) <= summary["blocked"]
 
 
+async def test_an_entry_that_names_no_call_is_dropped(wired: None) -> None:
+    """A list member that is not an object names no call, so nothing counts it.
+
+    The schema does not stop one, and reading it as a call would put a verdict
+    on a tool the caller never named.
+    """
+    assert wired is None
+    result = await handle_linode_profile_can_run(
+        {"calls": [_READ_TOOL, {"tool": _READ_TOOL}, 7]}, Config()
+    )
+    body: dict[str, Any] = json.loads(result[0].text)
+
+    assert len(body["results"]) == 1
+    assert body["summary"]["total"] == 1
+
+
 @pytest.mark.parametrize("wired", [(), ("*",)], indirect=True)
 async def test_unrestricted_environments_allow_any(wired: None) -> None:
     assert wired is None
@@ -179,3 +197,62 @@ async def test_remedies_match_the_go_wording(wired: None) -> None:
         "the registered tool surface"
     )
     assert "remedy" not in results[0]
+
+
+_SHARED_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "testdata"
+    / "profile"
+    / "can_run_verdicts.json"
+)
+
+# The fixture names capabilities the way a profile file does; the pre-check
+# reads the tags.
+_FIXTURE_CAPABILITIES = {
+    "read": Capability.Read,
+    "write": Capability.Write,
+    "destroy": Capability.Destroy,
+}
+
+
+async def test_verdicts_match_shared_fixture() -> None:
+    """Every reason and remedy matches the shared cross-language fixture.
+
+    A can_run reason is a member of a successful answer rather than a refusal,
+    so no declaration words it and each language keeps its own copy. The
+    behavior fixtures run under full-access, which permits every tool in every
+    environment, so three of the four blocked categories are unreachable there:
+    this fixture is what stops a one-sided reword.
+    """
+    fixture = json.loads(_SHARED_FIXTURE.read_text(encoding="utf-8"))
+    assert fixture["calls"], (
+        "the shared fixture names no calls, so this measures nothing"
+    )
+
+    catalog = [
+        ToolDescriptor(
+            name=entry["tool"], capability=_FIXTURE_CAPABILITIES[entry["capability"]]
+        )
+        for entry in fixture["catalog"]
+    ]
+    profile = Profile(
+        name=fixture["profile"]["name"],
+        description="shared verdict fixture",
+        allowed_tools=tuple(fixture["profile"]["allowed_tools"]),
+        allowed_environments=tuple(fixture["profile"]["allowed_environments"]),
+    )
+
+    token = set_builder_state(
+        BuilderState(
+            drafts=Registry(),
+            catalog=lambda: catalog,
+            active_profile=lambda: profile,
+            config=Config(),
+        )
+    )
+    try:
+        body = await _run(fixture["calls"])
+    finally:
+        reset_builder_state(token)
+
+    assert body == fixture["expect_result"]

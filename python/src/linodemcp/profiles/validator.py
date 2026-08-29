@@ -20,9 +20,10 @@ from linodemcp.profiles.scopecheck import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from linodemcp.linode import Grants, Profile
     from linodemcp.profiles.profile import Profile as ProfileModel
-    from linodemcp.profiles.scope import Scope
     from linodemcp.profiles.scopecheck import ScopeComparison
 
 
@@ -90,7 +91,7 @@ class ScopeValidationResult:
     """
 
     kind: TokenKind
-    actual_scopes: tuple[Scope, ...]
+    actual_scopes: tuple[str, ...]
     comparison: ScopeComparison
     profile: Profile
 
@@ -110,7 +111,7 @@ class GrantsFetchError(Exception):
 
 async def validate_scopes(
     inspector: TokenInspector,
-    required: list[Scope],
+    required: Sequence[str],
 ) -> ScopeValidationResult:
     """Inspect a token's scopes and diff against the profile's required set.
 
@@ -149,7 +150,7 @@ async def validate_scopes(
     except Exception as exc:
         raise GrantsFetchError("fetch /profile/grants failed") from exc
 
-    actual = flatten_grants(grants)
+    actual = [str(scope) for scope in flatten_grants(grants)]
     return ScopeValidationResult(
         kind=TokenKind.OAuth,
         actual_scopes=tuple(actual),

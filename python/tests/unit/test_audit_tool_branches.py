@@ -17,13 +17,18 @@ from linodemcp.audit import (
     Event,
     Mode,
     Status,
+    event_timestamp,
 )
 from linodemcp.config import (
     REPORT_OUTPUT_LIST,
     REPORT_OUTPUT_SUMMARY,
+    AuditConfig,
     Config,
     ReportConfig,
     ReportFilter,
+)
+from linodemcp.genlocal import (
+    record_audit_event,
 )
 from linodemcp.gentools import (
     handle_linode_audit_export,
@@ -31,13 +36,16 @@ from linodemcp.gentools import (
     handle_linode_audit_report,
     handle_linode_audit_summary,
 )
-from linodemcp.tools.linode_audit_report import set_audit_reports
-from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     import pytest
+
+
+def _reporting_config(reports: dict[str, ReportConfig]) -> Config:
+    """A config carrying the report catalog, which is where the tool reads it."""
+    return Config(audit=AuditConfig(reports=reports))
 
 
 def _event(
@@ -49,14 +57,14 @@ def _event(
     """Build an event at a distinct second with a chosen status/environment."""
     ts = datetime(2026, 5, 20, 0, 0, second, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id=f"evt_{second}",
         tool=tool,
-        tool_capability=Capability.READ,
+        tool_capability=Capability.READ.value,
         environment=environment,
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
@@ -74,19 +82,24 @@ def _write_log(tmp_path: Path, events: list[Event]) -> None:
     """Write events as a JSONL audit.log under the XDG state dir."""
     audit_dir = tmp_path / "linodemcp"
     audit_dir.mkdir(parents=True, exist_ok=True)
-    body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
+    body = "".join(record_audit_event(event, "", "") + "\n" for event in events)
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
 
 async def test_export_rejects_malformed_since() -> None:
-    """A non-RFC-3339 since surfaces as an error, not a written file."""
+    """A non-RFC-3339 since surfaces as an error naming the bound it failed on.
+
+    The bound is named because Go names it, and an export whose refusal said
+    only "invalid timestamp" left a caller with two bounds guessing which one
+    to fix.
+    """
     result = await handle_linode_audit_export(
         {"format": "json", "since": "garbage"}, Config()
     )
 
     assert len(result) == 1
     assert result[0].text.startswith("Error: ")
-    assert "invalid timestamp" in result[0].text
+    assert "invalid 'since' timestamp" in result[0].text
     assert "garbage" in result[0].text
 
 
@@ -98,7 +111,6 @@ async def test_export_caps_record_count_to_max_records(
     requested cap of five, five in the exported file. Proves the resolved
     limit is threaded into the query rather than ignored."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     _write_log(
         tmp_path,
         [
@@ -128,10 +140,9 @@ async def test_report_bad_group_by_errors(
 ) -> None:
     """A summary report grouping on an unknown column surfaces the error."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     _write_log(tmp_path, [])
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "broken": ReportConfig(
                 filter=ReportFilter(),
@@ -141,7 +152,7 @@ async def test_report_bad_group_by_errors(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "broken"}, Config())
+    result = await handle_linode_audit_report({"name": "broken"}, cfg)
     assert "bogus" in result[0].text
 
 
@@ -151,7 +162,6 @@ async def test_report_status_in_post_filter(
 ) -> None:
     """status_in keeps only matching-status events after load."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     _write_log(
         tmp_path,
         [
@@ -161,7 +171,7 @@ async def test_report_status_in_post_filter(
         ],
     )
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "errors": ReportConfig(
                 filter=ReportFilter(status_in=["error"]),
@@ -170,7 +180,7 @@ async def test_report_status_in_post_filter(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "errors"}, Config())
+    result = await handle_linode_audit_report({"name": "errors"}, cfg)
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 2, "two error events, the success dropped"
 
@@ -181,7 +191,6 @@ async def test_report_environment_glob_post_filter(
 ) -> None:
     """An environment glob keeps only matching-environment events."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     _write_log(
         tmp_path,
         [
@@ -190,7 +199,7 @@ async def test_report_environment_glob_post_filter(
         ],
     )
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "prod-only": ReportConfig(
                 filter=ReportFilter(environment="prod*"),
@@ -199,7 +208,7 @@ async def test_report_environment_glob_post_filter(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "prod-only"}, Config())
+    result = await handle_linode_audit_report({"name": "prod-only"}, cfg)
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 1
     assert payload["events"][0]["environment"] == "prod-us"
@@ -211,7 +220,6 @@ async def test_report_absolute_until_bounds_window(
 ) -> None:
     """An absolute until drops events after the bound."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     _write_log(
         tmp_path,
         [
@@ -221,7 +229,7 @@ async def test_report_absolute_until_bounds_window(
         ],
     )
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "until-2": ReportConfig(
                 filter=ReportFilter(until="2026-05-20T00:00:02+00:00"),
@@ -230,7 +238,7 @@ async def test_report_absolute_until_bounds_window(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "until-2"}, Config())
+    result = await handle_linode_audit_report({"name": "until-2"}, cfg)
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 2, "seconds 1 and 2 kept, second 3 dropped"
 
@@ -241,7 +249,6 @@ async def test_report_absolute_since_bounds_window(
 ) -> None:
     """An absolute since drops events before the bound."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     _write_log(
         tmp_path,
         [
@@ -251,7 +258,7 @@ async def test_report_absolute_since_bounds_window(
         ],
     )
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "since-2": ReportConfig(
                 filter=ReportFilter(since="2026-05-20T00:00:02+00:00"),
@@ -260,7 +267,7 @@ async def test_report_absolute_since_bounds_window(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "since-2"}, Config())
+    result = await handle_linode_audit_report({"name": "since-2"}, cfg)
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 2, "seconds 2 and 3 kept, second 1 dropped"
 
@@ -275,7 +282,6 @@ async def test_report_since_offset_excludes_old_events(
     events would return instead of none.
     """
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     _write_log(
         tmp_path,
         [
@@ -284,7 +290,7 @@ async def test_report_since_offset_excludes_old_events(
         ],
     )
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "recent-1h": ReportConfig(
                 filter=ReportFilter(since_offset="1h"),
@@ -293,7 +299,7 @@ async def test_report_since_offset_excludes_old_events(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "recent-1h"}, Config())
+    result = await handle_linode_audit_report({"name": "recent-1h"}, cfg)
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 0, "events older than an hour ago are excluded"
 
@@ -333,13 +339,12 @@ async def test_health_answers_rather_than_raising(
     Go's answered an error result, which is the divergence this pins closed.
     """
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
 
     def _boom(*_args: object, **_kwargs: object) -> object:
         msg = "audit dir is gone"
         raise OSError(msg)
 
-    monkeypatch.setattr("linodemcp.tools.linode_audit_health.collect_health", _boom)
+    monkeypatch.setattr("linodemcp.tools.operations.health", _boom)
 
     result = await handle_linode_audit_health({}, Config())
 
@@ -355,7 +360,6 @@ async def test_export_reports_a_file_it_cannot_write(
     pinning a branch the filesystem normally never reaches.
     """
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
     (tmp_path / "linodemcp").mkdir()
 
     def _boom(*_args: object, **_kwargs: object) -> object:

@@ -60,6 +60,7 @@ def test_dump_resolves_every_built_in_profile() -> None:
         "network-admin",
         "kubernetes-admin",
         "storage-admin",
+        "iam-admin",
         "full-access",
         "emergency",
     }

@@ -59,33 +59,34 @@ func (m *MultiSink) Write(ctx context.Context, event *Event) {
 // middleware tests rely on it to assert event-field population at
 // the wire boundary.
 type CapturingSink struct {
-	events []Event
+	events []*Event
 }
 
 // NewCapturingSink returns an empty sink.
 func NewCapturingSink() *CapturingSink {
-	return &CapturingSink{events: make([]Event, 0)}
+	return &CapturingSink{events: make([]*Event, 0)}
 }
 
-// Write copies the event into the internal buffer. A done context
-// skips the capture, matching the cancellation-respecting contract
-// the other sinks honor; tests pass live contexts so it captures
-// normally. The copy is deliberate: the capture middleware reuses the
-// event variable across invocations, so storing the pointer directly
-// would let later mutation overwrite earlier captures.
+// Write keeps the event in the internal buffer. A done context skips the
+// capture, matching the cancellation-respecting contract the other sinks honor;
+// tests pass live contexts so it captures normally.
+//
+// The record is kept rather than copied because a finalized event is a new
+// record rather than a write into the old one, so nothing a caller does later
+// reaches what was captured here.
 func (s *CapturingSink) Write(ctx context.Context, event *Event) {
 	if ctx.Err() != nil {
 		return
 	}
 
-	s.events = append(s.events, *event)
+	s.events = append(s.events, event)
 }
 
 // Events returns the captured event list. The slice is the sink's
 // internal buffer; callers must not mutate it. Returning the live
 // slice avoids a copy in the common test path (assertions read it
 // once at the end of the test).
-func (s *CapturingSink) Events() []Event {
+func (s *CapturingSink) Events() []*Event {
 	return s.events
 }
 

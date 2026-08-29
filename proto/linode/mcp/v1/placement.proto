@@ -57,6 +57,8 @@ message PlacementGroupGetInput {
     path: "/placement/groups/{group_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroup";
   option (linode.mcp.v1.tool_description) = "Retrieves details of a single placement group by its ID";
   option (linode.mcp.v1.error_message) = "Failed to retrieve placement group {group_id}: {error}";
@@ -102,6 +104,8 @@ message PlacementGroupListInput {
     path: "/placement/groups"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupListResponse";
   option (linode.mcp.v1.tool_description) = "Lists placement groups for the authenticated account with optional pagination.";
 
@@ -123,6 +127,8 @@ message PlacementGroupCreateInput {
     path: "/placement/groups"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a Linode placement group.";
   option (linode.mcp.v1.error_message) = "Failed to create placement group: {error}";
@@ -131,9 +137,16 @@ message PlacementGroupCreateInput {
   // A replayed create bills for a second group, which is why Go has never
   // retried this route.
   option (linode.mcp.v1.retry_disabled) = true;
-  // Each language trims a different set of these arguments before sending them,
-  // so the value that reaches the wire is a per-language reading.
-  option (linode.mcp.v1.tool_hooks) = "normalize";
+  // One trim for every text argument the create sends. Go always trimmed all
+  // four; Python trimmed the label alone, so this declaration is where the
+  // padded-region wire bytes converged.
+  option (linode.mcp.v1.normalize_fields) = {
+    field: "label"
+    field: "region"
+    field: "placement_group_type"
+    field: "placement_group_policy"
+    transform: NORMALIZE_TRANSFORM_TRIM
+  };
   // The group a create would add, named by the four values that fix it.
   option (linode.mcp.v1.preview_sentence) = {
     template: "A new placement group \"{label}\" ({placement_group_type}, {placement_group_policy} policy) will be created in region {region}."
@@ -199,6 +212,8 @@ message PlacementGroupUpdateInput {
     path: "/placement/groups/{group_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroup";
   option (linode.mcp.v1.tool_description) = "Updates one placement group label by ID.";
   option (linode.mcp.v1.error_message) = "Failed to update placement group {group_id}: {error}";
@@ -257,6 +272,8 @@ message PlacementGroupDeleteInput {
     path: "/placement/groups/{group_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a placement group by its ID. This destructive action requires confirm=true. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the placement group";
@@ -270,7 +287,19 @@ message PlacementGroupDeleteInput {
   };
   // The walk names the member Linodes the delete detaches, which the fetched
   // group carries.
-  option (linode.mcp.v1.tool_hooks) = "dependency_walk";
+  option (linode.mcp.v1.dependency_walk) = {
+    state_member: "members"
+    emit: {
+      kind: "instance"
+      id_field: "linode_id"
+      action: "detached"
+      note: "Linode is removed from the placement group; the instance is not deleted."
+    }
+    warnings: {
+      template: "Deleting this placement group detaches {count} Linode(s); the instances are not deleted."
+      when_any: true
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -301,6 +330,8 @@ message PlacementGroupAssignInput {
     path: "/placement/groups/{group_id}/assign"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
   option (linode.mcp.v1.tool_description) = "Assigns one or more Linodes to a placement group.";
   option (linode.mcp.v1.error_message) = "Failed to assign Linodes to placement group {group_id}: {error}";
@@ -309,9 +340,19 @@ message PlacementGroupAssignInput {
   // Go has never retried this route, so a replay cannot re-run a membership
   // change against a group the first attempt already altered.
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview names each Linode whose membership changes, and only one
-  // language reports the body beside it.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the group, so the preview reports it as current_state.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_placement_group_get"
+  };
+  // The request carries the membership only as a list of ids, so the preview
+  // owes the caller a sentence about each.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Linode {element} will be assigned to placement group {group_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    per_element: {
+      argument: "linodes"
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -360,6 +401,8 @@ message PlacementGroupUnassignInput {
     path: "/placement/groups/{group_id}/unassign"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_LINODES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
   option (linode.mcp.v1.tool_description) = "Unassigns Linodes from a placement group.";
   option (linode.mcp.v1.error_message) = "Failed to unassign placement group {group_id}: {error}";
@@ -368,9 +411,19 @@ message PlacementGroupUnassignInput {
   // Go has never retried this route, so a replay cannot re-run a membership
   // change against a group the first attempt already altered.
   option (linode.mcp.v1.retry_disabled) = true;
-  // The preview names each Linode whose membership changes, and only one
-  // language reports the body beside it.
-  option (linode.mcp.v1.tool_hooks) = "preview";
+  // The read is the group, so the preview reports it as current_state.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_placement_group_get"
+  };
+  // The request carries the membership only as a list of ids, so the preview
+  // owes the caller a sentence about each.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Linode {element} will be removed from placement group {group_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+    per_element: {
+      argument: "linodes"
+    }
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

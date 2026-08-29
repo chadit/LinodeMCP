@@ -30,9 +30,18 @@ message AuditHealthInput {
     tool: "linode_audit_health"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditHealthResponse";
   option (linode.mcp.v1.tool_description) = "Report the audit subsystem's status: log path and disk usage, rotated-file count and oldest date, and (when the SQLite sink is enabled) row count, oldest event, and database size.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_AUDIT_HEALTH
+    refuse: [
+      {
+        guard: LOCAL_GUARD_READ_FAILED
+        message: "failed to collect audit health: {error}"
+      }
+    ]
+  };
 }
 
 // AuditReportInput is the input contract for linode_audit_report. The audit
@@ -42,9 +51,34 @@ message AuditReportInput {
     tool: "linode_audit_report"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditReportResponse";
   option (linode.mcp.v1.tool_description) = "Run a named custom audit report from config (audit.reports). Reads SQLite when enabled, else the JSONL log. Returns a summary of counts or a list of matching events depending on the report's output mode.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_AUDIT_REPORT
+    bind: [
+      {
+        input: "report"
+        argument: "name"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_NOT_FOUND
+        argument: "name"
+        message: "unknown report: {name:quoted}"
+      },
+      {
+        guard: LOCAL_GUARD_INPUT_REJECTED
+        argument: "name"
+        message: "failed to run report: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_READ_FAILED
+        message: "failed to run report: load report events: {error}"
+      }
+    ]
+  };
   option (buf.validate.message).cel = {
     id: "linode_audit_report.name.required"
     message: "report name is required"
@@ -63,9 +97,58 @@ message AuditRecentInput {
     tool: "linode_audit_recent"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditRecentResponse";
   option (linode.mcp.v1.tool_description) = "Return the most recent audit events (what tools were called, with what outcome), newest first. Reads the on-disk JSONL audit log. Optional filters: limit, since, until, tool (glob), capability, status, include_meta.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_AUDIT_RECENT
+    bind: [
+      {
+        input: "limit"
+        argument: "limit"
+      },
+      {
+        input: "since"
+        argument: "since"
+      },
+      {
+        input: "until"
+        argument: "until"
+      },
+      {
+        input: "tool"
+        argument: "tool"
+      },
+      {
+        input: "capability"
+        argument: "capability"
+      },
+      {
+        input: "status"
+        argument: "status"
+      },
+      {
+        input: "include_meta"
+        argument: "include_meta"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_ARGUMENT_UNUSABLE
+        argument: "since"
+        message: "invalid 'since' timestamp: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_ARGUMENT_UNUSABLE
+        argument: "until"
+        message: "invalid 'until' timestamp: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_READ_FAILED
+        message: "failed to read audit log: {error}"
+      }
+    ]
+  };
 
   // Max events to return. Default 20, capped at 200.
   optional int32 limit = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
@@ -93,9 +176,58 @@ message AuditExportInput {
     tool: "linode_audit_export"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditExportResponse";
   option (linode.mcp.v1.tool_description) = "Export a range of audit events to a temp file and return its path. Reads SQLite when enabled, else the JSONL log. Optional filters: since, until, tool (glob), max_records, include_meta.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_AUDIT_EXPORT
+    bind: [
+      {
+        input: "format"
+        argument: "format"
+      },
+      {
+        input: "since"
+        argument: "since"
+      },
+      {
+        input: "until"
+        argument: "until"
+      },
+      {
+        input: "tool"
+        argument: "tool"
+      },
+      {
+        input: "max_records"
+        argument: "max_records"
+      },
+      {
+        input: "include_meta"
+        argument: "include_meta"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_ARGUMENT_UNUSABLE
+        argument: "since"
+        message: "invalid 'since' timestamp: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_ARGUMENT_UNUSABLE
+        argument: "until"
+        message: "invalid 'until' timestamp: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_READ_FAILED
+        message: "failed to read audit log: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_WRITE_FAILED
+        message: "failed to write export file: {error}"
+      }
+    ]
+  };
   // format has no presence, so a name matching no member arrives as the enum's
   // zero, the same as an absent one.
   option (buf.validate.message).cel = {
@@ -125,9 +257,42 @@ message AuditSummaryInput {
     tool: "linode_audit_summary"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_categories) = {none: true};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditSummaryResponse";
   option (linode.mcp.v1.tool_description) = "Count audit events grouped by tool and status (or other columns) over a time window. Useful for questions like 'how many destroys in the last 24h'. Reads SQLite when enabled, else the JSONL log.";
-  option (linode.mcp.v1.tool_hooks) = "answer";
+  option (linode.mcp.v1.local_answer) = {
+    call: LOCAL_CALL_AUDIT_SUMMARY
+    bind: [
+      {
+        input: "since"
+        argument: "since"
+      },
+      {
+        input: "group_by"
+        argument: "group_by"
+      },
+      {
+        input: "include_meta"
+        argument: "include_meta"
+      }
+    ]
+    refuse: [
+      {
+        guard: LOCAL_GUARD_ARGUMENT_UNUSABLE
+        argument: "since"
+        message: "invalid 'since' timestamp: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_INPUT_REJECTED
+        argument: "group_by"
+        message: "invalid group_by: {error}"
+      },
+      {
+        guard: LOCAL_GUARD_READ_FAILED
+        message: "failed to read audit log: {error}"
+      }
+    ]
+  };
 
   // Only count events at or after this RFC 3339 timestamp.
   optional string since = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
@@ -141,7 +306,13 @@ message AuditSummaryInput {
 // AuditEvent mirrors one audit log event as the audit query tools emit it.
 // args is the already-redacted argument map. 64-bit counters emit as JSON
 // numbers; the canonical serializer widens the proto3 JSON string form.
+//
+// It is also the JSONL log's on-disk record, which local_record declares: both
+// sinks serialize through the generated projection, so the member order below
+// is the order a log line carries in every language.
 message AuditEvent {
+  option (linode.mcp.v1.local_record) = true;
+
   // Event timestamp, RFC 3339.
   string ts = 1;
   // Event timestamp in Unix nanoseconds.
@@ -218,6 +389,9 @@ message AuditHealthResponse {
   int64 dropped_events = 6;
   // SQLite sink status, omitted when the sink is disabled.
   optional AuditHealthSQLite sqlite = 7;
+  // Lines describing anything degraded about the read, such as a configured
+  // SQLite store that would not open and was answered from JSONL instead.
+  repeated string warnings = 8;
 }
 
 // AuditExportResponse is the linode_audit_export body: where the export
@@ -229,6 +403,9 @@ message AuditExportResponse {
   string format = 2;
   // Records written.
   int32 record_count = 3;
+  // Lines describing anything degraded about the read, such as a configured
+  // SQLite store that would not open and was answered from JSONL instead.
+  repeated string warnings = 4;
 }
 
 // AuditRecentResponse is the linode_audit_recent body.
@@ -245,7 +422,7 @@ message AuditRecentResponse {
 message AuditReportResponse {
   // Report name from audit.reports.
   string name = 1;
-  // Report output type: summary or events.
+  // Report output type: summary or list.
   string output = 2;
   // Events matched by the report filter.
   int32 total_events = 3;
@@ -253,6 +430,9 @@ message AuditReportResponse {
   repeated AuditSummaryRow rows = 4;
   // Matching events when output is events.
   repeated AuditEvent events = 5;
+  // Lines describing anything degraded about the read, such as a configured
+  // SQLite store that would not open and was answered from JSONL instead.
+  repeated string warnings = 6;
 }
 
 // AuditSummaryResponse is the linode_audit_summary body.
@@ -261,4 +441,7 @@ message AuditSummaryResponse {
   int32 total_events = 1;
   // Group-by buckets.
   repeated AuditSummaryRow rows = 2;
+  // Lines describing anything degraded about the read, such as a configured
+  // SQLite store that would not open and was answered from JSONL instead.
+  repeated string warnings = 3;
 }

@@ -8,56 +8,83 @@ oldest event, and database size.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from linodemcp.audit.jsonl import ACTIVE_LOG_FILE_NAME
 from linodemcp.audit.retention import parse_rotated_file_day
+from linodemcp.audit.store import read_with_fallback
+from linodemcp.genlocal import AuditHealthResponse, AuditHealthSQLite
+
+# Always 0: the sinks write synchronously, so there is no bounded channel to
+# drop from. The member stays declared so the answer's shape survives a future
+# async sink that does drop.
+_DROPPED_EVENTS = 0
 
 
 @dataclass
-class SQLiteHealth:
-    """SQLite-sink portion of the health report."""
+class _JSONLHealth:
+    """The JSONL half of the report while it is being gathered.
 
-    path: str
-    event_count: int
-    oldest_event_unix_ns: int
-    db_bytes: int
-
-
-@dataclass
-class HealthReport:
-    """Audit subsystem status.
-
-    ``dropped_events`` is always 0: the sinks write synchronously, so
-    there is no bounded channel to drop from. The field exists so the
-    wire shape stays stable if a future async sink adds drop accounting.
+    The answer it fills is built once with every member, so the halves are
+    carried rather than assigned into it.
     """
 
-    jsonl_path: str
-    active_log_exists: bool = False
-    rotated_file_count: int = 0
     oldest_rotated_date: str = ""
     disk_bytes: int = 0
-    dropped_events: int = 0
-    sqlite: SQLiteHealth | None = None
+    rotated_file_count: int = 0
+    active_log_exists: bool = False
 
 
-def collect_health(sqlite_path: str, jsonl_dir: str) -> HealthReport:
-    """Gather audit subsystem status. The JSONL directory is always
-    inspected; the SQLite database only when ``sqlite_path`` is given.
-    A missing JSONL directory reports zero values, not an error.
+@dataclass
+class _HealthParts:
+    """One read of both sinks, before the store fallback has said whether it
+    degraded.
     """
-    report = HealthReport(jsonl_path=str(Path(jsonl_dir) / ACTIVE_LOG_FILE_NAME))
-    _collect_jsonl_health(jsonl_dir, report)
+
+    jsonl: _JSONLHealth = field(default_factory=_JSONLHealth)
+    sqlite: AuditHealthSQLite | None = None
+
+
+def health(sqlite_path: str, jsonl_dir: str) -> AuditHealthResponse:
+    """The audit stores' own status, read through the configured database where
+    one answers and through the JSONL log otherwise.
+
+    A configured database that will not open leaves the JSONL half standing
+    behind a warning; only a log nothing can read raises. The policy sits here
+    rather than beside the tool because it is the store's own degrade rule.
+    """
+    parts, warnings = read_with_fallback(
+        sqlite_path, lambda store: _collect_health(store, jsonl_dir)
+    )
+
+    return AuditHealthResponse(
+        jsonl_path=str(Path(jsonl_dir) / ACTIVE_LOG_FILE_NAME),
+        active_log_exists=parts.jsonl.active_log_exists,
+        rotated_file_count=parts.jsonl.rotated_file_count,
+        oldest_rotated_date=parts.jsonl.oldest_rotated_date,
+        disk_bytes=parts.jsonl.disk_bytes,
+        dropped_events=_DROPPED_EVENTS,
+        sqlite=parts.sqlite,
+        warnings=warnings,
+    )
+
+
+def _collect_health(sqlite_path: str, jsonl_dir: str) -> _HealthParts:
+    """Read both sinks once. The JSONL directory is always inspected; the
+    SQLite database only when ``sqlite_path`` is given. A missing JSONL
+    directory reports zero values, not a failure.
+    """
+    parts = _HealthParts()
+    _collect_jsonl_health(jsonl_dir, parts.jsonl)
 
     if sqlite_path:
-        report.sqlite = _collect_sqlite_health(sqlite_path)
+        parts.sqlite = _collect_sqlite_health(sqlite_path)
 
-    return report
+    return parts
 
 
-def _collect_jsonl_health(directory: str, report: HealthReport) -> None:
+def _collect_jsonl_health(directory: str, report: _JSONLHealth) -> None:
     """Fill the JSONL portion of the report from the directory contents."""
     base = Path(directory)
     if not base.is_dir():
@@ -87,7 +114,7 @@ def _collect_jsonl_health(directory: str, report: HealthReport) -> None:
     report.oldest_rotated_date = oldest_date
 
 
-def _collect_sqlite_health(path: str) -> SQLiteHealth:
+def _collect_sqlite_health(path: str) -> AuditHealthSQLite:
     """Query the row count and oldest timestamp and stat the DB size."""
     conn = sqlite3.connect(path)
     try:
@@ -99,7 +126,7 @@ def _collect_sqlite_health(path: str) -> SQLiteHealth:
 
     db_bytes = Path(path).stat().st_size if Path(path).exists() else 0
 
-    return SQLiteHealth(
+    return AuditHealthSQLite(
         path=path,
         event_count=int(count),
         oldest_event_unix_ns=int(oldest),

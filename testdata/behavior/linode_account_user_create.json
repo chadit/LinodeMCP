@@ -32,6 +32,44 @@
       }
     },
     {
+      "name": "dry_run_preview words the restriction the call asked for",
+      "args": { "username": "alice", "email": "alice@example.com", "restricted": true, "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_user_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/account/users",
+          "body": { "username": "alice", "email": "alice@example.com", "restricted": true }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new account user \"alice\" will be created with restricted=true."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "dry_run_preview words an explicit unrestricted the same as an absent one",
+      "args": { "username": "alice", "email": "alice@example.com", "restricted": false, "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_account_user_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/account/users",
+          "body": { "username": "alice", "email": "alice@example.com", "restricted": false }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A new account user \"alice\" will be created with restricted=false."
+        ],
+        "warnings": []
+      }
+    },
+    {
       "name": "requires confirm before creating",
       "args": { "username": "alice", "email": "alice@example.com" },
       "expect_error": "This creates an account user. Set confirm=true to proceed."

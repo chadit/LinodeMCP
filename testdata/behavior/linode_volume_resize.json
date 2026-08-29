@@ -4,61 +4,162 @@
   "cases": [
     {
       "name": "requires volume_id",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "volume_id is required"
     },
     {
       "name": "reads a numeric-string volume_id",
-      "args": { "confirm": true, "volume_id": "123", "size": 40 },
-      "api_response": { "id": 123, "label": "my-vol", "size": 40 },
+      "args": {
+        "confirm": true,
+        "volume_id": "123",
+        "size": 40
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-vol",
+        "size": 40
+      },
       "expect_request": {
         "method": "POST",
         "path": "/volumes/123/resize",
-        "body": { "size": 40 }
+        "body": {
+          "size": 40
+        }
       }
     },
     {
       "name": "reads a boolean volume_id as no id at all",
-      "args": { "confirm": true, "volume_id": true, "size": 40 },
+      "args": {
+        "confirm": true,
+        "volume_id": true,
+        "size": 40
+      },
       "expect_error": "volume_id is required"
     },
     {
       "name": "rejects size below 10 GB",
-      "args": { "confirm": true, "volume_id": 123, "size": 5 },
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "size": 5
+      },
       "expect_error": "volume size must be at least 10 GB"
     },
     {
       "name": "resizes a volume",
-      "args": { "confirm": true, "volume_id": 123, "size": 40 },
-      "api_response": { "id": 123, "label": "my-vol", "size": 40 },
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "size": 40
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-vol",
+        "size": 40
+      },
       "expect_request": {
         "method": "POST",
         "path": "/volumes/123/resize",
-        "body": { "size": 40 }
+        "body": {
+          "size": 40
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"volume_id": 123, "size": 40},
+      "args": {
+        "volume_id": 123,
+        "size": 40
+      },
       "expect_error": "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "confirm": true, "volume_id": 123, "size": 40 },
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "size": 40
+      },
       "api_response": 7,
       "expect_api_error": "Failed to resize volume"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "confirm": true, "volume_id": 123, "size": 40 },
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "size": 40
+      },
       "api_response": true,
       "expect_api_error": "Failed to resize volume"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "confirm": true, "volume_id": 123, "size": 40 },
-      "api_response": [1, 2],
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "size": 40
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to resize volume"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "volume_id": 123,
+        "size": 40,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /volumes/123": {
+          "id": 123,
+          "label": "data",
+          "status": "active",
+          "size": 20,
+          "region": "us-east",
+          "linode_id": 456,
+          "linode_label": "web",
+          "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data",
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "hardware_type": "nvme"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_volume_resize",
+        "would_execute": {
+          "method": "POST",
+          "path": "/volumes/123/resize"
+        },
+        "current_state": {
+          "id": 123,
+          "label": "data",
+          "status": "active",
+          "size": 20,
+          "region": "us-east",
+          "linode_id": 456,
+          "linode_label": "web",
+          "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data",
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "hardware_type": "nvme"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Volume resizes from 20 GB to 40 GB."
+        ],
+        "warnings": [
+          "A volume can only grow; the new size must be larger than the current size."
+        ]
+      }
     }
   ]
 }

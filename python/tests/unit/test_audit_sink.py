@@ -18,24 +18,25 @@ from linodemcp.audit import (
     NoopSink,
     Sink,
     Status,
+    event_timestamp,
 )
 
 
 def _event(tool: str) -> Event:
     """Build a minimal event for sink testing."""
     return Event(
-        ts=datetime.now(UTC),
+        ts=event_timestamp(datetime.now(UTC)),
         ts_unix_ns=0,
         event_id="evt_test",
         tool=tool,
-        tool_capability=Capability.META,
+        tool_capability=Capability.META.value,
         environment="",
         profile="",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
-        status=Status.SUCCESS,
+        status=Status.SUCCESS.value,
         latency_ms=0,
         result_summary="",
         error=None,

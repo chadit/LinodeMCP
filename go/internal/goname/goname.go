@@ -1,11 +1,9 @@
 // Package goname spells a contract name the way Go spells identifiers.
 //
-// Two places need the same answer and neither can import the other:
-// cmd/toolgen writes the factory, handler, and hook-call names into the
-// generated tree, and internal/toolhooks derives the name a declared hook must
-// be implemented under. A word this package renders one way and that one
-// renders another is a call to a function nobody wrote, which is why the table
-// lives here rather than beside either caller.
+// The table lives here rather than inside cmd/toolgen because the spelling is a
+// fact about the contract's names, not about one emitter: a word rendered one
+// way in the factory name and another in the handler name would be a call to a
+// function nobody wrote.
 package goname
 
 import "strings"

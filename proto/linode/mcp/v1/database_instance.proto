@@ -102,6 +102,8 @@ message DatabaseInstanceListInput {
     path: "/databases/instances"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Managed Database instances across all engines with optional pagination.";
 
@@ -122,6 +124,8 @@ message DatabaseMySQLInstanceListInput {
     path: "/databases/mysql/instances"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseMySQLInstanceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists Managed Database instances with optional pagination.";
 
@@ -142,6 +146,8 @@ message DatabasePostgreSQLInstanceListInput {
     path: "/databases/postgresql/instances"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabasePostgreSQLInstanceListResponse";
   option (linode.mcp.v1.tool_description) = "Lists PostgreSQL Managed Database instances with optional pagination.";
 
@@ -162,6 +168,8 @@ message DatabaseMySQLInstanceGetInput {
     path: "/databases/mysql/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstance";
   option (linode.mcp.v1.tool_description) = "Retrieves a single MySQL Managed Database instance by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve MySQL Managed Database instance: {error}";
@@ -184,6 +192,8 @@ message DatabasePostgreSQLInstanceGetInput {
     path: "/databases/postgresql/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstance";
   option (linode.mcp.v1.tool_description) = "Retrieves a single PostgreSQL Managed Database instance by ID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve PostgreSQL Managed Database instance: {error}";
@@ -206,6 +216,8 @@ message DatabaseMySQLInstanceCredentialsGetInput {
     path: "/databases/mysql/instances/{instance_id}/credentials"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseCredentials";
   option (linode.mcp.v1.tool_description) = "Retrieves credentials for a MySQL Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve MySQL Managed Database credentials: {error}";
@@ -252,6 +264,8 @@ message DatabasePostgreSQLInstanceCredentialsGetInput {
     path: "/databases/postgresql/instances/{instance_id}/credentials"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseCredentials";
   option (linode.mcp.v1.tool_description) = "Retrieves credentials for a PostgreSQL Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve PostgreSQL Managed Database credentials: {error}";
@@ -298,6 +312,8 @@ message DatabaseMySQLInstanceCredentialsResetInput {
     path: "/databases/mysql/instances/{instance_id}/credentials/reset"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resets credentials for a MySQL Managed Database instance by ID. Pass dry_run=true to preview without resetting.";
   option (linode.mcp.v1.error_message) = "Failed to reset MySQL Managed Database credentials: {error}";
@@ -348,6 +364,8 @@ message DatabasePostgreSQLInstanceCredentialsResetInput {
     path: "/databases/postgresql/instances/{instance_id}/credentials/reset"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resets credentials for a PostgreSQL Managed Database instance by ID. Pass dry_run=true to preview without resetting.";
   option (linode.mcp.v1.error_message) = "Failed to reset PostgreSQL Managed Database credentials: {error}";
@@ -398,6 +416,8 @@ message DatabaseMySQLInstanceDeleteInput {
     path: "/databases/mysql/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a MySQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a Managed Database instance. Set confirm=true to proceed.";
@@ -442,6 +462,8 @@ message DatabasePostgreSQLInstanceDeleteInput {
     path: "/databases/postgresql/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Deletes a PostgreSQL Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "This deletes a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
@@ -486,6 +508,8 @@ message DatabaseMySQLInstancePatchInput {
     path: "/databases/mysql/instances/{instance_id}/patch"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Applies security patches and updates to a MySQL Managed Database instance. Pass dry_run=true to preview without patching.";
   option (linode.mcp.v1.error_message) = "Failed to patch Managed Database instance {instance_id}: {error}";
@@ -532,6 +556,8 @@ message DatabasePostgreSQLInstancePatchInput {
     path: "/databases/postgresql/instances/{instance_id}/patch"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Applies security patches and updates to a PostgreSQL Managed Database instance. Pass dry_run=true to preview without patching.";
   option (linode.mcp.v1.error_message) = "Failed to patch PostgreSQL Managed Database instance {instance_id}: {error}";
@@ -578,6 +604,8 @@ message DatabaseMySQLInstanceSuspendInput {
     path: "/databases/mysql/instances/{instance_id}/suspend"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Suspends an active MySQL Managed Database instance. Pass dry_run=true to preview without suspending.";
   option (linode.mcp.v1.error_message) = "Failed to suspend Managed Database instance {instance_id}: {error}";
@@ -628,6 +656,8 @@ message DatabasePostgreSQLInstanceSuspendInput {
     path: "/databases/postgresql/instances/{instance_id}/suspend"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Suspends an active PostgreSQL Managed Database instance. Pass dry_run=true to preview without suspending.";
   option (linode.mcp.v1.error_message) = "Failed to suspend PostgreSQL Managed Database instance {instance_id}: {error}";
@@ -678,6 +708,8 @@ message DatabaseMySQLInstanceResumeInput {
     path: "/databases/mysql/instances/{instance_id}/resume"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resumes a suspended MySQL Managed Database instance. Pass dry_run=true to preview without resuming.";
   option (linode.mcp.v1.error_message) = "Failed to resume Managed Database instance {instance_id}: {error}";
@@ -728,6 +760,8 @@ message DatabasePostgreSQLInstanceResumeInput {
     path: "/databases/postgresql/instances/{instance_id}/resume"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
   option (linode.mcp.v1.tool_description) = "Resumes a suspended PostgreSQL Managed Database instance. Pass dry_run=true to preview without resuming.";
   option (linode.mcp.v1.error_message) = "Failed to resume PostgreSQL Managed Database instance {instance_id}: {error}";
@@ -787,6 +821,8 @@ message DatabaseMySQLInstanceCreateInput {
     expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates or restores a MySQL Managed Database instance. This creates a billable resource. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a billable Managed Database instance. Set confirm=true to proceed.";
@@ -886,6 +922,8 @@ message DatabasePostgreSQLInstanceCreateInput {
     expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates or restores a PostgreSQL Managed Database instance. This creates a billable resource. Pass dry_run=true to preview without creating.";
   option (linode.mcp.v1.confirm_message) = "This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed.";
@@ -988,6 +1026,8 @@ message DatabaseMySQLInstanceUpdateInput {
     path: "/databases/mysql/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a MySQL Managed Database instance. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to update Managed Database instance: {error}";
@@ -1082,6 +1122,8 @@ message DatabasePostgreSQLInstanceUpdateInput {
     path: "/databases/postgresql/instances/{instance_id}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates a PostgreSQL Managed Database instance. Pass dry_run=true to preview without modifying.";
   option (linode.mcp.v1.error_message) = "Failed to update PostgreSQL Managed Database instance: {error}";

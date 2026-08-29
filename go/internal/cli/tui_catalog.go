@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/server"
 )
@@ -121,10 +122,10 @@ func buildCatalogItems(infos []server.ToolInfo) []list.Item {
 }
 
 // categoriesFor returns the categories a tool belongs to, substituting a
-// single "other" bucket when the profile mapping returns none so every
-// tool is reachable in the catalog.
+// single "other" bucket when the declared mapping has none so every tool is
+// reachable in the catalog.
 func categoriesFor(toolName string) []string {
-	cats := profiles.Categories(toolName)
+	cats := gentools.CategoriesFor(toolName)
 	if len(cats) == 0 {
 		return []string{catalogUncategorized}
 	}

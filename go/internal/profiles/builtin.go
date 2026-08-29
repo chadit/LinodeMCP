@@ -3,17 +3,24 @@ package profiles
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
-	"strings"
 )
 
 // ToolDescriptor is the minimal projection of a registered tool that the
-// built-in profile resolver needs: the tool name and its capability tag.
-// Callers (e.g. server.New in Phase 4 or the parity test) build this slice
-// from their own registry and pass it in. Keeping the type local avoids an
-// import cycle with internal/server.
+// built-in profile resolver needs. Callers (e.g. server.New in Phase 4 or
+// the parity test) build this slice from their own registry and pass it in.
+// Keeping the type local avoids an import cycle with internal/server.
 type ToolDescriptor struct {
-	Name       string
+	Name string
+	// Scopes is the tool's declared OAuth scope strings, read from the
+	// generated registry table at the call sites that build the catalog.
+	// Empty for meta tools and documented-scopeless routes.
+	Scopes []string
+	// Categories is the tool's declared profile categories in declaration
+	// order, read from the same generated table. Empty on a declared none.
+	Categories []string
 	Capability Capability
 }
 
@@ -26,6 +33,7 @@ const (
 	BuiltinNetworkAdmin    = "network-admin"
 	BuiltinKubernetesAdmin = "kubernetes-admin"
 	BuiltinStorageAdmin    = "storage-admin"
+	BuiltinIamAdmin        = "iam-admin"
 	BuiltinFullAccess      = "full-access"
 	BuiltinEmergency       = "emergency"
 
@@ -34,144 +42,6 @@ const (
 	// shape stable across languages.
 	allEnvironments = "*"
 )
-
-// Categories returns the list of category names a tool belongs to based on
-// its name. Every matching rule contributes, so a tool sits in each category
-// it fits and a profile elevating any of them serves it.
-//
-// Returns an empty slice for tools whose name matches no known prefix.
-// Phase 8.2 builder tools surface this list via linode_profile_list_tools
-// so the model can filter the catalog by category.
-func Categories(toolName string) []string {
-	if isCoreTool(toolName) {
-		return []string{"core"}
-	}
-
-	cats := make([]string, 0, 2)
-
-	for _, rule := range categoryTable() {
-		if hasAnyPrefix(toolName, rule.prefixes...) {
-			cats = append(cats, rule.category)
-		}
-	}
-
-	return cats
-}
-
-// isCoreTool reports whether a tool is one of the four the "core" category
-// holds. Core is the session's own starting point rather than a slice of the
-// Linode surface, so it stands apart from the prefix table and no profile
-// elevates it; account-gated tools live in "account", which one can.
-func isCoreTool(toolName string) bool {
-	switch toolName {
-	case "hello", "version", "linode_profile_get", "linode_account_get":
-		return true
-	default:
-		return false
-	}
-}
-
-// categoryTable returns the prefix-to-category rules. This is the same table
-// python/src/linodemcp/profiles/builtin.py declares as _TOOL_CATEGORIES, and
-// `make profile-resolution` holds the two to one answer per tool: a category a
-// tool has in one language and not the other is a profile that serves
-// different tools depending on which client the caller runs.
-//
-// Built fresh per call so the slice doesn't sit as a package-level global,
-// matching scopePrefixTable.
-func categoryTable() []prefixRule {
-	return []prefixRule{
-		// Per-instance sub-resources, listed ahead of compute for reading
-		// order: storage-admin elevates this slice without the rest of compute.
-		{
-			category: "compute_deep",
-			prefixes: []string{
-				"linode_instance_backup_",
-				"linode_instance_backups_",
-				"linode_instance_disk_",
-				"linode_instance_ip_",
-				"linode_instance_stats_",
-				"linode_instance_transfer_",
-			},
-		},
-		// Tool names are singular across verbs (linode_image_list,
-		// linode_stackscript_create), so one prefix per resource covers a
-		// family's reads and writes alike.
-		{
-			category: "compute",
-			prefixes: []string{
-				"linode_image_",
-				"linode_instance_",
-				"linode_kernel_",
-				"linode_placement_group_",
-				"linode_region_",
-				"linode_stackscript_",
-				"linode_type_",
-			},
-		},
-		// What the API gates on account:*, following scope.go's account rule.
-		// The profile prefixes are enumerated rather than swept up under one
-		// linode_profile_ entry because the builder's own draft tools share
-		// that prefix and never reach the API.
-		{
-			category: "account",
-			prefixes: []string{
-				"linode_account_",
-				"linode_beta_",
-				"linode_lock_",
-				"linode_maintenance_policy_",
-				"linode_managed_",
-				"linode_profile_app_",
-				"linode_profile_device_",
-				"linode_profile_grants_",
-				"linode_profile_login_",
-				"linode_profile_phone_number_",
-				"linode_profile_preferences_",
-				"linode_profile_security_",
-				"linode_profile_tfa_",
-				"linode_profile_token_",
-				"linode_profile_update",
-				"linode_support_ticket_",
-				"linode_tag_",
-			},
-		},
-		{category: "block_storage", prefixes: []string{"linode_volume_"}},
-		{category: "databases", prefixes: []string{"linode_database_"}},
-		{category: "object_storage", prefixes: []string{"linode_object_storage_"}},
-		{category: "dns", prefixes: []string{"linode_domain_"}},
-		{
-			category: "networking",
-			prefixes: []string{
-				"linode_firewall_",
-				"linode_ipv6_",
-				"linode_network_transfer_",
-				"linode_networking_",
-				"linode_nodebalancer_",
-				"linode_vlan_",
-			},
-		},
-		{category: "lke", prefixes: []string{"linode_lke_"}},
-		{category: "vpcs", prefixes: []string{"linode_vpc_"}},
-		{category: "security", prefixes: []string{"linode_sshkey_"}},
-		{category: "monitor", prefixes: []string{"linode_monitor_"}},
-		// Longview carries its own longview:* scope, so a profile that
-		// elevates monitor must not reach it.
-		{category: "longview", prefixes: []string{"linode_longview_"}},
-		{category: "iam", prefixes: []string{"linode_iam_"}},
-	}
-}
-
-// hasAnyPrefix reports whether toolName starts with any of the given
-// prefixes. Helper to keep Categories readable.
-func hasAnyPrefix(toolName string, prefixes ...string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(toolName, p) {
-			return true
-		}
-	}
-
-	return false
-}
 
 // elevatedCategories returns the set of categories whose Write/Destroy tools
 // the given profile permits. Empty for read-only profiles. The full-access
@@ -197,6 +67,10 @@ func elevatedCategories(profileName string) map[string]struct{} {
 		add("lke", "compute", "compute_deep", "vpcs")
 	case BuiltinStorageAdmin:
 		add("block_storage", "object_storage", "compute_deep")
+	case BuiltinIamAdmin:
+		// iam only: the legacy account grants tools sit in account, and Linode
+		// documents mixing the two access-control systems as a security risk.
+		add("iam")
 	case BuiltinFullAccess, BuiltinEmergency:
 		add(allEnvironments)
 	}
@@ -242,7 +116,7 @@ func selectAllowed(catalog []ToolDescriptor, elevated map[string]struct{}) []str
 		case CapRead, CapMeta:
 			allowed = append(allowed, descriptor.Name)
 		case CapWrite, CapDestroy:
-			if isElevated(Categories(descriptor.Name), elevated) {
+			if isElevated(descriptor.Categories, elevated) {
 				allowed = append(allowed, descriptor.Name)
 			}
 		case CapAdmin:
@@ -259,27 +133,21 @@ func selectAllowed(catalog []ToolDescriptor, elevated map[string]struct{}) []str
 	return allowed
 }
 
-// computeRequiredScopes returns the deduplicated union of RequiredScopes
-// over allowedTools, looked up against the catalog for capability. Output
-// is sorted ascending so cross-language parity tests stay stable. Tools
-// the catalog doesn't know about contribute nothing (matches the
-// best-effort fallback in RequiredScopes itself).
+// computeRequiredScopes returns the deduplicated union of the catalog's
+// declared per-tool scopes over allowedTools. Output is sorted ascending so
+// cross-language parity tests stay stable. Tools the catalog doesn't know
+// about contribute nothing.
 func computeRequiredScopes(catalog []ToolDescriptor, allowedTools []string) []string {
-	capByName := make(map[string]Capability, len(catalog))
+	scopesByName := make(map[string][]string, len(catalog))
 	for _, d := range catalog {
-		capByName[d.Name] = d.Capability
+		scopesByName[d.Name] = d.Scopes
 	}
 
 	seen := make(map[string]struct{}, len(allowedTools))
 
 	for _, name := range allowedTools {
-		capability, ok := capByName[name]
-		if !ok {
-			continue
-		}
-
-		for _, scope := range RequiredScopes(name, capability) {
-			seen[string(scope)] = struct{}{}
+		for _, scope := range scopesByName[name] {
+			seen[scope] = struct{}{}
 		}
 	}
 
@@ -293,16 +161,11 @@ func computeRequiredScopes(catalog []ToolDescriptor, allowedTools []string) []st
 	return out
 }
 
-// BuiltinProfiles returns the catalog of built-in profiles, resolved against
-// the supplied tool descriptors. The function is pure: repeated calls with
-// the same catalog return equal output. The caller owns the catalog slice
-// (typically Server.ToolInfos in production, or a synthetic fixture in
-// tests).
-//
-// The returned map is keyed by profile Name. Each Profile's AllowedTools is
-// sorted ascending so cross-language comparisons are stable.
-func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
-	profiles := map[string]Profile{
+// builtinBlueprints is the nine built-in profiles before a catalog resolves
+// their tool lists. One place carries their names and descriptions, so a
+// built-in added here reaches every reader of the set.
+func builtinBlueprints() map[string]Profile {
+	return map[string]Profile{
 		BuiltinDefault: {
 			Name:                BuiltinDefault,
 			Description:         "Safe read-only default profile. Cannot execute writes, destroys, or admin operations.",
@@ -345,6 +208,13 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 			AllowYolo:           false,
 			Disabled:            false,
 		},
+		BuiltinIamAdmin: {
+			Name:                BuiltinIamAdmin,
+			Description:         "Read everywhere plus write/destroy on identity and access management: role assignment, delegation, and IdP/SSO configs.",
+			AllowedEnvironments: []string{},
+			AllowYolo:           false,
+			Disabled:            false,
+		},
 		BuiltinFullAccess: {
 			Name:                BuiltinFullAccess,
 			Description:         "Read, write, and destroy across every category. Disabled by default.",
@@ -360,10 +230,29 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 			Disabled:            true,
 		},
 	}
+}
+
+// BuiltinProfileNames is the names the built-in profiles occupy, sorted. Read
+// off the blueprints rather than restated, so a built-in added above is refused
+// as a save target without a second list needing the same edit.
+func BuiltinProfileNames() []string {
+	return slices.Sorted(maps.Keys(builtinBlueprints()))
+}
+
+// BuiltinProfiles returns the catalog of built-in profiles, resolved against
+// the supplied tool descriptors. The function is pure: repeated calls with
+// the same catalog return equal output. The caller owns the catalog slice
+// (typically Server.ToolInfos in production, or a synthetic fixture in
+// tests).
+//
+// The returned map is keyed by profile Name. Each Profile's AllowedTools is
+// sorted ascending so cross-language comparisons are stable.
+func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
+	profiles := builtinBlueprints()
 
 	// Phase 6.3: RequiredTokenScopes is derived from the resolved tool
 	// list rather than hardcoded. Each profile's scope union comes from
-	// RequiredScopes(toolName, capability) over its AllowedTools, so a
+	// the catalog's declared per-tool scopes over its AllowedTools, so a
 	// new tool added to a category automatically extends the scope
 	// requirement. The previous hardcoded values had Linode-name typos
 	// (firewalls plural, ssh_keys, vpcs plural); deriving them fixes

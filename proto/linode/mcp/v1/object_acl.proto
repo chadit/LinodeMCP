@@ -31,6 +31,8 @@ message ObjectACLGetInput {
     path: "/object-storage/buckets/{region}/{label}/object-acl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectACL";
   option (linode.mcp.v1.tool_description) = "Gets the Access Control List (ACL) for a specific object in an Object Storage bucket";
   option (linode.mcp.v1.error_message) = "Failed to retrieve ACL for object '{name}' in bucket '{label}': {error}";
@@ -73,6 +75,8 @@ message ObjectACLUpdateInput {
     path: "/object-storage/buckets/{region}/{label}/object-acl"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectACLWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates the Access Control List (ACL) for a specific object in an Object Storage bucket. Requires confirm=true to proceed.";
   option (linode.mcp.v1.error_message) = "Failed to modify ACL for object '{name}' in bucket '{label}': {error}";

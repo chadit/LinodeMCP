@@ -4,16 +4,18 @@
 // into the tool dispatch middleware; later phases add JSONL and
 // SQLite sinks plus query tools.
 //
-// The package is intentionally dependency-free at the types layer
-// so the event struct can be used from tests without pulling in
-// server-internal types.
+// The record itself is the contract's own AuditEvent, which declares
+// local_record, so the members and their order on disk come from the
+// declaration rather than from this language's struct layout. The
+// vocabularies below stay this package's own words: they are what the
+// server tags a call with, and the record carries their text.
 package audit
 
 import (
 	"crypto/rand"
-	"encoding/json"
-	"fmt"
 	"time"
+
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
 
 // EventIDPrefix is the constant prefix on every event_id. Combined
@@ -68,28 +70,34 @@ const (
 // Mode is the execution-path enumeration.
 type Mode string
 
-// Event is one audit record per tool call. All fields are non-optional
-// in the JSON encoding (null for genuinely absent values rather than
-// omitted) so every record has the same shape.
-type Event struct {
-	TS                   time.Time      `json:"ts"`
-	PlanID               *string        `json:"plan_id"`
-	Error                *string        `json:"error"`
-	Args                 map[string]any `json:"args"`
-	EventID              string         `json:"event_id"`
-	Tool                 string         `json:"tool"`
-	ToolCapability       Capability     `json:"tool_capability"`
-	Environment          string         `json:"environment"`
-	Profile              string         `json:"profile"`
-	Mode                 Mode           `json:"mode"`
-	Status               Status         `json:"status"`
-	ResultSummary        string         `json:"result_summary"`
-	LinodemcpVersion     string         `json:"linodemcp_version"`
-	SessionID            string         `json:"session_id"`
-	ArgsRedacted         []string       `json:"args_redacted"`
-	TSUnixNS             int64          `json:"ts_unix_ns"`
-	LatencyMS            int64          `json:"latency_ms"`
-	CredentialGeneration uint64         `json:"credential_generation"`
+// Event is one audit record per tool call, which is the contract's own
+// AuditEvent under this package's name for it. One declaration owns the
+// member set, their order and their types, so a log line reads the same
+// whichever language wrote it.
+type Event = genlocal.AuditEvent
+
+// The two spellings an event's own timestamp takes: no fractional part where
+// the instant lands on a whole second, and microseconds where it does not.
+//
+// Microseconds because that is the finest resolution every language's clock
+// reads, and the whole-second form because a record written by an earlier
+// version carries it and a reconstructed timestamp has to come back the same.
+const (
+	eventTimeFormat      = "2006-01-02T15:04:05.000000Z"
+	eventWholeTimeFormat = "2006-01-02T15:04:05Z"
+)
+
+// EventTimestamp is one instant as an event's ts member spells it.
+//
+// Exported because the SQLite store keeps only the nanosecond count, so an
+// event read back off it has its timestamp text written here rather than in a
+// second spelling beside it.
+func EventTimestamp(instant time.Time) string {
+	if instant.Nanosecond() == 0 {
+		return instant.UTC().Format(eventWholeTimeFormat)
+	}
+
+	return instant.UTC().Format(eventTimeFormat)
 }
 
 // NewEvent constructs an Event with the timestamp, ULID, and tool
@@ -107,6 +115,9 @@ type Event struct {
 // PII list (RedactWithPII). The middleware passes the value from
 // cfg.Audit.RedactPII; tests and direct constructors pass false to
 // keep the existing credential-only redaction behavior.
+//
+// The instant is truncated to the microsecond the record spells, so the two
+// timestamp members describe one moment rather than two a fraction apart.
 func NewEvent(
 	tool string,
 	capability Capability,
@@ -117,8 +128,8 @@ func NewEvent(
 	credentialGeneration uint64,
 	linodemcpVersion string,
 	redactPII bool,
-) Event {
-	now := time.Now().UTC()
+) *Event {
+	now := time.Now().UTC().Truncate(time.Microsecond)
 
 	redactFn := Redact
 	if redactPII {
@@ -127,88 +138,82 @@ func NewEvent(
 
 	redactedArgs, redactedKeys := redactFn(args)
 
-	return Event{
-		TS:                   now,
-		TSUnixNS:             now.UnixNano(),
-		EventID:              NewEventID(now),
-		Tool:                 tool,
-		ToolCapability:       capability,
-		Environment:          environment,
-		Profile:              profile,
-		Mode:                 ModeNormal,
-		PlanID:               nil,
-		Args:                 redactedArgs,
-		ArgsRedacted:         redactedKeys,
-		Status:               StatusSuccess,
-		LatencyMS:            0,
-		ResultSummary:        "",
-		Error:                nil,
-		LinodemcpVersion:     linodemcpVersion,
-		SessionID:            sessionID,
-		CredentialGeneration: credentialGeneration,
-	}
+	return genlocal.NewAuditEvent(
+		EventTimestamp(now),
+		now.UnixNano(),
+		NewEventID(now),
+		tool,
+		string(capability),
+		environment,
+		profile,
+		string(ModeNormal),
+		nil,
+		redactedArgs,
+		redactedKeys,
+		string(StatusSuccess),
+		0,
+		"",
+		nil,
+		linodemcpVersion,
+		sessionID,
+		credentialGeneration,
+	)
 }
 
-// Finalize records the outcome of the tool call: status, latency,
-// optional error message, and optional human-readable summary. The
-// capture middleware (Phase 1b) calls this once the handler returns.
+// Finalize answers the event the call ended as: status, latency, optional
+// error message, and optional human-readable summary. The capture middleware
+// (Phase 1b) calls this once the handler returns.
 //
-// Callers that want a non-nil Error should pass the message string;
-// nil means "no error to report" (status is success or refused with
-// a refusal reason captured in ResultSummary instead).
-func (e *Event) Finalize(status Status, latency time.Duration, errMsg, summary string) {
-	e.Status = status
-	e.LatencyMS = latency.Milliseconds()
-	e.ResultSummary = summary
+// A new record rather than four writes into the old one, because the record is
+// a value the contract owns and one language's is frozen. Callers that want a
+// non-nil Error pass the message string; empty means "no error to report"
+// (status is success, or refused with a reason captured in ResultSummary).
+func Finalize(event *Event, status Status, latency time.Duration, errMsg, summary string) *Event {
+	finalized := *event
+	finalized.Status = string(status)
+	finalized.LatencyMs = latency.Milliseconds()
+	finalized.ResultSummary = summary
+	finalized.Error = optionalText(errMsg)
 
-	if errMsg == "" {
-		e.Error = nil
-
-		return
-	}
-
-	e.Error = &errMsg
+	return &finalized
 }
 
-// SetMode updates the execution mode (and the plan ID for plan/apply
-// modes). Phase 1a callers leave Mode at its default `normal`;
-// dry-run / two-stage-write phases set this through their middleware.
-func (e *Event) SetMode(mode Mode, planID string) {
-	e.Mode = mode
-
-	if planID == "" {
-		e.PlanID = nil
-
-		return
+// Outcome answers the event a call ended as, taken from what its handler
+// answered: an error where there is one, and success otherwise.
+//
+// The choice lives here rather than in the middleware because this is where the
+// status vocabulary is, and because one language's dispatch reaches it through
+// a returned error while the other reaches each status from its own except arm.
+// A caller that already knows the status calls Finalize directly, which is what
+// the refusal gate does.
+func Outcome(event *Event, latency time.Duration, err error) *Event {
+	if err == nil {
+		return Finalize(event, StatusSuccess, latency, "", "")
 	}
 
-	e.PlanID = &planID
+	return Finalize(event, StatusError, latency, err.Error(), "")
 }
 
-// MarshalJSON ensures the empty `args_redacted` slice serializes to
-// `[]` rather than `null`. Empty `args` similarly serializes to `{}`.
-// The standard encoder's behavior on nil maps and slices would
-// otherwise produce `null` for both, which JSONL consumers find
-// surprising. Receiver is a pointer because the Event struct is
-// ~256 bytes; a value receiver triggers gocritic's hugeParam.
-func (e *Event) MarshalJSON() ([]byte, error) {
-	type alias Event
+// SetMode answers the event under the execution mode the call took, with the
+// plan ID for plan/apply modes. Phase 1a callers leave Mode at its default
+// `normal`; the dry-run and two-stage-write phases set this through their
+// middleware.
+func SetMode(event *Event, mode Mode, planID string) *Event {
+	moded := *event
+	moded.Mode = string(mode)
+	moded.PlanId = optionalText(planID)
 
-	out := alias(*e)
-	if out.Args == nil {
-		out.Args = map[string]any{}
+	return &moded
+}
+
+// optionalText is one member that carries its own absence: the text where
+// there is some, and nothing where the caller passed an empty string.
+func optionalText(text string) *string {
+	if text == "" {
+		return nil
 	}
 
-	if out.ArgsRedacted == nil {
-		out.ArgsRedacted = []string{}
-	}
-
-	body, err := json.Marshal(out)
-	if err != nil {
-		return nil, fmt.Errorf("marshal audit event: %w", err)
-	}
-
-	return body, nil
+	return &text
 }
 
 // crockfordAlphabet is Crockford's base32, used by the ULID format.
@@ -223,7 +228,7 @@ const crockfordAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 // The ULID format reserves 80 bits of randomness per id; same-ms
 // collisions are negligible at the per-tool-call rate we expect, so
 // the generator is stateless. Callers needing strict monotonic
-// ordering between events should sort by Event.TSUnixNS, which is
+// ordering between events should sort by Event.TsUnixNs, which is
 // captured at the same instant.
 func NewEventID(now time.Time) string {
 	timestampMS := uint64(now.UnixMilli())

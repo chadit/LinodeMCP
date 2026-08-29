@@ -53,6 +53,8 @@ message ImageShareGroupTokenGetInput {
     path: "/images/sharegroups/tokens/{token_uuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupToken";
   option (linode.mcp.v1.tool_description) = "Gets a single image share group token by token UUID.";
   option (linode.mcp.v1.error_message) = "Failed to retrieve image share group token: {error}";
@@ -92,6 +94,8 @@ message ImageShareGroupTokenListInput {
     path: "/images/sharegroups/tokens"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenListResponse";
   option (linode.mcp.v1.tool_description) = "Lists image share group tokens for the authenticated user with optional pagination.";
 
@@ -113,6 +117,8 @@ message ImageShareGroupTokenCreateInput {
     path: "/images/sharegroups/tokens"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenWriteResponse";
   option (linode.mcp.v1.tool_description) = "Creates a single-use image share group membership token. The response includes token material that is only useful if handled carefully.";
   option (linode.mcp.v1.error_message) = "Failed to create image share group token: {error}";
@@ -180,6 +186,8 @@ message ImageShareGroupTokenUpdateInput {
     path: "/images/sharegroups/tokens/{token_uuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenWriteResponse";
   option (linode.mcp.v1.tool_description) = "Updates an image share group membership token label.";
   option (linode.mcp.v1.error_message) = "Failed to update image share group token: {error}";
@@ -243,6 +251,8 @@ message ImageShareGroupTokenDeleteInput {
     path: "/images/sharegroups/tokens/{token_uuid}"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupTokenDeleteResponse";
   option (linode.mcp.v1.tool_description) = "Removes a single image share group membership token by token UUID. Pass dry_run=true to preview without removing. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
   option (linode.mcp.v1.confirm_message) = "confirm=true is required to remove the share group token";
@@ -301,6 +311,8 @@ message ImageShareGroupTokenImageListInput {
     path: "/images/sharegroups/tokens/{token_uuid}/sharegroup/images"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_IMAGES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_COMPUTE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
   option (linode.mcp.v1.tool_description) = "Lists images available through an image share group token.";
 

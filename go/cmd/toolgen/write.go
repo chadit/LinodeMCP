@@ -764,18 +764,8 @@ func emitWritePreview(out *source, tool *contract) error {
 		return nil
 	}
 
-	if tool.Hooks.Preview == "" {
-		out.writef("\treturn tools.RunDryRunPreviewWithBody(ctx, request, cfg, %s, %s, %s, %s, nil)",
-			goStringLiteral(tool.Name), goStringLiteral(tool.Method), path, reported)
-		out.writef("}")
-		out.writef("")
-
-		return nil
-	}
-
-	out.need(importToolhooks)
-	out.writef("\treturn toolhooks.%s(ctx, request, cfg, %s, %s, %s)",
-		tool.Hooks.Preview, goStringLiteral(tool.Method), path, reported)
+	out.writef("\treturn tools.RunDryRunPreviewWithBody(ctx, request, cfg, %s, %s, %s, %s, nil)",
+		goStringLiteral(tool.Name), goStringLiteral(tool.Method), path, reported)
 	out.writef("}")
 	out.writef("")
 
@@ -789,24 +779,15 @@ func emitWriteChecks(out *source, tool *contract, ordered []field, echoes bool) 
 	emitNormalize(out, tool)
 	emitConstraintCheck(out, tool)
 
-	if tool.Hooks.Validate != "" {
-		emitValidateHook(out, tool.Hooks.Validate)
-	}
-
-	if tool.Hooks.Validate == "" {
-		for _, entry := range ordered {
-			if err := emitRequiredPathArg(out, tool, &entry); err != nil {
-				return err
-			}
+	for _, entry := range ordered {
+		if err := emitRequiredPathArg(out, tool, &entry); err != nil {
+			return err
 		}
 	}
 
-	if tool.Hooks.Validate != "" && len(ordered) > 0 {
-		emitPathArgReads(out, ordered)
-	}
-
 	// Body presence runs after the path checks and before the body is built,
-	// which is the order the hooks these replace answered in. The open-object
+	// which is the order the hand-written checks these replaced answered in. The
+	// open-object
 	// walks read what is inside an argument whose own shape just passed, and the
 	// cross-field any-of question comes last: each argument answers for itself
 	// before the call answers for naming nothing.
@@ -848,11 +829,19 @@ func previewBody(tool *contract) string {
 		}
 	}
 
-	if len(names) == 0 {
-		return "body"
+	chain := make([]string, 0, len(tool.PreviewStandIns)+2)
+	chain = append(chain, "body")
+
+	if len(names) > 0 {
+		chain = append(chain, fmt.Sprintf(".Redacting(%s)", strings.Join(names, ", ")))
 	}
 
-	return fmt.Sprintf("body.Redacting(%s)", strings.Join(names, ", "))
+	for _, entry := range tool.PreviewStandIns {
+		chain = append(chain, fmt.Sprintf(".StandingIn(%s, %s, %s)",
+			goStringLiteral(entry.Argument), goStringLiteral(entry.Member), goStringLiteral(entry.Text)))
+	}
+
+	return strings.Join(chain, "")
 }
 
 // bodyName is the builder a tool's two branches share.

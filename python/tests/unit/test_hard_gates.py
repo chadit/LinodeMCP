@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from types import ModuleType
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -28,14 +29,29 @@ CONTRACTS = REPO_ROOT / "docs" / "contracts"
 
 _TOOL = "linode_widget_create"
 
-# Each proto-surface gate, with the status its classifiers report for a tool
-# that is done. A tool at any other status is a straggler.
-_PROTO_GATES = (
-    ("verify_write_proto", "proto"),
-    ("verify_read_proto", "proto"),
-    ("verify_input_proto", "generated"),
-    ("verify_meta_proto", "proto"),
+# Each surface of the generated-form gate, with the status its classifiers
+# report for a tool that is done. A tool at any other status is a straggler.
+_FORM_SURFACES = (
+    ("write", "proto"),
+    ("read", "proto"),
+    ("input", "generated"),
+    ("meta", "proto"),
 )
+
+
+def _fixed_dump(status: str) -> Callable[[str], dict[str, str]]:
+    """A classifier stand-in reporting one tool at *status* on any surface."""
+
+    def dump(_surface: str) -> dict[str, str]:
+        return {_TOOL: status}
+
+    return dump
+
+
+def _empty_dump(_surface: str) -> dict[str, str]:
+    """A classifier stand-in that resolves nothing on any surface."""
+    return {}
+
 
 # The baselines these gates used to carry. Nothing reads them now, so a file
 # reappearing here means someone recorded a finding instead of fixing it.
@@ -99,41 +115,66 @@ def test_report_names_every_finding_and_fails(
     assert "fix them" in printed
 
 
-@pytest.mark.parametrize(("script", "done"), _PROTO_GATES)
-def test_proto_gate_fails_on_a_straggler(
-    script: str, done: str, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(("surface", "done"), _FORM_SURFACES)
+def test_generated_form_fails_on_a_straggler(
+    surface: str, done: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """One side hand-written is the whole point of these four gates."""
-    gate = _load_script(script)
-    monkeypatch.setattr(gate, "_dump_go", lambda: {_TOOL: done})
-    monkeypatch.setattr(gate, "_dump_python", lambda: {_TOOL: "legacy"})
+    """One side hand-written is the whole point of the merged gate."""
+    gate = _load_script("verify_generated_form")
+    monkeypatch.setattr(gate, "_dump_go", _fixed_dump(done))
+    monkeypatch.setattr(gate, "_dump_python", _fixed_dump("legacy"))
 
-    assert gate.main() == 1
+    assert gate.check_surface(surface) == 1
 
 
-@pytest.mark.parametrize(("script", "done"), _PROTO_GATES)
-def test_proto_gate_passes_when_both_sides_are_generated(
-    script: str, done: str, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(("surface", "done"), _FORM_SURFACES)
+def test_generated_form_passes_when_both_sides_are_generated(
+    surface: str, done: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The converted state is the one that must stay green."""
-    gate = _load_script(script)
-    monkeypatch.setattr(gate, "_dump_go", lambda: {_TOOL: done})
-    monkeypatch.setattr(gate, "_dump_python", lambda: {_TOOL: done})
+    gate = _load_script("verify_generated_form")
+    monkeypatch.setattr(gate, "_dump_go", _fixed_dump(done))
+    monkeypatch.setattr(gate, "_dump_python", _fixed_dump(done))
 
-    assert gate.main() == 0
+    assert gate.check_surface(surface) == 0
 
 
-@pytest.mark.parametrize(("script", "done"), _PROTO_GATES)
-def test_proto_gate_fails_when_a_classifier_resolves_nothing(
-    script: str, done: str, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(("surface", "done"), _FORM_SURFACES)
+def test_generated_form_fails_when_a_classifier_resolves_nothing(
+    surface: str, done: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A classifier that stops finding handlers must not read as converted."""
-    gate = _load_script(script)
-    monkeypatch.setattr(gate, "_dump_go", dict)
-    monkeypatch.setattr(gate, "_dump_python", lambda: {_TOOL: done})
+    gate = _load_script("verify_generated_form")
+    monkeypatch.setattr(gate, "_dump_go", _empty_dump)
+    monkeypatch.setattr(gate, "_dump_python", _fixed_dump(done))
 
     with pytest.raises(SystemExit, match="covered nothing"):
-        gate.main()
+        gate.check_surface(surface)
+
+
+def test_generated_form_main_walks_every_surface_and_the_fixtures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A green main means all four surfaces and the fixture check ran.
+
+    The fixture half runs against the real proto tree, so this also pins that
+    every checked-in *WriteResponse is registered in the conformance corpus.
+    """
+    gate = _load_script("verify_generated_form")
+    seen: list[str] = []
+
+    def go_dump(surface: str) -> dict[str, str]:
+        seen.append(surface)
+        return {_TOOL: str(gate._SURFACES[surface][0])}
+
+    def py_dump(surface: str) -> dict[str, str]:
+        return {_TOOL: str(gate._SURFACES[surface][0])}
+
+    monkeypatch.setattr(gate, "_dump_go", go_dump)
+    monkeypatch.setattr(gate, "_dump_python", py_dump)
+
+    assert gate.main() == 0
+    assert seen == ["write", "read", "meta", "input"]
 
 
 def _messages_gate(
@@ -203,7 +244,13 @@ def test_parity_todo_names_every_hard_gate() -> None:
     report = _load_script("parity_todo")
     named = " ".join(gate for gate, _ in report._HARD_GATES)
 
-    for gate in ("write-proto", "behavior", "messages", "pagination", "route-evidence"):
+    for gate in (
+        "generated-form",
+        "behavior",
+        "messages",
+        "pagination",
+        "route-evidence",
+    ):
         assert gate in named
 
 

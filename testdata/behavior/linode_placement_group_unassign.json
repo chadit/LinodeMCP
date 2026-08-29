@@ -4,36 +4,126 @@
   "cases": [
     {
       "name": "unassigns Linodes from a placement group",
-      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
-      "api_response": { "id": 123, "label": "my-group" },
+      "args": {
+        "confirm": true,
+        "group_id": 123,
+        "linodes": [
+          456
+        ]
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-group"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/placement/groups/123/unassign",
-        "body": { "linodes": [456] }
+        "body": {
+          "linodes": [
+            456
+          ]
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"group_id": 123, "linodes": [456]},
+      "args": {
+        "group_id": 123,
+        "linodes": [
+          456
+        ]
+      },
       "expect_error": "This unassigns Linodes from a placement group. Set confirm=true to proceed."
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
+      "args": {
+        "confirm": true,
+        "group_id": 123,
+        "linodes": [
+          456
+        ]
+      },
       "api_response": 7,
       "expect_api_error": "Failed to unassign"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
+      "args": {
+        "confirm": true,
+        "group_id": 123,
+        "linodes": [
+          456
+        ]
+      },
       "api_response": true,
       "expect_api_error": "Failed to unassign"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
-      "api_response": [1, 2],
+      "args": {
+        "confirm": true,
+        "group_id": 123,
+        "linodes": [
+          456
+        ]
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to unassign"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "group_id": 123,
+        "linodes": [
+          456,
+          789
+        ],
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /placement/groups/123": {
+          "id": 123,
+          "label": "my-group",
+          "region": "us-east",
+          "placement_group_type": "",
+          "placement_group_policy": "",
+          "is_compliant": false,
+          "members": []
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_placement_group_unassign",
+        "would_execute": {
+          "method": "POST",
+          "path": "/placement/groups/123/unassign",
+          "body": {
+            "linodes": [
+              456,
+              789
+            ]
+          }
+        },
+        "current_state": {
+          "id": 123,
+          "label": "my-group",
+          "region": "us-east",
+          "placement_group_type": "",
+          "placement_group_policy": "",
+          "is_compliant": false,
+          "members": []
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Linode 456 will be removed from placement group 123.",
+          "Linode 789 will be removed from placement group 123."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

@@ -669,9 +669,9 @@ func TestLKENodePoolProtoCanonicalOutput(t *testing.T) {
 			`"nodes":[{"id":"node-123","instance_id":111,"status":"ready"}],`+
 			`"tags":["prod"]}`)
 
-		disks, isArray := out["disks"].([]any)
+		disks, isArray := out[memberDisks].([]any)
 		if !isArray || len(disks) != 1 {
-			t.Fatalf("disks not a 1-element array: %v", out["disks"])
+			t.Fatalf("disks not a 1-element array: %v", out[memberDisks])
 		}
 
 		autoscaler, isObject := out["autoscaler"].(map[string]any)
@@ -691,7 +691,7 @@ func TestLKENodePoolProtoCanonicalOutput(t *testing.T) {
 			t.Error("autoscaler must be omitted when unset (proto message presence)")
 		}
 
-		for _, key := range []string{"disks", "nodes", "tags"} {
+		for _, key := range []string{memberDisks, "nodes", "tags"} {
 			list, isArray := out[key].([]any)
 			if !isArray || len(list) != 0 {
 				t.Errorf("%s must be an empty array, got %v", key, out[key])

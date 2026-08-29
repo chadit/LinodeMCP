@@ -7,9 +7,9 @@ import (
 )
 
 // TestExportedSpellsInitialisms covers the reason this table is shared: the
-// emitter writes a call to a name this renders and toolhooks derives the name
-// it must implement from the same call, so a word rendered two ways is a call
-// to a function nobody wrote.
+// emitter writes the factory name, the handler name and every call between them
+// through it, so a word rendered two ways is a call to a function nobody
+// wrote.
 func TestExportedSpellsInitialisms(t *testing.T) {
 	t.Parallel()
 

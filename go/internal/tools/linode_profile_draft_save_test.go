@@ -17,7 +17,6 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -312,7 +311,7 @@ func TestSaveRefusesBuiltinName(t *testing.T) {
 
 	t.Setenv(configPathEnv, path)
 
-	wantAnswerRefusal(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
+	wantBuilderRefusal(t, draftState(reg), saveHandler(), map[string]any{
 		keyName:    profiles.BuiltinComputeAdmin,
 		keyConfirm: true,
 	}, "cannot save over built-in profile name: compute-admin")
@@ -326,7 +325,7 @@ func TestSaveRefusesUnknownDraft(t *testing.T) {
 
 	t.Setenv(configPathEnv, path)
 
-	wantAnswerRefusal(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
+	wantBuilderRefusal(t, draftState(reg), saveHandler(), map[string]any{
 		keyName:    draftNonexistent,
 		keyConfirm: true,
 	}, "draft not found: nonexistent-draft")
@@ -336,7 +335,7 @@ func TestSaveRefusesUnknownDraft(t *testing.T) {
 func TestSaveRefusesMissingName(t *testing.T) {
 	t.Parallel()
 
-	wantAnswerRefusal(t, draftState(builder.NewRegistry()), tools.ProfileDraftSaveAnswer, nil,
+	wantBuilderRefusal(t, draftState(builder.NewRegistry()), saveHandler(),
 		map[string]any{keyConfirm: true}, wantDraftNameMissing)
 }
 
@@ -413,7 +412,7 @@ func TestSaveReportsLoadFailure(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	refusal := refusalText(t, callAnswer(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
+	refusal := refusalText(t, callBuilder(t, draftState(reg), saveHandler(), map[string]any{
 		keyName:    saveDraftName,
 		keyConfirm: true,
 	}))
@@ -483,7 +482,7 @@ func TestSaveReportsWriteFailure(t *testing.T) {
 
 	t.Setenv(configPathEnv, path)
 
-	refusal := refusalText(t, callAnswer(t, draftState(reg), tools.ProfileDraftSaveAnswer, nil, map[string]any{
+	refusal := refusalText(t, callBuilder(t, draftState(reg), saveHandler(), map[string]any{
 		keyName:    saveDraftName,
 		keyConfirm: true,
 	}))

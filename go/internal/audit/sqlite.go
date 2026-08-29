@@ -124,10 +124,10 @@ func (s *SQLiteSink) Write(ctx context.Context, event *Event) {
 	if _, err := s.db.ExecContext(
 		ctx,
 		insertEvent,
-		event.EventID, event.TSUnixNS, event.Tool, string(event.ToolCapability),
-		event.Environment, event.Profile, string(event.Mode), nullableString(event.PlanID),
-		string(event.Status), event.LatencyMS, event.ResultSummary, nullableString(event.Error),
-		event.LinodemcpVersion, event.SessionID, event.CredentialGeneration,
+		event.EventId, event.TsUnixNs, event.Tool, event.ToolCapability,
+		event.Environment, event.Profile, event.Mode, nullableString(event.PlanId),
+		event.Status, event.LatencyMs, event.ResultSummary, nullableString(event.Error),
+		event.LinodemcpVersion, event.SessionId, event.CredentialGeneration,
 		string(argsJSON), string(redactedJSON),
 	); err != nil {
 		s.onWriteErr(fmt.Errorf("audit: sqlite insert: %w", err))

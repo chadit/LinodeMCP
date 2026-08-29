@@ -40,26 +40,111 @@
     },
     {
       "name": "requires confirm",
-      "args": {"ssh_key_id": 123, "label": "renamed-key"},
+      "args": {
+        "ssh_key_id": 123,
+        "label": "renamed-key"
+      },
       "expect_error": "This updates an SSH key in your Linode profile. Set confirm=true to proceed."
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "ssh_key_id": 123, "label": "renamed-key", "confirm": true },
+      "args": {
+        "ssh_key_id": 123,
+        "label": "renamed-key",
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "SSH key"
     },
     {
       "name": "rejects malformed success body",
-      "args": { "ssh_key_id": 123, "label": "renamed-key", "confirm": true },
+      "args": {
+        "ssh_key_id": 123,
+        "label": "renamed-key",
+        "confirm": true
+      },
       "api_response_raw": "not json",
       "expect_api_error": "line 1"
     },
     {
       "name": "rejects empty success body",
-      "args": { "ssh_key_id": 123, "label": "renamed-key", "confirm": true },
+      "args": {
+        "ssh_key_id": 123,
+        "label": "renamed-key",
+        "confirm": true
+      },
       "api_response_raw": "",
       "expect_api_error": "line 1"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "ssh_key_id": 9,
+        "label": "renamed-key",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /profile/sshkeys/9": {
+          "id": 9,
+          "label": "laptop",
+          "ssh_key": "ssh-rsa AAAA",
+          "created": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_sshkey_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/profile/sshkeys/9"
+        },
+        "current_state": {
+          "id": 9,
+          "label": "laptop",
+          "ssh_key": "ssh-rsa AAAA",
+          "created": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Label changes from \"laptop\" to \"renamed-key\"."
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "dry_run_preview_label_already_matches",
+      "args": {
+        "ssh_key_id": 9,
+        "label": "laptop",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /profile/sshkeys/9": {
+          "id": 9,
+          "label": "laptop",
+          "ssh_key": "ssh-rsa AAAA",
+          "created": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_sshkey_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/profile/sshkeys/9"
+        },
+        "current_state": {
+          "id": 9,
+          "label": "laptop",
+          "ssh_key": "ssh-rsa AAAA",
+          "created": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Label is set to \"laptop\"."
+        ],
+        "warnings": []
+      }
     }
   ]
 }

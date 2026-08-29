@@ -3,7 +3,6 @@ package audit
 import (
 	"bufio"
 	"compress/gzip"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +12,8 @@ import (
 	"slices"
 	"sort"
 	"time"
+
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
 
 // DefaultRecentLimit is the default number of events returned by a
@@ -51,7 +52,7 @@ type RecentQuery struct {
 // returned error covers a directory that exists but can't be listed
 // and a file that fails mid-read (truncation would silently drop
 // events).
-func ReadRecent(dir string, query *RecentQuery) ([]Event, error) {
+func ReadRecent(dir string, query *RecentQuery) ([]*Event, error) {
 	limit := query.Limit
 	if limit <= 0 {
 		limit = DefaultRecentLimit
@@ -68,11 +69,11 @@ func ReadRecent(dir string, query *RecentQuery) ([]Event, error) {
 // limit events matching the query. Shared by ReadRecent (which clamps
 // limit to MaxRecentLimit) and the export loader (which allows the
 // larger max_records cap). A missing directory is an empty result.
-func scanMatching(dir string, query *RecentQuery, limit int) ([]Event, error) {
+func scanMatching(dir string, query *RecentQuery, limit int) ([]*Event, error) {
 	root, err := openReadRoot(dir)
 	if err != nil {
 		if errors.Is(err, errAuditDirMissing) {
-			return []Event{}, nil
+			return []*Event{}, nil
 		}
 
 		return nil, err
@@ -85,7 +86,7 @@ func scanMatching(dir string, query *RecentQuery, limit int) ([]Event, error) {
 		return nil, fmt.Errorf("audit: list audit dir %s: %w", dir, err)
 	}
 
-	results := make([]Event, 0, limit)
+	results := make([]*Event, 0, limit)
 
 	for _, name := range files {
 		events, err := readEventsFromFile(root, name)
@@ -97,7 +98,7 @@ func scanMatching(dir string, query *RecentQuery, limit int) ([]Event, error) {
 		// backwards so the accumulator stays newest-first across the
 		// date-descending file order.
 		for i := range slices.Backward(events) {
-			if !query.matches(&events[i]) {
+			if !query.matches(events[i]) {
 				continue
 			}
 
@@ -113,8 +114,12 @@ func scanMatching(dir string, query *RecentQuery, limit int) ([]Event, error) {
 
 // matches reports whether an event satisfies every set filter in the
 // query. Meta events are excluded unless IncludeMeta is set.
+//
+// The two bounds read the record's own nanosecond count rather than parsing
+// its timestamp text, which is the column the SQLite reader already bounds on,
+// so one window means one thing whichever store answered it.
 func (q *RecentQuery) matches(event *Event) bool {
-	if !q.IncludeMeta && event.ToolCapability == CapabilityMeta {
+	if !q.IncludeMeta && event.ToolCapability == string(CapabilityMeta) {
 		return false
 	}
 
@@ -125,19 +130,19 @@ func (q *RecentQuery) matches(event *Event) bool {
 		}
 	}
 
-	if q.Capability != "" && event.ToolCapability != q.Capability {
+	if q.Capability != "" && event.ToolCapability != string(q.Capability) {
 		return false
 	}
 
-	if q.Status != "" && event.Status != q.Status {
+	if q.Status != "" && event.Status != string(q.Status) {
 		return false
 	}
 
-	if !q.Since.IsZero() && event.TS.Before(q.Since) {
+	if !q.Since.IsZero() && event.TsUnixNs < q.Since.UnixNano() {
 		return false
 	}
 
-	if !q.Until.IsZero() && event.TS.After(q.Until) {
+	if !q.Until.IsZero() && event.TsUnixNs > q.Until.UnixNano() {
 		return false
 	}
 
@@ -222,7 +227,7 @@ type rotatedFile struct {
 // scan skips the file) and undecodable lines are skipped individually,
 // but a read failure mid-file returns an error so a truncated scan is
 // never mistaken for a complete one.
-func readEventsFromFile(root *os.Root, name string) ([]Event, error) {
+func readEventsFromFile(root *os.Root, name string) ([]*Event, error) {
 	file, err := root.Open(name)
 	if err != nil {
 		return nil, nil
@@ -243,7 +248,7 @@ func readEventsFromFile(root *os.Root, name string) ([]Event, error) {
 		reader = gzReader
 	}
 
-	var events []Event
+	var events []*Event
 
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 0, bufScanInitial), bufScanMax)
@@ -254,8 +259,8 @@ func readEventsFromFile(root *os.Root, name string) ([]Event, error) {
 			continue
 		}
 
-		var event Event
-		if err := json.Unmarshal(line, &event); err != nil {
+		event, err := genlocal.AuditEventFromRecord(line)
+		if err != nil {
 			continue
 		}
 

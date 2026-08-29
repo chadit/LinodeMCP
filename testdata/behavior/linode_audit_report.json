@@ -1,0 +1,394 @@
+{
+  "tool": "linode_audit_report",
+  "description": "CapMeta named-report runner (no Linode API call). The report is declared in the case's config overlay and the events come from the seeded audit_store. The summary case sets now, which is the clock its relative since_offset window is measured back from; the list case bounds the window absolutely, so it reads the wall clock and never uses it. Without the overlay, the store and the clock the answer moves with the host's own audit log. The SQLite case seeds only the database, so the same event coming back proves the report read the store the config named rather than the log beside it. The bad-column case declares a report grouping on a column the summary vocabulary does not carry: that whole sentence is declared on AuditReportInput, so one contract edit moves both languages at once.",
+  "cases": [
+    {
+      "name": "refuses a name no report declares",
+      "args": {
+        "name": "no-such-report"
+      },
+      "expect_error": "unknown report: \"no-such-report\""
+    },
+    {
+      "name": "runs a relative-window summary report",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "now": "2026-05-19T13:00:00Z",
+      "config": {
+        "audit": {
+          "reports": {
+            "recent-writes": {
+              "description": "writes in the last two hours",
+              "output": "summary",
+              "group_by": [
+                "status"
+              ],
+              "filter": {
+                "since_offset": "2h"
+              }
+            }
+          }
+        }
+      },
+      "args": {
+        "name": "recent-writes"
+      },
+      "expect_result": {
+        "name": "recent-writes",
+        "output": "summary",
+        "total_events": 2,
+        "rows": [
+          {
+            "groups": {
+              "status": "error"
+            },
+            "count": 1
+          },
+          {
+            "groups": {
+              "status": "success"
+            },
+            "count": 1
+          }
+        ],
+        "events": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "runs an absolute-window list report under its limit",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "config": {
+        "audit": {
+          "reports": {
+            "since-noon": {
+              "description": "events from 10:30 on, newest first",
+              "output": "list",
+              "limit": 1,
+              "filter": {
+                "since": "2026-05-19T10:30:00Z"
+              }
+            }
+          }
+        }
+      },
+      "args": {
+        "name": "since-noon"
+      },
+      "expect_result": {
+        "name": "since-noon",
+        "output": "list",
+        "total_events": 1,
+        "rows": [],
+        "events": [
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "runs the same list report against the sqlite store",
+      "audit_store": {
+        "backend": "sqlite",
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "config": {
+        "audit": {
+          "reports": {
+            "since-noon": {
+              "description": "events from 10:30 on, newest first",
+              "output": "list",
+              "limit": 1,
+              "filter": {
+                "since": "2026-05-19T10:30:00Z"
+              }
+            }
+          }
+        }
+      },
+      "args": {
+        "name": "since-noon"
+      },
+      "expect_result": {
+        "name": "since-noon",
+        "output": "list",
+        "total_events": 1,
+        "rows": [],
+        "events": [
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "refuses a report grouping on a column the vocabulary does not carry",
+      "audit_store": {
+        "events": []
+      },
+      "config": {
+        "audit": {
+          "reports": {
+            "bad-column": {
+              "description": "grouped on a column the vocabulary does not carry",
+              "output": "summary",
+              "group_by": [
+                "nonsense"
+              ],
+              "filter": {
+                "since": "2026-05-19T09:00:00Z"
+              }
+            }
+          }
+        }
+      },
+      "args": {
+        "name": "bad-column"
+      },
+      "expect_error": "failed to run report: validate report group_by: audit: unknown group_by column: \"nonsense\""
+    }
+  ]
+}

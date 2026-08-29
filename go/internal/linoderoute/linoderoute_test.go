@@ -2,6 +2,7 @@ package linoderoute_test
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -177,6 +178,27 @@ func TestEndpointFillsSlotsInOrder(t *testing.T) {
 	}
 
 	got, err := route.Endpoint(4242, 8615)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	const want = "/images/sharegroups/4242/images/8615"
+	if got != want {
+		t.Errorf("Endpoint() = %v, want %v", got, want)
+	}
+}
+
+// TestEndpointRendersADeclaredStateNumber pins the json.Number form, which is
+// how a walk enrichment fills its slot straight off the fetched state.
+func TestEndpointRendersADeclaredStateNumber(t *testing.T) {
+	t.Parallel()
+
+	route, err := linoderoute.For("linode_image_sharegroup_image_delete")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := route.Endpoint(json.Number("4242"), json.Number("8615"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

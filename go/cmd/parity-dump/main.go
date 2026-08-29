@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
@@ -29,10 +29,10 @@ type toolDump struct {
 	Capability string            `json:"capability"`
 	Params     map[string]string `json:"params"`
 	Required   []string          `json:"required"`
-	// Scopes is what profiles.RequiredScopes returns for the tool at its
-	// registered capability: the OAuth scope strings the active token must
-	// carry. Scope enforcement is per-language hand-written mapping code,
-	// so without this field a one-sided scope change passes every gate.
+	// Scopes is the tool's declared OAuth scope strings from the generated
+	// registry table: what the active token must carry. The declaration is
+	// rendered per language, so without this field a one-sided rendering
+	// change passes every gate.
 	Scopes []string `json:"scopes"`
 }
 
@@ -76,12 +76,11 @@ func main() {
 		params, required := schemaParams(&info)
 		sort.Strings(required)
 
-		requiredScopes := profiles.RequiredScopes(info.Name, info.Capability)
+		declaredScopes := gentools.ScopesFor(info.Name)
 
-		scopes := make([]string, 0, len(requiredScopes))
-		for _, scope := range requiredScopes {
-			scopes = append(scopes, string(scope))
-		}
+		// Copied before sorting: ScopesFor answers the registry's own slice.
+		scopes := make([]string, 0, len(declaredScopes))
+		scopes = append(scopes, declaredScopes...)
 
 		sort.Strings(scopes)
 

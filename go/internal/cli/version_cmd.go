@@ -9,11 +9,11 @@ import (
 )
 
 // RunVersionCommand prints the build and version metadata as JSON and
-// returns 0. It serializes the same VersionResponse proto the `version` MCP
-// tool returns, so the CLI subcommand and the tool emit identical bytes.
+// returns 0. It serializes the same body the `version` MCP tool answers from,
+// so the CLI subcommand and the tool emit identical bytes.
 // Output stream is a parameter for tests.
 func RunVersionCommand(stdout, stderr io.Writer) int {
-	body, err := tools.MarshalProtoJSON(tools.VersionResponseProto())
+	body, err := tools.VersionResponseJSON()
 	if err != nil {
 		writef(stderr, "marshal version info: %v\n", err)
 

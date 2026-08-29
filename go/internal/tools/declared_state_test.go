@@ -263,7 +263,7 @@ func TestDeclaredStateOfRefusesWhatNoDeclaredFetchProduced(t *testing.T) {
 
 	for name, state := range map[string]any{
 		"a typed resource": &linodev1.Volume{Id: 333},
-		"a bare map":       map[string]any{"id": 333},
+		"a bare map":       map[string]any{keySupportTicketID: 333},
 		"nothing at all":   nil,
 	} {
 		t.Run(name, func(t *testing.T) {

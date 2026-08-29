@@ -493,7 +493,7 @@ func RunProfileDelete(args []string, configPath string, stdout, stderr io.Writer
 	return writeAndReport(path, cfg, stdout, stderr, "profile "+name+" deleted")
 }
 
-// isBuiltinName reports whether name matches any of the eight
+// isBuiltinName reports whether name matches any of the nine
 // built-in profile names. Used by enable/disable to refuse to operate
 // on user-defined profiles where the override map has no effect.
 func isBuiltinName(name string) bool {
@@ -504,6 +504,7 @@ func isBuiltinName(name string) bool {
 		profiles.BuiltinNetworkAdmin,
 		profiles.BuiltinKubernetesAdmin,
 		profiles.BuiltinStorageAdmin,
+		profiles.BuiltinIamAdmin,
 		profiles.BuiltinFullAccess,
 		profiles.BuiltinEmergency:
 		return true

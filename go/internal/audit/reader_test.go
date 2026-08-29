@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
+	"github.com/chadit/LinodeMCP/go/internal/genlocal"
 )
 
 // testYear is the fixed year for reader test timestamps. Extracted so
@@ -21,28 +22,31 @@ import (
 const testYear = 2026
 
 // makeTestEvent builds an event with just the fields the reader tests
-// filter on. The rest stay zero; MarshalJSON normalizes nil maps and
+// filter on. The rest stay zero; the record writer normalizes nil maps and
 // slices so the lines round-trip.
 func makeTestEvent(
 	tool string,
 	capability audit.Capability,
 	status audit.Status,
 	timestamp time.Time,
-) audit.Event {
-	return audit.Event{
-		TS:             timestamp,
-		TSUnixNS:       timestamp.UnixNano(),
-		EventID:        "evt_" + tool,
+) *audit.Event {
+	return &audit.Event{
+		Ts:             audit.EventTimestamp(timestamp),
+		TsUnixNs:       timestamp.UnixNano(),
+		EventId:        "evt_" + tool,
 		Tool:           tool,
-		ToolCapability: capability,
-		Status:         status,
+		ToolCapability: string(capability),
+		Status:         string(status),
 	}
 }
 
-// writeJSONLFile writes events as one JSON line each, oldest-first
-// (the append order the sink produces). gzipped controls whether the
-// file is gzip-compressed like a rotated log.
-func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Event) {
+// writeJSONLFile writes events as one record per line, oldest-first (the
+// append order the sink produces). gzipped controls whether the file is
+// gzip-compressed like a rotated log.
+//
+// The lines go through the package's own NDJSON encoder rather than through a
+// second spelling, so a fixture log carries the format the sink writes.
+func writeJSONLFile(t *testing.T, path string, gzipped bool, events []*audit.Event) {
 	t.Helper()
 
 	file, err := os.Create(path)
@@ -52,7 +56,7 @@ func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Even
 
 	defer func() { _ = file.Close() }()
 
-	encoder := json.NewEncoder(file)
+	var out io.Writer = file
 
 	if gzipped {
 		gzWriter := gzip.NewWriter(file)
@@ -63,13 +67,11 @@ func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Even
 			}
 		}()
 
-		encoder = json.NewEncoder(gzWriter)
+		out = gzWriter
 	}
 
-	for i := range events {
-		if err := encoder.Encode(&events[i]); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+	if err := audit.EncodeEvents(out, events, audit.ExportFormatNDJSON); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -82,13 +84,13 @@ func TestReadRecentNewestFirstAcrossFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	// Rotated (older) day, gzipped, two events oldest-first.
-	writeJSONLFile(t, filepath.Join(dir, "audit-2026-05-18.log.gz"), true, []audit.Event{
+	writeJSONLFile(t, filepath.Join(dir, "audit-2026-05-18.log.gz"), true, []*audit.Event{
 		makeTestEvent("tool_a", audit.CapabilityRead, audit.StatusSuccess, day(18, 8)),
 		makeTestEvent("tool_b", audit.CapabilityRead, audit.StatusSuccess, day(18, 9)),
 	})
 
 	// Active log (today), two events oldest-first.
-	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []audit.Event{
+	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []*audit.Event{
 		makeTestEvent("tool_c", audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
 		makeTestEvent("tool_d", audit.CapabilityRead, audit.StatusSuccess, day(19, 9)),
 	})
@@ -115,7 +117,7 @@ func TestReadRecentLimitClamp(t *testing.T) {
 
 	dir := t.TempDir()
 
-	events := make([]audit.Event, 0, 50)
+	events := make([]*audit.Event, 0, 50)
 
 	for i := range 50 {
 		ts := day(19, 0).Add(time.Duration(i) * time.Minute)
@@ -133,8 +135,9 @@ func TestReadRecentLimitClamp(t *testing.T) {
 		t.Errorf("len(got) = %d, want %d", len(got), 10)
 	}
 
-	if got[0].TS.Unix() != day(19, 0).Add(49*time.Minute).Unix() {
-		t.Errorf("got[0].TS.Unix() = %v, want %v", got[0].TS.Unix(), day(19, 0).Add(49*time.Minute).Unix())
+	if got[0].TsUnixNs != day(19, 0).Add(49*time.Minute).UnixNano() {
+		t.Errorf("got[0].TsUnixNs = %v, want %v",
+			got[0].TsUnixNs, day(19, 0).Add(49*time.Minute).UnixNano())
 	}
 
 	defaulted, err := audit.ReadRecent(dir, &audit.RecentQuery{Limit: 0})
@@ -153,7 +156,7 @@ func readRecentFilterFixture(t *testing.T) string {
 
 	dir := t.TempDir()
 
-	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []audit.Event{
+	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []*audit.Event{
 		makeTestEvent("linode_instance_list", audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
 		makeTestEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusError, day(19, 9)),
 		makeTestEvent("linode_audit_recent", audit.CapabilityMeta, audit.StatusSuccess, day(19, 10)),
@@ -177,7 +180,7 @@ func TestReadRecentFilters(t *testing.T) {
 		}
 
 		for i := range got {
-			if got[i].ToolCapability == audit.CapabilityMeta {
+			if got[i].ToolCapability == string(audit.CapabilityMeta) {
 				t.Errorf("got[i].ToolCapability = %v, do not want %v", got[i].ToolCapability, audit.CapabilityMeta)
 			}
 		}
@@ -248,7 +251,7 @@ func TestReadRecentFiltersByField(t *testing.T) {
 			t.Fatalf("len(got) = %d, want %d", len(got), 1)
 		}
 
-		if got[0].Status != audit.StatusError {
+		if got[0].Status != string(audit.StatusError) {
 			t.Errorf("got[0].Status = %v, want %v", got[0].Status, audit.StatusError)
 		}
 	})
@@ -298,7 +301,7 @@ func TestReadRecentSkipsCorruptLines(t *testing.T) {
 
 	good := makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8))
 
-	line, err := json.Marshal(&good)
+	line, err := genlocal.RecordAuditEvent(good, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -329,7 +332,7 @@ func TestReadRecentSkipsUnopenableFile(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	writeJSONLFile(t, filepath.Join(dir, audit.ActiveLogFileName), false, []audit.Event{
+	writeJSONLFile(t, filepath.Join(dir, audit.ActiveLogFileName), false, []*audit.Event{
 		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
 	})
 
@@ -356,7 +359,7 @@ func TestReadRecentSkipsCorruptGzipHeader(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	writeJSONLFile(t, filepath.Join(dir, audit.ActiveLogFileName), false, []audit.Event{
+	writeJSONLFile(t, filepath.Join(dir, audit.ActiveLogFileName), false, []*audit.Event{
 		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
 	})
 

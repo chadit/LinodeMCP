@@ -1,8 +1,10 @@
 """The hand-validator ratchet counts every non-CEL check, wherever it lives.
 
-Hook functions and validators still inside hand-written handlers are one
-population: extracting a handler validator into a hook must hold the count
-flat, or migration reads as growth and the gate blocks the work it measures.
+An argument check is named after what it CHECKS, so no tool name appears in it.
+That is why this gate exists beside `make hand-code`, which fails by name on a
+function named after a TOOL and cannot see this population at all. The last test
+here holds the two gates against one planted check and pins that split, because
+it is the only reason two contract files are worth keeping.
 """
 
 from __future__ import annotations
@@ -39,90 +41,57 @@ def _write(root: Path, relative: str, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def _counted(tmp_path: Path, hook_src: str, hand_src: str) -> int:
-    """The go count over a fabricated pair of trees."""
-    _write(tmp_path, "go/internal/toolhooks/h.go", hook_src)
-    _write(tmp_path, "go/internal/tools/t.go", hand_src)
-    hooks = gate.Tree(
-        root="go/internal/toolhooks",
-        suffix=".go",
-        definition=gate._TREES["go"].definition,
-    )
-    hand = gate.Tree(
-        root="go/internal/tools",
-        suffix=".go",
-        definition=gate._HAND_TREES["go"].definition,
-    )
+def _rooted(tmp_path: Path, tree: Any) -> list[str]:
+    """The sites one tree yields with the repo root pointed at a fabrication."""
     swap: Any = gate
     original = swap._REPO_ROOT
     swap._REPO_ROOT = tmp_path
     try:
-        return len(gate.implemented(hooks)) + len(gate.hand_written(hand))
+        found: list[str] = gate.hand_written(tree)
     finally:
         swap._REPO_ROOT = original
 
+    return found
 
-def _python_hand_count(tmp_path: Path, files: dict[str, str]) -> int:
-    """The python handler-tree count over a fabricated tree."""
+
+def _go_count(tmp_path: Path, source: str) -> int:
+    """The go count over a fabricated hand-written tree."""
+    _write(tmp_path, "go/internal/tools/t.go", source)
+
+    return len(_rooted(tmp_path, gate._TREES["go"]))
+
+
+def _python_count(tmp_path: Path, files: dict[str, str]) -> int:
+    """The python count over a fabricated hand-written tree."""
     for relative, text in files.items():
         _write(tmp_path, f"python/src/linodemcp/tools/{relative}", text)
-    tree = gate.Tree(
-        root="python/src/linodemcp/tools",
-        suffix=".py",
-        definition=gate._HAND_TREES["python"].definition,
-    )
-    swap: Any = gate
-    original = swap._REPO_ROOT
-    swap._REPO_ROOT = tmp_path
-    try:
-        return len(gate.hand_written(tree))
-    finally:
-        swap._REPO_ROOT = original
+
+    return len(_rooted(tmp_path, gate._TREES["python"]))
 
 
-def test_both_populations_are_counted(tmp_path: Path) -> None:
-    """A hook function and a handler validator are one check each."""
-    count = _counted(
-        tmp_path,
-        'func LinodeDomainGetValidate(a map[string]any) string { return "" }\n',
-        'func validateDomainCreate(a map[string]any) string { return "" }\n',
+def test_a_hand_written_check_is_counted(tmp_path: Path) -> None:
+    """One check written out in a handler is one unit of the debt."""
+    count = _go_count(
+        tmp_path, 'func validateDomainCreate(a map[string]any) string { return "" }\n'
     )
 
-    assert count == 2
-
-
-def test_extraction_is_count_neutral(tmp_path: Path) -> None:
-    """Moving a validator from a handler into a hook holds the total flat."""
-    before = _counted(
-        tmp_path,
-        "",
-        'func validateDomainCreate(a map[string]any) string { return "" }\n',
-    )
-    extracted = _counted(
-        tmp_path,
-        'func LinodeDomainCreateValidate(a map[string]any) string { return "" }\n',
-        "",
-    )
-
-    assert before == 1
-    assert extracted == 1
+    assert count == 1
 
 
 def test_test_files_are_not_counted(tmp_path: Path) -> None:
-    """A table test naming hook shapes is not a second implementation."""
+    """A table test naming a check shape is not a second implementation."""
     _write(
         tmp_path,
         "go/internal/tools/t_test.go",
         'func validatePhantom(a map[string]any) string { return "" }\n',
     )
-    count = _counted(tmp_path, "", "")
 
-    assert count == 0
+    assert _go_count(tmp_path, "package tools\n") == 0
 
 
 def test_parse_and_validate_helpers_count(tmp_path: Path) -> None:
     """Every spelling python gives an argument check is one check."""
-    count = _python_hand_count(
+    count = _python_count(
         tmp_path,
         {
             "a.py": (
@@ -142,7 +111,7 @@ def test_parse_and_validate_helpers_count(tmp_path: Path) -> None:
 
 def test_response_decoders_are_not_argument_checks(tmp_path: Path) -> None:
     """A helper that shapes a response body is not a hand-written check."""
-    count = _python_hand_count(
+    count = _python_count(
         tmp_path,
         {
             "a.py": (
@@ -159,16 +128,15 @@ def test_response_decoders_are_not_argument_checks(tmp_path: Path) -> None:
 def test_repeated_copies_each_count(tmp_path: Path) -> None:
     """Two files spelling out the same check are two copies of it."""
     body = "def _parse_instance_id(arguments: dict) -> int:\n    return 1\n"
-    count = _python_hand_count(tmp_path, {"a.py": body, "b.py": body})
+    count = _python_count(tmp_path, {"a.py": body, "b.py": body})
 
     assert count == 2
 
 
 def test_go_parse_and_validate_helpers_count(tmp_path: Path) -> None:
-    """Go's handler tree spells the same check three ways, and all count."""
-    count = _counted(
+    """Go's hand-written tree spells the same check three ways, and all count."""
+    count = _go_count(
         tmp_path,
-        "",
         'func validateDomainCreate(a map[string]any) string { return "" }\n\n'
         'func parseConfigDevices(raw any) (any, string) { return nil, "" }\n\n'
         "func domainIDFromTool(r *mcp.CallToolRequest) (int, string) "
@@ -180,9 +148,8 @@ def test_go_parse_and_validate_helpers_count(tmp_path: Path) -> None:
 
 def test_go_handlers_are_not_argument_checks(tmp_path: Path) -> None:
     """Ordinary handler and client functions are not hand-written checks."""
-    count = _counted(
+    count = _go_count(
         tmp_path,
-        "",
         "func handleLinodeDomainCreateRequest(a map[string]any) error "
         "{ return nil }\n\n"
         "func httpCreateDomain(a map[string]any) error { return nil }\n\n"
@@ -194,15 +161,27 @@ def test_go_handlers_are_not_argument_checks(tmp_path: Path) -> None:
 
 def test_direction_failures_name_both_sides() -> None:
     """Above and below the recorded line both fail, naming the movement."""
-    above = gate.compare({"go": 5}, {"go": 4})
+    sites = {"go": ["go/internal/tools/t.go:validateDomainCreate"]}
+
+    above = gate.compare({"go": 5}, {"go": 4}, sites)
     assert above
-    assert "go" in above[0]
+    assert "up from" in above[0]
 
-    below = gate.compare({"go": 3}, {"go": 4})
+    below = gate.compare({"go": 3}, {"go": 4}, sites)
     assert below
-    assert "go" in below[0]
+    assert "down from" in below[0]
 
-    assert gate.compare({"go": 4}, {"go": 4}) == []
+    assert gate.compare({"go": 4}, {"go": 4}, sites) == []
+
+
+def test_a_count_over_its_line_names_the_sites_that_pushed_it_there() -> None:
+    """A bare number does not say which check to move onto a message."""
+    sites = {"go": ["go/internal/tools/t.go:validateDomainCreate"]}
+
+    problems = gate.compare({"go": 1}, {"go": 0}, sites)
+
+    assert problems
+    assert "go/internal/tools/t.go:validateDomainCreate" in problems[0]
 
 
 def test_the_real_trees_match_the_recorded_counts() -> None:
@@ -210,10 +189,31 @@ def test_the_real_trees_match_the_recorded_counts() -> None:
     languages = gate.registered_languages(
         gate._REPO_ROOT / "docs" / "contracts" / "languages.txt"
     )
-    counts, problems = gate.measure(languages)
+    sites: dict[str, list[str]] = {}
+    counts, problems = gate.measure(languages, sites)
 
     assert problems == []
     assert counts == gate.read_counts(gate._COUNTS)
+
+
+def test_a_tree_that_holds_no_source_file_is_reported(tmp_path: Path) -> None:
+    """At zero, an empty scan and a clean tree read the same without this."""
+    swap: Any = gate
+    original = swap._REPO_ROOT
+    swap._REPO_ROOT = tmp_path
+    try:
+        _, problems = gate.measure(["go"], {})
+    finally:
+        swap._REPO_ROOT = original
+
+    assert any("no source file found under" in problem for problem in problems)
+
+
+def test_a_registered_language_with_no_tree_is_reported() -> None:
+    """The gate names the language rather than counting it as zero."""
+    _, problems = gate.measure(["rust"], {})
+
+    assert any("rust is registered" in problem for problem in problems)
 
 
 def test_plumbing_names_are_not_counted(tmp_path: Path) -> None:
@@ -228,16 +228,10 @@ def test_plumbing_names_are_not_counted(tmp_path: Path) -> None:
         "go/internal/tools/t.go",
         "func standardPaginationFromTool(r any) (int, int, string)"
         ' { return 0, 0, "" }\n\n'
-        "func parseOptionalTime(v string) (any, error) { return nil, nil }\n\n"
         'func validateDomainCreate(a map[string]any) string { return "" }\n',
     )
-    swap: Any = gate
-    original = swap._REPO_ROOT
-    swap._REPO_ROOT = tmp_path
-    try:
-        found = gate.hand_written(gate._HAND_TREES["go"])
-    finally:
-        swap._REPO_ROOT = original
+
+    found = _rooted(tmp_path, gate._TREES["go"])
 
     assert [name.rsplit(":", maxsplit=1)[-1] for name in found] == [
         "validateDomainCreate"
@@ -258,13 +252,8 @@ def test_python_plumbing_name_is_not_counted(tmp_path: Path) -> None:
         "def _firewall_ids_argument(arguments: dict) -> list | None:\n"
         "    return None\n",
     )
-    swap: Any = gate
-    original = swap._REPO_ROOT
-    swap._REPO_ROOT = tmp_path
-    try:
-        found = gate.hand_written(gate._HAND_TREES["python"])
-    finally:
-        swap._REPO_ROOT = original
+
+    found = _rooted(tmp_path, gate._TREES["python"])
 
     assert [name.rsplit(":", maxsplit=1)[-1] for name in found] == [
         "_firewall_ids_argument"
@@ -277,7 +266,7 @@ def test_every_plumbing_name_exists_in_its_tree() -> None:
     Without this the set could keep a name long after its function went, and
     the next function to be given that name would be exempt by accident.
     """
-    for language, tree in gate._HAND_TREES.items():
+    for language, tree in gate._TREES.items():
         if not tree.plumbing:
             continue
         root = gate._REPO_ROOT / tree.root
@@ -292,17 +281,41 @@ def test_every_plumbing_name_exists_in_its_tree() -> None:
         )
 
 
-def test_a_new_hook_raises_the_count(tmp_path: Path) -> None:
+def test_a_new_check_raises_the_count(tmp_path: Path) -> None:
     """The gate still fails loudly when surface writes a check by hand.
 
     Zero is only worth reaching if it cannot be passed by a tree that grew one
     back, so this drives the same comparison `make check` runs.
     """
-    grown = _counted(
-        tmp_path,
-        'func LinodeDomainGetValidate(a map[string]any) string { return "" }\n',
-        "",
+    grown = _go_count(
+        tmp_path, 'func validateDomainCreate(a map[string]any) string { return "" }\n'
     )
 
     assert grown == 1
-    assert gate.compare({"go": grown}, {"go": 0})
+    assert gate.compare({"go": grown}, {"go": 0}, {"go": ["t.go:validateDomainCreate"]})
+
+
+def test_the_hand_code_detector_cannot_see_this_population(tmp_path: Path) -> None:
+    """Why both contract files exist, held as a fact rather than a claim.
+
+    One planted check, named after what it checks rather than after a tool:
+    `make hand-code` reports nothing and this gate counts it. Retiring either
+    file would leave that check with no gate at all.
+    """
+    detector = _load_script("verify_hand_code")
+
+    _write(tmp_path, ".gitignore", "/go/internal/gentools/\n")
+    _write(
+        tmp_path,
+        "go/internal/tools/t.go",
+        "package tools\n\n"
+        'func validateResizeTarget(a map[string]any) string { return "" }\n',
+    )
+
+    languages = [detector.Language("go", "go")]
+    declared = detector.Declared(tools={"linodevolumeresize": "linode_volume_resize"})
+
+    assert detector.measure(tmp_path, languages, declared) == []
+    assert _rooted(tmp_path, gate._TREES["go"]) == [
+        "go/internal/tools/t.go:validateResizeTarget"
+    ]

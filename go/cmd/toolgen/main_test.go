@@ -47,7 +47,8 @@ func runGen(t *testing.T) string {
 
 	cmd := exec.CommandContext(t.Context(), "go", "run", ".",
 		"-languages", writeLanguages(t, "go"),
-		"-handwritten", handwrittenFile, "-out", out, "-schemas", schemaDir)
+		"-handwritten", handwrittenFile,
+		"-out", out, "-answers-out", t.TempDir(), "-schemas", schemaDir)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("toolgen failed: %v\n%s", err, output)
@@ -65,7 +66,8 @@ func runGenFrom(t *testing.T, handwritten string) string {
 
 	cmd := exec.CommandContext(t.Context(), "go", "run", ".",
 		"-languages", writeLanguages(t, "go"),
-		"-handwritten", handwritten, "-out", out, "-schemas", schemaDir)
+		"-handwritten", handwritten,
+		"-out", out, "-answers-out", t.TempDir(), "-schemas", schemaDir)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("toolgen failed: %v\n%s", err, output)
@@ -167,7 +169,8 @@ func runGenExpectingFailure(t *testing.T, handwritten string) string {
 
 	cmd := exec.CommandContext(t.Context(), "go", "run", ".",
 		"-languages", writeLanguages(t, "go"),
-		"-handwritten", handwritten, "-out", t.TempDir(), "-schemas", schemaDir)
+		"-handwritten", handwritten,
+		"-out", t.TempDir(), "-answers-out", t.TempDir(), "-schemas", schemaDir)
 
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -187,7 +190,8 @@ func TestRefusesARegisteredLanguageWithNoRendererArm(t *testing.T) {
 
 	cmd := exec.CommandContext(t.Context(), "go", "run", ".",
 		"-languages", writeLanguages(t, "go", "rust"),
-		"-handwritten", handwrittenFile, "-out", out, "-schemas", schemaDir)
+		"-handwritten", handwrittenFile,
+		"-out", out, "-answers-out", t.TempDir(), "-schemas", schemaDir)
 
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -220,7 +224,8 @@ func TestRefusesALanguagesRegistryThatNamesNothing(t *testing.T) {
 
 	cmd := exec.CommandContext(t.Context(), "go", "run", ".",
 		"-languages", path,
-		"-handwritten", handwrittenFile, "-out", t.TempDir(), "-schemas", schemaDir)
+		"-handwritten", handwrittenFile,
+		"-out", t.TempDir(), "-answers-out", t.TempDir(), "-schemas", schemaDir)
 
 	output, err := cmd.CombinedOutput()
 	if err == nil {
@@ -322,13 +327,13 @@ func TestEmitsFiltersDerivedFromQueryArguments(t *testing.T) {
 	}
 }
 
-// No tool declares a validate hook any more: every argument check the surface
-// makes is a rule, a declared reader, or an object walk, which is what
-// docs/contracts/hand-validator-counts.txt records as zero. The emitter still
-// writes the call for a tool that declares one, so this pins the end state
-// rather than the removal of the seam; a hook that comes back fails here and at
-// the ratchet.
-func TestNoEmittedHandlerCallsAValidateHook(t *testing.T) {
+// The generated tree reaches no hand-written body at all: every argument check
+// the surface makes is a rule, a declared reader, or an object walk, which is
+// what docs/contracts/hand-validator-counts.txt records as zero. The population
+// this counts is the emitted files rather than the calls, because the calls are
+// meant to be none and a guard on an empty set would fail on the state the
+// migration was for.
+func TestTheGoTreeReachesNoHandWrittenBody(t *testing.T) {
 	t.Parallel()
 
 	dir := runGen(t)
@@ -341,10 +346,14 @@ func TestNoEmittedHandlerCallsAValidateHook(t *testing.T) {
 	for _, entry := range entries {
 		source := readGenerated(t, dir, entry.Name())
 		for line := range strings.SplitSeq(source, "\n") {
-			if strings.Contains(line, "toolhooks.") && strings.Contains(line, "Validate(request)") {
-				t.Errorf("%s calls a validate hook: %s", entry.Name(), strings.TrimSpace(line))
+			if strings.Contains(line, "toolhooks.") {
+				t.Errorf("%s reaches a hand-written body: %s", entry.Name(), strings.TrimSpace(line))
 			}
 		}
+	}
+
+	if len(entries) == 0 {
+		t.Fatal("found no emitted files, so this measured nothing")
 	}
 }
 
@@ -525,7 +534,8 @@ func readHandlers(source string) []emittedHandler {
 // each of the mutation tests the way the acknowledge tier does, so without the
 // branch this pins, hello would be emitted as a mutation that calls nothing.
 //
-// The zero-hook shape is what hello proves: the sentence its contract declares,
+// The declared-sentence shape is what hello proves: the sentence its contract
+// declares,
 // over the argument the template names, with the default that template carries.
 func TestEmitsTheMetaShellForARoutelessTool(t *testing.T) {
 	t.Parallel()
@@ -553,9 +563,9 @@ func TestEmitsTheMetaShellForARoutelessTool(t *testing.T) {
 	}
 }
 
-// A meta tool answers through a hook or through the sentence its contract
-// declares. With neither, the emitted handler has nothing to return, so the
-// emitter refuses it.
+// A meta tool answers through a declared local operation or through the
+// sentence its contract declares. With neither, the emitted handler has nothing
+// to return, so the emitter refuses it.
 //
 // This reads that refusal off the tree rather than off a specimen: every meta
 // tool the contract declares now names one or the other, so there is no tool
@@ -579,7 +589,7 @@ func TestEveryEmittedMetaToolNamesItsAnswer(t *testing.T) {
 		for _, handler := range metaHandlers(t, source) {
 			handlers++
 
-			if strings.Contains(handler, "toolhooks.") {
+			if strings.Contains(handler, "tools.") {
 				continue
 			}
 
@@ -587,7 +597,7 @@ func TestEveryEmittedMetaToolNamesItsAnswer(t *testing.T) {
 				continue
 			}
 
-			t.Errorf("%s emits a meta handler that answers with neither a hook nor a sentence:\n%s",
+			t.Errorf("%s emits a meta handler that answers with neither an operation nor a sentence:\n%s",
 				entry.Name(), handler)
 		}
 	}
@@ -820,8 +830,8 @@ func TestEmitsTheMembershipReaderAtEverySeam(t *testing.T) {
 }
 
 // TestEmitsThePresenceReadersAtEverySeam holds the presence family to the same
-// bar as the membership reader: each retired hook's sentence now comes from a
-// declared reader, and an any-of sentence rides the message as data.
+// bar as the membership reader: each retired hand-written sentence now comes
+// from a declared reader, and an any-of sentence rides the message as data.
 func TestEmitsThePresenceReadersAtEverySeam(t *testing.T) {
 	t.Parallel()
 
@@ -963,10 +973,10 @@ func TestEmitsThePreviewCallFromTheRoute(t *testing.T) {
 	source := readGenerated(t, runGen(t), "domain.gen.go")
 
 	preview := handlerBody(t, source, "previewLinodeDomainUpdate")
-	want := `toolhooks.LinodeDomainUpdatePreview(ctx, request, cfg, "PUT", fmt.Sprintf("/domains/%d", domainID), body)`
+	want := `tools.RunDeclaredStatePreview(ctx, request, cfg, "linode_domain_update", "PUT", fmt.Sprintf("/domains/%d", domainID),`
 
 	if !strings.Contains(preview, want) {
-		t.Errorf("preview does not hand over the resolved call:\n%s", preview)
+		t.Errorf("preview does not report the resolved call:\n%s", preview)
 	}
 }
 
@@ -992,7 +1002,11 @@ func TestEmitsTheDestroyConfigurationTheContractDescribes(t *testing.T) {
 		`state := &linodev1.Domain{}`,
 		`return client.CallRoute(ctx, "linode_domain_delete", []any{domainID})`,
 		`declared, err := tools.DeclaredStateOf(state)`,
-		`return toolhooks.LinodeDomainDeleteDependencyWalk(ctx, client, domainID, declared)`,
+		`return tools.RunDependencyWalks(ctx, client, []tools.WalkSpec{`,
+		`"linode_domain_record_list"`,
+		`Filter: &tools.WalkSpecFilter{`,
+		`"NS record for {name}"`,
+		`WhenPositive: "total",`,
 		`HashIgnore: twostage.HashIgnoreFields("Domain"),`,
 	} {
 		if !strings.Contains(body, want) {
@@ -1244,11 +1258,11 @@ func TestFillsAResponseMemberFromTheArgumentItsAliasNames(t *testing.T) {
 	}
 }
 
-// A destroy without fetch_state has nothing to preview or hash, and serving it
+// A destroy with no state read has nothing to preview or hash, and serving it
 // would answer a dry run and a plan with an empty resource rather than say so.
 // The emitter refuses one, and this reads that refusal off the tree rather than
-// off a specimen: every destroy the contract declares now names a hook, so there
-// is no tool left to drop from the hand-written list and be refused.
+// off a specimen: every destroy the contract declares now declares its read, so
+// there is no tool left to drop from the hand-written list and be refused.
 func TestEveryEmittedDestroyNamesItsStateFetch(t *testing.T) {
 	t.Parallel()
 
@@ -1278,12 +1292,11 @@ func TestEveryEmittedDestroyNamesItsStateFetch(t *testing.T) {
 	}
 }
 
-// A removal that declares no fetch_state hook reads its state through the GET
+// A removal that declares no state_route reads its state through the GET
 // declared beside it on the same route, rather than through a hand-written step
-// per delete. Both halves are checked here: the synthesized fetch names the
-// sibling and reaches no hook, and a removal that does declare one still calls
-// it, so the branch is a choice rather than a replacement.
-func TestDestroyWithoutAHookReadsItsSibling(t *testing.T) {
+// per delete. The synthesized fetch names that sibling and reaches no
+// hand-written body.
+func TestDestroyWithoutADeclaredRouteReadsItsSibling(t *testing.T) {
 	t.Parallel()
 
 	dir := runGen(t)
@@ -1303,14 +1316,22 @@ func TestDestroyWithoutAHookReadsItsSibling(t *testing.T) {
 	}
 
 	if strings.Contains(synthesized, "toolhooks.") {
-		t.Errorf("a removal with no declared hook still reaches one:\n%s", synthesized)
+		t.Errorf("a synthesized state fetch still reaches a hand-written body:\n%s", synthesized)
 	}
 
-	// The VLAN delete is the specimen because its state is a list scan with a
-	// match predicate, which no route name can say, so it stays hand-written.
-	hooked := handlerBody(t, readGenerated(t, dir, "vlan.gen.go"), "handleLinodeVlanDelete")
-	if want := "toolhooks.LinodeVlanDeleteFetchState(ctx, client, regionID, label)"; !strings.Contains(hooked, want) {
-		t.Errorf("a removal declaring a state fetch no longer calls it (%q):\n%s", want, hooked)
+	// The VLAN delete is the specimen for the declared scan: its state is a
+	// whole-collection read matched on region and label together, worded into
+	// the not-found sentence.
+	scanned := handlerBody(t, readGenerated(t, dir, "vlan.gen.go"), "handleLinodeVlanDelete")
+
+	for _, want := range []string{
+		`tools.FetchCollectionScan(ctx, client, "linode_vlan_list", []any{},`,
+		"func(item *linodev1.VLAN) bool { return item.GetRegion() == regionID && item.GetLabel() == label },",
+		`fmt.Sprintf("region='%v', label='%v'", regionID, label))`,
+	} {
+		if !strings.Contains(scanned, want) {
+			t.Errorf("the emitted scan fetch is missing %q:\n%s", want, scanned)
+		}
 	}
 }
 
@@ -1433,23 +1454,32 @@ func removalTool(literal string) string {
 func declaredStateRoutes(t *testing.T) map[string]string {
 	t.Helper()
 
-	found := make(map[string]string)
+	declaredMessages := make([]protoreflect.MessageDescriptor, 0)
 
+	// Collected under the registry's read lock and read after it is released,
+	// for the reason walkMessages does the same: Options() unmarshals lazily
+	// through that same lock, and a read lock is not reentrant.
 	protoregistry.GlobalFiles.RangeFiles(func(file protoreflect.FileDescriptor) bool {
 		messages := file.Messages()
 		for i := range messages.Len() {
-			options := messages.Get(i).Options()
-
-			route, _ := proto.GetExtension(options, linodev1.E_ToolRoute).(*linodev1.ToolRoute)
-			declared, _ := proto.GetExtension(options, linodev1.E_StateRoute).(*linodev1.StateRoute)
-
-			if route.GetTool() != "" && declared.GetTool() != "" {
-				found[route.GetTool()] = declared.GetTool()
-			}
+			declaredMessages = append(declaredMessages, messages.Get(i))
 		}
 
 		return true
 	})
+
+	found := make(map[string]string, len(declaredMessages))
+
+	for _, message := range declaredMessages {
+		options := message.Options()
+
+		route, _ := proto.GetExtension(options, linodev1.E_ToolRoute).(*linodev1.ToolRoute)
+		declared, _ := proto.GetExtension(options, linodev1.E_StateRoute).(*linodev1.StateRoute)
+
+		if route.GetTool() != "" && declared.GetTool() != "" {
+			found[route.GetTool()] = declared.GetTool()
+		}
+	}
 
 	return found
 }
@@ -1550,6 +1580,27 @@ func TestEmitsTheObjectBodySetterAndItsRedaction(t *testing.T) {
 
 	preview := handlerBody(t, source, "previewLinodeAccountPaymentMethodCreate")
 	if want := `body.Redacting("data")`; !strings.Contains(preview, want) {
+		t.Errorf("preview is missing %q:\n%s", want, preview)
+	}
+}
+
+// TestEmitsTheItemStandInTheSecurityAnswersDeclare: the answers reach the live
+// request as the caller sent them and the dry run with one member of each entry
+// stood in for, which is the shape a whole-member redaction cannot report: the
+// question ids beside them are what a caller checks before confirming.
+func TestEmitsTheItemStandInTheSecurityAnswersDeclare(t *testing.T) {
+	t.Parallel()
+
+	source := readGenerated(t,
+		runGenFrom(t, writeHandwritten(t, readNames(t, handwrittenFile))), "profile.gen.go")
+
+	live := handlerBody(t, source, "handleLinodeProfileSecurityQuestionAnswer")
+	if strings.Contains(live, "StandingIn(") {
+		t.Errorf("live call reports a stood-in body, which would send the text:\n%s", live)
+	}
+
+	preview := handlerBody(t, source, "previewLinodeProfileSecurityQuestionAnswer")
+	if want := `body.StandingIn("security_questions", "response", "[redacted]")`; !strings.Contains(preview, want) {
 		t.Errorf("preview is missing %q:\n%s", want, preview)
 	}
 }
@@ -1920,11 +1971,11 @@ func TestEmitsABodyReadThatAssemblesItsEnvelope(t *testing.T) {
 }
 
 // A read whose route answers with something no decode can place: the OAuth
-// client thumbnail arrives as raw PNG bytes, so its hook owns the call and one
-// declared member carries what the hook brought back. Fetched the ordinary way,
-// the image would reach protojson and the tool would report a parse failure over
-// a call that succeeded.
-func TestEmitsAReadWhoseHookOwnsTheCall(t *testing.T) {
+// client thumbnail arrives as raw PNG bytes, so its declared transport owns the
+// call and one member carries what the transfer brought back. Fetched the
+// ordinary way, the image would reach protojson and the tool would report a
+// parse failure over a call that succeeded.
+func TestEmitsAReadWhoseTransportOwnsTheCall(t *testing.T) {
 	t.Parallel()
 
 	source := readGenerated(t,
@@ -1934,23 +1985,72 @@ func TestEmitsAReadWhoseHookOwnsTheCall(t *testing.T) {
 	handler := handlerBody(t, source, "handleLinodeAccountOauthClientThumbnailGet")
 
 	for _, want := range []string{
-		`assembled, err := toolhooks.LinodeAccountOauthClientThumbnailGetExecute(` +
-			`ctx, client, request, []any{clientID})`,
+		`transferred, err := client.CallRouteRawBodyRead(` +
+			`ctx, "linode_account_oauth_client_thumbnail_get", []any{clientID}, "image/png")`,
 		`return tools.MarshalProtoToolResponse(&linodev1.OAuthClientThumbnail{`,
 		`ClientId:           clientID,`,
-		`ThumbnailPngBase64: assembled.GetThumbnailPngBase64(),`,
+		`ThumbnailPngBase64: tools.Base64Text(transferred),`,
 	} {
 		if !strings.Contains(handler, want) {
 			t.Errorf("emitted handler is missing %q:\n%s", want, handler)
 		}
 	}
 
-	// The hook is the whole transport, so nothing here builds the routed fetch
+	// The transport is the whole call, so nothing here builds the routed fetch
 	// the tier writes for every other read.
 	for _, unwanted := range []string{"client.CallProtoRoute", `query := ""`} {
 		if strings.Contains(handler, unwanted) {
 			t.Errorf("emitted handler carries %q:\n%s", unwanted, handler)
 		}
+	}
+}
+
+// The presign pair is the other assembled shape: the declared POST mints a URL
+// and the transfer that follows it is the tool's own, so the handler renders one
+// spec literal and reads the transfer's measurements into the answer.
+func TestEmitsThePresignTransferTheContractDeclares(t *testing.T) {
+	t.Parallel()
+
+	source := readGenerated(t,
+		runGenFrom(t, writeHandwritten(t, readNames(t, handwrittenFile))),
+		"object_storage.gen.go")
+
+	handler := handlerBody(t, source, "handleLinodeObjectStorageObjectUpload")
+
+	for _, want := range []string{
+		`transferred, err := tools.RunPresignTransfer(ctx, client, &tools.PresignSpec{`,
+		`Tool:        "linode_object_storage_object_upload",`,
+		`Subject:     "object storage object upload",`,
+		`Up:          true,`,
+		`LocalPath:   request.GetString("source_path", ""),`,
+		`ContentType: request.GetString("content_type", ""),`,
+		`SizeBytes:  transferred.SizeBytes,`,
+		`Etag:       transferred.ETag,`,
+		`UploadMode: "single",`,
+	} {
+		if !strings.Contains(handler, want) {
+			t.Errorf("emitted handler is missing %q:\n%s", want, handler)
+		}
+	}
+
+	// The dry run measures the same source the transfer would send, inside
+	// the walk the declared wording is filled in, and no hand-written body
+	// stands between the declaration and the report.
+	preview := handlerBody(t, source, "previewLinodeObjectStorageObjectUpload")
+
+	for _, want := range []string{
+		`tools.RunDeclaredTransportPreview(ctx, request, cfg, "linode_object_storage_object_upload", "POST", `,
+		`body, "source_path",`,
+		`func(transfer tools.PresignPreview) tools.DryRunDetails {`,
+		`"transport:size_bytes": transfer.SizeBytes,`,
+	} {
+		if !strings.Contains(preview, want) {
+			t.Errorf("emitted preview is missing %q:\n%s", want, preview)
+		}
+	}
+
+	if strings.Contains(preview, "toolhooks.") {
+		t.Errorf("emitted preview still reaches a hand-written body:\n%s", preview)
 	}
 }
 
@@ -2024,8 +2124,14 @@ func TestEmitsTheStagedBranchAWriteAdvertises(t *testing.T) {
 		"staged, handled := tools.RunTwoStageWrite(ctx, request, cfg, &tools.DestructiveAction{",
 		"Capability: profiles.CapWrite,",
 		`return client.CallRouteBody(ctx, "linode_instance_resize", []any{instanceID}, body)`,
-		"return toolhooks.LinodeInstanceResizeFetchState(ctx, client, instanceID)",
-		"return toolhooks.LinodeInstanceResizeDependencyWalk(ctx, client, request, state)",
+		"return tools.FetchCompositeState(ctx, client, []tools.CompositeCall{",
+		`Tool:   "linode_instance_disk_list",`,
+		`Fields: []string{"id", "size", "filesystem"},`,
+		// The plan words the tool's own declared prose against the composite
+		// member the prose reads through, so one wording serves both paths.
+		`previewValues := map[string]string{`,
+		`"state:type": tools.PreviewStateText(declared.Object("instance"), "type"),`,
+		`details.SideEffects = []string{tools.PreviewSentence(previewValues, "Instance resizes from type {state:type} to {type};`,
 	} {
 		if !strings.Contains(source, want) {
 			t.Errorf("emitted staged branch is missing %q", want)
@@ -2104,6 +2210,15 @@ func TestEveryDeclaredFetchDecodesWhatItsReadDecodes(t *testing.T) {
 
 	var fetches int
 
+	// The three declared state forms decode through their own runtime rather
+	// than the single-resource call, so each counted occurrence is one fetch.
+	stateForms := regexp.MustCompile(
+		`tools\.Fetch(?:CollectionScan|EnvelopeState|CompositeState)\(`,
+	)
+	for _, source := range sources {
+		fetches += len(stateForms.FindAllString(source, -1))
+	}
+
 	for _, source := range sources {
 		for _, match := range stateReadDecode.FindAllStringSubmatch(source, -1) {
 			fetches++
@@ -2124,10 +2239,49 @@ func TestEveryDeclaredFetchDecodesWhatItsReadDecodes(t *testing.T) {
 
 	// Every state route in the contract, so a scan that stopped matching cannot
 	// pass by measuring nothing.
-	const declaredFetches = 145
+	const declaredFetches = 174
 
 	if fetches != declaredFetches {
 		t.Errorf("found %d declared fetch(es), want %d", fetches, declaredFetches)
+	}
+}
+
+// envelopeStateQuery finds an envelope fetch that carries the page controls its
+// tool publishes, which is the only form that previews the page the call itself
+// asks for.
+var envelopeStateQuery = regexp.MustCompile(
+	`tools\.FetchEnvelopeState\(ctx, client, "([^"]+)".*tools\.StateReadQuery\(`,
+)
+
+// TestEveryEnvelopeFetchCarriesThePageControlsItPublishes: a replacement whose
+// preview read page one while its own call published page two would describe a
+// page the caller never asked about, and no behavior fixture can see it, since
+// a preview's stub is matched on the path alone. The reads are named rather
+// than counted: there are two, and both are page-forwarding replacements.
+func TestEveryEnvelopeFetchCarriesThePageControlsItPublishes(t *testing.T) {
+	t.Parallel()
+
+	dir := runGen(t)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read emitted tree: %v", err)
+	}
+
+	reads := make([]string, 0, 2)
+
+	for _, entry := range entries {
+		source := readGenerated(t, dir, entry.Name())
+		for _, match := range envelopeStateQuery.FindAllStringSubmatch(source, -1) {
+			reads = append(reads, match[1])
+		}
+	}
+
+	slices.Sort(reads)
+
+	want := []string{"linode_instance_firewall_list", "linode_nodebalancer_firewall_list"}
+	if !slices.Equal(reads, want) {
+		t.Errorf("page-forwarding envelope fetches read %v, want %v", reads, want)
 	}
 }
 

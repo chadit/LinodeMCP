@@ -35,7 +35,7 @@ server:
 | `profile` | List, show, switch, enable/disable, clone, and delete profiles. Full reference in [profiles.md](./profiles.md). |
 | `call` | Invoke a single tool from the shell. The tool name is validated against the catalog before anything runs. |
 | `tools` | Inspect the tool surface: what exists, with what capability. |
-| `audit` | Query the [audit log](./audit-log.md) from the shell, no MCP host needed. |
+| `audit` | Query the [audit log](./audit.md) from the shell, no MCP host needed. |
 | `tui` | Interactive terminal UI over the same surface. |
 | `version` | Build and version information. |
 
@@ -80,4 +80,4 @@ laid out in [profiles.md](./profiles.md).
 - [Host integrations](./host-integrations/README.md): registering the server
   binary with Claude Code, Claude Desktop, and other MCP hosts.
 - [Profiles](./profiles.md): the permission model both modes enforce.
-- [Audit log](./audit-log.md): what the `audit` verb queries.
+- [Audit log](./audit.md): what the `audit` verb queries.

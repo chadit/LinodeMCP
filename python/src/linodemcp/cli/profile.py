@@ -18,6 +18,7 @@ from linodemcp.config import (
     load_from_file,
     write_atomic,
 )
+from linodemcp.gentools import categories_for, scopes_for
 from linodemcp.profiles import (
     DEFAULT_PROFILE_NAME,
     Profile,
@@ -38,6 +39,7 @@ _BUILTIN_PROFILE_NAMES: frozenset[str] = frozenset(
         "network-admin",
         "kubernetes-admin",
         "storage-admin",
+        "iam-admin",
         "full-access",
         "emergency",
     }
@@ -467,7 +469,12 @@ def all_profiles(cfg: Config) -> dict[str, Profile]:
     Built-in disabled flags fold in any per-name overrides.
     """
     descriptors = [
-        ToolDescriptor(name=entry.name, capability=entry.capability)
+        ToolDescriptor(
+            name=entry.name,
+            capability=entry.capability,
+            scopes=tuple(scopes_for(entry.name)),
+            categories=tuple(categories_for(entry.name)),
+        )
         for entry in get_tool_registry()
     ]
     builtins = builtin_profiles(descriptors)

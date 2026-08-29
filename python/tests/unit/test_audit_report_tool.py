@@ -12,21 +12,29 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from linodemcp.audit import Capability, Event, Mode, Status
+from linodemcp.audit import (
+    Capability,
+    Event,
+    Mode,
+    Status,
+    event_timestamp,
+)
 from linodemcp.config import (
     REPORT_OUTPUT_LIST,
     REPORT_OUTPUT_SUMMARY,
+    AuditConfig,
     Config,
     ReportConfig,
     ReportFilter,
+)
+from linodemcp.genlocal import (
+    record_audit_event,
 )
 from linodemcp.gentools import (
     create_linode_audit_report_tool,
     handle_linode_audit_report,
 )
 from linodemcp.profiles import Capability as ProfileCapability
-from linodemcp.tools.linode_audit_report import set_audit_reports
-from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -34,18 +42,23 @@ if TYPE_CHECKING:
     import pytest
 
 
+def _reporting_config(reports: dict[str, ReportConfig]) -> Config:
+    """A config carrying the report catalog, which is where the tool reads it."""
+    return Config(audit=AuditConfig(reports=reports))
+
+
 def _event(tool: str, capability: Capability, status: Status, second: int) -> Event:
     """Build an event at a distinct second."""
     ts = datetime(2026, 5, 20, 0, 0, second, tzinfo=UTC)
     return Event(
-        ts=ts,
+        ts=event_timestamp(ts),
         ts_unix_ns=int(ts.timestamp() * 1_000_000_000),
         event_id=f"evt_{second}",
         tool=tool,
         tool_capability=capability,
         environment="prod",
         profile="operator",
-        mode=Mode.NORMAL,
+        mode=Mode.NORMAL.value,
         plan_id=None,
         args={},
         args_redacted=[],
@@ -75,8 +88,6 @@ async def test_unknown_report_returns_error() -> None:
     The prefix is the contract: the CLI's exit-code mapping and the
     cross-language behavior runner both read it as Go's error result.
     """
-    set_audit_reports({})
-
     result = await handle_linode_audit_report({"name": "does-not-exist"}, Config())
     assert result[0].text.startswith("Error: unknown report:")
     assert "does-not-exist" in result[0].text
@@ -84,8 +95,6 @@ async def test_unknown_report_returns_error() -> None:
 
 async def test_missing_name_returns_error() -> None:
     """An absent name is rejected with the Error: shape, mirroring Go."""
-    set_audit_reports({})
-
     result = await handle_linode_audit_report({}, Config())
     assert result[0].text == "Error: report name is required"
 
@@ -100,9 +109,8 @@ async def test_bad_group_by_returns_error(
     must land in the Error: shape rather than raise out of the handler.
     """
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "bad-group": ReportConfig(
                 filter=ReportFilter(),
@@ -112,7 +120,7 @@ async def test_bad_group_by_returns_error(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "bad-group"}, Config())
+    result = await handle_linode_audit_report({"name": "bad-group"}, cfg)
     assert result[0].text.startswith("Error: failed to run report:")
 
 
@@ -122,7 +130,6 @@ async def test_summary_counts_with_capability_in(
 ) -> None:
     """Summary output groups destroy events by tool, excluding reads."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
 
     audit_dir = tmp_path / "linodemcp"
     audit_dir.mkdir(parents=True)
@@ -132,10 +139,10 @@ async def test_summary_counts_with_capability_in(
         _event("linode_volume_delete", Capability.DESTROY, Status.SUCCESS, 3),
         _event("linode_instance_list", Capability.READ, Status.SUCCESS, 4),
     ]
-    body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
+    body = "".join(record_audit_event(event, "", "") + "\n" for event in events)
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "destroys": ReportConfig(
                 filter=ReportFilter(capability_in=["destroy"]),
@@ -144,7 +151,7 @@ async def test_summary_counts_with_capability_in(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "destroys"}, Config())
+    result = await handle_linode_audit_report({"name": "destroys"}, cfg)
     payload = json.loads(result[0].text)
 
     assert payload["name"] == "destroys"
@@ -160,7 +167,6 @@ async def test_list_output_capped_at_limit(
 ) -> None:
     """List output returns matching events capped at the report's limit."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    set_audit_sqlite_path("")
 
     audit_dir = tmp_path / "linodemcp"
     audit_dir.mkdir(parents=True)
@@ -169,10 +175,10 @@ async def test_list_output_capped_at_limit(
         _event("linode_instance_list", Capability.READ, Status.SUCCESS, 2),
         _event("linode_instance_list", Capability.READ, Status.SUCCESS, 3),
     ]
-    body = "".join(json.dumps(event.to_dict()) + "\n" for event in events)
+    body = "".join(record_audit_event(event, "", "") + "\n" for event in events)
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
-    set_audit_reports(
+    cfg = _reporting_config(
         {
             "recent-reads": ReportConfig(
                 filter=ReportFilter(capability=Capability.READ.value),
@@ -182,7 +188,7 @@ async def test_list_output_capped_at_limit(
         }
     )
 
-    result = await handle_linode_audit_report({"name": "recent-reads"}, Config())
+    result = await handle_linode_audit_report({"name": "recent-reads"}, cfg)
     payload = json.loads(result[0].text)
 
     assert payload["output"] == REPORT_OUTPUT_LIST

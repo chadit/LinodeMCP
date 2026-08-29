@@ -8,8 +8,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from linodemcp.tools.declared_state import DeclaredState
+
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
+
+    # The lines one half of a declared preview reports: the wordings themselves
+    # when nothing in them reads the resource, and a function of the fetched
+    # state when something does, since a sentence naming what the resource
+    # carries cannot be worded until the read has answered.
+    PreviewLines = Sequence[str] | Callable[[Any], Sequence[str]]
 
 # The brackets an argument name sits inside a wording.
 _OPEN = "{"
@@ -41,6 +49,182 @@ def preview_number(arguments: dict[str, Any], name: str) -> str:
         return ""
     whole = int(value)
     return str(whole) if whole else ""
+
+
+def _state_at(state: Any, path: str) -> tuple[DeclaredState, str]:
+    """A declared state walked down to the object holding the path's last name.
+
+    A state some other fetch produced reads as carrying nothing, so a wording
+    over it steps aside rather than reporting a gap.
+    """
+    if not isinstance(state, DeclaredState):
+        return DeclaredState({}), ""
+    head, separator, member = path.partition(".")
+    if not separator:
+        return state, head
+    return state.object(head), member
+
+
+def preview_state_text(state: Any, path: str) -> str:
+    """A text member of the fetched resource as a declared sentence reports it."""
+    fields, name = _state_at(state, path)
+    return fields.text(name)
+
+
+def preview_state_number(state: Any, path: str) -> str:
+    """A whole-number member of the fetched resource as a sentence reports it.
+
+    Zero reads as none for the reason preview_number reads it that way: the
+    sizes and ids a sentence names are absent at zero, which is what lets the
+    wording naming a starting size give way to the one that names only the
+    target.
+    """
+    fields, name = _state_at(state, path)
+    whole = fields.number(name)
+    return str(whole) if whole else ""
+
+
+def preview_changed(reading: str, argument: str) -> str:
+    """A state reading as a wording that only names a change reports it.
+
+    The reading itself, and "" where it already matches the argument the call
+    would set. Matching reads as absent so the wording naming the reading steps
+    aside for the next one, which is what turns "Label changes from X to Y" into
+    "Label is set to Y" without a second rule for choosing between them.
+    """
+    return "" if reading == argument else reading
+
+
+def preview_carried(arguments: dict[str, Any], name: str) -> bool:
+    """Whether the call sent an argument at all.
+
+    Presence rather than emptiness is the question a line guarded on a value it
+    never names asks: a number, a list and an object each have a real zero value
+    a caller can mean, so a throttle of 0 and an empty tag list are both
+    carried. A text argument is guarded on its own reader instead, which already
+    collapses empty onto absent.
+    """
+    return name in arguments
+
+
+def preview_carried_number(arguments: dict[str, Any], name: str) -> str:
+    """A whole number a line has already guarded on being carried.
+
+    Zero reports as the value it is rather than as no value, which is what the
+    guard has already established.
+    """
+    value = arguments.get(name)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return ""
+    if isinstance(value, float) and not value.is_integer():
+        return ""
+    return str(int(value))
+
+
+def preview_guarded(carried: bool, line: str) -> str:
+    """A line the call has to have asked for.
+
+    The wording when it did, and "" when it did not, which drops the line.
+    """
+    return line if carried else ""
+
+
+def preview_differs(reading: str, argument: str) -> bool:
+    """Whether a line naming only the new value has a change to report.
+
+    The call carries one, and the resource does not already hold it. A wording
+    that names both values needs none of this, since the reading it names steps
+    aside on its own.
+    """
+    return bool(argument) and reading != argument
+
+
+def preview_or(value: str, folded: str) -> str:
+    """A folded argument as a wording reports it.
+
+    The value the call carried, or the one that argument's own fold sends in
+    its place. The default is declared once, in the fold, so the sentence and
+    the request it describes name the same value. Go's PreviewOr answers the
+    same way.
+    """
+    return value or folded
+
+
+def preview_folded(reading: str) -> str:
+    """A state reading as a matched line compares it.
+
+    A resource spells its own vocabularies, so a status the API sends as
+    "Running" selects the arm declared for "running"; an argument's values are
+    the ones the tool's schema publishes and are compared exactly. Go's
+    PreviewFolded answers the same way.
+    """
+    return reading.lower()
+
+
+def preview_matched(
+    values: dict[str, str], value: str, arms: dict[str, str], otherwise: str
+) -> str:
+    """The wording a value selects, filled the way an ordered wording is.
+
+    "" for a value the declaration answers with no wording, which drops the
+    line.
+    """
+    wording = arms.get(value, otherwise)
+    if not wording:
+        return ""
+    return preview_sentence(values, wording)
+
+
+# The placeholder an entry fills, which is the one name a wording may read that
+# is not an argument.
+PREVIEW_ELEMENT_NAME = "element"
+
+
+def _element_value(raw: Any) -> str:
+    """One entry of a repeated argument as a wording reports it.
+
+    "" for an entry neither language spells the same way.
+    """
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return ""
+    if isinstance(raw, float) and not raw.is_integer():
+        return ""
+    return str(int(raw))
+
+
+def _elements(arguments: dict[str, Any], name: str) -> list[str]:
+    """The entries of a repeated argument, the unspellable ones dropped."""
+    raw = arguments.get(name)
+    if not isinstance(raw, list):
+        return []
+    # Cast to Sequence rather than list: pyright reads a narrowed list's element
+    # as unknown, and mypy calls a cast back to list[Any] redundant.
+    entries = [_element_value(item) for item in cast("Sequence[Any]", raw)]
+    return [entry for entry in entries if entry]
+
+
+def preview_joined(arguments: dict[str, Any], name: str, separator: str) -> str:
+    """The entries of a repeated argument as one value.
+
+    For the line that names them all rather than one each.
+    """
+    return separator.join(_elements(arguments, name))
+
+
+def preview_per_element(
+    arguments: dict[str, Any], name: str, values: dict[str, str], template: str
+) -> list[str]:
+    """One line per entry of a repeated argument, in the order the call sent them.
+
+    A list the call did not send writes no lines at all, which is what a preview
+    owes a caller who asked for no memberships.
+    """
+    return [
+        preview_sentence({**values, PREVIEW_ELEMENT_NAME: entry}, template)
+        for entry in _elements(arguments, name)
+    ]
 
 
 # A flag's three states as a declared preview reads it. A declaration answers
@@ -112,13 +296,14 @@ def preview_sentence(values: dict[str, str], *templates: str) -> str:
     return ""
 
 
-def preview_reported_lines(lines: Sequence[str]) -> list[str]:
-    """The declared lines that have something to say.
+def preview_reported_lines(lines: PreviewLines, state: Any = None) -> list[str]:
+    """The declared lines that have something to say, worded against the state.
 
     A line whose wordings could not be filled reports "" and is dropped here,
     so a conditional sentence leaves no empty line behind it.
     """
-    return [line for line in lines if line]
+    worded = lines(state) if callable(lines) else lines
+    return [line for line in worded if line]
 
 
 def _filled(values: dict[str, str], template: str) -> bool:

@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
-	"math"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -26,7 +25,7 @@ func TestExportEventsJSONL(t *testing.T) {
 	keep.Args = map[string]any{keyRegion: valUSEast}
 	drop := makeTestEvent("linode_volume_list", audit.CapabilityRead, audit.StatusSuccess, day(20, 9))
 
-	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []audit.Event{keep, drop})
+	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []*audit.Event{keep, drop})
 
 	query := &audit.RecentQuery{Limit: audit.DefaultExportMaxRecords, Tool: "linode_instance_*"}
 
@@ -67,7 +66,7 @@ func TestExportEventsSQLiteFullRecord(t *testing.T) {
 	errText := "boom"
 	evt.Error = &errText
 
-	sink.Write(t.Context(), &evt)
+	sink.Write(t.Context(), evt)
 
 	if closeErr := sink.Close(); closeErr != nil {
 		t.Fatalf("unexpected error: %v", closeErr)
@@ -89,8 +88,11 @@ func TestExportEventsSQLiteFullRecord(t *testing.T) {
 		t.Errorf("got.Tool = %v, want %v", got.Tool, tcLinodeInstanceDelete)
 	}
 
-	if numF, numOK := got.Args[argLinodeID].(float64); !numOK || math.Abs(numF-float64(float64(123))) > 0 {
-		t.Errorf("got %v, want %v", got.Args[argLinodeID], float64(123))
+	// The stored number keeps the spelling it was written with rather than
+	// widening to a double, which is what lets an export off the store carry
+	// the same bytes an export off the log does.
+	if number, isNumber := got.Args[argLinodeID].(json.Number); !isNumber || number.String() != "123" {
+		t.Errorf("got %v, want %v", got.Args[argLinodeID], "123")
 	}
 
 	if !reflect.DeepEqual(got.Args["confirm"], true) {
@@ -115,7 +117,7 @@ func TestExportEventsSQLiteFullRecord(t *testing.T) {
 func TestEncodeEventsJSON(t *testing.T) {
 	t.Parallel()
 
-	events := []audit.Event{
+	events := []*audit.Event{
 		makeTestEvent("tool_a", audit.CapabilityRead, audit.StatusSuccess, day(20, 8)),
 	}
 
@@ -145,7 +147,7 @@ func TestEncodeEventsJSON(t *testing.T) {
 func TestEncodeEventsNDJSON(t *testing.T) {
 	t.Parallel()
 
-	events := []audit.Event{
+	events := []*audit.Event{
 		makeTestEvent("tool_a", audit.CapabilityRead, audit.StatusSuccess, day(20, 8)),
 		makeTestEvent("tool_b", audit.CapabilityRead, audit.StatusError, day(20, 9)),
 	}
@@ -182,7 +184,7 @@ func TestEncodeEventsCSV(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	if err := audit.EncodeEvents(&buf, []audit.Event{evt}, audit.ExportFormatCSV); err != nil {
+	if err := audit.EncodeEvents(&buf, []*audit.Event{evt}, audit.ExportFormatCSV); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -227,7 +229,7 @@ func TestEncodeEventsJSONEmptyIsArray(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	if err := audit.EncodeEvents(&buf, []audit.Event{}, audit.ExportFormatJSON); err != nil {
+	if err := audit.EncodeEvents(&buf, []*audit.Event{}, audit.ExportFormatJSON); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

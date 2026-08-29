@@ -1,9 +1,9 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity profile-resolution tool-count dryrun pagination response-shapes list-envelope tool-routes api-surfaces field-location tool-capability tool-response route-evidence route-source generated-tools hand-validators hook-bodies system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint tools-fmt-check tools-lint tools-typecheck techdocs-proof go-analyzers dockerfiles proto-lint clean install-hooks check-hooks tool-parity profile-resolution scope-spellings tool-count dryrun pagination response-shapes list-envelope tool-routes api-surfaces field-location tool-response route-evidence route-source generated-tools hand-validators hand-code hand-arms system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage generated-form behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
 	python-build python-install-dev python-test python-lint python-fmt python-clean python-run python-check \
-	betterleaks trivy actionlint proto generate
+	betterleaks trivy actionlint proto generate update-deps update-deps-dry-run
 
 CONTAINER_ENGINE ?= docker
 GO_IMAGE := linodemcp:go
@@ -17,11 +17,19 @@ help:
 	@echo ""
 	@echo "Every gate target stays invocable by name; docs/gates.md describes each one."
 
+# CPython caches bytecode beside the source it imports, so a gate run leaves a
+# __pycache__ next to the scripts it read. It is gitignored and can never reach
+# a commit, but it reappears after every run and reads as a mystery to whoever
+# finds it. A gate is short-lived, so refusing the cache costs nothing.
+PYRUN := PYTHONDONTWRITEBYTECODE=1 python3
+VENV_PYRUN := PYTHONDONTWRITEBYTECODE=1 python/.venv/bin/python
+
 # --- Proto codegen ---
 # Generated code is gitignored. Stamp-gated so build/test regenerate only when
 # the proto sources change, which keeps offline builds working after one run.
 PROTO_SRCS := $(shell find proto -name '*.proto') buf.yaml buf.gen.yaml buf.gen.protovalidate.yaml $(wildcard buf.lock) \
-	docs/contracts/handwritten-tools.txt docs/contracts/languages.txt \
+	docs/contracts/handwritten-tools.txt \
+	docs/contracts/languages.txt \
 	scripts/gen_tool_registries.py \
 	$(shell find go/cmd/toolgen -name '*.go' -not -name '*_test.go')
 PROTO_STAMP := .make/proto-generated
@@ -31,7 +39,16 @@ proto: $(PROTO_STAMP)
 
 generate: proto
 
-$(PROTO_STAMP): $(PROTO_SRCS)
+# gen_tool_registries.py and toolgen both run venv binaries, so the venv is a
+# prerequisite of the regen: a fresh checkout installs it before the first run,
+# a manifest change re-installs it, a deleted venv comes back.
+VENV_RUFF := python/.venv/bin/ruff
+$(VENV_RUFF): python/pyproject.toml python/uv.lock
+	$(MAKE) -C python install-dev
+	@# pip keeps mtimes when versions are unchanged, so end the staleness by hand.
+	@touch $@
+
+$(PROTO_STAMP): $(PROTO_SRCS) $(VENV_RUFF)
 	@command -v buf >/dev/null 2>&1 || { echo "buf is required: https://buf.build/docs/installation"; exit 1; }
 	buf generate
 	@# Second pass, after the first because that one wipes its output: the Python
@@ -54,25 +71,27 @@ $(PROTO_STAMP): $(PROTO_SRCS)
 	find python/src/linodemcp/genpb -type d -exec touch {}/__init__.py \;
 	@# proto3 requires an `unspecified = 0` sentinel. Dropping it from both schema dirs
 	@# leaves clients only real API values and keeps the two schemas byte-identical.
-	python3 scripts/strip_enum_sentinel.py
+	$(PYRUN) scripts/strip_enum_sentinel.py
 	@# The tool surface and each tool's tier are declarations the descriptors carry, so the
 	@# two registries that used to restate them are written from the descriptors instead.
 	@# Both land gitignored beside the generated code, which is what makes adding a tool
 	@# one proto message and nothing else.
-	python3 scripts/gen_tool_registries.py
+	$(PYRUN) scripts/gen_tool_registries.py
 	@# The emitter runs last because it reads the schemas above as well as the
 	@# descriptors. One run writes a tree per language languages.txt registers, from
 	@# one contract model, so a tool cannot reach one language and miss another.
 	@# Every declared tool is generated except the ones handwritten-tools.txt still
 	@# claims, so new surface is born generated. Both contracts and the emitter's own
 	@# sources join PROTO_SRCS, so editing any of them regenerates. The Python arm
-	@# renders through the repo's ruff, so the venv has to be installed first.
+	@# renders through the repo's ruff, installed by the venv prerequisite above.
 	go -C go run ./cmd/toolgen \
 		-languages ../docs/contracts/languages.txt \
 		-handwritten ../docs/contracts/handwritten-tools.txt \
 		-schemas internal/toolschemas/data \
 		-out internal/gentools \
 		-python-out ../python/src/linodemcp/gentools \
+		-answers-out internal/genlocal \
+		-python-answers-out ../python/src/linodemcp/genlocal \
 		-ruff ../python/.venv/bin/ruff
 	@mkdir -p $(dir $@)
 	@touch $@
@@ -84,13 +103,14 @@ build: proto go-build python-build
 
 # THE gate order, cheap fails first, venv install before everything that needs
 # it. CI's one job and the pre-push hook run exactly this list (docs/gates.md).
-CHECK_GATES := proto python-install-dev fmt-check scripts-lint actionlint \
-	baseline-guard tool-float go-check python-check coverage-floor \
-	diff-coverage tool-parity profile-resolution tool-count dryrun \
+CHECK_GATES := proto proto-lint python-install-dev fmt-check scripts-lint tools-lint \
+	techdocs-proof actionlint dockerfiles tools-typecheck \
+	baseline-guard tool-float go-check go-analyzers python-check coverage-floor \
+	diff-coverage tool-parity profile-resolution scope-spellings tool-count dryrun \
 	pagination response-shapes list-envelope tool-routes api-surfaces \
-	field-location tool-capability tool-response route-evidence route-source \
-	generated-tools hand-validators hook-bodies system-params env-parity cli-surface \
-	docs-links metrics-surface write-proto read-proto input-proto meta-proto \
+	field-location tool-response route-evidence route-source \
+	generated-tools hand-validators hand-code hand-arms system-params env-parity cli-surface \
+	docs-links metrics-surface generated-form \
 	behavior messages betterleaks trivy build go-build-prod
 
 ## check: THE gate. Everything, one target (fmt, full lint incl. security scans, all tests, all cross-language gates, both builds)
@@ -98,13 +118,15 @@ check: $(CHECK_GATES)
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # Same provisioning as the CI job (scripts/ci-setup.sh) against a copy of the tree.
+# Cached layers and an old base image rehearse CI with stale tools, so the
+# build re-pulls the base and reruns every layer.
 check-container:
-	$(CONTAINER_ENGINE) build -t linodemcp:ci -f ci/Dockerfile .
+	$(CONTAINER_ENGINE) build --pull --no-cache -t linodemcp:ci -f ci/Dockerfile .
 	$(CONTAINER_ENGINE) run --rm -v "$(CURDIR)":/src:ro linodemcp:ci
 
-## fmt-check: Verify Go + Python + scripts formatting, read-only (generated code excluded). Shared by check, lint, and CI.
+## fmt-check: Verify Go + Python + scripts + tools formatting, read-only (generated code excluded). Shared by check, lint, and CI.
 # Read-only on purpose: auto-fixing here would hide drift CI still fails on.
-fmt-check: go-fmt-check python-fmt-check scripts-fmt-check
+fmt-check: go-fmt-check python-fmt-check scripts-fmt-check tools-fmt-check
 
 go-fmt-check:
 	$(MAKE) -C go fmt-check
@@ -121,8 +143,27 @@ scripts-lint:
 	@echo "Running ruff check on scripts/..."
 	@python/.venv/bin/ruff check scripts/
 
-## lint: Run all linters (fmt-check, go-lint, python-lint, scripts-lint, betterleaks, trivy, actionlint)
-lint: proto fmt-check go-lint python-lint scripts-lint betterleaks trivy actionlint
+# tools/ holds tool projects that are never shipped with either language
+# package. Each carries its own pyproject, which ruff discovers per file, so
+# one invocation covers the tree.
+tools-fmt-check:
+	@echo "Running ruff format --check on tools/..."
+	@python/.venv/bin/ruff format --check tools/
+
+tools-lint:
+	@echo "Running ruff check on tools/..."
+	@python/.venv/bin/ruff check tools/
+
+# The TechDocs comparator's offline arm. It is stdlib only, so no venv and no
+# network: `make check` stays strictly offline and the scraping half runs only
+# from .github/workflows/techdocs-drift.yml or by hand. Run evidence lives
+# outside the repository; see tools/techdocs-proof/README.md.
+techdocs-proof:
+	@PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools/techdocs-proof/src \
+		python3 -m techdocs_proof --self-test
+
+## lint: Run all linters (fmt-check, go-lint, go-analyzers, python-lint, scripts-lint, tools-lint, tools-typecheck, dockerfiles, proto-lint, betterleaks, trivy, actionlint)
+lint: proto proto-lint fmt-check go-lint go-analyzers python-lint scripts-lint tools-lint tools-typecheck dockerfiles betterleaks trivy actionlint
 
 ## test: Run all tests (go-test + python-test)
 test: proto go-test python-test coverage-report
@@ -130,23 +171,25 @@ test: proto go-test python-test coverage-report
 # --- Cross-language gates (each documented in docs/gates.md) ---
 
 # A gate named x-y runs scripts/verify_x_y.py. This list runs on the project
-# venv because the scripts import the Python registry.
-VENV_GATES := tool-parity write-proto read-proto input-proto meta-proto \
-	behavior messages
+# venv because the scripts import the Python registry, or run a tool the venv
+# owns: tools-typecheck invokes mypy as `sys.executable -m mypy`, so the
+# interpreter it runs on is the one that supplies the checker.
+VENV_GATES := tool-parity generated-form behavior messages tools-typecheck
 
 $(VENV_GATES):
-	@python/.venv/bin/python scripts/verify_$(subst -,_,$@).py
+	@$(VENV_PYRUN) scripts/verify_$(subst -,_,$@).py
 
 # Same name-to-script mapping for the scripts that need no venv.
-PLAIN_GATES := profile-resolution dryrun pagination response-shapes \
-	list-envelope api-surfaces tool-routes field-location tool-capability \
+PLAIN_GATES := profile-resolution scope-spellings dryrun pagination response-shapes \
+	list-envelope api-surfaces tool-routes field-location \
 	tool-response route-evidence route-source generated-tools \
-	hand-validators hook-bodies system-params env-parity cli-surface docs-links \
+	hand-validators hand-code hand-arms system-params env-parity cli-surface docs-links \
 	metrics-surface coverage-floor tool-float sync-enums sync-defaults \
-	sync-scopes sync-pagination sync-response-shapes
+	sync-scopes sync-pagination sync-response-shapes \
+	go-analyzers dockerfiles proto-lint
 
 $(PLAIN_GATES):
-	@python3 scripts/verify_$(subst -,_,$@).py
+	@$(PYRUN) scripts/verify_$(subst -,_,$@).py
 
 # sync-scopes imports the Python registry, unlike the other sync gates.
 sync-scopes: python-install-dev
@@ -155,26 +198,38 @@ sync-scopes: python-install-dev
 BASE ?= origin/main
 
 baseline-guard:
-	@python3 scripts/verify_baseline_direction.py "$(BASE)"
+	@$(PYRUN) scripts/verify_baseline_direction.py "$(BASE)"
 
 diff-coverage:
-	@python3 scripts/verify_diff_coverage.py "$(BASE)"
+	@$(PYRUN) scripts/verify_diff_coverage.py "$(BASE)"
 
 tool-count:
-	@python3 scripts/verify_docs_tool_count.py
+	@$(PYRUN) scripts/verify_docs_tool_count.py
 
 sync-issues:
-	@python3 scripts/verify_tracking_issues.py
+	@$(PYRUN) scripts/verify_tracking_issues.py
 
 parity-todo:
-	@python3 scripts/parity_todo.py
+	@$(PYRUN) scripts/parity_todo.py
 
 # Reporting only, never fails: coverage-floor owns pass/fail.
 coverage-report:
-	@python3 scripts/report_coverage.py
+	@$(PYRUN) scripts/report_coverage.py
 
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
 sync: sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues
+
+# An action target like proto, never a gate: it needs the network and it writes.
+# Renovate manages the same four surfaces daily, so both write go.mod, the two
+# uv.lock files, and the workflow pins; docs/dependency-updates.md covers the
+# overlap and what each one is for. Nothing here touches git.
+## update-deps: Refresh every declared dependency version (Go, both uv projects, tool pins, action pins). Needs network, writes files, overlaps Renovate. See docs/dependency-updates.md
+update-deps:
+	@$(PYRUN) scripts/update_deps.py
+
+## update-deps-dry-run: Report what update-deps would change. Offline, writes nothing
+update-deps-dry-run:
+	@$(PYRUN) scripts/update_deps.py --dry-run
 
 install-hooks:
 	@./scripts/git-hooks.sh install
@@ -288,3 +343,4 @@ docker-clean:
 clean: go-clean python-clean docker-clean
 	-rm -rf .make go/internal/genpb python/src/linodemcp/genpb go/internal/toolschemas/data
 	-rm -rf go/internal/gentools python/src/linodemcp/gentools
+	-rm -rf go/internal/genlocal python/src/linodemcp/genlocal
