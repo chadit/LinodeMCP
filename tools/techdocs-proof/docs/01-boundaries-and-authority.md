@@ -42,6 +42,8 @@ Rendered TechDocs pages are the source for externally documented API facts:
 
 OpenAPI is not consulted as a fallback, tie breaker, validator, or repair source. If OpenAPI differs from rendered TechDocs, that is a separate investigation. Pulling OpenAPI into this proof would create two external authorities and make every disagreement ambiguous.
 
+That rule costs something, and the cost is worth naming. A handful of operations render their Body Params section behind a client-side switcher: the HTML carries one variant's fields, and the rest are built in the browser from an OpenAPI payload embedded in the page. Reading that payload would recover them. It would also make OpenAPI the authority for those routes and nothing else, which is the split this rule exists to prevent. The comparator records the variant labels the page does publish and reports the affected comparisons as limits instead. See chapter 3 and `techdocs_body_variant_unrendered` in chapter 6.
+
 ### 2. LinodeMCP tool authority: protobuf
 
 Files under the LinodeMCP protobuf tree define tool request messages, field names, scalar and enum types, optionality signals, comments, and deprecation metadata.
@@ -147,6 +149,8 @@ bool confirm = 2;
 
 The exact prefix turns an implicit exception into a reviewable protobuf-owned declaration. There is no name allowlist for `environment`, `confirm`, `dry_run`, or any other field.
 
+`field_location` is the machine-readable form of the same declaration, and two of its values keep a field off the wire. `FIELD_LOCATION_LOCAL` is MCP plumbing and stays locked to the marker above. `FIELD_LOCATION_TOOL` is the tool's own domain argument, such as a profile name a meta tool builds or a local path an object-storage transfer reads; it reaches no Linode route, so there is nothing on the documented side to join it to. Both are left out of the comparison and counted in the summary, `system_parameters` and `tool_arguments` separately, because the marker covers one and not the other. A `field_location` value the map does not carry is still unreadable and still reported.
+
 ## Deprecation has its own boundary
 
 A deprecated route is not equivalent to an active route missing from proto.
@@ -173,7 +177,8 @@ The proof does not assume:
 
 - page discovery always succeeds;
 - every page parses into an operation;
-- every proto field has obvious requiredness;
+- a page that parses published every field it documents;
+- every proto field has obvious requiredness, or that proto3 presence answers it;
 - field names alone identify location;
 - comments are present;
 - all deprecation prose is machine-readable;

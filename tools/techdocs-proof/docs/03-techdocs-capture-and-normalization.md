@@ -79,8 +79,9 @@ The normalizer:
 5. decodes HTML entities;
 6. normalizes line endings and horizontal whitespace;
 7. removes blank lines and a small set of known sign-in/vendor footer noise;
-8. redacts credential-shaped values;
-9. writes a terminal newline.
+8. keeps a schema switcher as a `[variants: ...; rendered: ...]` line;
+9. redacts credential-shaped values;
+10. writes a terminal newline.
 
 The result is not intended to be beautiful Markdown. It is a stable, readable evidence format that retains rendered words and URLs.
 
@@ -110,9 +111,15 @@ The route parser expects the rendered route declaration to contain:
 
 - one supported method: `GET`, `POST`, `PUT`, `PATCH`, or `DELETE`;
 - optional route-level `deprecated` text in the rendered declaration;
-- `https://api.linode.com`;
+- `https://api.linode.com` or `https://monitor-api.linode.com`;
 - `{apiVersion}`;
 - a route suffix.
+
+Two hosts, not one. The monitor metrics read is served from its own host, and a
+regex pinned to `api.linode.com` reads that page as documenting no operation at
+all, so the whole route drops out of the comparison rather than one parameter.
+The host is a serving detail, not part of the route key: both hosts produce the
+same normalized path, and the protobuf side declares a path with no host.
 
 Whitespace around the displayed URL is removed. The raw path is retained, while the comparison path is normalized.
 
@@ -172,6 +179,32 @@ Each section begins after its marker and ends at the next marker. Parsing stops 
 
 This bounded approach prevents a parameter-like phrase elsewhere on the page from being classified as an API parameter.
 
+## Schema switchers, and what the page does not publish
+
+Some operations render their Body Params section behind a client-side switcher.
+The NodeBalancer config create page opens its body section with `UDP TCP HTTP
+HTTPS`; the destination create page puts one on the `details` parameter with
+`Akamai Object Storage` and `Custom HTTPS`.
+
+The fetched HTML carries the fields of one variant. The others are not hidden in
+the DOM and no per-variant URL reaches them: the switcher is a `<select>` whose
+options are labels, and the fields it swaps in are built in the browser. The one
+place the other variants' fields do appear is the OpenAPI document the page
+hydrates from, and chapter 1 rules that out as a second external authority.
+
+So the normalizer keeps what the page does publish, which is the labels:
+
+```text
+[variants: UDP, TCP, HTTP, HTTPS; rendered: UDP]
+```
+
+A marker with a parameter head above it belongs to that parameter. A marker with
+no head above it governs the whole section, and the operation record carries the
+labels and the one that was rendered.
+
+The comparison reads that as a limit on the documented side rather than as a
+complete body. See chapter 5.
+
 ## Parameter parsing
 
 A parameter begins with a name and a recognized rendered type. Accepted type families include:
@@ -187,7 +220,19 @@ A parameter begins with a name and a recognized rendered type. Accepted type fam
 - map of a recognized type;
 - password;
 - date-time;
-- nullable forms rendered with `| null`.
+- URL;
+- nullable forms rendered with `| null` or with `or null`;
+- an array's item qualifier rendered as a trailing `, unique`.
+
+The site names a string's format where it has one, so `url` and `uuid` and
+`date-time` normalize to `string` for comparison: the protobuf side carries the
+scalar and nothing finer.
+
+A parameter whose schema is a switcher renders no type token at all. Its head is
+the name alone, or the name followed by `required`, and the switcher marker on
+the next line is what separates that head from ordinary prose. The type recorded
+for it is `object`, which is the only schema shape the site renders a switcher
+for.
 
 Within the parameter block, the parser recognizes:
 

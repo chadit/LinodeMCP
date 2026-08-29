@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint tools-fmt-check tools-lint tools-typecheck techdocs-proof go-analyzers dockerfiles proto-lint clean install-hooks check-hooks tool-parity profile-resolution scope-spellings tool-count dryrun pagination response-shapes list-envelope tool-routes api-surfaces field-location tool-response route-evidence route-source generated-tools hand-validators hand-code hand-arms system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage generated-form behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint tools-fmt-check tools-lint tools-typecheck techdocs-proof go-analyzers dockerfiles proto-lint overlay-roundtrip overlay-merge wire-breaking techdocs-routes clean install-hooks check-hooks tool-parity profile-resolution scope-spellings tool-count dryrun pagination response-shapes list-envelope tool-routes api-surfaces field-location tool-response route-evidence route-source generated-tools hand-validators hand-code hand-arms system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage generated-form behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -103,7 +103,7 @@ build: proto go-build python-build
 
 # THE gate order, cheap fails first, venv install before everything that needs
 # it. CI's one job and the pre-push hook run exactly this list (docs/gates.md).
-CHECK_GATES := proto proto-lint python-install-dev fmt-check scripts-lint tools-lint \
+CHECK_GATES := proto proto-lint overlay-roundtrip overlay-merge wire-breaking techdocs-routes python-install-dev fmt-check scripts-lint tools-lint \
 	techdocs-proof actionlint dockerfiles tools-typecheck \
 	baseline-guard tool-float go-check go-analyzers python-check coverage-floor \
 	diff-coverage tool-parity profile-resolution scope-spellings tool-count dryrun \
@@ -162,6 +162,41 @@ techdocs-proof:
 	@PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=tools/techdocs-proof/src \
 		python3 -m techdocs_proof --self-test
 
+# The overlay extraction's standing control: it decomposes proto/ into the
+# upstream surface and the repo-owned overlay, renders the pair back, and
+# byte-compares. Scope comes from buf.yaml's modules, so a module added later
+# is walked untouched. Offline; the logic is in go/cmd/protomerge.
+overlay-roundtrip:
+	@go -C go run ./cmd/protomerge -repo ..
+
+# The merger's control: at zero techdocs drift, the tree merged from an upstream
+# surface descriptor plus the overlay is byte-identical to proto/. The descriptor
+# goes to a scratch directory, since one committed beside its own output would
+# only restate it.
+overlay-merge:
+	@dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+		go -C go run ./cmd/protomerge -repo .. -emit-surface "$$dir/surface.json" && \
+		go -C go run ./cmd/protomerge -repo .. -surface "$$dir/surface.json" -out "$$dir/tree" && \
+		diff -ru proto "$$dir/tree/proto"
+
+# The wire-stability check buf.yaml declared and nothing invoked. The baseline is
+# a pinned image, not a branch reference: a checkout compared against its own
+# branch measures nothing. Built with --exclude-source-info so comments and
+# layout never move it. Offline: no deps and no buf.lock, so buf never calls BSR.
+WIRE_BASELINE := docs/contracts/wire-baseline.binpb.gz
+
+wire-breaking:
+	@command -v buf >/dev/null 2>&1 || { echo "buf is required: https://buf.build/docs/installation"; exit 1; }
+	@test -s $(WIRE_BASELINE) || { echo "$(WIRE_BASELINE) is missing or empty, so this gate would measure nothing"; exit 1; }
+	@echo "compared the proto tree against $(WIRE_BASELINE) ($$(wc -c < $(WIRE_BASELINE) | tr -d ' ') bytes)"
+	@buf breaking --against $(WIRE_BASELINE) || { \
+		echo ""; \
+		echo "A wire change breaks every client already speaking this contract."; \
+		echo "Put the number and the name back, or retire them with a reserved"; \
+		echo "statement and refresh the baseline in the same reviewed change:"; \
+		echo "  buf build --exclude-source-info -o $(WIRE_BASELINE)"; \
+		exit 1; }
+
 ## lint: Run all linters (fmt-check, go-lint, go-analyzers, python-lint, scripts-lint, tools-lint, tools-typecheck, dockerfiles, proto-lint, betterleaks, trivy, actionlint)
 lint: proto proto-lint fmt-check go-lint go-analyzers python-lint scripts-lint tools-lint tools-typecheck dockerfiles betterleaks trivy actionlint
 
@@ -181,7 +216,7 @@ $(VENV_GATES):
 
 # Same name-to-script mapping for the scripts that need no venv.
 PLAIN_GATES := profile-resolution scope-spellings dryrun pagination response-shapes \
-	list-envelope api-surfaces tool-routes field-location \
+	list-envelope api-surfaces tool-routes techdocs-routes field-location \
 	tool-response route-evidence route-source generated-tools \
 	hand-validators hand-code hand-arms system-params env-parity cli-surface docs-links \
 	metrics-surface coverage-floor tool-float sync-enums sync-defaults \

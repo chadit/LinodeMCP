@@ -127,13 +127,23 @@ TechDocs object vs proto bool
 
 **Rule:** Both sides provide a usable requiredness signal and the booleans disagree.
 
-**Check:** rendered `Required` marker, proto presence/validation metadata, and whether the field is path/query/body.
+**Check:** rendered `Required` marker, the `buf.validate` rule that names the field, proto presence, and whether the field is path/query/body. Chapter 5 gives the order the proto side answers in. The rule is the fact worth reading first: a field with no rule and no `optional` keyword is one the generated body builder sends on every call, which is a different claim from one the handler rejects the call without.
 
 ### `proto_requiredness_ambiguous`
 
 **Rule:** TechDocs provides requiredness, but the descriptor does not provide enough evidence to classify the proto field safely.
 
 **This is not the same as optional.** The resolution may be better protobuf validation metadata, a schema annotation, or a refined extractor rule backed by descriptor facts.
+
+### `techdocs_body_variant_unrendered`
+
+**Rule:** The Body Params section rendered one variant of a schema switcher, and the comparison landed on something only an unrendered variant could document: a protobuf body field with no documented match, or an allowed-value list the protobuf side strictly contains.
+
+**Severity:** limitation. The documented side was never published, so there is nothing to judge against, the way proto3 cannot state a repeated field's requiredness.
+
+**Do not act on this as a repo defect.** The field or value is real and the API accepts it. The finding carries `body_variants`, `rendered_body_variant`, and `unrendered_body_variants` so a reader can open the page, switch the tab, and check by hand.
+
+**Resolution:** none available from the rendered page. Closing this class needs the site to render every variant server-side, or a ruling that the page's own OpenAPI payload becomes a second authority, which chapter 1 currently forbids.
 
 ### `parameter_location_ambiguous`
 

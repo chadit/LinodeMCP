@@ -124,7 +124,16 @@ FIELD_LOCATION_VALUES = {
     "FIELD_LOCATION_QUERY": "query",
     "FIELD_LOCATION_BODY": "body",
     "FIELD_LOCATION_LOCAL": "local",
+    "FIELD_LOCATION_TOOL": "tool",
 }
+# A tool argument that reaches no Linode route: meta-tool domain arguments and
+# the local file paths the transfer tools read. Counted apart from the system
+# parameters because LOCAL is locked to the `// system param` marker.
+TOOL_ARGUMENT_LOCATION = "tool"
+VALIDATE_MESSAGE_OPTION = "[buf.validate.message]"
+# A rule is named after the field and the constraint, so the identifier is
+# where a declared requiredness is readable.
+VALIDATE_REQUIRED_SUFFIX = "required"
 TECHDOCS_OPERATION_OPTION = "[techdocs.linode.api.operation]"
 TECHDOCS_PARAMETER_OPTION = "[techdocs.linode.api.api_parameter]"
 TECHDOCS_PROTO_FILE = "techdocs_contract.proto"
@@ -190,12 +199,16 @@ def normalize_name(value: str) -> str:
 
 def normalize_semantic_type(value: str) -> str:
     normalized = value.strip().lower()
-    normalized = re.sub(r"\s*\|\s*null$", "", normalized)
+    normalized = re.sub(r"\s*,\s*unique$", "", normalized)
+    normalized = re.sub(r"\s*(?:\|\s*null|or null)$", "", normalized)
     if normalized == "array" or normalized.startswith("array of "):
         return "array"
+    # The proto side carries only the scalar, so a format token is the same
+    # semantic type.
     return {
         "date-time": "string",
         MASKED_STRING_FORMAT: "string",
+        "url": "string",
         "uuid": "string",
     }.get(normalized, normalized)
 
@@ -294,10 +307,40 @@ def fetch_text(url: str, timeout: int = 30, attempts: int = 3) -> str | None:
     return None
 
 
+VARIANT_SELECT_RE = re.compile(
+    r'(?is)<select\b[^>]*data-testid="OneOfMultiSchema-trigger"[^>]*>(.*?)</select>'
+)
+VARIANT_OPTION_RE = re.compile(r"(?is)<option\b([^>]*)>(.*?)</option>")
+VARIANT_LABEL_SEPARATORS_RE = re.compile(r"[,;\[\]]")
+
+
+def variant_marker(match: re.Match[str]) -> str:
+    """Keep a schema switcher's labels as a line the parser can read.
+
+    The switcher is client-side and the fetched HTML carries one variant's
+    fields, so the labels are the page's only published evidence that the other
+    variants exist at all.
+    """
+    labels: list[str] = []
+    rendered = ""
+    for attributes, body in VARIANT_OPTION_RE.findall(match.group(1)):
+        label = html.unescape(re.sub(r"<[^>]+>", " ", body))
+        label = re.sub(r"\s+", " ", VARIANT_LABEL_SEPARATORS_RE.sub(" ", label)).strip()
+        if not label:
+            continue
+        labels.append(label)
+        if not rendered and re.search(r"(?i)(^|\s)selected(\s|=|/|>|$)", attributes):
+            rendered = label
+    if not labels:
+        return "\n"
+    return f"\n[variants: {', '.join(labels)}; rendered: {rendered}]\n"
+
+
 def html_to_markdownish(raw: str) -> str:
     text = re.sub(r"(?is)<script[^>]*>.*?</script>", "\n", raw)
     text = re.sub(r"(?is)<style[^>]*>.*?</style>", "\n", text)
     text = re.sub(r"(?is)<noscript[^>]*>.*?</noscript>", "\n", text)
+    text = VARIANT_SELECT_RE.sub(variant_marker, text)
     text = re.sub(r"(?i)</(h[1-6]|p|div|section|article|li|tr|pre|code)>", "\n", text)
     text = re.sub(r"(?i)<br\s*/?>", "\n", text)
     text = re.sub(
@@ -373,23 +416,38 @@ def discover_docs_pages(max_pages: int | None = None) -> list[str]:
     return result
 
 
+# The monitor metrics read from their own host, so one pinned host loses them.
 TECHDOCS_ROUTE_RE = re.compile(
     r"^(get|post|put|patch|delete)(?:\s+(deprecated))?\s+"
-    r"https://api\.linode\.com\s*/\s*\{apiVersion\}\s*(.+?)\s*$",
+    r"https://(?:api|monitor-api)\.linode\.com\s*/\s*\{apiVersion\}\s*(.+?)\s*$",
     re.IGNORECASE,
 )
 TECHDOCS_SECTION_RE = re.compile(
     r"(?:\[link:\s*#[^]]+\]\s*)?(Path Params|Query Params|Body Params|Responses)$",
     re.IGNORECASE,
 )
+# A documented type token: collection prefix, both nullable spellings, and the
+# trailing item qualifier arrays render.
+TECHDOCS_TYPE_PHRASE = (
+    r"(?:(?:array|map) of )?"
+    r"(?:strings?|objects?|integers?|numbers?|booleans?|uuids?|urls?|passwords?"
+    r"|date-times?|array)"
+    r"(?:\s*(?:\|\s*null|or null))?"
+    r"(?:\s*,\s*unique)?"
+)
 TECHDOCS_PARAM_RE = re.compile(
-    r"^([A-Za-z_][A-Za-z0-9_.-]*)\s+"
-    r"((?:(?:array|map) of )?(?:strings?|objects?|integers?|numbers?|booleans?|uuids?)"
-    r"(?:\s*\|\s*null)?|(?:string|integer|number|boolean|object|array|password|uuid|date-time)"
-    r"(?:\s*\|\s*null)?)$",
+    rf"^([A-Za-z_][A-Za-z0-9_.-]*)\s+({TECHDOCS_TYPE_PHRASE})$",
     re.IGNORECASE,
 )
+# A switcher renders no type token, so the marker line below the bare name is
+# what identifies it.
+TECHDOCS_VARIANT_PARAM_RE = re.compile(
+    r"^([A-Za-z_][A-Za-z0-9_.-]*)(?:\s+(required))?$"
+)
+TECHDOCS_VARIANTS_RE = re.compile(r"^\[variants:\s*(.*?);\s*rendered:\s*(.*?)\]$")
 TECHDOCS_ENUM_VALUE_RE = re.compile(r"^[A-Za-z0-9_.:/+@-]+$")
+# ReadMe renders a switcher only for a choice between object shapes.
+TECHDOCS_VARIANT_TYPE = "object"
 
 
 def parse_techdocs_scalar(raw: str) -> Any:
@@ -419,18 +477,83 @@ def techdocs_section_ranges(
     return ranges
 
 
+def parse_techdocs_variants(line: str) -> tuple[list[str], str] | None:
+    """Read a rendered schema switcher back out of its marker line."""
+    match = TECHDOCS_VARIANTS_RE.match(line)
+    if match is None:
+        return None
+    labels = [item.strip() for item in match.group(1).split(",") if item.strip()]
+    return labels, match.group(2).strip()
+
+
+def techdocs_parameter_heads(
+    lines: list[str], start: int, end: int
+) -> list[tuple[int, dict[str, Any]]]:
+    """Find every parameter head in a section, with the type each one renders.
+
+    A head carries its documented type token, except where the schema is a
+    switcher: there the site renders the name alone and the switcher below it,
+    so the marker line is what separates that head from ordinary prose.
+    """
+    heads: list[tuple[int, dict[str, Any]]] = []
+    for index in range(start, end):
+        line = lines[index].strip()
+        typed = TECHDOCS_PARAM_RE.match(line)
+        if typed:
+            heads.append(
+                (
+                    index,
+                    {
+                        "name": typed.group(1),
+                        "type": re.sub(r"\s+", " ", typed.group(2).casefold()),
+                        "required": False,
+                    },
+                )
+            )
+            continue
+        if index + 1 >= end:
+            continue
+        switcher = parse_techdocs_variants(lines[index + 1].strip())
+        untyped = TECHDOCS_VARIANT_PARAM_RE.match(line)
+        if switcher is None or untyped is None:
+            continue
+        heads.append(
+            (
+                index,
+                {
+                    "name": untyped.group(1),
+                    "type": TECHDOCS_VARIANT_TYPE,
+                    "required": bool(untyped.group(2)),
+                },
+            )
+        )
+    return heads
+
+
+def techdocs_section_variants(
+    lines: list[str], start: int, end: int
+) -> tuple[list[str], str]:
+    """Read the switcher that governs a whole section rather than one parameter.
+
+    ReadMe renders a section-level switcher with no name above it, so a marker
+    that no parameter head introduces is the section's own.
+    """
+    heads = {index for index, _ in techdocs_parameter_heads(lines, start, end)}
+    for index in range(start, end):
+        switcher = parse_techdocs_variants(lines[index].strip())
+        if switcher is not None and index - 1 not in heads:
+            return switcher
+    return [], ""
+
+
 def parse_techdocs_parameters(
     lines: list[str], start: int, end: int
 ) -> list[dict[str, Any]]:
-    starts: list[tuple[int, re.Match[str]]] = []
-    for index in range(start, end):
-        match = TECHDOCS_PARAM_RE.match(lines[index].strip())
-        if match:
-            starts.append((index, match))
+    starts = techdocs_parameter_heads(lines, start, end)
     parameters: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for position, (index, match) in enumerate(starts):
-        name = match.group(1)
+    for position, (index, head) in enumerate(starts):
+        name = head["name"]
         if name in seen:
             continue
         seen.add(name)
@@ -455,8 +578,9 @@ def parse_techdocs_parameters(
             enum_values = sorted({candidate for candidate in candidates if candidate})
         parameter = {
             "name": name,
-            "type": re.sub(r"\s+", " ", match.group(2).casefold()),
-            "required": any(item.casefold() == "required" for item in block),
+            "type": head["type"],
+            "required": head["required"]
+            or any(item.casefold() == "required" for item in block),
             "default": default,
             "enum": enum_values,
             "deprecated": any(item.casefold() == "deprecated" for item in block),
@@ -528,6 +652,9 @@ def parse_techdocs_endpoint(
     for location in parameters:
         if location in ranges:
             parameters[location] = parse_techdocs_parameters(lines, *ranges[location])
+    body_variants, rendered_body_variant = techdocs_section_variants(
+        lines, *ranges.get("body", (0, 0))
+    )
     version_parameter = next(
         (item for item in parameters["path"] if item["name"] == "apiVersion"), None
     )
@@ -566,6 +693,7 @@ def parse_techdocs_endpoint(
     return {
         "api_surface": api_surface,
         "api_version": api_version,
+        "body_variants": body_variants,
         "deprecated": deprecated,
         "deprecated_parameters": sorted(deprecated_parameters),
         "docs_url": source_url,
@@ -578,6 +706,7 @@ def parse_techdocs_endpoint(
         "parameters": parameters,
         "path": path,
         "raw_path": raw_path,
+        "rendered_body_variant": rendered_body_variant,
         "source_page": page_file,
         "status_codes": status_codes,
         "title": title,
@@ -636,6 +765,61 @@ def build_techdocs_contract_snapshot(endpoints: list[dict[str, Any]]) -> dict[st
         "deprecated_routes": stable(deprecated_routes),
         "deprecated_parameters": stable(deprecated_parameters),
     }
+
+
+ROUTE_SNAPSHOT_NAME = "route-snapshot.txt"
+ROUTE_SNAPSHOT_HEADER = """\
+# Rendered-TechDocs route snapshot (harvested {harvested}, {count} routes)
+# One line per route the rendered TechDocs state:
+#   METHOD /path/shape surface=<both|v4_only|v4beta_only> status=<active|deprecated>
+# Placeholder names collapse to {{}}: TechDocs writes clusterId where the proto
+# writes cluster_id, so the shape is the only join both sides agree on.
+# Generated; regenerate with:
+#   PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof \\
+#     --techdocs-contract <run>/techdocs-contracts.json \\
+#     --emit-route-snapshot docs/contracts/api-techdocs-routes-baseline.txt
+# Consumed offline by scripts/verify_techdocs_routes.py (make techdocs-routes);
+# .github/workflows/techdocs-drift.yml reports the weekly diff for a human.
+"""
+
+
+def route_snapshot_lines(contract: Mapping[str, Any]) -> list[str]:
+    """One line per rendered-TechDocs route, in the snapshot's own vocabulary.
+
+    Routes collapse to their path shape because that is the only key the proto
+    and the site spell the same way. Two operations that collapse together
+    agree on surface and status, so the set stays one line per route.
+    """
+    lines: set[str] = set()
+    for route in contract.get("routes", []):
+        method = str(route.get("method") or "").upper().strip()
+        shape = path_shape(normalize_path(str(route.get("path") or "")))
+        surface = str(route.get("api_surface") or "")
+        status = "deprecated" if route.get("deprecated") else "active"
+        lines.add(f"{method} {shape} surface={surface} status={status}")
+    return sorted(lines)
+
+
+def route_snapshot_text(contract: Mapping[str, Any], harvested: str) -> str:
+    """The snapshot file's whole text, header included."""
+    lines = route_snapshot_lines(contract)
+    if not lines:
+        raise ProofError(
+            "the TechDocs contract states no route, so a snapshot written from "
+            "it would gate nothing"
+        )
+    header = ROUTE_SNAPSHOT_HEADER.format(harvested=harvested, count=len(lines))
+    return header + "".join(f"{line}\n" for line in lines)
+
+
+def write_route_snapshot(
+    contract: Mapping[str, Any], destination: Path, harvested: str
+) -> int:
+    """Write the snapshot and answer how many routes it states."""
+    text = route_snapshot_text(contract, harvested)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(text, encoding="utf-8")
+    return len(text.splitlines()) - len(ROUTE_SNAPSHOT_HEADER.splitlines())
 
 
 def scrape_techdocs(
@@ -834,7 +1018,9 @@ def run_buf_descriptor(
             descriptor = build(Path(directory) / "descriptor.json")
     else:
         descriptor = build(output_path)
-    files = descriptor.get("file") if isinstance(descriptor, dict) else None
+    # build already refused a non-object descriptor, so the only thing left to
+    # prove here is that the object carries files.
+    files = descriptor.get("file")
     if not isinstance(files, list) or not files:
         raise ProofError("Buf output contains no descriptor files")
     return descriptor
@@ -937,6 +1123,31 @@ def is_map_field(field: dict[str, Any], messages: dict[str, dict[str, Any]]) -> 
     return bool(message and message.get("options", {}).get("mapEntry"))
 
 
+def declared_required_fields(message: dict[str, Any]) -> set[str]:
+    """Fields the input message declares required through a validation rule.
+
+    proto3 presence says whether a field can be omitted on the wire, not whether
+    the tool accepts the call without it. The rule is what the handler runs, so
+    the rule is what the documented contract has to be compared against. A rule
+    counts only when its identifier names the field it constrains and its
+    expression reads that same field, which keeps a member rule such as
+    `saml.entity_id.required` off the parent.
+    """
+    options: dict[str, Any] = message.get("options") or {}
+    validation: dict[str, Any] = options.get(VALIDATE_MESSAGE_OPTION) or {}
+    rules: list[dict[str, Any]] = validation.get("cel") or []
+    required: set[str] = set()
+    for rule in rules:
+        identifier = str(rule.get("id") or "").split(".")
+        if len(identifier) < 2 or identifier[-1] != VALIDATE_REQUIRED_SUFFIX:
+            continue
+        field_name = identifier[-2]
+        expression = str(rule.get("expression") or "")
+        if re.search(rf"\bthis\.{re.escape(field_name)}\b", expression):
+            required.add(field_name)
+    return required
+
+
 def extract_proto_tools(
     descriptor: dict[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
@@ -1002,6 +1213,7 @@ def extract_proto_tools(
                 part for part in (package, message_name) if part
             )
             parameters: list[dict[str, Any]] = []
+            required_by_rule = declared_required_fields(message)
             for field_index, field in enumerate(message.get("field", [])):
                 comment = comments.get((4, message_index, 2, field_index), "")
                 repeated = field.get("label") == "LABEL_REPEATED"
@@ -1014,7 +1226,16 @@ def extract_proto_tools(
                 if repeated and not map_field:
                     field_type = "array"
                 required: bool | None
-                if field.get("proto3Optional"):
+                # A singular message field tracks presence without `optional`,
+                # so reading it as required overstates the contract.
+                singular_message = (
+                    str(field.get("type")) == "TYPE_MESSAGE"
+                    and not repeated
+                    and not map_field
+                )
+                if str(field.get("name") or "") in required_by_rule:
+                    required = True
+                elif field.get("proto3Optional") or singular_message:
                     required = False
                 elif repeated or map_field:
                     required = None
@@ -1133,12 +1354,17 @@ def techdocs_indexes(
             )
             if not isinstance(operation, dict):
                 continue  # OperationContract and ParameterContract carry no route.
-            method = str(operation.get("method") or "").upper().strip()
-            canonical_path = normalize_path(str(operation.get("path") or ""))
+            # Buf hands the option back as decoded JSON, so the contract is read
+            # through one declared shape rather than off an untyped mapping.
+            contract: dict[str, Any] = operation
+            method = str(contract.get("method") or "").upper().strip()
+            canonical_path = normalize_path(str(contract.get("path") or ""))
             key = (method, path_shape(canonical_path))
-            declared_surface = str(operation.get("apiSurface") or "")
-            route = {
-                "api_version": str(operation.get("apiVersion") or ""),
+            declared_surface = str(contract.get("apiSurface") or "")
+            variant_labels: list[Any] = contract.get("bodyVariants") or []
+            status_codes: list[Any] = contract.get("statusCodes") or []
+            route: dict[str, Any] = {
+                "api_version": str(contract.get("apiVersion") or ""),
                 "api_surface": (
                     declared_surface
                     if declared_surface in API_SURFACE_CLASSIFICATIONS
@@ -1148,10 +1374,12 @@ def techdocs_indexes(
                 "path": canonical_path,
                 "route_shape": key[1],
                 "placeholders": path_placeholders(canonical_path),
-                "deprecated": bool(operation.get("isDeprecated")),
-                "source_url": str(operation.get("sourceUrl") or ""),
-                "status_codes": list(operation.get("statusCodes") or []),
+                "deprecated": bool(contract.get("isDeprecated")),
+                "source_url": str(contract.get("sourceUrl") or ""),
+                "status_codes": list(status_codes),
                 "message": str(message.get("name") or ""),
+                "body_variants": [str(label) for label in variant_labels],
+                "rendered_body_variant": str(contract.get("renderedBodyVariant") or ""),
             }
             prior = routes.get(key)
             if prior and prior["message"] != route["message"]:
@@ -1253,19 +1481,60 @@ LEDGER_FIELDS = (
     "parameter",
     "reason",
 )
+# Keys are written out rather than pattern-matched: a pattern absorbs whatever
+# starts matching later and never goes stale, which is a suppression.
+LEDGER_CLASS_FIELDS = ("category", "kind", "reason", "entries")
+LEDGER_CLASS_ENTRY_FIELDS = ("method", "shape", "location", "parameter")
+
+
+def json_list(value: Any, message: str) -> list[Any]:
+    """Read a decoded JSON value as a list, refusing anything else.
+
+    The annotation is the point. An isinstance guard narrows Any to a list of
+    unknowns, and every read off that list carries the unknown forward, so the
+    shape is declared once here rather than at each element.
+    """
+    if not isinstance(value, list):
+        raise ProofError(message)
+    return value
+
+
+def expand_ledger_class(position: int, item: dict[str, Any]) -> list[dict[str, str]]:
+    """Turn one class rule into the per-key entries the comparison matches."""
+    failure = f"exclusion ledger class {position} must list at least one entry"
+    rows = json_list(item["entries"], failure)
+    if not rows:
+        raise ProofError(failure)
+    expanded: list[dict[str, str]] = []
+    for offset, row in enumerate(rows):
+        if not isinstance(row, dict) or set(row) != set(LEDGER_CLASS_ENTRY_FIELDS):
+            raise ProofError(
+                f"exclusion ledger class {position} entry {offset} must carry "
+                f"exactly {list(LEDGER_CLASS_ENTRY_FIELDS)}"
+            )
+        expanded.append(
+            {
+                "category": str(item["category"]),
+                "kind": str(item["kind"]),
+                "reason": str(item["reason"]),
+                **{field: str(row[field]) for field in LEDGER_CLASS_ENTRY_FIELDS},
+            }
+        )
+    return expanded
 
 
 def load_known_divergences(path: Path = LEDGER_PATH) -> tuple[dict[str, str], ...]:
     """Read the exclusion ledger, refusing an entry the comparison cannot key."""
-    raw = read_json(path)
-    if not isinstance(raw, list):
-        raise ProofError(f"exclusion ledger must hold a JSON list: {path}")
+    raw = json_list(read_json(path), f"exclusion ledger must hold a JSON list: {path}")
     entries: list[dict[str, str]] = []
     for position, item in enumerate(raw):
+        if isinstance(item, dict) and set(item) == set(LEDGER_CLASS_FIELDS):
+            entries.extend(expand_ledger_class(position, item))
+            continue
         if not isinstance(item, dict) or set(item) != set(LEDGER_FIELDS):
             raise ProofError(
                 f"exclusion ledger entry {position} must carry exactly "
-                f"{list(LEDGER_FIELDS)}"
+                f"{list(LEDGER_FIELDS)} or {list(LEDGER_CLASS_FIELDS)}"
             )
         entries.append({field: str(item[field]) for field in LEDGER_FIELDS})
     return tuple(entries)
@@ -1328,6 +1597,7 @@ FINDING_SEVERITY = {
     "route_surface_downgrade_available": "info",
     "proto_requiredness_ambiguous": "limitation",
     "parameter_default_unrepresented_in_proto": "limitation",
+    "techdocs_body_variant_unrendered": "limitation",
 }
 
 SEVERITY_ORDER = ("high", "medium", "known", "limitation", "info")
@@ -1432,6 +1702,44 @@ def order_path_slots(
         if slot is None and unbound:
             slots[position] = unbound.pop(0)
     return slots, unbound
+
+
+def unrendered_body_variants(route: dict[str, Any], location: str) -> list[str]:
+    """Body-schema variants the page named and the fetched HTML left out.
+
+    A non-empty answer means the documented body is one branch of a choice, so
+    the missing branches, not the repo, explain a field or an allowed value the
+    rendered side does not carry.
+    """
+    if location != "body":
+        return []
+    rendered = str(route.get("rendered_body_variant") or "")
+    labels: list[Any] = route.get("body_variants") or []
+    return [str(label) for label in labels if label != rendered]
+
+
+def body_variant_finding(
+    key: tuple[str, str],
+    route: dict[str, Any],
+    tool: dict[str, Any],
+    parameter: str,
+    observation: str,
+    unrendered: list[str],
+) -> dict[str, Any]:
+    finding = finding_base("techdocs_body_variant_unrendered", key, route, tool)
+    finding.update(
+        {
+            "parameter": parameter,
+            "location": "body",
+            "observation": observation,
+            "techdocs": {
+                "body_variants": list(route.get("body_variants") or []),
+                "rendered_body_variant": route.get("rendered_body_variant") or "",
+                "unrendered_body_variants": unrendered,
+            },
+        }
+    )
+    return finding
 
 
 def compare_parameter(
@@ -1556,15 +1864,30 @@ def compare_parameter(
     tech_enum = sorted(str(value) for value in tech_parameter.get("enum", []))
     proto_enum = sorted(str(value) for value in proto_parameter.get("enum", []))
     if tech_enum != proto_enum and (tech_enum or proto_enum):
-        finding = dict(base)
-        finding.update(
-            {
-                "kind": "parameter_enum_mismatch",
-                "techdocs": tech_enum,
-                "proto": proto_enum,
-            }
+        unrendered = unrendered_body_variants(
+            route, str(tech_parameter.get("location") or "")
         )
-        findings.append(finding)
+        if unrendered and set(tech_enum) < set(proto_enum):
+            findings.append(
+                body_variant_finding(
+                    key,
+                    route,
+                    tool,
+                    str(proto_parameter["name"]),
+                    "the rendered variant lists fewer allowed values than the proto",
+                    unrendered,
+                )
+            )
+        else:
+            finding = dict(base)
+            finding.update(
+                {
+                    "kind": "parameter_enum_mismatch",
+                    "techdocs": tech_enum,
+                    "proto": proto_enum,
+                }
+            )
+            findings.append(finding)
 
     tech_deprecated = bool(tech_parameter.get("deprecated"))
     proto_deprecated = bool(proto_parameter.get("deprecated"))
@@ -1771,6 +2094,19 @@ def compare_wire_parameters(
                 )
                 findings.append(finding)
                 continue
+            unrendered = unrendered_body_variants(route, location)
+            if unrendered:
+                findings.append(
+                    body_variant_finding(
+                        key,
+                        route,
+                        tool,
+                        str(proto_parameter.get("name") or ""),
+                        "the rendered variant declares no such body parameter",
+                        unrendered,
+                    )
+                )
+                continue
             findings.append(extra_in_proto_finding(key, route, tool, proto_parameter))
             continue
         consumed.add(id(match))
@@ -1789,15 +2125,19 @@ def compare_tool_parameters(
     route: dict[str, Any],
     tool: dict[str, Any],
     tech_parameters: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], int, int]:
     findings: list[dict[str, Any]] = []
     system_count = 0
+    tool_argument_count = 0
     proto_path: list[dict[str, Any]] = []
     proto_wire: list[dict[str, Any]] = []
 
     for parameter in tool.get("parameters", []):
         if parameter.get("system_parameter"):
             system_count += 1
+            continue
+        if parameter.get("location") == TOOL_ARGUMENT_LOCATION:
+            tool_argument_count += 1
             continue
         if parameter.get("location") is None:
             finding = finding_base("proto_field_location_missing", key, route, tool)
@@ -1814,7 +2154,7 @@ def compare_tool_parameters(
 
     findings.extend(compare_path_parameters(key, route, tool, proto_path, tech_path))
     findings.extend(compare_wire_parameters(key, route, tool, proto_wire, tech_wire))
-    return findings, system_count
+    return findings, system_count, tool_argument_count
 
 
 def compare_route_surface(
@@ -1928,6 +2268,7 @@ def compare_contracts(
         key: route for key, route in routes.items() if bool(route.get("deprecated"))
     }
     system_count = 0
+    tool_argument_count = 0
     # A descriptor where no tool declares a surface predates the option, and
     # reading every tool there as v4 would report each beta-only route as a
     # repo defect. One declaration anywhere means absence is a real v4 claim.
@@ -1943,10 +2284,11 @@ def compare_contracts(
         for tool in tools:
             if surface_declared:
                 findings.extend(compare_route_surface(key, route, tool))
-            parameter_findings, count = compare_tool_parameters(
+            parameter_findings, count, arguments = compare_tool_parameters(
                 key, route, tool, parameters.get(key, [])
             )
             system_count += count
+            tool_argument_count += arguments
             findings.extend(parameter_findings)
 
     all_tech_keys = set(routes)
@@ -2083,6 +2425,9 @@ def compare_contracts(
             "exact_route_contract_matches": exact_matches,
             "routes_without_actionable_findings": contract_matches,
             "system_parameters": system_count,
+            # Counted rather than reported: a tool-location argument reaches no
+            # Linode route, so there is nothing on the documented side to join.
+            "tool_arguments": tool_argument_count,
             "mismatches": len(findings),
             "actionable_findings": sum(
                 1 for item in findings if item.get("severity") in actionable
@@ -2118,7 +2463,22 @@ def compare_contracts(
             (
                 "Divergences a triage confirmed are not repo defects carry severity "
                 "known and a recorded reason; each entry is route-scoped and the "
-                "summary lists any entry that no longer matches."
+                "summary lists any entry that no longer matches. A class rule "
+                "states one reason over a written-out list of finding keys, so a "
+                "key that stops appearing is reported the same way."
+            ),
+            (
+                "Requiredness on the repo side reads the input message's declared "
+                "buf.validate rule first and proto3 presence only where no rule "
+                "names the field. A singular message field is presence-tracked, so "
+                "an unruled one is read as optional the way the generated body "
+                "builder treats it."
+            ),
+            (
+                "Where the Body Params section renders a schema switcher, the "
+                "fetched HTML carries one variant. The labels of the rest are "
+                "recorded, and a body field or allowed value only the unrendered "
+                "variants could document is reported at limitation severity."
             ),
             (
                 "Proto3 repeated/map requiredness and documented defaults are reported "
@@ -2319,7 +2679,8 @@ def proto_message_name(endpoint: dict[str, Any], used: set[str]) -> str:
 
 
 def proto_field_spec(raw_type: str) -> tuple[str, bool]:
-    normalized = re.sub(r"\s*\|\s*null$", "", raw_type.strip().lower())
+    normalized = re.sub(r"\s*,\s*unique$", "", raw_type.strip().lower())
+    normalized = re.sub(r"\s*(?:\|\s*null|or null)$", "", normalized)
     repeated = normalized == "array" or normalized.startswith("array of ")
     item = normalized.removeprefix("array of ").rstrip("s") if repeated else normalized
     scalar = {
@@ -2329,6 +2690,7 @@ def proto_field_spec(raw_type: str) -> tuple[str, bool]:
         "number": "double",
         MASKED_STRING_FORMAT: "string",
         "string": "string",
+        "url": "string",
         "uuid": "string",
     }.get(item, "google.protobuf.Value")
     return scalar, repeated
@@ -2390,6 +2752,11 @@ def render_techdocs_proto(endpoints: list[dict[str, Any]]) -> str:
         "  // v4_only, v4beta_only, or both. Empty when the page never rendered",
         "  // an Allowed list to classify.",
         "  string api_surface = 7;",
+        "  // Labels of the schema switcher over the whole Body Params section,",
+        "  // and the one label the fetched HTML carried fields for. The rest",
+        "  // are named by the page and rendered only in a browser.",
+        "  repeated string body_variants = 8;",
+        "  string rendered_body_variant = 9;",
         "}",
         "",
         "message ParameterContract {",
@@ -2439,6 +2806,14 @@ def render_techdocs_proto(endpoints: list[dict[str, Any]]) -> str:
         surface = endpoint_api_surface(endpoint)
         if surface:
             lines.append(f"    api_surface: {proto_quote(surface)}")
+        variant_labels: list[Any] = endpoint.get("body_variants") or []
+        body_variants = [str(label) for label in variant_labels]
+        lines.extend(
+            f"    body_variants: {proto_quote(label)}" for label in body_variants
+        )
+        if body_variants:
+            rendered = str(endpoint.get("rendered_body_variant") or "")
+            lines.append(f"    rendered_body_variant: {proto_quote(rendered)}")
         lines.extend(
             f"    status_codes: {int(status)}"
             for status in endpoint.get("status_codes", [])
@@ -2667,12 +3042,20 @@ def run_scrape_mode(args: argparse.Namespace) -> int:
                         str(preserved_source) if preserved_source else None
                     ),
                     "linodemcp_descriptor": str(linodemcp_descriptor_path),
+                    "route_snapshot": str(run_dir / ROUTE_SNAPSHOT_NAME),
                     "comparison": str(run_dir / "comparison.json"),
                     "checksums": str(run_dir / "checksums.sha256"),
                 },
             }
         )
         write_json(run_dir / "comparison.json", result)
+        # The candidate snapshot rides along with the run so the scheduled job
+        # has a refresh to diff and upload without a second invocation.
+        write_route_snapshot(
+            read_json(run_dir / "techdocs-contracts.json"),
+            run_dir / ROUTE_SNAPSHOT_NAME,
+            now.date().isoformat(),
+        )
         write_artifact_checksums(run_dir)
         manifest.update(
             {
@@ -3020,6 +3403,60 @@ def run_self_test() -> None:
     ]
     assert len(findings) == 1, result["findings"]
     assert findings[0]["investigation_guidance"] == INVESTIGATION_GUIDANCE
+
+    # The page rendered one body variant, so the documented side never carried
+    # the others and the comparison says so instead of calling the field extra.
+    variant_body = json.loads(json.dumps(unknown))
+    variant_body["linode_widget_get"]["parameters"][1]["location"] = "body"
+    variant_body["linode_widget_get"]["parameters"][1]["enum"] = ["one", "two"]
+    variant_fixture = techdocs_fixture([path_parameter])
+    variant_operation = variant_fixture["file"][0]["messageType"][0]["options"][
+        TECHDOCS_OPERATION_OPTION
+    ]
+    variant_operation["bodyVariants"] = ["UDP", "TCP"]
+    variant_operation["renderedBodyVariant"] = "UDP"
+    result = compare_contracts(variant_fixture, variant_body, [], None)
+    assert [item["kind"] for item in result["findings"]] == [
+        "techdocs_body_variant_unrendered"
+    ], result["findings"]
+    assert result["findings"][0]["severity"] == "limitation"
+    assert result["findings"][0]["techdocs"]["unrendered_body_variants"] == ["TCP"]
+
+    # A query field on the same route keeps its finding: the switcher governs
+    # the body section only.
+    query_on_variant_route = json.loads(json.dumps(unknown))
+    result = compare_contracts(variant_fixture, query_on_variant_route, [], None)
+    assert [item["kind"] for item in result["findings"]] == [
+        "proto_parameter_not_in_techdocs"
+    ], result["findings"]
+
+    # On a switched section the unrendered variants explain a longer proto
+    # list; a value the page never names anywhere is still a disagreement.
+    enum_tool = json.loads(json.dumps(unknown))
+    enum_tool["linode_widget_get"]["parameters"][1]["location"] = "body"
+    enum_tool["linode_widget_get"]["parameters"][1]["enum"] = ["a", "b"]
+    for documented, expected in (
+        (["a"], "techdocs_body_variant_unrendered"),
+        (["a", "b", "c"], "parameter_enum_mismatch"),
+    ):
+        documented_parameter = json.loads(json.dumps(body_parameter))
+        documented_parameter["name"] = "environment"
+        documented_parameter["jsonName"] = "environment"
+        contract = documented_parameter["options"][TECHDOCS_PARAMETER_OPTION]
+        contract["documentedType"] = "string"
+        contract["enumValues"] = documented
+        contract["isRequired"] = False
+        enum_fixture = techdocs_fixture([path_parameter, documented_parameter])
+        enum_operation = enum_fixture["file"][0]["messageType"][0]["options"][
+            TECHDOCS_OPERATION_OPTION
+        ]
+        enum_operation["bodyVariants"] = ["UDP", "TCP"]
+        enum_operation["renderedBodyVariant"] = "UDP"
+        result = compare_contracts(enum_fixture, enum_tool, [], None)
+        assert [item["kind"] for item in result["findings"]] == [expected], result[
+            "findings"
+        ]
+
     # A map field is an object, not an array. Its MapEntry message is repeated in
     # the descriptor, so dropping MapEntry from the message index made every map
     # read as a plain repeated field.
@@ -3075,6 +3512,106 @@ def run_self_test() -> None:
     assert mapped["metadata"]["required"] is None, mapped["metadata"]
     assert mapped["tags"]["map"] is False, mapped["tags"]
     assert mapped["tags"]["type"] == "array", mapped["tags"]
+
+    # A singular message field is presence tracked without the optional keyword,
+    # which the body builder reads, so only a declared rule makes it required.
+    required_descriptor = json.loads(json.dumps(descriptor_fixture))
+    required_message = required_descriptor["file"][1]["messageType"][0]
+    required_message["nestedType"] = [
+        {
+            "name": "Placement",
+            "field": [
+                {
+                    "name": "id",
+                    "number": 1,
+                    "label": "LABEL_OPTIONAL",
+                    "type": "TYPE_INT32",
+                }
+            ],
+        }
+    ]
+    for number, name in ((3, "placement_group"), (4, "saml")):
+        required_message["field"].append(
+            {
+                "name": name,
+                "jsonName": name,
+                "number": number,
+                "label": "LABEL_OPTIONAL",
+                "type": "TYPE_MESSAGE",
+                "typeName": ".linode.mcp.v1.WidgetGetInput.Placement",
+                "options": {FIELD_LOCATION_OPTION: "FIELD_LOCATION_BODY"},
+            }
+        )
+    required_message["field"].append(
+        {
+            "name": "label",
+            "jsonName": "label",
+            "number": 5,
+            "label": "LABEL_OPTIONAL",
+            "type": "TYPE_STRING",
+            "options": {FIELD_LOCATION_OPTION: "FIELD_LOCATION_BODY"},
+        }
+    )
+    required_message["options"][VALIDATE_MESSAGE_OPTION] = {
+        "cel": [
+            {
+                "id": "widget_get.saml.required",
+                "message": "saml is required",
+                "expression": "has(this.saml)",
+            },
+            {
+                "id": "widget_get.saml.entity_id.required",
+                "message": "saml.entity_id is required",
+                "expression": "this.saml.entity_id != ''",
+            },
+            {
+                "id": "widget_get.fields.required",
+                "message": "at least one of placement_group or saml is required",
+                "expression": "has(this.placement_group) || has(this.saml)",
+            },
+        ]
+    }
+    required_tools, _ = extract_proto_tools(required_descriptor)
+    by_name = {
+        item["name"]: item for item in required_tools["linode_widget_get"]["parameters"]
+    }
+    assert by_name["placement_group"]["required"] is False, by_name["placement_group"]
+    assert by_name["saml"]["required"] is True, by_name["saml"]
+    assert by_name["label"]["required"] is True, by_name["label"]
+    # A member rule names the member, not the parent, and an at-least-one rule
+    # names no field of the message, so neither makes anything required.
+    assert declared_required_fields(required_message) == {"saml"}
+
+    # A tool-location argument reaches no Linode route, so it is counted and
+    # left out of the comparison rather than reported as an unreadable location.
+    tool_argument_descriptor = json.loads(json.dumps(descriptor_fixture))
+    tool_argument_descriptor["file"][1]["messageType"][0]["field"][1]["options"] = {
+        FIELD_LOCATION_OPTION: "FIELD_LOCATION_TOOL"
+    }
+    tool_argument_tools, _ = extract_proto_tools(tool_argument_descriptor)
+    argument = tool_argument_tools["linode_widget_get"]["parameters"][1]
+    assert argument["location"] == TOOL_ARGUMENT_LOCATION, argument
+    assert argument["system_parameter"] is False, argument
+    result = compare_contracts(
+        techdocs_fixture([path_parameter]), tool_argument_tools, [], None
+    )
+    assert result["summary"]["mismatches"] == 0, result["findings"]
+    assert result["summary"]["tool_arguments"] == 1, result["summary"]
+    assert result["summary"]["system_parameters"] == 0, result["summary"]
+
+    # An unmapped field_location value is still unreadable and still reported,
+    # so the new mapping did not turn the location check off.
+    unmapped = json.loads(json.dumps(descriptor_fixture))
+    unmapped["file"][1]["messageType"][0]["field"][1]["options"] = {
+        FIELD_LOCATION_OPTION: "FIELD_LOCATION_ELSEWHERE"
+    }
+    unmapped_tools, _ = extract_proto_tools(unmapped)
+    result = compare_contracts(
+        techdocs_fixture([path_parameter]), unmapped_tools, [], None
+    )
+    assert [item["kind"] for item in result["findings"]] == [
+        "proto_field_location_missing"
+    ], result["findings"]
 
     # Known divergences are route-scoped, so the same parameter name on another
     # route keeps its finding. An entry that stops matching is reported rather
@@ -3218,6 +3755,95 @@ def run_self_test() -> None:
     assert "api_surface:" not in render_techdocs_proto(
         [{**both_endpoint, "api_surface": ""}]
     )
+
+    # The monitor metrics operation is served from its own host. A route regex
+    # pinned to one host reads the page as documenting no operation at all, so
+    # the whole route drops out of the comparison rather than one parameter.
+    second_host = parse_techdocs_endpoint(
+        "Read metrics\nCopy Page\n"
+        "post https://monitor-api.linode.com / {apiVersion} /monitor/services/"
+        "{serviceType} /metrics\nPath Params\nserviceType string\nrequired\n"
+        "Responses\n200\n",
+        "https://techdocs.akamai.com/linode-api/reference/post-read-metric",
+        "pages/post-read-metric.md",
+    )
+    assert second_host is not None, "the monitor host must parse as a route"
+    assert second_host["method"] == "POST", second_host
+    # The generated proto carries the raw path, so that is the spelling the
+    # route key the proto tool has to join to is built from.
+    assert path_shape(normalize_path(second_host["raw_path"])) == (
+        "/monitor/services/{}/metrics"
+    )
+
+    # Parameter heads the site renders with a format token, a nullable array
+    # with its item qualifier, and a switcher in place of a type. Each one used
+    # to skip the whole block, taking its required and Allowed lines with it.
+    typed_page = (
+        "Create a client\nCopy Page\n"
+        "post https://api.linode.com / {apiVersion} /account/oauth-clients\n"
+        "Body Params\n"
+        "redirect_uri url\nrequired\nWhere a successful log in lands.\n"
+        "interfaces array of objects or null, unique\nlength <= 3\n"
+        "details\n[variants: Object Storage, Custom HTTPS; rendered: Object Storage]\n"
+        "label string\nrequired\n"
+        "Responses\n200\n"
+    )
+    typed_endpoint = parse_techdocs_endpoint(
+        typed_page,
+        "https://techdocs.akamai.com/linode-api/reference/post-client",
+        "pages/post-client.md",
+    )
+    assert typed_endpoint is not None
+    typed_body = {item["name"]: item for item in typed_endpoint["parameters"]["body"]}
+    assert sorted(typed_body) == ["details", "interfaces", "label", "redirect_uri"]
+    assert typed_body["redirect_uri"]["required"] is True, typed_body["redirect_uri"]
+    assert typed_body["interfaces"]["type"] == "array of objects or null, unique"
+    assert typed_body["details"]["type"] == TECHDOCS_VARIANT_TYPE
+    assert normalize_semantic_type("url") == "string"
+    assert normalize_semantic_type("array of objects or null, unique") == "array"
+    # The switcher belongs to the details parameter above it, so it is not the
+    # whole section's, and label keeps the required line the block boundary now
+    # leaves in its own block.
+    assert typed_endpoint["body_variants"] == [], typed_endpoint
+    assert typed_body["label"]["required"] is True, typed_body["label"]
+
+    # A switcher with no parameter head above it governs the whole section, and
+    # the fetched HTML carries only the variant it names as rendered.
+    section_page = (
+        "Create a config\nCopy Page\n"
+        "post https://api.linode.com / {apiVersion} /widgets\n"
+        "Body Params\n"
+        "[variants: UDP, TCP, HTTP, HTTPS; rendered: UDP]\n"
+        "protocol string\nenum\nAllowed: udp\n"
+        "Responses\n200\n"
+    )
+    section_endpoint = parse_techdocs_endpoint(
+        section_page,
+        "https://techdocs.akamai.com/linode-api/reference/post-widget",
+        "pages/post-widget.md",
+    )
+    assert section_endpoint is not None
+    assert section_endpoint["body_variants"] == ["UDP", "TCP", "HTTP", "HTTPS"]
+    assert section_endpoint["rendered_body_variant"] == "UDP"
+    rendered_proto = render_techdocs_proto([section_endpoint])
+    assert 'body_variants: "TCP"' in rendered_proto
+    assert 'rendered_body_variant: "UDP"' in rendered_proto
+    assert "body_variants:" not in render_techdocs_proto([both_endpoint])
+
+    # The switcher marker comes from the published select element, so the
+    # labels survive the text normalization the page evidence is written in.
+    switcher_html = (
+        '<div><span class="Param-nameU7">details</span></div>'
+        '<select class="Select" data-testid="OneOfMultiSchema-trigger">'
+        '<option value="0" selected="">Akamai Object Storage</option>'
+        '<option value="1">Custom HTTPS</option></select>'
+    )
+    assert (
+        "[variants: Akamai Object Storage, Custom HTTPS; rendered: Akamai Object "
+        "Storage]" in html_to_markdownish(switcher_html)
+    )
+    assert parse_techdocs_variants("[variants: A, B; rendered: B]") == (["A", "B"], "B")
+    assert parse_techdocs_variants("UDP TCP HTTP HTTPS") is None
 
     # A route serving both surfaces answers either declaration, so a beta tool
     # there is an observation and not a defect.
@@ -3373,6 +3999,126 @@ def run_self_test() -> None:
         else:
             raise AssertionError("an incomplete ledger entry must fail")
 
+        # A class rule is one approval item over a written-out key list, and it
+        # expands into the same per-key entries the stale report already walks,
+        # so a key that stops matching still surfaces.
+        classed = Path(directory) / "class-rule.json"
+        classed.write_text(
+            json.dumps(
+                [
+                    {
+                        "category": "list_pagination_undocumented",
+                        "kind": "proto_parameter_not_in_techdocs",
+                        "reason": "The page renders no Query Params section.",
+                        "entries": [
+                            {
+                                "method": "GET",
+                                "shape": "/widgets",
+                                "location": "query",
+                                "parameter": "page",
+                            },
+                            {
+                                "method": "GET",
+                                "shape": "/widgets",
+                                "location": "query",
+                                "parameter": "page_size",
+                            },
+                        ],
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        expanded = load_known_divergences(classed)
+        assert len(expanded) == 2, expanded
+        assert {entry["parameter"] for entry in expanded} == {"page", "page_size"}
+        assert all(entry["reason"] for entry in expanded), expanded
+
+        empty_class = Path(directory) / "empty-class.json"
+        empty_class.write_text(
+            json.dumps(
+                [
+                    {
+                        "category": "list_pagination_undocumented",
+                        "kind": "proto_parameter_not_in_techdocs",
+                        "reason": "A rule that absorbs nothing named.",
+                        "entries": [],
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        try:
+            load_known_divergences(empty_class)
+        except ProofError:
+            pass
+        else:
+            raise AssertionError("a class rule with no keys must fail")
+
+    saved_class_ledger = KNOWN_DIVERGENCES
+    try:
+        globals()["KNOWN_DIVERGENCES"] = tuple(expanded)
+        classed_findings = [
+            {
+                "kind": "proto_parameter_not_in_techdocs",
+                "severity": "medium",
+                "method": "GET",
+                "route_shape": "/widgets",
+                "location": "query",
+                "parameter": "page",
+            }
+        ]
+        demoted, unused = apply_known_divergences(classed_findings)
+        assert demoted[0]["severity"] == "known", demoted[0]
+        assert demoted[0]["known_category"] == "list_pagination_undocumented"
+        # page_size stopped appearing, and the class rule reports it exactly as
+        # a per-key entry would. A pattern rule could not report this at all.
+        assert [entry["parameter"] for entry in unused] == ["page_size"], unused
+    finally:
+        globals()["KNOWN_DIVERGENCES"] = saved_class_ledger
+
+    # The route snapshot is the artifact scripts/verify_techdocs_routes.py gates
+    # proto/ against, so the shape it is written in is a contract of its own.
+    snapshot_contract = {
+        "routes": [
+            {
+                "method": "get",
+                "path": "/v4/widgets/{widgetId}",
+                "api_surface": "both",
+                "deprecated": False,
+            },
+            {
+                "method": "DELETE",
+                "path": "/v4beta/widgets/{widgetId}",
+                "api_surface": "v4beta_only",
+                "deprecated": True,
+            },
+        ]
+    }
+    assert route_snapshot_lines(snapshot_contract) == [
+        "DELETE /widgets/{} surface=v4beta_only status=deprecated",
+        "GET /widgets/{} surface=both status=active",
+    ], route_snapshot_lines(snapshot_contract)
+
+    snapshot_text = route_snapshot_text(snapshot_contract, "2026-01-02")
+    assert "harvested 2026-01-02, 2 routes" in snapshot_text, snapshot_text
+    assert snapshot_text.endswith("status=active\n"), snapshot_text
+    assert "verify_techdocs_routes.py" in snapshot_text, snapshot_text
+
+    # A contract that parsed to no route would write a snapshot the offline gate
+    # reads as an empty upstream, so it fails here instead.
+    try:
+        route_snapshot_text({"routes": []}, "2026-01-02")
+    except ProofError:
+        pass
+    else:
+        raise AssertionError("a routeless contract must not write a snapshot")
+
+    with tempfile.TemporaryDirectory(prefix="techdocs-proof-snapshot-") as directory:
+        written = Path(directory) / "nested" / ROUTE_SNAPSHOT_NAME
+        assert write_route_snapshot(snapshot_contract, written, "2026-01-02") == 2
+        assert written.read_text(encoding="utf-8") == snapshot_text
+
     print("SELF_TEST_OK")
 
 
@@ -3463,6 +4209,19 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument(
+        "--techdocs-contract",
+        type=Path,
+        help="Run's techdocs-contracts.json to read for --emit-route-snapshot",
+    )
+    parser.add_argument(
+        "--emit-route-snapshot",
+        type=Path,
+        help=(
+            "Write the reviewed route snapshot from --techdocs-contract and "
+            "exit; offline, and it writes only where it is pointed"
+        ),
+    )
     parser.add_argument("--output", type=Path, help="Write JSON here; default stdout")
     parser.add_argument(
         "--fail-on-findings",
@@ -3473,11 +4232,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def run_route_snapshot_mode(args: argparse.Namespace) -> int:
+    """Render one run's route snapshot. Offline: it reads a contract and writes."""
+    if args.techdocs_contract is None:
+        raise ProofError("--emit-route-snapshot needs --techdocs-contract")
+    contract = read_json(args.techdocs_contract)
+    if not isinstance(contract, dict):
+        raise ProofError(f"{args.techdocs_contract} is not a TechDocs contract")
+    harvested = datetime.now(UTC).date().isoformat()
+    count = write_route_snapshot(contract, args.emit_route_snapshot, harvested)
+    print(
+        f"ROUTE_SNAPSHOT_OK routes={count} path={args.emit_route_snapshot}",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def main() -> int:
     args = parse_args()
     if args.self_test:
         run_self_test()
         return 0
+    if args.emit_route_snapshot is not None:
+        try:
+            return run_route_snapshot_mode(args)
+        except (ProofError, OSError) as exc:
+            print(f"PROOF_ERROR {exc}", file=sys.stderr)
+            return 1
     started_at = utc_now()
     try:
         if args.techdocs_descriptor is None:

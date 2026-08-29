@@ -5,10 +5,10 @@ them apart is most of the orientation you need:
 
 - **Pages** (`.md`) are prose for people and agents. Each covers one topic and
   links to its neighbors, so any page can be read on its own.
-- **Machine contracts** (`.txt`, all under [`contracts/`](./contracts/)) are
-  read by the `make check` gates by exact path and listed in
-  [Machine contracts](#machine-contracts) below so nobody mistakes them for
-  reading material.
+- **Machine contracts** (under [`contracts/`](./contracts/), text apart from
+  one pinned binary image) are read by the `make check` gates by exact path and
+  listed in [Machine contracts](#machine-contracts) below so nobody mistakes
+  them for reading material.
 
 New here? Read the [root README](../README.md) for install and first-run, then
 [profiles](./profiles.md), [dry-run](./dry-run.md), and
@@ -84,7 +84,8 @@ also carries an `llms.txt` with this same map, one line per page.
   each one checks, the contract file it ratchets, and how to update it.
 - [Refreshing dependency versions](./dependency-updates.md): what
   `make update-deps` moves, the pins it refuses and why (buf above all), and
-  how it coexists with Renovate, which manages the same four surfaces daily.
+  how it coexists with Renovate, which manages the same writable surfaces
+  daily.
 - [Git hooks](./git-hooks.md): pre-commit setup for commit-time and push-time
   checks (`make install-hooks`).
 - [Deprecated routes](./deprecated-routes.md): tools and routes removed from
@@ -132,6 +133,8 @@ may use a free-text reason instead).
 | [scope-sync-baseline.txt](./contracts/scope-sync-baseline.txt) | Accepted deviations between the per-tool OAuth scope mapping and the spec's per-operation security blocks, each annotated with its tracking issue (network; runs on the sync schedule) | `scripts/verify_sync_scopes.py` |
 | [api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt) | Snapshot of paginated GET routes and their page_size bounds at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_pagination.py` |
 | [api-response-shapes-baseline.txt](./contracts/api-response-shapes-baseline.txt) | Snapshot of every route's success response shape at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_response_shapes.py` |
+| [api-techdocs-routes-baseline.txt](./contracts/api-techdocs-routes-baseline.txt) | Snapshot of every route the rendered TechDocs state, with its API surface and deprecation status. `make techdocs-routes` gates `proto/` against it offline; the weekly comparator run writes the refresh candidate (network; runs on the techdocs-drift schedule) | `tools/techdocs-proof` (`--emit-route-snapshot`), read by `scripts/verify_techdocs_routes.py` |
+| [wire-baseline.binpb.gz](./contracts/wire-baseline.binpb.gz) | The proto tree's wire shape at a reviewed revision, as a `buf build --exclude-source-info` image. `make wire-breaking` compares `proto/` against it offline, so a renumbered, retyped, or reused field number fails by name. The only binary contract here, and it refreshes in the same reviewed change as any field retirement, because `buf breaking` cannot tell a retirement from a careless drop | `buf breaking`, via `make wire-breaking` |
 
 ### Hard gates (no baseline)
 

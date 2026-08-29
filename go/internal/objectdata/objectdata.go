@@ -140,10 +140,7 @@ func Upload(ctx context.Context, request UploadRequest) (UploadResult, error) {
 		return UploadResult{}, err
 	}
 
-	defer func() {
-		_, _ = io.Copy(io.Discard, response.Body)
-		_ = response.Body.Close()
-	}()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return UploadResult{}, fmt.Errorf("%w: the bucket answered HTTP %d", ErrTransfer, response.StatusCode)
@@ -248,10 +245,10 @@ func Download(ctx context.Context, request DownloadRequest) (DownloadResult, err
 		return DownloadResult{}, err
 	}
 
-	defer func() {
-		_, _ = io.Copy(io.Discard, response.Body)
-		_ = response.Body.Close()
-	}()
+	// Close drains the unread body itself from Go 1.27, bounded, so a transfer
+	// that fails midway drops one pooled connection instead of pulling the
+	// discarded remainder of a large object back across the network.
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return DownloadResult{}, fmt.Errorf("%w: the bucket answered HTTP %d", ErrTransfer, response.StatusCode)

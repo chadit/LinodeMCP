@@ -232,8 +232,7 @@ func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 		}
 
 		// Releasing exactly one backoff admits exactly one more attempt.
-		time.Sleep(firstBackoff)
-		synctest.Wait()
+		synctest.Sleep(firstBackoff)
 
 		if got := callCount.Load(); got != int32(2) {
 			t.Fatalf("callCount after one backoff = %v, want %v", got, int32(2))

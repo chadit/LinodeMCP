@@ -74,8 +74,7 @@ func TestRunSweepsImmediatelyThenOnEveryTick(t *testing.T) {
 
 		clock.Store(now.AddDate(0, 0, 3).UnixNano())
 
-		time.Sleep(time.Hour + time.Minute)
-		synctest.Wait()
+		synctest.Sleep(time.Hour + time.Minute)
 
 		if _, err := os.Stat(secondPass); !os.IsNotExist(err) {
 			t.Errorf("stat %s after one tick = %v, want the file removed",
@@ -149,8 +148,7 @@ func TestRunSurvivesAnUnreadableDirectory(t *testing.T) {
 
 		synctest.Wait()
 
-		time.Sleep(2*time.Hour + time.Minute)
-		synctest.Wait()
+		synctest.Sleep(2*time.Hour + time.Minute)
 
 		select {
 		case <-stopped:

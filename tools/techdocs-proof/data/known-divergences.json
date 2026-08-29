@@ -110,15 +110,6 @@
   {
     "category": "techdocs_path_type_inconsistent",
     "kind": "parameter_type_mismatch",
-    "method": "POST",
-    "shape": "/domains/{}/clone",
-    "location": "path",
-    "parameter": "domain_id",
-    "reason": "The documentation types this identifier as string here and as integer on sibling pages; the repo is int32 throughout."
-  },
-  {
-    "category": "techdocs_path_type_inconsistent",
-    "kind": "parameter_type_mismatch",
     "method": "GET",
     "shape": "/domains/{}/zone-file",
     "location": "path",
@@ -439,5 +430,331 @@
     "location": "body",
     "parameter": "ip_whitelist_enabled",
     "reason": "profile.proto records the field as deliberately absent: the API marks it deprecated and one-way, so a caller who disabled the allowlist through the tool could never re-enable it."
+  },
+  {
+    "category": "list_pagination_undocumented",
+    "kind": "proto_parameter_not_in_techdocs",
+    "reason": "The route serves a paginated collection and the tool declares page and page_size for it, while the reference page renders no Query Params section at all. Seventy other list routes in the same run document both and match cleanly, so the gap is documentation coverage on the Linode side; removing pagination would break paging the API serves.",
+    "entries": [
+      {
+        "method": "GET",
+        "shape": "/account/logins",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/account/logins",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/account/maintenance",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/account/maintenance",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/account/notifications",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/account/notifications",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/tokens",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/tokens",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/tokens/{}/sharegroup/images",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/tokens/{}/sharegroup/images",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/{}/images",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/{}/images",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/{}/members",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/sharegroups/{}/members",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/{}/sharegroups",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/images/{}/sharegroups",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/linode/instances/{}/interfaces/history",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/linode/instances/{}/interfaces/history",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/maintenance/policies",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/maintenance/policies",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/managed/services",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/managed/services",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/monitor/alert-definitions",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/monitor/alert-definitions",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/monitor/dashboards",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/monitor/dashboards",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/networking/reserved/ips",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/networking/reserved/ips",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/nodebalancers/{}/firewalls",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/nodebalancers/{}/firewalls",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/object-storage/endpoints",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/object-storage/endpoints",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/profile/devices",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/profile/devices",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/profile/logins",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/profile/logins",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/profile/tokens",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/profile/tokens",
+        "location": "query",
+        "parameter": "page_size"
+      },
+      {
+        "method": "GET",
+        "shape": "/regions",
+        "location": "query",
+        "parameter": "page"
+      },
+      {
+        "method": "GET",
+        "shape": "/regions",
+        "location": "query",
+        "parameter": "page_size"
+      }
+    ]
+  },
+  {
+    "category": "owner_deferred_to_product_scope",
+    "kind": "route_missing_from_proto",
+    "reason": "The owner ruled on 2026-08-29 not to add a valkey tool family. The twelve documented /databases/valkey routes have no proto surface, so they are missing coverage rather than drift: absent in Go and Python equally, nothing can drift between the two languages. Authoring twelve tool contracts is a product decision about supporting valkey, not a comparator backlog item.",
+    "entries": [
+      {
+        "method": "DELETE",
+        "shape": "/databases/valkey/instances/{}",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "GET",
+        "shape": "/databases/valkey/config",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "GET",
+        "shape": "/databases/valkey/instances",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "GET",
+        "shape": "/databases/valkey/instances/{}",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "GET",
+        "shape": "/databases/valkey/instances/{}/credentials",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "GET",
+        "shape": "/databases/valkey/instances/{}/ssl",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "POST",
+        "shape": "/databases/valkey/instances",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "POST",
+        "shape": "/databases/valkey/instances/{}/credentials/reset",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "POST",
+        "shape": "/databases/valkey/instances/{}/patch",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "POST",
+        "shape": "/databases/valkey/instances/{}/resume",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "POST",
+        "shape": "/databases/valkey/instances/{}/suspend",
+        "location": "",
+        "parameter": ""
+      },
+      {
+        "method": "PUT",
+        "shape": "/databases/valkey/instances/{}",
+        "location": "",
+        "parameter": ""
+      }
+    ]
   }
 ]

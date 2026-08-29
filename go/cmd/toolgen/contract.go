@@ -758,12 +758,12 @@ func collectionSiblingRead(
 // parentPath is the route template one segment up, empty when the template has
 // no segment to drop.
 func parentPath(template string) string {
-	cut := strings.LastIndex(template, "/")
-	if cut <= 0 {
+	parent, _, found := strings.CutLast(template, "/")
+	if !found {
 		return ""
 	}
 
-	return template[:cut]
+	return parent
 }
 
 // pageElementMessage is the element a list response carries, reported absent

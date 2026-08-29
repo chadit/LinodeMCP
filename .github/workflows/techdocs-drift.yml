@@ -1,30 +1,14 @@
-# Scheduled drift watch for the documented API contract. `make check` is
-# strictly offline, so nothing in the push or CI path ever compares the repo
-# proto against the LIVE rendered TechDocs site; this job is that comparison.
-# It scrapes the rendered pages, generates a TechDocs-derived proto, compiles
-# both sides with Buf, and reports every place the two contracts disagree.
-#
-# It reads only. It never commits, never opens anything, and never writes into
-# the checkout: run evidence goes to a runner-local directory the comparator
-# refuses to place inside the repository. The run directory uploads as an
-# artifact, and the medium-tier findings are the input to the proto sync
-# batches (docs/parity.md, and the spec's Phase D).
-#
-# Findings do not fail the job today. The medium tier is not at zero yet, so a
-# red run would report the same known worklist every week; --fail-on-findings
-# belongs here once T-D4 proves zero medium. A scrape, parse, or compile
-# failure still exits non-zero and fails the job.
-#
-# This replaces a comparator that ran by hand on one development host. Any
-# host with Python, Buf, and network access runs the repo command directly;
-# see tools/techdocs-proof/README.md.
+# Weekly comparison of proto/ against the LIVE rendered TechDocs site, which
+# `make check` cannot do because it is offline. It reads only: evidence goes to
+# a runner-local directory and uploads as an artifact, and the route snapshot
+# refresh reports a candidate a human lands. Findings do not fail the job while
+# the medium tier is above zero; a scrape, parse, or compile failure still does.
 name: techdocs-drift
 
 on:
   schedule:
-    # Thursdays 05:41 UTC; off-peak, a non-zero minute to dodge the
-    # top-of-hour scheduler crunch, and a different day from sync-drift so the
-    # two upstream watches do not report in the same window.
+    # Off-peak on a non-zero minute to dodge the top-of-hour crunch, on a
+    # different day from sync-drift.
     - cron: "41 5 * * 4"
   workflow_dispatch: {}
 
@@ -50,10 +34,8 @@ jobs:
         with:
           python-version: "3.14"
 
-      # The same provisioning script the CI job and the CI-mirror container
-      # run. The comparator needs Buf, which that script installs at the
-      # pinned version codegen already depends on, so this job cannot drift to
-      # a different Buf than the one the repo generates with.
+      # The same provisioning script CI runs, so this job cannot drift to a
+      # different Buf than the one the repo generates with.
       - name: Install gate toolchain
         env:
           GH_TOKEN: ${{ github.token }}
@@ -96,6 +78,49 @@ jobs:
           for kind, count in sorted(medium.items()):
               print(f"| {kind} | {count} |")
           PY
+
+      # Refreshes docs/contracts/api-techdocs-routes-baseline.txt. It reports and
+      # uploads a candidate; REQ-D5 keeps the write behind a human landing a diff.
+      - name: Route snapshot refresh
+        if: always()
+        env:
+          LINODEMCP_TECHDOCS_PROOF_ROOT: ${{ runner.temp }}/techdocs-proof
+        run: |
+          set -euo pipefail
+          candidate="$(python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          latest = Path(os.environ["LINODEMCP_TECHDOCS_PROOF_ROOT"]) / "latest.json"
+          if not latest.is_file():
+              raise SystemExit(0)
+          manifest = json.loads(latest.read_text(encoding="utf-8"))
+          print((manifest.get("artifacts") or {}).get("route_snapshot") or "")
+          PY
+          )"
+          reviewed=docs/contracts/api-techdocs-routes-baseline.txt
+          if [[ -z "${candidate}" || ! -f "${candidate}" ]]; then
+            echo "## route snapshot: no candidate" >> "${GITHUB_STEP_SUMMARY}"
+            echo "The comparator did not reach a route snapshot." >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          echo "## route snapshot refresh" >> "${GITHUB_STEP_SUMMARY}"
+          # Header lines carry the harvest date; only route lines are signal.
+          if diff <(grep -v '^#' "${reviewed}") <(grep -v '^#' "${candidate}") \
+            > "${RUNNER_TEMP}/route-drift.diff"; then
+            echo "No route drift: the reviewed snapshot still matches TechDocs." \
+              >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          {
+            echo "TechDocs moved. Copy \`route-snapshot.txt\` out of the uploaded"
+            echo "run evidence over \`${reviewed}\`, review the diff, and land it."
+            echo ""
+            echo '```diff'
+            cat "${RUNNER_TEMP}/route-drift.diff"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload run evidence
         if: always()

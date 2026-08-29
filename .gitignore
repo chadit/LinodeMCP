@@ -38,6 +38,8 @@ coverage.xml
 /go/route-dump
 /go/toolgen
 /go/cmd/toolgen/toolgen
+/go/protomerge
+/go/cmd/protomerge/protomerge
 
 # IDE
 .idea/

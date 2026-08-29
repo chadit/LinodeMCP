@@ -74,8 +74,7 @@ func TestWatcherPicksUpReload(t *testing.T) {
 
 		// One poll is all it takes on virtual time, so the old spin-until-
 		// deadline loop collapses into a single settle and a direct read.
-		time.Sleep(2 * pollInterval)
-		synctest.Wait()
+		synctest.Sleep(2 * pollInterval)
 
 		cfg := watcher.Get()
 		if cfg == nil {
@@ -120,8 +119,7 @@ func TestWatcherKeepsLastConfigOnBadReload(t *testing.T) {
 
 		bumpMtime(t, path)
 
-		time.Sleep(2 * pollInterval)
-		synctest.Wait()
+		synctest.Sleep(2 * pollInterval)
 
 		select {
 		case reloadErr := <-watcher.Errors():
@@ -190,8 +188,7 @@ environments:
 
 		bumpMtime(t, path)
 
-		time.Sleep(2 * pollInterval)
-		synctest.Wait()
+		synctest.Sleep(2 * pollInterval)
 
 		select {
 		case cfg := <-received:
@@ -244,8 +241,7 @@ func TestWatcherOnChangeNotFiredOnBadReload(t *testing.T) {
 
 		bumpMtime(t, path)
 
-		time.Sleep(2 * pollInterval)
-		synctest.Wait()
+		synctest.Sleep(2 * pollInterval)
 
 		select {
 		case <-watcher.Errors():
@@ -260,8 +256,7 @@ func TestWatcherOnChangeNotFiredOnBadReload(t *testing.T) {
 		// will ever get. A callback that has not fired by now cannot fire at
 		// all, which makes this an exhaustive check rather than a deadline the
 		// machine could simply have been too slow to reach.
-		time.Sleep(5 * pollInterval)
-		synctest.Wait()
+		synctest.Sleep(5 * pollInterval)
 
 		select {
 		case got := <-fired:
@@ -361,8 +356,7 @@ func TestWatcherReloadsUnderSynctest(t *testing.T) {
 
 		// Advance the fake clock past one poll: the ticker fires, run() reloads,
 		// and the callback runs -- all with zero real time elapsed.
-		time.Sleep(2 * pollInterval)
-		synctest.Wait()
+		synctest.Sleep(2 * pollInterval)
 
 		select {
 		case cfg := <-reloaded:
@@ -422,8 +416,7 @@ func TestWatcherCloseStopsPollingUnderSynctest(t *testing.T) {
 
 		// Advance the fake clock past several polls; with run() stopped nothing
 		// should reload.
-		time.Sleep(2 * pollInterval)
-		synctest.Wait()
+		synctest.Sleep(2 * pollInterval)
 
 		if got := watcher.Get().Server.Name; got == tcReloadedServer {
 			t.Errorf("watcher reloaded after Close: Server.Name = %v", got)

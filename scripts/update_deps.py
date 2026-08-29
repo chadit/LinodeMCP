@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Refresh every dependency version this repository declares, in one command.
 
-Four surfaces carry a declared version, and each one is found from a declared
+Five surfaces carry a declared version, and each one is found from a declared
 source rather than from a path written here:
 
 - Go modules: every language directory docs/contracts/languages.txt registers
-  that carries a go.mod. `go get -u ./...` then `go mod tidy`.
+  that carries a go.mod. `go get -u ./...` then `go mod tidy`. Every run first
+  checks each go.mod require line against its own go.sum and fails when one has
+  no module hash, because `go get -u` against a graph that does not resolve
+  stacks a second failure on the first.
+- Language versions: the `go` directive in each go.mod and `requires-python` in
+  each uv project. These are reported and never rewritten. A language version
+  is not a dependency; it is the floor every dependency resolves against, so it
+  gets its own surface rather than one more line in a refresh diff.
 - Python: every uv project, meaning a directory holding both a pyproject.toml
   and a uv.lock. That is the registered language directories plus the tool
   projects under tools/, so the comparator's own project is covered the same
@@ -31,10 +38,12 @@ every baseline in this repository was captured under it, so a bump would move
 the baselines instead of the code. The buf remote codegen plugins are refused
 for the same reason.
 
-Renovate already manages all four surfaces daily at 04:00 UTC with branch
-automerge, so this target and Renovate write the same files. That overlap is
-deliberate. It is also why every rewrite here copies Renovate's pin form: a
-human diffing one against the other sees the same shape.
+Renovate already manages the four writable surfaces daily at 04:00 UTC with
+branch automerge, so this target and Renovate write the same files. That
+overlap is deliberate. It is also why every rewrite here copies Renovate's pin
+form: a human diffing one against the other sees the same shape. Renovate has
+custom managers for the language versions too, and it moves them where this
+target only reports them.
 docs/dependency-updates.md carries the rest of that story.
 
 Nothing here touches git. The target rewrites files and stops; staging,
@@ -120,11 +129,28 @@ _SPEC_NOTE = (
     "only a bare >= floor is rewritten here; a ceiling or an exact pin is a"
     " human decision"
 )
+_GO_LANGUAGE_NOTE = (
+    "reported, not rewritten: the directive sets the lowest Go a build accepts,"
+    " and raising it turns on analyzer rules the gates then fail on unchanged"
+    " code"
+)
+_PYTHON_LANGUAGE_NOTE = (
+    "reported, not rewritten: uv resolves every locked package against this"
+    " floor, so moving it re-resolves the whole project"
+)
 
 _FIX = (
     "Float it at @latest the way scripts/ci-setup.sh floats the rest of the\n"
     "toolchain, or add it to the protected table in scripts/update_deps.py\n"
     "with the reason it must not move."
+)
+
+_GRAPH_FIX = (
+    "Correct the require line rather than writing the missing sum. A version\n"
+    "go.sum cannot cover is usually one no resolver would pick: a release the\n"
+    "author retracted, or a module that renamed its path at that version.\n"
+    "`go get` and `go mod tidy` both refuse to run while such a line is in the\n"
+    "file, so the edit has to come first and `go mod tidy` settles the rest."
 )
 
 # `go install x@v`, `go run x@v`, and `npx pkg@v` are the three ways a tool
@@ -161,6 +187,7 @@ _REQUIREMENT = re.compile(
     r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?P<extras>\[[^\]]*\])?(?P<spec>.*)$"
 )
 _SIMPLE_FLOOR = re.compile(r"^>=\s*(?P<floor>[A-Za-z0-9][^\s,;]*)$")
+_GO_DIRECTIVE = re.compile(r"^go\s+(?P<version>\d+(?:\.\d+)*)$")
 
 
 @dataclass(frozen=True)
@@ -363,6 +390,118 @@ def plan_go(modules: Sequence[Path]) -> list[Change]:
                 note="go get -u ./... then go mod tidy",
             )
         )
+
+    return changes
+
+
+def _sum_versions(module: Path) -> set[str]:
+    """Every `path version` pair go.sum carries a hash for.
+
+    A `/go.mod` line keeps that suffix in its version field, so it never reads
+    as covering the source a graph-only dependency never fetched.
+    """
+    covered: set[str] = set()
+    for raw in (module / "go.sum").read_text(encoding="utf-8").splitlines():
+        fields = raw.split()
+        if len(fields) == 3:
+            covered.add(f"{fields[0]} {fields[1]}")
+
+    return covered
+
+
+def _uncovered(module: Path) -> list[str]:
+    """Requirements this module's go.sum carries no module hash for."""
+    covered = _sum_versions(module)
+    where = _relative(module / "go.mod")
+    declared = (module / "go.mod").read_text(encoding="utf-8")
+    fields = (line.split() for line in _require_lines(declared))
+
+    return [
+        f"{where}: {found[0]} {found[1]} has no go.sum entry"
+        for found in fields
+        if len(found) >= 2 and f"{found[0]} {found[1]}" not in covered
+    ]
+
+
+def go_graph_findings(modules: Sequence[Path]) -> list[str]:
+    """Every requirement whose module go.sum cannot cover, across all modules.
+
+    It runs before anything writes, because `go get -u` against a graph that
+    does not resolve stacks a second failure on the first. Reading two files
+    answers it with no network call, so the dry run carries the check too.
+
+    The shape it catches is narrow and it has already cost this repository a
+    build: a require line naming a version no resolver would choose, while
+    go.sum still holds the version one did.
+    """
+    findings: list[str] = []
+    for module in modules:
+        findings.extend(_uncovered(module))
+
+    return findings
+
+
+def _one_spelling(version: str) -> str:
+    """A go directive with a trailing `.0` dropped, so one version reads one way.
+
+    `go mod tidy` respells `go 1.26` as `go 1.26.0`; that is not drift.
+    """
+    parts = version.split(".")
+    while len(parts) > 2 and parts[-1] == "0":
+        parts.pop()
+
+    return ".".join(parts)
+
+
+def _go_language_change(module: Path) -> list[Change]:
+    """The `go` directive a module declares, or nothing when it has none."""
+    for raw in (module / "go.mod").read_text(encoding="utf-8").splitlines():
+        found = _GO_DIRECTIVE.match(raw.strip())
+        if found:
+            return [
+                Change(
+                    where=_relative(module / "go.mod"),
+                    what="go language directive",
+                    current=_one_spelling(found.group("version")),
+                    action=_HOLD,
+                    note=_GO_LANGUAGE_NOTE,
+                )
+            ]
+
+    return []
+
+
+def _python_language_change(project: Path) -> list[Change]:
+    """The `requires-python` floor a project declares, or nothing when absent."""
+    parsed = tomllib.loads((project / "pyproject.toml").read_text(encoding="utf-8"))
+    spec = _table(parsed.get("project")).get("requires-python")
+    if not isinstance(spec, str):
+        return []
+
+    return [
+        Change(
+            where=_relative(project / "pyproject.toml"),
+            what="requires-python",
+            current=spec,
+            action=_HOLD,
+            note=_PYTHON_LANGUAGE_NOTE,
+        )
+    ]
+
+
+def plan_languages(modules: Sequence[Path], projects: Sequence[Path]) -> list[Change]:
+    """One row per declared language version, none of which this run moves.
+
+    These two declarations were the only versions in the tree with no line in
+    the report at all. Raising either one re-resolves everything below it, so
+    they are named on their own surface where a reader sees them rather than
+    folded in beside the requirement counts.
+    """
+    changes: list[Change] = []
+    for module in modules:
+        changes.extend(_go_language_change(module))
+    for project in projects:
+        changes.extend(_python_language_change(project))
 
     return changes
 
@@ -864,6 +1003,7 @@ def main() -> int:
 
     surfaces = [
         ("go modules", plan_go(modules)),
+        ("language versions", plan_languages(modules, projects)),
         ("python dependencies", plan_python(projects)),
         ("tool versions", plan_tools(provisioning, templates)),
         ("github actions", plan_actions(workflows, tag_only)),
@@ -871,6 +1011,11 @@ def main() -> int:
     for name, changes in surfaces:
         _hardgate.measured(f"{name} scan", len(changes))
         _render(name, changes)
+
+    graph = go_graph_findings(modules)
+    if graph:
+        _hardgate.say("")
+        return _hardgate.report("requirements go.sum cannot cover", graph, _GRAPH_FIX)
 
     findings = [
         f"{change.where}: {change.what} {change.current}"

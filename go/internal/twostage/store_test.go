@@ -65,8 +65,7 @@ func TestStartJanitorSweepsExpiredPlans(t *testing.T) {
 		future := base.Add(2 * time.Minute)
 		clock.Store(&future)
 
-		time.Sleep(2 * time.Second)
-		synctest.Wait()
+		synctest.Sleep(2 * time.Second)
 
 		if store.Len() != 0 {
 			t.Errorf("janitor did not sweep the expired plan, Len = %d", store.Len())

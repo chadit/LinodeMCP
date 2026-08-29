@@ -1,6 +1,6 @@
 """Offline tests for the dependency-refresh target.
 
-update_deps.py rewrites the four surfaces that carry a declared version. These
+update_deps.py rewrites the five surfaces that carry a declared version. These
 tests pin the decisions that would be expensive to get wrong: which directories
 count as a project, which pins are refused and why, and what a rewritten action
 pin looks like. Nothing here reaches the network. The action tests replace the
@@ -387,6 +387,167 @@ def test_a_pin_whose_comment_is_not_a_version_is_reported() -> None:
     assert change.action == target._UNKNOWN
 
 
+# --- The module graph, checked before anything writes ---
+
+
+def test_the_live_module_graph_has_no_requirement_go_sum_cannot_cover() -> None:
+    """A refresh started here would run go get -u against a broken graph."""
+    assert target.go_graph_findings(target.go_modules()) == []
+
+
+def test_a_requirement_go_sum_cannot_cover_is_named_with_its_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """This is the shape that broke the build: go.mod ahead of go.sum."""
+    module = tmp_path / "go"
+    module.mkdir()
+    (module / "go.mod").write_text(
+        "module example.com/m\n\ngo 1.27\n\nrequire (\n"
+        "\texample.com/renamed v0.32.0 // indirect\n"
+        "\texample.com/fine v1.0.0 // indirect\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    (module / "go.sum").write_text(
+        "example.com/renamed v0.31.0 h1:aaa=\n"
+        "example.com/renamed v0.31.0/go.mod h1:bbb=\n"
+        "example.com/fine v1.0.0 h1:ccc=\n"
+        "example.com/fine v1.0.0/go.mod h1:ddd=\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(target, "_ROOT", tmp_path)
+
+    assert target.go_graph_findings([module]) == [
+        "go/go.mod: example.com/renamed v0.32.0 has no go.sum entry"
+    ]
+
+
+def test_a_go_mod_only_sum_line_does_not_count_as_covering_the_module(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A graph-only entry has that line without the source ever being built."""
+    module = tmp_path / "go"
+    module.mkdir()
+    (module / "go.mod").write_text(
+        "module example.com/m\n\ngo 1.27\n\nrequire (\n"
+        "\texample.com/graphonly v1.0.0 // indirect\n)\n",
+        encoding="utf-8",
+    )
+    (module / "go.sum").write_text(
+        "example.com/graphonly v1.0.0/go.mod h1:bbb=\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(target, "_ROOT", tmp_path)
+
+    assert target.go_graph_findings([module]) == [
+        "go/go.mod: example.com/graphonly v1.0.0 has no go.sum entry"
+    ]
+
+
+def test_a_graph_go_sum_cannot_cover_fails_the_run_before_it_writes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The finding has to reach the exit code, not just the report."""
+
+    def one_finding(*_args: object) -> list[str]:
+        return ["go/go.mod: example.com/renamed v0.32.0 has no go.sum entry"]
+
+    monkeypatch.setattr(target, "go_graph_findings", one_finding)
+    monkeypatch.setattr(sys, "argv", ["update_deps.py", "--dry-run"])
+
+    assert target.main() == 1
+
+    printed = capsys.readouterr().out
+    assert "example.com/renamed v0.32.0" in printed
+    assert "nothing was written" not in printed
+
+
+# --- Language versions, which are reported and never moved ---
+
+
+def test_the_live_plan_holds_every_declared_language_version() -> None:
+    """One go directive and both requires-python floors, none of them moving."""
+    changes = target.plan_languages(target.go_modules(), target.uv_projects())
+
+    assert [(change.where, change.what) for change in changes] == [
+        ("go/go.mod", "go language directive"),
+        ("python/pyproject.toml", "requires-python"),
+        ("tools/techdocs-proof/pyproject.toml", "requires-python"),
+    ]
+    assert {change.action for change in changes} == {target._HOLD}
+
+
+def test_no_live_surface_proposes_moving_a_language_version() -> None:
+    """Holding them is only worth something if no other arm rewrites them."""
+    surfaces = [
+        target.plan_go(target.go_modules()),
+        target.plan_languages(target.go_modules(), target.uv_projects()),
+        target.plan_python(target.uv_projects()),
+    ]
+    moving = [
+        change.what
+        for changes in surfaces
+        for change in changes
+        if change.action == target._UPDATE
+        and change.what in {"go language directive", "requires-python"}
+    ]
+
+    assert moving == []
+
+
+def test_a_directive_written_in_full_reports_the_same_version_as_the_short_form(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`go mod tidy` respells `go 1.26` as `go 1.26.0`; that is not a move."""
+    short = tmp_path / "short"
+    full = tmp_path / "full"
+    for module, directive in ((short, "go 1.26"), (full, "go 1.26.0")):
+        module.mkdir()
+        (module / "go.mod").write_text(
+            f"module example.com/m\n\n{directive}\n", encoding="utf-8"
+        )
+    monkeypatch.setattr(target, "_ROOT", tmp_path)
+
+    reported = [
+        target._go_language_change(module)[0].current for module in (short, full)
+    ]
+
+    assert reported == ["1.26", "1.26"]
+
+
+def test_a_patch_level_directive_keeps_the_digit_that_carries_meaning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a trailing zero is spelling; `1.26.1` is a different floor."""
+    (tmp_path / "go.mod").write_text(
+        "module example.com/m\n\ngo 1.26.1\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(target, "_ROOT", tmp_path)
+
+    assert target._go_language_change(tmp_path)[0].current == "1.26.1"
+
+
+def test_a_module_declaring_no_go_directive_contributes_no_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A row naming a version the file never declares would be an invention."""
+    (tmp_path / "go.mod").write_text("module example.com/m\n", encoding="utf-8")
+    monkeypatch.setattr(target, "_ROOT", tmp_path)
+
+    assert target._go_language_change(tmp_path) == []
+
+
+def test_a_project_declaring_no_requires_python_contributes_no_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The floor is optional in a pyproject, so its absence is not a finding."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "example"\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(target, "_ROOT", tmp_path)
+
+    assert target._python_language_change(tmp_path) == []
+
+
 # --- The whole plan, offline ---
 
 
@@ -401,6 +562,7 @@ def test_the_live_dry_run_plans_every_surface_and_writes_nothing(
     printed = capsys.readouterr().out
     for surface in (
         "go modules",
+        "language versions",
         "python dependencies",
         "tool versions",
         "github actions",

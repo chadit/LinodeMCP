@@ -10,11 +10,12 @@ rewrites lock files, so it stays out of `CHECK_GATES` and out of everything
 The logic lives in `scripts/update_deps.py`; the Makefile recipes are two lines
 each.
 
-## The four surfaces
+## The five surfaces
 
 | Surface | Found from | What a run does |
 |---------|-----------|-----------------|
 | Go modules | every language directory [`languages.txt`](./contracts/languages.txt) registers that carries a `go.mod` | `go get -u ./...` then `go mod tidy` |
+| Language versions | the `go` directive in each `go.mod` and `requires-python` in each uv project | report both and move neither |
 | Python | every directory holding both a `pyproject.toml` and a `uv.lock`, which today means `python/` and `tools/techdocs-proof/` | `uv lock --upgrade`, raise each bare `>=` floor to the version uv locked, then `uv lock` again so the lock's requirement strings match |
 | Tool versions | `scripts/*.sh`, the root Makefile, each registered language's Makefile, `buf.gen*.yaml`, and `.pre-commit-config.yaml` | report what floats, refuse the codegen pins, run `pre-commit autoupdate` |
 | GitHub Actions | every `uses:` line under `.github/workflows/` | rewrite the sha and its trailing version comment together |
@@ -48,6 +49,44 @@ Every declared version gets one line in the report:
 A run whose discovery finds nothing fails rather than reporting a clean pass,
 the same rule the hard gates follow (`scripts/_hardgate.py`).
 
+## The graph check that runs before anything writes
+
+Every run, dry or not, first compares each `go.mod` require line against its own
+`go.sum` and fails when a required version has no module hash. No network call:
+it reads the two files. `go get -u` against a graph that does not resolve is not
+a refresh, it's a second failure stacked on the first, so the check comes first.
+
+The `/go.mod` sum lines don't count as coverage. A graph-only dependency gets
+one of those without its source ever being fetched, so counting them would read
+a module nothing can build as present.
+
+Commit `df41283f` is why this exists. It shipped a `go.mod` requiring
+`github.com/google/cel-go v0.32.0` and `github.com/grafana/regexp` at a
+2025-09-05 pseudo-version, while `go.sum` carried v0.31.0 and a 2024-05-18 one.
+`go build` failed with nine missing-sum errors and no gate had caught it,
+because `make check` is offline and can't resolve a module graph. Pointed at
+that commit the check names both lines.
+
+When it fires, correct the require line rather than writing the missing sum. A
+version `go.sum` can't cover is usually one no resolver would pick, and the two
+shapes behind `df41283f` are the ones to look for:
+
+- **A retracted release.** `prometheus/common v1.20.99` is retracted upstream,
+  along with the whole accidental v1.x line. `@latest` skips it and resolves to
+  v0.70.1, but anything reading the raw tag list sees v1.20.99 as newest. Once
+  it's written into `go.mod`, MVS keeps it, because 1.20.99 beats 0.70.1.
+- **A renamed module path.** cel-go declares `module cel.dev/cel-go` from
+  v0.32.0 on, so requiring that version as `github.com/google/cel-go` can't
+  resolve at all. The bad line then blocks its own repair: `go get` and
+  `go mod tidy` both die parsing it, so the edit has to come first.
+
+`go get -u` sees through both. It skipped the retracted version and refused the
+renamed path when run against the pre-bump tree, landing on v0.70.1 and v0.31.0
+with `go.mod` and `go.sum` in agreement. `go list -m -u` is the looser one: it
+still offers `cel-go v0.31.0 -> v0.32.0`, reading the tag in the old repo
+without knowing about the rename. Anything that writes what `go list -m -u`
+reports walks straight back into this.
+
 ## The gap this target cannot close
 
 `go/Makefile` `install-tools` installs golangci-lint, gopls, gofumpt and
@@ -69,6 +108,14 @@ it reports each `@latest` install as `float` so the remaining gap is at least
 visible in the output rather than silent. Closing it properly means giving
 those four tools a declared version, which changes the install policy
 `ci-setup.sh` states, so it is a decision rather than a refresh.
+
+Two inputs decide a lint result, not one: the binary on your PATH, and the `go`
+directive. `modernize` only proposes a rewrite the declared language version
+allows. Bumping this repo to `go 1.27` turned on `embedlit` against a test file
+nobody had touched, and the same golangci-lint binary reported zero issues at
+`go 1.26`. So a lint failure that appears with no source change points at either
+input, and the `language versions` surface is where the second one is written
+down.
 
 ## What it refuses, and why
 
@@ -139,12 +186,34 @@ rewrites files and stops, so reviewing the diff and deciding what to keep stays
 human work.
 
 It also never moves the Go language version in `go.mod` or `requires-python` in
-a `pyproject.toml`. Renovate has custom managers for both, and a
-language-version move deserves its own change.
+a `pyproject.toml`. It does now report both, on the `language versions` surface,
+with `hold` beside each one. Until that surface existed these were the only
+declared versions in the tree with no line in the report at all, so a reader
+had no way to tell whether the target had considered them and declined or
+simply never looked.
+
+They are held rather than moved because a language version is not a dependency.
+It's the floor everything else resolves against:
+
+- The `go` directive sets the lowest Go a build accepts, and raising it turns on
+  analyzer rules against code nobody touched. Moving this repo from `go 1.26` to
+  `go 1.27` is what surfaced the `modernize` `embedlit` finding in
+  `go/internal/tools/linode_ipv6_ranges_test.go`. Full-tree `golangci-lint` at
+  `go 1.26` reported zero issues; the same command at `go 1.27` reported that
+  one. Nothing about the dependencies changed.
+- `requires-python` is the floor uv resolves every locked package against, so
+  moving it re-resolves the whole project rather than one requirement.
+
+Renovate has custom managers for both, and a language-version move deserves its
+own change with its own review. A refresh command should show you where those
+floors sit, not step them on the way past.
 
 One thing to know before you read a Go diff: `go mod tidy` writes that
 directive in full, so a `go 1.26` line comes back as `go 1.26.0`. Same version,
-longer spelling, and Renovate's custom manager reads either form.
+longer spelling, and Renovate's custom manager reads either form. The report
+drops a trailing `.0` before printing, so the same directive reads the same way
+whether or not a tidy has respelled it, and a run before and after `go mod tidy`
+prints the identical line.
 
 ## Reading a dry run
 
@@ -153,6 +222,11 @@ $ make update-deps-dry-run
 
 go modules (1: 1 update)
   update  go/go.mod: every module requirement 22 direct, 61 indirect (go get -u ./... then go mod tidy)
+
+language versions (3: 3 hold)
+  hold    go/go.mod: go language directive 1.27 (reported, not rewritten: the directive sets the lowest Go a build accepts, and raising it turns on analyzer rules the gates then fail on unchanged code)
+  hold    python/pyproject.toml: requires-python >=3.14.6 (reported, not rewritten: uv resolves every locked package against this floor, so moving it re-resolves the whole project)
+  ...
 
 tool versions (26: 18 float, 6 refuse, 2 update)
   refuse  scripts/ci-setup.sh: github.com/bufbuild/buf/cmd/buf v1.71.0 (codegen must stay byte-reproducible and every committed baseline was captured under this version)

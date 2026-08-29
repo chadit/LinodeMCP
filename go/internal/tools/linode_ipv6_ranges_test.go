@@ -244,7 +244,9 @@ func TestLinodeIPv6RangeGetToolSuccess(t *testing.T) {
 		Linodes    []int  `json:"linodes"`
 		IsBgp      bool   `json:"is_bgp"`
 	}{
-		IPv6Range:  linode.IPv6Range{Range: ipv6RangeCIDR, Region: regionUSEast, Prefix: 64},
+		Range:      ipv6RangeCIDR,
+		Region:     regionUSEast,
+		Prefix:     64,
 		IsBgp:      false,
 		Linodes:    []int{12345, 12346},
 		NotInProto: valNotInProto,

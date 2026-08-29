@@ -185,7 +185,23 @@ The proof ignores formatting and package names, not shape. Scalar versus repeate
 
 ## Requiredness comparison
 
-TechDocs marks a parameter as required through rendered prose. Protobuf expresses presence and validation through syntax and descriptor metadata.
+TechDocs marks a parameter as required through rendered prose. The protobuf side
+answers in this order:
+
+1. a `buf.validate` message rule whose identifier names the field and whose
+   expression reads that same field is a declared requirement, and it wins;
+2. a `proto3Optional` field, and a singular message field, are presence tracked,
+   so an omitted argument never reaches the wire and the field is optional;
+3. a repeated or map field with no rule cannot state requiredness in proto3;
+4. anything else is a field the generated body builder sends on every call, so
+   it is required.
+
+The rule comes first because it is what the handler runs. proto3 presence says
+whether a field can be omitted on the wire, not whether the tool accepts the call
+without it, and reading presence alone got both directions wrong: a singular
+message field read as required reported an omittable argument as a stricter
+contract than the tool has, and a field the rule requires read as optional where
+the field carries `optional`.
 
 When both sides provide a reliable signal and disagree:
 
@@ -200,6 +216,27 @@ proto_requiredness_ambiguous
 ```
 
 Ambiguity is separate from mismatch. This distinction prevents “unknown” from being silently coerced to optional.
+
+## Body sections the page rendered one variant of
+
+Where the Body Params section carries a schema switcher, the page published the
+fields of one variant and the labels of the rest. Two comparisons then have no
+documented side to judge against, and both are reported at limitation severity
+with the unrendered labels named:
+
+```text
+techdocs_body_variant_unrendered
+```
+
+- a protobuf body field with no documented match, where an unrendered variant is
+  where the documentation for it would live;
+- an allowed-value list where the protobuf set is a strict superset of the
+  rendered variant's, which is the shape a union across variants produces.
+
+Everything else on such a route is still compared. A query field is outside the
+switcher. A type or requiredness disagreement is about a fact the page states for
+the variant it rendered, and an allowed-value list the protobuf side does not
+cover is a disagreement no unrendered variant explains.
 
 ## Default comparison
 

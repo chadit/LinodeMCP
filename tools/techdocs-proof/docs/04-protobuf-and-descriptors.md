@@ -195,14 +195,21 @@ Enum values named like `UNSPECIFIED` are excluded from documented allowed-value 
 
 Protobuf requiredness is not a single boolean in modern proto syntax.
 
-The extractor considers:
+The extractor considers, in this order:
 
-- explicit proto2 required labels;
+- a `buf.validate` message rule whose identifier names the field and whose
+  expression reads it, which is the requirement the handler enforces;
 - proto3 optional presence;
-- message-field presence;
+- message-field presence, which proto3 tracks with or without the keyword;
 - repeated/map semantics;
-- known validation metadata when represented in descriptors;
 - ambiguity when no reliable signal proves required or optional.
+
+Buf serializes `(buf.validate.message).cel` into the descriptor, so the rules
+arrive with everything else and no source parsing is involved. LinodeMCP names a
+rule after the field it constrains, `sshkey_create.label.required`, which is what
+makes the identifier readable; a member rule such as
+`iam_idp_config_create.saml.entity_id.required` names the member and its
+expression reads `this.saml.entity_id`, so it never lands on the parent.
 
 When requiredness cannot be proved, the proof emits `proto_requiredness_ambiguous` rather than guessing from a scalar type or field name.
 

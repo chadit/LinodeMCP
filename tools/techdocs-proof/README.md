@@ -34,6 +34,28 @@ The offline arm is what `make check` runs:
 make techdocs-proof
 ```
 
+## The route snapshot
+
+Every run writes `route-snapshot.txt` beside its other evidence: one line per
+route the rendered TechDocs state, with the route's API surface and whether the
+site marks it deprecated. That file is the refresh candidate for
+`docs/contracts/api-techdocs-routes-baseline.txt`, which
+`scripts/verify_techdocs_routes.py` gates `proto/` against offline in
+`make check`.
+
+The scheduled workflow diffs the candidate against the reviewed file and reports
+the difference in its job summary. It does not land it: REQ-D5 keeps every
+repository change behind a human reviewing a diff. To write one from a run by
+hand:
+
+```bash
+PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof \
+  --techdocs-contract <run>/techdocs-contracts.json \
+  --emit-route-snapshot docs/contracts/api-techdocs-routes-baseline.txt
+```
+
+That mode reads a contract and writes a file. It never scrapes.
+
 ## What lives here
 
 - `src/techdocs_proof/proof.py` is the comparator, including `--self-test`.
@@ -42,4 +64,16 @@ make techdocs-proof
   parameter, each carrying its reason. The self-test refuses a duplicate or a
   malformed entry, so a bad edit fails the gate rather than silently widening
   what counts as accepted.
+
+  An entry takes one of two forms. The per-key form carries `category`, `kind`,
+  `method`, `shape`, `location`, `parameter` and `reason`. The class form carries
+  `category`, `kind`, `reason` and an `entries` list of `method`, `shape`,
+  `location` and `parameter`, which is one approval item over many keys where
+  writing the same reason out forty times would be the only difference.
+
+  A class rule writes its keys out. There is no pattern form, and that is the
+  point: a pattern absorbs whatever starts matching it later and can never go
+  stale, which makes it a suppression rather than a ledger entry. A class rule
+  expands into per-key entries at load, so a key that stops appearing in a run
+  is reported in `known_divergences_unmatched` exactly as a per-key entry is.
 - `docs/` is the wiki.

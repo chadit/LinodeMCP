@@ -430,6 +430,173 @@ vendored `proto/buf/validate/` is exempted there under `lint.ignore`, which
 is lint-only and leaves generation reading it. buf is already a hard
 requirement and already pinned.
 
+### overlay-roundtrip
+
+`go/cmd/protomerge`: the standing control for the overlay extraction the
+techdocs pipeline merges through. One run splits every proto file `buf.yaml`
+declares into a SURFACE (which message carries which field, its label, its
+type, its `field_location`, an enum's value names, and the method and path of
+each `tool_route`) and an OVERLAY (wire numbers, declaration order, tool names,
+prose, layout, and every other option the contract states), renders the pair
+back, and byte-compares against the file it read. A file whose bytes move fails
+by name, with the line and both spellings.
+
+It is the only gate whose logic is Go source in this repo rather than a
+`scripts/verify_x_y.py` script, because the merger it hardens renders these
+proto conventions and has to version with them (the 2026-08-19 residency
+ruling put it at `go/cmd/protomerge`). The recipe stays thin:
+`go -C go run ./cmd/protomerge -repo ..`.
+
+Scope comes from `buf.yaml`, the same declaration `proto-lint` reads, so a
+module added later is walked without editing the gate, and the vendored tree
+`lint.ignore` disowns is pruned rather than filtered. It stays offline: the
+local tree and nothing else.
+
+Wire numbers and declaration order live only in the overlay. The surface type
+has no field to put a number in, so upstream drift cannot renumber anything:
+the change is unrepresentable rather than refused.
+
+This gate cannot see a reused number on its own. It measures the extractor
+against the tree in front of it, so a field removed in one cycle and its number
+handed to a different field in a later one round-trips clean: nothing left in
+the tree says what that number used to mean. What says it is a `reserved`
+statement inside the file, which `overlay-merge` writes when it retires a field
+and protoc refuses to let anything reuse. `reserved` travels as overlay text
+here, so a retired number round-trips like any other repo-owned line.
+
+A declaration or a tail written in a shape the model cannot re-render is
+refused rather than copied through, because copying it would leave the
+extractor's gap invisible. The same holds for a `tool_route` option: the block
+is modeled entry by entry, and one written in another order, with another
+indent, or with an entry the model has no slot for is refused. A walk that
+covered no file fails too, the way every hard gate here does.
+
+The route is in the surface rather than in the verbatim spans because a route
+is upstream's to state. Leaving the whole option as overlay text would mean a
+route upstream dropped merged straight through, and the merger would never see
+it. The tool name stays in the overlay: MCP names its own tools.
+
+### overlay-merge
+
+`go/cmd/protomerge` again, run the other way: it reads an upstream surface
+descriptor off disk, renders every declared file from that surface plus the
+overlay it just extracted, writes the result to a scratch directory, and diffs
+it against `proto/`. At zero techdocs drift the diff is empty, which is the
+merger's acceptance line.
+
+The descriptor is written per run rather than committed. A merge input living
+beside its own output would only restate it; the techdocs comparator supplies
+the real one, and until then the tree emits its own with
+`protomerge -emit-surface`. The gate spends two `go run` invocations and a
+`diff -ru`, so the check reads as the thing it checks.
+
+Two refusals cover REQ-D4, and a rename fires both because the merger cannot
+tell a rename from a drop plus an add:
+
+- an overlay anchor the descriptor stopped carrying, named with its file and
+  line, because the repo would render a field upstream no longer states;
+- upstream surface no overlay entry claims, named by key, because the field
+  would reach the tree with no wire number, no declaration order, and none of
+  the MCP semantics only this repo can state.
+
+Both directions fire at three levels: fields, enum values, and routes. The
+route level is what closes REQ-D4, since a route the descriptor drops means the
+API the tool calls is gone, and a route it adds reaches the tree with no tool
+name and no capability, scopes, or wording.
+
+Nothing is written when either fires, so a refused merge leaves no half-merged
+tree behind. A descriptor that fails to parse, and one that parses to no field,
+enum value, or route, are refused the same way: every anchor in the tree would
+dangle against an empty upstream and the run would read as total drift.
+
+`-retire Message.field` is what the first refusal hands the reader. It drops the
+declaration, drops the prose written above it, and leaves `reserved <number>;`
+and `reserved "<name>";` in its place, so the number and the name stay spent
+after the declaration that explains them is gone. Retiring a name the tree does
+not carry is refused rather than ignored. Message-level `buf.validate` CEL rules
+that still name the retired field are left alone on purpose: rewriting somebody
+else's expression is a guess, and `proto-lint` names each one by line.
+
+### wire-breaking
+
+`buf breaking --against docs/contracts/wire-baseline.binpb.gz`: the
+wire-stability check `buf.yaml` has declared under `breaking: use: FILE` since
+the contract's first commit, which nothing invoked. A renumber, a rename on a
+live number, and a deletion all fail by name and line.
+
+The baseline is a pinned image, not a branch reference. A branch reference
+compares a clean checkout against its own last commit, which is the same tree,
+so the gate would report green in CI without ever measuring anything. The image
+is built with `--exclude-source-info`, so comments and layout never move it and
+it churns only when the wire shape does; two builds over one tree write the same
+bytes.
+
+Refreshing it is part of the reviewed change that earns it:
+
+    buf build --exclude-source-info -o docs/contracts/wire-baseline.binpb.gz
+
+`use: FILE` treats every field deletion as breaking, whether or not the number
+retires to `reserved`. That is the right split rather than a gap: this gate
+catches a wire change at the moment it is introduced, and the `reserved`
+statement carries the retirement forever, since protoc refuses a later
+declaration that reuses the number or the name. A refreshed baseline forgets the
+retired field; the file does not.
+
+Offline like `proto-lint`, for the same reason: no `deps`, no `buf.lock`, every
+import inside `proto/`. Proven under a sandbox profile denying all network. A
+baseline file that is missing or empty fails rather than passing a comparison
+against nothing.
+
+### techdocs-routes
+
+`scripts/verify_techdocs_routes.py`: the repo half of the TechDocs loop. It
+reads `docs/contracts/api-techdocs-routes-baseline.txt`, the reviewed snapshot
+of every route the rendered TechDocs state, and every `tool_route` the proto
+tree declares, and refuses a route that no longer lines up.
+
+Two failures, both by name and both with the proto file and line:
+
+- a `tool_route` the snapshot no longer states, which means the API the tool
+  calls is gone;
+- a tool built on the v4 surface whose route the snapshot restricts to
+  v4beta, or the reverse, which means upstream withdrew the surface the tool
+  is built on.
+
+It answers the one question `wire-breaking` cannot. `wire-breaking` compares
+`proto/` against a proto-derived image, so it catches a wire break WE made.
+This snapshot is TechDocs-derived, so it catches a route THEY dropped, renamed,
+or moved between surfaces. A gate that compared the tree against something
+derived from the tree would report green no matter what upstream did.
+
+Same reviewed-snapshot pattern as the `api-*-baseline` files: the scraping
+half runs weekly in `.github/workflows/techdocs-drift.yml`, writes a candidate
+snapshot into its run evidence, reports the diff in the job summary, and
+uploads it. A human copies the candidate over the reviewed file and lands it,
+because REQ-D5 keeps every repository change behind a reviewed diff. Refreshing
+by hand from a run:
+
+    PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof \
+      --techdocs-contract <run>/techdocs-contracts.json \
+      --emit-route-snapshot docs/contracts/api-techdocs-routes-baseline.txt
+
+Placeholder names collapse to `{}` in both directions, because TechDocs write
+`clusterId` where the proto writes `cluster_id`. That is a spelling variant
+rather than a different slot, and the shape is the only join the two sides
+agree on. The per-slot names stay in the comparator's findings.
+
+Routes the snapshot marks deprecated are counted and named in the report
+rather than failed. REQ-D7 owns that worklist and its six standing entries
+would make this gate red for a debt it does not own. A route TechDocs state
+that no tool declares is not this gate's business either: that is
+`route_missing_from_proto` in the comparator's findings.
+
+Scope comes from `buf.yaml`, the same declaration `proto-lint` and
+`overlay-roundtrip` read. Nothing here is per-language, so
+`docs/contracts/languages.txt` has no scope to give: both languages generate
+their route tables from this one proto tree. Offline, stdlib only, and a
+snapshot that is missing or states no route fails rather than passing a
+comparison against nothing.
+
 ### actionlint
 
 Lints the workflow files with an unconditional `go run ...@latest`, because a
@@ -468,6 +635,14 @@ live Linode API spec.
 rendered TechDocs and compares them against the checked-out proto tree,
 uploading the run directory as an artifact. It reads only, never commits, and
 its findings feed the sync batches rather than any gate.
+
+It also carries the weekly refresh for `techdocs-routes`. The run writes a
+candidate `route-snapshot.txt` into its evidence, the job diffs it against
+`docs/contracts/api-techdocs-routes-baseline.txt` and prints the difference in
+its summary, and the upload step carries the candidate out. Landing it is a
+human copying the file and reviewing the diff, because REQ-D5 puts every
+repository change behind that review rather than behind a bot commit or a bot
+pull request.
 
 ### sync-enums
 

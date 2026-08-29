@@ -22,13 +22,14 @@ Growth stays possible (landing one language ahead of the others is a real
 workflow), but only as a visible, dated commitment that review can see in
 the diff itself. Removals never fail; shrinking is the point of a ratchet.
 
-Two files under the same glob are not ratchets: api-defaults-baseline.txt and
-enum-sync-baseline.txt are full drift snapshots the scheduled sync scripts
-regenerate wholesale from the live Linode spec. A new API-side default or enum
-there is ordinary upstream drift the sync gate itself already watches, not a
-divergence someone chose to accept, and `--update-baseline` writes those lines
-with no annotation it could attach. So they are exempt from this guard; see
-_SNAPSHOT_BASELINES.
+Several files under the same glob are not ratchets: they are reviewed upstream
+snapshots that the scheduled sync scripts and the TechDocs comparator regenerate
+wholesale. A line appearing there is ordinary upstream drift the scheduled job
+already watches, and the regenerating command has no annotation to attach. They
+are exempt; see _SNAPSHOT_BASELINES.
+
+The exemption is a hand-list and it fails closed: an unregistered snapshot is
+guarded as a ratchet. A test pins the list to the producers themselves.
 
 behavior-exempt.txt is guarded too, though it is not a ratchet: an entry
 there removes a tool from behavior-fixture coverage permanently, so a NEW
@@ -58,17 +59,18 @@ import _baselines
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CONTRACTS = _REPO_ROOT / "docs" / "contracts"
 
-# Regenerated drift snapshots, not hand-shrinkable ratchets: the sync scripts
-# rewrite these wholesale from the live spec and their added lines carry no
-# annotation, so the growth-must-be-annotated rule does not apply. Kept in
-# lockstep with verify_sync_defaults.BASELINE / verify_sync_enums.BASELINE by
-# test_verify_baseline_direction.py, so a rename there cannot silently re-guard
-# a snapshot or leave a new one unguarded.
+# Reviewed upstream snapshots, not hand-shrinkable ratchets: each is rewritten
+# wholesale by the command that owns it and the added lines carry no annotation,
+# so the growth-must-be-annotated rule does not apply. The route snapshot's
+# producer lives in tools/techdocs-proof, so the lockstep names its consumer's
+# constant. test_verify_baseline_direction.py pins the list to those producers,
+# so a rename cannot silently re-guard a snapshot or leave a new one unguarded.
 _SNAPSHOT_BASELINES = frozenset(
     {
         "api-defaults-baseline.txt",
         "api-pagination-baseline.txt",
         "api-response-shapes-baseline.txt",
+        "api-techdocs-routes-baseline.txt",
         "enum-sync-baseline.txt",
     }
 )

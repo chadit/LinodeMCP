@@ -2,12 +2,12 @@
 
 verify_baseline_direction.py guards ratchet baselines: an ADDED entry must
 carry an acceptance annotation citing a tracking-issue URL, because a
-ratchet entry is a promise to come back. Two files under the same glob are
-regenerated drift snapshots (api-defaults, enum-sync) whose added lines
-never carry an annotation, so they are exempt, and behavior-exempt.txt may
-carry a free-text reason since a permanent exemption has no follow-up to
-track. These tests pin the exemptions, the URL requirement, and the guard's
-flagging of real unannotated growth.
+ratchet entry is a promise to come back. Several files under the same glob
+are reviewed upstream snapshots whose added lines never carry an annotation,
+so they are exempt, and behavior-exempt.txt may carry a free-text reason
+since a permanent exemption has no follow-up to track. These tests pin the
+exemptions, the URL requirement, and the guard's flagging of real
+unannotated growth.
 """
 
 from __future__ import annotations
@@ -52,21 +52,30 @@ def _load_script(name: str) -> ModuleType:
 guard = _load_script("verify_baseline_direction")
 
 
-def test_snapshot_exemption_matches_sync_scripts() -> None:
-    """The exempt set must name exactly the files the sync scripts regenerate.
+def test_snapshot_exemption_matches_its_producers() -> None:
+    """The exempt set must name exactly the files a regenerating command owns.
 
-    This gates the guard's hand-list: rename a sync BASELINE and this fails,
-    so a snapshot can never be silently re-guarded or left off the exemption.
+    This gates the guard's hand-list from both sides: rename a producer's
+    baseline path and this fails, so a snapshot can never be silently
+    re-guarded, and a name added to the exemption with no producer behind it
+    fails too, so the list cannot quietly grow into a way of switching the
+    guard off.
+
+    Four producers are the scheduled sync scripts. The fifth snapshot is
+    written by the TechDocs comparator, which lives in tools/ rather than
+    scripts/, so its path is named by the gate that reads it offline.
     """
     defaults = _load_script("verify_sync_defaults")
     enums = _load_script("verify_sync_enums")
     pagination = _load_script("verify_sync_pagination")
     response_shapes = _load_script("verify_sync_response_shapes")
+    techdocs_routes = _load_script("verify_techdocs_routes")
     expected = {
         defaults.BASELINE.name,
         enums.BASELINE.name,
         pagination.BASELINE.name,
         response_shapes.BASELINE.name,
+        techdocs_routes._SNAPSHOT.name,
     }
     assert expected == guard._SNAPSHOT_BASELINES
 

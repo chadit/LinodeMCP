@@ -127,6 +127,23 @@ Compiled descriptor set for the candidate TechDocs proto. Its existence proves t
 
 Compiled descriptor set for the checked-out LinodeMCP proto tree, including source comments.
 
+### `route-snapshot.txt`
+
+One line per rendered route, in the vocabulary
+`docs/contracts/api-techdocs-routes-baseline.txt` uses:
+
+```text
+GET /lke/clusters/{}/dashboard surface=both status=deprecated
+```
+
+Placeholder names collapse to `{}` because TechDocs and the proto tree spell
+them differently, and the shape is the only join the two sides agree on.
+
+This is the refresh candidate for the reviewed snapshot that
+`make techdocs-routes` gates `proto/` against offline. It is evidence like
+everything else here: the scheduled job reports its diff against the reviewed
+file, and a human lands the refresh.
+
 ### `comparison.json`
 
 Primary Phase 1 result. It contains:
@@ -176,6 +193,10 @@ pages/*.md
 working tree (or GitHub SHA) + LinodeMCP proto and ToolRoute options
             │
             └──> linodemcp-descriptor.json
+
+techdocs-contracts.json
+            │
+            └──> route-snapshot.txt
 
 techdocs-contracts.json + linodemcp-descriptor.json
             │
