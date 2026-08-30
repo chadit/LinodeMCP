@@ -7,7 +7,7 @@ import dataclasses
 import json
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, cast
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -26,9 +26,7 @@ from linodemcp.genpb.linode.mcp.v1 import (
 )
 from linodemcp.gentools import handle_hello, handle_version, scopes_for
 from linodemcp.linode import (
-    Client,
     NetworkError,
-    RetryableClient,
 )
 from linodemcp.profiles import (
     ActiveProfileDisabledError,
@@ -508,7 +506,6 @@ async def test_deprecated_object_storage_clusters_list_tool_absent(
 ) -> None:
     """Deprecated Object Storage cluster tools should not be exposed."""
     from linodemcp import tools as tools_mod
-    from linodemcp.version import FEATURE_TOOLS_LIST, REMOVED_FEATURE_TOOLS_LIST
 
     assert "create_linode_object_storage_clusters_list_tool" not in tools_mod.__all__
     assert "handle_linode_object_storage_clusters_list" not in tools_mod.__all__
@@ -522,9 +519,6 @@ async def test_deprecated_object_storage_clusters_list_tool_absent(
     srv = Server(_full_access_config(sample_config))
     assert "linode_object_storage_clusters_list" not in srv.registered_tool_names
     assert "linode_object_storage_cluster_get" not in srv.registered_tool_names
-    assert "linode_object_storage_clusters_list" not in FEATURE_TOOLS_LIST.split(",")
-    assert "linode_object_storage_cluster_get" not in FEATURE_TOOLS_LIST.split(",")
-    assert "linode_object_storage_cluster_get" in REMOVED_FEATURE_TOOLS_LIST.split(",")
     assert "linode_region_get" in registry
     assert "linode_region_get" in srv.registered_tool_names
 
@@ -3159,7 +3153,6 @@ async def test_database_mysql_config_get_tool_is_exported_and_registered(
 ) -> None:
     """MySQL config get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_database_mysql_config_get_tool" in gentools_mod.__all__
     assert "handle_linode_database_mysql_config_get" in gentools_mod.__all__
@@ -3175,7 +3168,6 @@ async def test_database_mysql_config_get_tool_is_exported_and_registered(
     assert entry.capability == Capability.Read
     assert entry.tool.input_schema.get("required") is None
     assert "environment" in entry.tool.input_schema["properties"]
-    assert "linode_database_mysql_config_get" in get_version_info().features["tools"]
 
 
 async def test_database_mysql_config_get_dispatches_from_registry(
@@ -3227,7 +3219,6 @@ async def test_database_postgresql_config_get_tool_is_exported_and_registered(
 ) -> None:
     """PostgreSQL config get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_database_postgresql_config_get_tool" in gentools_mod.__all__
     assert "handle_linode_database_postgresql_config_get" in gentools_mod.__all__
@@ -3243,9 +3234,6 @@ async def test_database_postgresql_config_get_tool_is_exported_and_registered(
     assert entry.capability == Capability.Read
     assert entry.tool.input_schema.get("required") is None
     assert "environment" in entry.tool.input_schema["properties"]
-    assert (
-        "linode_database_postgresql_config_get" in get_version_info().features["tools"]
-    )
 
 
 async def test_database_postgresql_config_get_dispatches_from_registry(
@@ -3272,66 +3260,11 @@ async def test_database_postgresql_config_get_dispatches_from_registry(
     )
 
 
-async def test_client_pg_database_instance_get_uses_exact_path() -> None:
-    """Low-level client uses the documented PostgreSQL database route."""
-    response_data = {"id": 123, "label": "primary-db", "engine": "postgresql"}
-    response = Mock()
-    response.json.return_value = response_data
-    client = Client("https://api.linode.test/v4", "token")
-    with patch.object(
-        client, "make_request", AsyncMock(return_value=response)
-    ) as make_request:
-        result = await client.get_database_postgresql_instance(123)
-
-    assert result == response_data
-    make_request.assert_awaited_once_with("GET", "/databases/postgresql/instances/123")
-    await client.close()
-
-
-async def test_client_get_database_postgresql_instance_maps_http_error() -> None:
-    """Low-level client maps PostgreSQL instance HTTP failures to NetworkError."""
-    client = Client("https://api.linode.test/v4", "token")
-    with (
-        patch.object(
-            client,
-            "make_request",
-            AsyncMock(side_effect=httpx.ConnectError("boom")),
-        ),
-        pytest.raises(NetworkError, match="GetDatabasePostgreSQLInstance"),
-    ):
-        await client.get_database_postgresql_instance(123)
-
-    await client.close()
-
-
-async def test_retryable_client_pg_database_instance_get_retries() -> None:
-    """Read-only PostgreSQL database instance get delegates through retry."""
-    response_data = {"id": 123, "label": "primary-db"}
-    retry_client = RetryableClient.__new__(RetryableClient)
-    retry_client.client = Mock()
-    retry_client.client.get_database_postgresql_instance = AsyncMock(
-        return_value=response_data
-    )
-
-    async def _execute(call: Any, *args: Any) -> Any:
-        return await call(*args)
-
-    with patch.object(
-        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
-    ) as execute_with_retry:
-        result = await retry_client.get_database_postgresql_instance(123)
-
-    assert result == response_data
-    execute_with_retry.assert_awaited_once()
-    retry_client.client.get_database_postgresql_instance.assert_awaited_once_with(123)
-
-
 async def test_database_postgresql_instance_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
     """PostgreSQL database instance get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_database_postgresql_instance_get_tool" in gentools_mod.__all__
     assert "handle_linode_database_postgresql_instance_get" in gentools_mod.__all__
@@ -3353,10 +3286,6 @@ async def test_database_postgresql_instance_get_tool_is_exported_and_registered(
         if item.name == "linode_database_postgresql_instance_get"
     )
     assert entry.capability == Capability.Read
-    assert (
-        "linode_database_postgresql_instance_get"
-        in get_version_info().features["tools"]
-    )
 
 
 async def test_database_postgresql_instance_get_dispatches_from_registry(
@@ -3421,7 +3350,6 @@ async def test_database_postgresql_instance_patch_tool_is_exported_and_registere
 ) -> None:
     """PostgreSQL database patch tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert (
         "create_linode_database_postgresql_instance_patch_tool" in gentools_mod.__all__
@@ -3447,10 +3375,6 @@ async def test_database_postgresql_instance_patch_tool_is_exported_and_registere
         if item.name == "linode_database_postgresql_instance_patch"
     )
     assert entry.capability == Capability.Write
-    assert (
-        "linode_database_postgresql_instance_patch"
-        in get_version_info().features["tools"]
-    )
 
 
 async def test_database_postgresql_instance_patch_dispatches_from_registry(
@@ -3585,7 +3509,6 @@ async def test_database_postgresql_instance_ssl_get_tool_is_exported_and_registe
 ) -> None:
     """PostgreSQL database SSL get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert (
         "create_linode_database_postgresql_instance_ssl_get_tool"
@@ -3610,10 +3533,6 @@ async def test_database_postgresql_instance_ssl_get_tool_is_exported_and_registe
         if item.name == "linode_database_postgresql_instance_ssl_get"
     )
     assert entry.capability == Capability.Read
-    assert (
-        "linode_database_postgresql_instance_ssl_get"
-        in get_version_info().features["tools"]
-    )
 
 
 async def test_database_postgresql_instance_ssl_get_dispatches_from_registry(
@@ -3671,68 +3590,11 @@ async def test_database_postgresql_instance_ssl_get_rejects_invalid_instance_id(
     mock_client.route_raw.assert_not_called()
 
 
-async def test_client_get_database_mysql_instance_uses_exact_encoded_path() -> None:
-    """Low-level client uses the documented MySQL database instance route."""
-    response_data = {"id": 123, "label": "primary-db", "engine": "mysql"}
-    response = Mock()
-    response.json.return_value = response_data
-    client = Client("https://api.linode.test/v4", "token")
-    with patch.object(
-        client, "make_request", AsyncMock(return_value=response)
-    ) as make_request:
-        result = await client.get_database_mysql_instance(123)
-
-    assert result == response_data
-    make_request.assert_awaited_once_with("GET", "/databases/mysql/instances/123")
-    await client.close()
-
-
-async def test_client_get_database_mysql_instance_maps_http_error() -> None:
-    """Low-level client maps HTTP failures to NetworkError."""
-    client = Client("https://api.linode.test/v4", "token")
-    with (
-        patch.object(
-            client,
-            "make_request",
-            AsyncMock(side_effect=httpx.ConnectError("boom")),
-        ),
-        pytest.raises(NetworkError, match="GetDatabaseMySQLInstance"),
-    ):
-        await client.get_database_mysql_instance(123)
-
-    await client.close()
-
-
-async def test_retryable_client_get_database_mysql_instance_uses_retry_wrapper() -> (
-    None
-):
-    """Read-only MySQL database instance get delegates through retry."""
-    response_data = {"id": 123, "label": "primary-db"}
-    retry_client = RetryableClient.__new__(RetryableClient)
-    retry_client.client = Mock()
-    retry_client.client.get_database_mysql_instance = AsyncMock(
-        return_value=response_data
-    )
-
-    async def _execute(call: Any, *args: Any) -> Any:
-        return await call(*args)
-
-    with patch.object(
-        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
-    ) as execute_with_retry:
-        result = await retry_client.get_database_mysql_instance(123)
-
-    assert result == response_data
-    execute_with_retry.assert_awaited_once()
-    retry_client.client.get_database_mysql_instance.assert_awaited_once_with(123)
-
-
 async def test_database_mysql_instance_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
     """MySQL database instance get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_database_mysql_instance_get_tool" in gentools_mod.__all__
     assert "handle_linode_database_mysql_instance_get" in gentools_mod.__all__
@@ -3752,7 +3614,6 @@ async def test_database_mysql_instance_get_tool_is_exported_and_registered(
         if item.name == "linode_database_mysql_instance_get"
     )
     assert entry.capability == Capability.Read
-    assert "linode_database_mysql_instance_get" in get_version_info().features["tools"]
 
 
 async def test_database_mysql_instance_get_dispatches_from_registry(
@@ -3815,7 +3676,6 @@ async def test_database_mysql_instance_credentials_get_tool_is_exported_and_regi
 ) -> None:
     """MySQL database credentials get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert (
         "create_linode_database_mysql_instance_credentials_get_tool"
@@ -3850,10 +3710,6 @@ async def test_database_mysql_instance_credentials_get_tool_is_exported_and_regi
         if item.name == "linode_database_mysql_instance_credentials_get"
     )
     assert entry.capability == Capability.Write
-    assert (
-        "linode_database_mysql_instance_credentials_get"
-        in get_version_info().features["tools"]
-    )
 
 
 async def test_database_mysql_instance_credentials_get_dispatches_from_registry(
@@ -3976,7 +3832,6 @@ async def test_database_postgresql_credentials_get_tool_registration(
 ) -> None:
     """PostgreSQL credentials get tool is exported and gated as write."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert (
         "create_linode_database_postgresql_instance_credentials_get_tool"
@@ -3998,7 +3853,6 @@ async def test_database_postgresql_credentials_get_tool_registration(
     assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.name not in Server(sample_config).registered_tool_names
     assert tool.name in Server(_full_access_config(sample_config)).registered_tool_names
-    assert tool.name in get_version_info().features["tools"]
     entry = next(item for item in get_tool_registry() if item.name == tool.name)
     assert entry.capability == Capability.Write
 
@@ -4109,7 +3963,6 @@ async def test_database_mysql_instance_ssl_get_tool_is_exported_and_registered(
 ) -> None:
     """MySQL database SSL get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_database_mysql_instance_ssl_get_tool" in gentools_mod.__all__
     assert "handle_linode_database_mysql_instance_ssl_get" in gentools_mod.__all__
@@ -4129,9 +3982,6 @@ async def test_database_mysql_instance_ssl_get_tool_is_exported_and_registered(
         if item.name == "linode_database_mysql_instance_ssl_get"
     )
     assert entry.capability == Capability.Read
-    assert (
-        "linode_database_mysql_instance_ssl_get" in get_version_info().features["tools"]
-    )
 
 
 async def test_database_mysql_instance_ssl_get_dispatches_from_registry(
@@ -5313,42 +5163,6 @@ async def test_account_login_get_schema_requires_login_id(
     assert "login_id" in entry.tool.input_schema["properties"]
 
 
-async def test_client_get_account_user_uses_exact_encoded_path() -> None:
-    """Low-level client uses the documented account user route."""
-    response_data = {"username": "alice-dev"}
-    response = Mock()
-    response.json.return_value = response_data
-    client = Client("https://api.linode.test/v4", "token")
-    with patch.object(
-        client, "make_request", AsyncMock(return_value=response)
-    ) as make_request:
-        result = await client.get_account_user("alice/dev")
-
-    assert result == response_data
-    make_request.assert_awaited_once_with("GET", "/account/users/alice%2Fdev")
-    await client.close()
-
-
-async def test_retryable_client_get_account_user_uses_retry_wrapper() -> None:
-    """Read-only account user get delegates through the retry wrapper."""
-    response_data = {"username": "alice-dev"}
-    retry_client = RetryableClient.__new__(RetryableClient)
-    retry_client.client = Mock()
-    retry_client.client.get_account_user = AsyncMock(return_value=response_data)
-
-    async def _execute(call: Any, *args: Any) -> Any:
-        return await call(*args)
-
-    with patch.object(
-        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
-    ) as execute_with_retry:
-        result = await retry_client.get_account_user("alice-dev")
-
-    assert result == response_data
-    execute_with_retry.assert_awaited_once()
-    retry_client.client.get_account_user.assert_awaited_once_with("alice-dev")
-
-
 async def test_account_user_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
@@ -5427,42 +5241,6 @@ async def test_account_user_get_schema_requires_username(
     assert entry.tool.input_schema["required"] == ["username"]
     username_schema = entry.tool.input_schema["properties"]["username"]
     assert username_schema["type"] == "string"
-
-
-async def test_client_get_account_user_grants_uses_exact_encoded_path() -> None:
-    """Low-level client uses the documented account user grants route."""
-    response_data = {"global": {"account_access": "read_only"}}
-    response = Mock()
-    response.json.return_value = response_data
-    client = Client("https://api.linode.test/v4", "token")
-    with patch.object(
-        client, "make_request", AsyncMock(return_value=response)
-    ) as make_request:
-        result = await client.get_account_user_grants("alice/dev")
-
-    assert result == response_data
-    make_request.assert_awaited_once_with("GET", "/account/users/alice%2Fdev/grants")
-    await client.close()
-
-
-async def test_retryable_client_get_account_user_grants_uses_retry_wrapper() -> None:
-    """Read-only account user grants delegates through the retry wrapper."""
-    response_data = {"global": {"account_access": "read_only"}}
-    retry_client = RetryableClient.__new__(RetryableClient)
-    retry_client.client = Mock()
-    retry_client.client.get_account_user_grants = AsyncMock(return_value=response_data)
-
-    async def _execute(call: Any, *args: Any) -> Any:
-        return await call(*args)
-
-    with patch.object(
-        retry_client, "_execute_with_retry", AsyncMock(side_effect=_execute)
-    ) as execute_with_retry:
-        result = await retry_client.get_account_user_grants("alice-dev")
-
-    assert result == response_data
-    execute_with_retry.assert_awaited_once()
-    retry_client.client.get_account_user_grants.assert_awaited_once_with("alice-dev")
 
 
 async def test_account_user_grants_get_tool_is_exported_and_registered(
@@ -7934,7 +7712,6 @@ async def test_database_postgresql_instance_update_tool_is_exported_and_register
 ) -> None:
     """PostgreSQL database update tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert (
         "create_linode_database_postgresql_instance_update_tool" in gentools_mod.__all__
@@ -7953,10 +7730,6 @@ async def test_database_postgresql_instance_update_tool_is_exported_and_register
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_database_postgresql_instance_update" in srv.registered_tool_names
-    assert (
-        "linode_database_postgresql_instance_update"
-        in get_version_info().features["tools"]
-    )
 
 
 async def test_database_postgresql_instance_update_dispatches_from_registry(
@@ -8239,7 +8012,6 @@ async def test_database_mysql_instance_patch_tool_is_exported_and_registered(
 ) -> None:
     """MySQL Managed Database patch tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_database_mysql_instance_patch_tool" in gentools_mod.__all__
     assert "handle_linode_database_mysql_instance_patch" in gentools_mod.__all__
@@ -8254,9 +8026,6 @@ async def test_database_mysql_instance_patch_tool_is_exported_and_registered(
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_database_mysql_instance_patch" in srv.registered_tool_names
-    assert (
-        "linode_database_mysql_instance_patch" in get_version_info().features["tools"]
-    )
 
 
 async def test_database_mysql_instance_patch_dispatches_from_registry(
@@ -8475,7 +8244,6 @@ async def test_database_postgresql_instances_list_tool_is_exported_and_registere
 ) -> None:
     """PostgreSQL Managed Database list tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert (
         "create_linode_database_postgresql_instance_list_tool" in gentools_mod.__all__
@@ -8492,9 +8260,6 @@ async def test_database_postgresql_instances_list_tool_is_exported_and_registere
 
     srv = Server(sample_config)
     assert "linode_database_postgresql_instance_list" in srv.registered_tool_names
-    assert "linode_database_postgresql_instance_list" in get_version_info().features[
-        "tools"
-    ].split(",")
 
 
 async def test_database_postgresql_instances_list_dispatches_from_registry(
@@ -11885,7 +11650,6 @@ async def test_linode_images_sharegroup_image_delete_tool_is_exported_and_regist
 ) -> None:
     """Image share group image delete tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_image_sharegroup_image_delete_tool" in gentools_mod.__all__
     assert "handle_linode_image_sharegroup_image_delete" in gentools_mod.__all__
@@ -11903,9 +11667,6 @@ async def test_linode_images_sharegroup_image_delete_tool_is_exported_and_regist
     entries = {entry.name: entry for entry in get_tool_registry()}
     assert (
         entries["linode_image_sharegroup_image_delete"].capability is Capability.Destroy
-    )
-    assert (
-        "linode_image_sharegroup_image_delete" in get_version_info().features["tools"]
     )
 
 
@@ -12057,7 +11818,6 @@ async def test_linode_images_sharegroup_get_tool_is_exported_and_registered(
 ) -> None:
     """Image share group get tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_image_sharegroup_get_tool" in gentools_mod.__all__
     assert "handle_linode_image_sharegroup_get" in gentools_mod.__all__
@@ -12072,7 +11832,6 @@ async def test_linode_images_sharegroup_get_tool_is_exported_and_registered(
 
     entries = {entry.name: entry for entry in get_tool_registry()}
     assert entries["linode_image_sharegroup_get"].capability is Capability.Read
-    assert "linode_image_sharegroup_get" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_get_dispatches_from_registry(
@@ -12145,7 +11904,6 @@ async def test_linode_images_sharegroup_members_add_tool_is_exported_and_registe
     sample_config: Config,
 ) -> None:
     """Image share group add-members tool should be registered."""
-    from linodemcp.version import get_version_info
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     entry = registry["linode_image_sharegroup_member_add"]
@@ -12167,14 +11925,12 @@ async def test_linode_images_sharegroup_members_add_tool_is_exported_and_registe
 
     entries = {entry.name: entry for entry in get_tool_registry()}
     assert entries["linode_image_sharegroup_member_add"].capability is Capability.Write
-    assert "linode_image_sharegroup_member_add" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_images_add_tool_is_registered(
     sample_config: Config,
 ) -> None:
     """Image share group add-images tool should be registered."""
-    from linodemcp.version import get_version_info
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     entry = registry["linode_image_sharegroup_image_add"]
@@ -12193,7 +11949,6 @@ async def test_linode_images_sharegroup_images_add_tool_is_registered(
 
     entries = {entry.name: entry for entry in get_tool_registry()}
     assert entries["linode_image_sharegroup_image_add"].capability is Capability.Write
-    assert "linode_image_sharegroup_image_add" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
@@ -12314,7 +12069,6 @@ async def test_linode_images_sharegroup_update_tool_is_exported_and_registered(
 ) -> None:
     """Image share group update tool should be exported and registered."""
     from linodemcp import gentools as gentools_mod
-    from linodemcp.version import get_version_info
 
     assert "create_linode_image_sharegroup_update_tool" in gentools_mod.__all__
     assert "handle_linode_image_sharegroup_update" in gentools_mod.__all__
@@ -12330,7 +12084,6 @@ async def test_linode_images_sharegroup_update_tool_is_exported_and_registered(
 
     entries = {entry.name: entry for entry in get_tool_registry()}
     assert entries["linode_image_sharegroup_update"].capability is Capability.Write
-    assert "linode_image_sharegroup_update" in get_version_info().features["tools"]
 
 
 async def test_linode_images_sharegroup_update_dispatches_from_registry(
@@ -14687,7 +14440,6 @@ async def test_firewall_device_delete_dry_run_does_not_require_confirm(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_firewall_device.return_value = {"id": 456}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client

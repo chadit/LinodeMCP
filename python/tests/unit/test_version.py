@@ -22,13 +22,6 @@ def test_get_version_info() -> None:
     assert info.build_date == "unknown"
     assert info.python_version
     assert info.platform
-    assert "hello" in info.features["tools"]
-    assert "linode_managed_linode_settings_get" in info.features["tools"]
-    assert "linode_managed_service_list" in info.features["tools"]
-    assert "linode_managed_service_delete" in info.features["tools"]
-    assert "linode_managed_service_disable" in info.features["tools"]
-    assert "linode_managed_service_enable" in info.features["tools"]
-    assert "linode_networking_ip_share" in info.features["tools"]
 
 
 def test_version_info_with_custom_values() -> None:
@@ -50,7 +43,7 @@ def test_version_info_to_dict() -> None:
     assert isinstance(data, dict)
     assert data["version"] == "0.1.0"
     assert data["api_version"] == "0.1.0"
-    assert "features" in data
+    assert "features" not in data
 
 
 def test_version_info_str() -> None:
@@ -68,7 +61,7 @@ def test_cli_version_verb_emits_the_proto_field_set() -> None:
 
     version.proto pins {version, api_version, build_date, commit, platform}
     as the envelope every language and every path emits; the legacy
-    ``to_dict()`` shape (git_commit, git_branch, features) must never come
+    ``to_dict()`` shape (git_commit, git_branch) must never come
     back on the CLI path.
     """
     stream = io.StringIO()

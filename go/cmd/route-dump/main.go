@@ -42,12 +42,14 @@ type dump struct {
 	Unresolved []string `json:"unresolved"`
 }
 
-// contractedSite is one call that names a tool instead of a path. The site
-// travels with the tool so the gate can name the call when the contract does
-// not declare that tool.
+// contractedSite is one call that takes its route from the contract instead of
+// a path: by the tool it names, or by the generated *Input message it hands to
+// the typed lookup. The site travels with either so the gate can name the call
+// when the contract declares no such tool or message.
 type contractedSite struct {
-	Tool string `json:"tool"`
-	Site string `json:"site"`
+	Tool    string `json:"tool,omitempty"`
+	Message string `json:"message,omitempty"`
+	Site    string `json:"site"`
 }
 
 func main() {
@@ -62,16 +64,18 @@ func main() {
 	}
 }
 
-// defaultDirs are the two places a route is reached from: the client package
-// builds paths and holds the request primitives, and the generated tool package
-// names its tool to those primitives without writing a path. Scanning the
-// client alone reports every generated tool's route as missing.
+// defaultDirs are the places a route is reached from: the client package holds
+// the request primitives, the generated tool package names its tool to those
+// primitives without writing a path, and the profiles package reads the two
+// routes its scope validator needs by handing generated message types to the
+// typed lookup. Scanning the client alone reports every route reached from the
+// other two as missing.
 //
-// Both parse into one symbol table because a call and the primitive it reaches
-// sit on opposite sides of the package boundary. A name declared in both is
-// ambiguous and resolves to nothing, which surfaces the affected call sites
+// All parse into one symbol table because a call and the primitive it reaches
+// sit on opposite sides of a package boundary. A name declared in more than one
+// is ambiguous and resolves to nothing, which surfaces the affected call sites
 // rather than attributing a route to the wrong body.
-const defaultDirs = "internal/linode,internal/gentools"
+const defaultDirs = "internal/linode,internal/gentools,internal/profiles"
 
 // splitDirs drops empty entries so a trailing comma is not a directory named "".
 func splitDirs(value string) []string {

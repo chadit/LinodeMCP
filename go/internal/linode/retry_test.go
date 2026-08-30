@@ -22,9 +22,9 @@ func writeRetryTestResponse(t *testing.T, w http.ResponseWriter, body string) {
 	}
 }
 
-// TestRetryableClientGetProfileSuccessNoRetry verifies that a successful
-// first attempt returns immediately without any retries.
-func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
+// TestRetryableClientSuccessNoRetry verifies that a successful first
+// attempt returns immediately without any retries.
+func TestRetryableClientSuccessNoRetry(t *testing.T) {
 	t.Parallel()
 
 	var callCount atomic.Int32
@@ -48,7 +48,7 @@ func TestRetryableClientGetProfileSuccessNoRetry(t *testing.T) {
 		linode.WithJitter(false),
 	)
 
-	profile, err := client.GetProfile(t.Context())
+	profile, err := readProfile(t.Context(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRetryableClientRetriesOnServerError(t *testing.T) {
 		linode.WithJitter(false),
 	)
 
-	profile, err := client.GetProfile(t.Context())
+	profile, err := readProfile(t.Context(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestRetryableClientNoRetryOnAuthError(t *testing.T) {
 		linode.WithJitter(false),
 	)
 
-	_, err := client.GetProfile(t.Context())
+	_, err := readProfile(t.Context(), client)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -165,7 +165,7 @@ func TestRetryableClientExhaustsRetries(t *testing.T) {
 		linode.WithJitter(false),
 	)
 
-	_, err := client.GetProfile(t.Context())
+	_, err := readProfile(t.Context(), client)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -220,7 +220,7 @@ func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 		result := make(chan error, 1)
 
 		go func() {
-			_, err := client.GetProfile(ctx)
+			_, err := readProfile(ctx, client)
 			result <- err
 		}()
 
@@ -317,7 +317,7 @@ func TestRetryHonorsRetryAfterHint(t *testing.T) {
 		)
 
 		start := time.Now()
-		profile, err := client.GetProfile(t.Context())
+		profile, err := readProfile(t.Context(), client)
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -396,7 +396,7 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 		)
 
 		start := time.Now()
-		_, err := client.GetProfile(t.Context())
+		_, err := readProfile(t.Context(), client)
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -415,277 +415,4 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 			t.Errorf("elapsed = %v, want exactly %v", elapsed, maxDelay)
 		}
 	})
-}
-
-// TestRetryableClientListInstanceConfigsRetries verifies that ListInstanceConfigs
-// retries transient read failures and succeeds on the second attempt.
-func TestRetryableClientListInstanceConfigsRetries(t *testing.T) {
-	t.Parallel()
-
-	var callCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcLinodeInstances123Configs {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs)
-		}
-
-		count := callCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
-
-			return
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData:    []linode.InstanceConfig{{ID: 77, Label: labelBootConfig}},
-			keyPage:    1,
-			keyPages:   1,
-			keyResults: 1,
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(2),
-		linode.WithBaseDelay(1*time.Millisecond),
-		linode.WithMaxDelay(10*time.Millisecond),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
-
-	configs, err := client.ListInstanceConfigs(t.Context(), 123, 0, 0)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(configs) != 1 {
-		t.Errorf("len(configs) = %d, want %d", len(configs), 1)
-	}
-
-	if callCount.Load() != int32(2) {
-		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
-	}
-}
-
-// TestRetryableClientGetInstanceInterfaceRetries verifies that GetInstanceInterface
-// retries transient read failures and succeeds on the second attempt.
-func TestRetryableClientGetInstanceInterfaceRetries(t *testing.T) {
-	t.Parallel()
-
-	var callCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcLinodeInstances123Interfaces456 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces456)
-		}
-
-		count := callCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
-
-			return
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(linode.InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02"}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(2),
-		linode.WithBaseDelay(1*time.Millisecond),
-		linode.WithMaxDelay(10*time.Millisecond),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
-
-	instanceInterface, err := client.GetInstanceInterface(t.Context(), 123, 456)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if instanceInterface == nil {
-		t.Fatal("instanceInterface is nil")
-	}
-
-	if instanceInterface.ID != 456 {
-		t.Errorf("instanceInterface.ID = %v, want %v", instanceInterface.ID, 456)
-	}
-
-	if callCount.Load() != int32(2) {
-		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
-	}
-}
-
-// TestRetryableClientGetInstanceConfigInterfaceRetries verifies that GetInstanceConfigInterface
-// retries transient read failures and succeeds on the second attempt.
-func TestRetryableClientGetInstanceConfigInterfaceRetries(t *testing.T) {
-	t.Parallel()
-
-	var callCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcLinodeInstances123Configs789Interfaces456 {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Configs789Interfaces456)
-		}
-
-		count := callCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
-
-			return
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(linode.ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposePublic}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(2),
-		linode.WithBaseDelay(1*time.Millisecond),
-		linode.WithMaxDelay(10*time.Millisecond),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
-
-	configInterface, err := client.GetInstanceConfigInterface(t.Context(), 123, 789, 456)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if configInterface == nil {
-		t.Fatal("configInterface is nil")
-	}
-
-	if configInterface.Purpose != purposePublic {
-		t.Errorf("configInterface.Purpose = %v, want %v", configInterface.Purpose, purposePublic)
-	}
-
-	if configInterface.ID != 456 {
-		t.Errorf("configInterface.ID = %v, want %v", configInterface.ID, 456)
-	}
-
-	if !configInterface.Active {
-		t.Error("configInterface.Active = false, want true")
-	}
-
-	if callCount.Load() != int32(2) {
-		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
-	}
-}
-
-// TestRetryableClientGetInstanceRetries verifies that GetInstance retries
-// on a 500 server error and succeeds on the second attempt.
-// TestRetryableClientListInstanceVolumesRetries verifies that ListInstanceVolumes
-// retries transient read failures and succeeds on the second attempt.
-func TestRetryableClientListInstanceVolumesRetries(t *testing.T) {
-	t.Parallel()
-
-	var callCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != tcLinodeInstances123Volumes {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Volumes)
-		}
-
-		count := callCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			writeRetryTestResponse(t, w, `{"errors":[{"reason":"rate limited"}]}`)
-
-			return
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData:    []linode.Volume{{ID: 321, Label: dataVolumeLabel}},
-			keyPage:    1,
-			keyPages:   1,
-			keyResults: 1,
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(2),
-		linode.WithBaseDelay(1*time.Millisecond),
-		linode.WithMaxDelay(10*time.Millisecond),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
-
-	volumes, err := client.ListInstanceVolumes(t.Context(), 123, 0, 0)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(volumes) != 1 {
-		t.Errorf("len(volumes) = %d, want %d", len(volumes), 1)
-	}
-
-	if callCount.Load() != int32(2) {
-		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
-	}
-}
-
-func TestRetryableClientGetInstanceRetries(t *testing.T) {
-	t.Parallel()
-
-	var callCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		count := callCount.Add(1)
-		if count == 1 {
-			w.WriteHeader(http.StatusInternalServerError)
-			writeRetryTestResponse(t, w, `{"errors":[{"reason":"temporary"}]}`)
-
-			return
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(linode.Instance{ID: 99, Label: "recovered"}); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(2),
-		linode.WithBaseDelay(1*time.Millisecond),
-		linode.WithMaxDelay(10*time.Millisecond),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
-
-	instance, err := client.GetInstance(t.Context(), 99)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if instance.ID != 99 {
-		t.Errorf("instance.ID = %v, want %v", instance.ID, 99)
-	}
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -68,9 +70,7 @@ func fetchList[T proto.Message](
 }
 
 // listProtoElementsPaginated is listProtoElements for endpoints that take
-// page/page_size query params. It builds the URL with withPaginationQuery, the
-// same helper the non-proto list methods use, so the runtime request matches
-// the existing httpListX exactly.
+// page/page_size query params, appended by withPaginationQuery.
 //
 // Sub-resource lists (e.g. /linode/instances/{linode_id}/configs) reuse this
 // helper directly by formatting the path id into the endpoint first, so there
@@ -267,9 +267,29 @@ func routedList[T proto.Message](
 	return fetch(client.onSurface(segment), endpoint)
 }
 
+// withPaginationQuery appends the page controls a paginated list route takes,
+// leaving the endpoint alone when neither is set so an unpaged request spells
+// the route the way the contract declares it.
+func withPaginationQuery(endpoint string, page, pageSize int) string {
+	query := url.Values{}
+
+	if page > 0 {
+		query.Set("page", strconv.Itoa(page))
+	}
+
+	if pageSize > 0 {
+		query.Set("page_size", strconv.Itoa(pageSize))
+	}
+
+	if encoded := query.Encode(); encoded != "" {
+		return endpoint + "?" + encoded
+	}
+
+	return endpoint
+}
+
 // pageQuery renders the page controls on their own, through the same encoder
-// the hand-built list methods use, so a routed request spells them the same way
-// as the call sites that have not moved yet.
+// every paginated list route uses, so a routed request spells them one way.
 func pageQuery(page, pageSize int) string {
 	return strings.TrimPrefix(withPaginationQuery("", page, pageSize), "?")
 }

@@ -5,6 +5,9 @@ import "errors"
 var (
 	// ErrNoRoute reports a tool the proto contract declares no route for.
 	ErrNoRoute = errors.New("tool declares no route")
+	// ErrNoToolRoute reports a message handed to ToolOf that carries no
+	// tool_route: a response type, or a meta tool's input.
+	ErrNoToolRoute = errors.New("message declares no tool_route")
 	// ErrValueCount reports the wrong number of path values for a route.
 	ErrValueCount = errors.New("path value count does not match the route")
 	// ErrValueType reports a path value of a type that cannot fill a slot.
@@ -31,6 +34,7 @@ var (
 // ErrDeclaration and ErrRegistered are startup failures no request path reaches.
 func IsContractError(err error) bool {
 	return errors.Is(err, ErrNoRoute) ||
+		errors.Is(err, ErrNoToolRoute) ||
 		errors.Is(err, ErrValueCount) ||
 		errors.Is(err, ErrValueType) ||
 		errors.Is(err, ErrEmptyValue) ||

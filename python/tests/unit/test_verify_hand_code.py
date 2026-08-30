@@ -5,10 +5,14 @@ rule, so the tests below fabricate a repo root with a registry, an ignore file
 and a tree per language, and hold it against a fabricated contract. The half
 worth pinning is that there is no allowed set left: a function named after a
 tool is reported whatever it is called and wherever it sits, because nothing
-derives a hand-written name from a tool any more.
+derives a hand-written name from a tool any more, and a string literal that
+spells a tool name is reported by file and line for the same reason.
 
 The single-word case is pinned too, and it pins a HOLE rather than a guarantee:
-`version` prefixes ordinary vocabulary, so the scan cannot claim it.
+`version` prefixes ordinary vocabulary, so neither arm can claim it. The trees
+that call tools by name are pinned as a scope rather than an exemption: the
+literal arm leaves them out, the definition arm still reads them, and a tree
+whose path merely starts the same way is scanned by both.
 """
 
 from __future__ import annotations
@@ -73,6 +77,21 @@ STRAY_GO = (
     "func LinodeVolumeCreatePreview(a any) (any, error) { return nil, nil }\n"
 )
 STRAY_PY = "def linode_volume_create_preview(a):\n    return None\n"
+
+# Tool names spelled in string literals, in the two shapes the tree once held:
+# a route lookup keyed on the name, and a comma-joined hand list of names.
+LITERAL_GO = (
+    "package linode\n\n"
+    "func (c *Client) httpGetVolume(ctx context.Context) error {\n"
+    '\treturn c.makeRouteRequest(ctx, "linode_volume_create", nil)\n'
+    "}\n"
+)
+LITERAL_PY = (
+    "FEATURE_TOOLS_LIST = (\n"
+    '    "hello,version,linode_audit_export,"\n'
+    "    'linode_profile_can_run'\n"
+    ")\n"
+)
 
 
 def _write(root: Path, relative: str, text: str) -> None:
@@ -185,16 +204,150 @@ def test_generated_trees_tests_and_dot_directories_are_not_scanned(
         _repo(
             tmp_path,
             {
-                "go/internal/gentools/volume.gen.go": STRAY_GO,
-                "go/internal/tools/volume_test.go": STRAY_GO,
-                "python/src/linodemcp/gentools/volume.py": STRAY_PY,
-                "python/tests/unit/test_volume.py": STRAY_PY,
-                "python/.venv/lib/site.py": STRAY_PY,
+                "go/internal/gentools/volume.gen.go": STRAY_GO + LITERAL_GO,
+                "go/internal/tools/volume_test.go": STRAY_GO + LITERAL_GO,
+                "python/src/linodemcp/gentools/volume.py": STRAY_PY + LITERAL_PY,
+                "python/tests/unit/test_volume.py": STRAY_PY + LITERAL_PY,
+                "python/.venv/lib/site.py": STRAY_PY + LITERAL_PY,
             },
         )
     )
 
     assert problems == []
+
+
+def test_a_tool_name_in_a_string_literal_fails_by_name_and_line(
+    tmp_path: Path,
+) -> None:
+    """A route lookup keyed on a tool name and a hand list of names both fail.
+
+    The list is the shape that hid sixty names in one string: every name on
+    every line of it is reported, not the string as a whole.
+    """
+    problems = _measure(
+        _repo(
+            tmp_path,
+            {
+                "go/internal/linode/methods_storage.go": LITERAL_GO,
+                "python/src/linodemcp/version.py": LITERAL_PY,
+            },
+        )
+    )
+
+    assert len(problems) == 3
+    assert "methods_storage.go:4 spells linode_volume_create" in problems[0]
+    assert "version.py:2 spells linode_audit_export" in problems[1]
+    assert "version.py:3 spells linode_profile_can_run" in problems[2]
+    assert all("in a string literal" in problem for problem in problems)
+
+
+def test_a_literal_matches_a_whole_tool_name_only(tmp_path: Path) -> None:
+    """A longer identifier, an unquoted name and a single-word tool are not hits.
+
+    The single-word case pins the same hole the definition arm has: "version"
+    is the JSON key every version answer carries.
+    """
+    problems = _measure(
+        _repo(
+            tmp_path,
+            {
+                "go/internal/tools/names.go": (
+                    "package tools\n\n"
+                    'const preview = "linode_volume_create_preview"\n'
+                    'const key = "version"\n'
+                    "var bare = linode_volume_create\n"
+                ),
+                "python/src/linodemcp/names.py": (
+                    "PREVIEW = 'linode_volume_create_preview'\nKEY = \"hello\"\n"
+                ),
+            },
+        )
+    )
+
+    assert problems == []
+
+
+def test_the_trees_that_call_tools_by_name_are_left_out_of_the_literal_arm_only(
+    tmp_path: Path,
+) -> None:
+    """The CLI and TUI spell tool names to invoke them; nothing else may.
+
+    The definition arm still reads those trees, and a tree whose path merely
+    starts with a caller's path is not a caller.
+    """
+    callers = _measure(
+        _repo(
+            tmp_path / "callers",
+            {
+                "go/internal/cli/audit_cmd.go": (
+                    'package cli\n\nvar tools = []string{"linode_audit_export"}\n'
+                ),
+                "python/src/linodemcp/cli/audit.py": (
+                    'TOOLS = ("linode_audit_export",)\n'
+                ),
+                "python/src/linodemcp/tui/app.py": (
+                    'SCREEN = "linode_profile_can_run"\n'
+                ),
+            },
+        )
+    )
+    assert callers == []
+
+    defined = _measure(
+        _repo(
+            tmp_path / "defined",
+            {
+                "go/internal/cli/stray.go": (
+                    "package cli\n\nfunc LinodeVolumeCreateRun() {}\n"
+                ),
+            },
+        )
+    )
+    assert len(defined) == 1
+    assert "stray.go defines LinodeVolumeCreateRun" in defined[0]
+
+    neighbour = _measure(
+        _repo(
+            tmp_path / "neighbour",
+            {
+                "go/internal/client/routes.go": (
+                    'package client\n\nconst route = "linode_volume_create"\n'
+                ),
+                "python/src/linodemcp/tuix/app.py": (
+                    'SCREEN = "linode_profile_can_run"\n'
+                ),
+            },
+        )
+    )
+    assert len(neighbour) == 2
+    assert "client/routes.go:3 spells linode_volume_create" in neighbour[0]
+    assert "tuix/app.py:1 spells linode_profile_can_run" in neighbour[1]
+
+
+def test_tools_named_reads_every_quoted_string_on_a_line() -> None:
+    """Every quote kind, an escaped quote inside, and a list all read through."""
+    compound = gate.compound_tools(DECLARED)
+
+    assert compound == frozenset(
+        {
+            "linode_audit_export",
+            "linode_profile_can_run",
+            "linode_volume_create",
+            "linode_volume",
+        }
+    )
+    line = (
+        "a = \"linode_volume\" + 'x linode_volume_create'"
+        ' + "it\\"s linode_audit_export"'
+    )
+    assert gate.tools_named(line, compound) == [
+        "linode_volume",
+        "linode_volume_create",
+        "linode_audit_export",
+    ]
+    assert gate.tools_named("b = linode_volume_create", compound) == []
+    assert gate.tools_named('c = "version,hello"', compound) == []
+    assert gate.tools_named("d := `linode_volume`", compound) == ["linode_volume"]
 
 
 def test_the_scan_roots_come_from_the_registry(tmp_path: Path) -> None:

@@ -89,8 +89,26 @@ def contract_routes() -> dict[str, str]:
     }
 
 
+def contract_messages() -> dict[str, str]:
+    """The declared routes keyed by input message, as {message: tool}.
+
+    The message is named the way a call site writes it, without its package,
+    because that is all a source reader can see. The scanners resolve a typed
+    lookup through this map and then through contract_routes, so the message
+    the call site names and the route the gate checks come from one reading of
+    the descriptors.
+    """
+    return {
+        entry.message.rsplit(".", 1)[-1]: entry.tool
+        for entry in _toolroutes.tool_routes()
+    }
+
+
 def go_evidence(
-    workdir: Path, dump_path: str | None = None, declared: dict[str, str] | None = None
+    workdir: Path,
+    dump_path: str | None = None,
+    declared: dict[str, str] | None = None,
+    messages: dict[str, str] | None = None,
 ) -> _routescan.Evidence:
     """Resolve Go's route surface through cmd/route-dump.
 
@@ -98,10 +116,12 @@ def go_evidence(
     the gate fails loudly rather than treating Go as a language with no routes
     and reporting every contracted route as missing.
 
-    declared is the contract in the gate's own shape, {tool: "<METHOD> <path>"}.
-    The dump cannot supply it: cmd/route-dump reads source with go/ast and never
-    imports the generated descriptors, so a call site that names a tool instead
-    of a path arrives here as a name, and this is where it becomes a route.
+    declared is the contract in the gate's own shape, {tool: "<METHOD> <path>"},
+    and messages the same contract as {input message: tool}. The dump cannot
+    supply either: cmd/route-dump reads source with go/ast and never imports
+    the generated descriptors, so a call site that names a tool, or hands a
+    message type to the typed lookup, arrives here as a name, and this is
+    where it becomes a route.
     """
     if dump_path:
         raw = json.loads(Path(dump_path).read_text(encoding="utf-8"))
@@ -125,16 +145,24 @@ def go_evidence(
     unresolved = [str(site) for site in raw.get("unresolved", [])]
 
     for entry in raw.get("contracted", []):
-        route = (declared or {}).get(str(entry.get("tool", "")))
+        site = str(entry.get("site", ""))
+        tool = str(entry.get("tool", ""))
+        message = str(entry.get("message", ""))
+        if message:
+            tool = (messages or {}).get(message, "")
+            if not tool:
+                unresolved.append(f"{site}: unknown message {message!r}")
+                continue
+        route = (declared or {}).get(tool)
         if route is None:
-            unresolved.append(_undeclared(entry))
+            unresolved.append(_undeclared(site, tool))
             continue
         routes.add(route)
 
     return _routescan.Evidence(routes=routes, unresolved=unresolved)
 
 
-def _undeclared(entry: dict[str, str]) -> str:
+def _undeclared(site: str, tool: str) -> str:
     """Name a call site that resolves its route from a tool nothing declares.
 
     Its own error class rather than silence: the name is the whole route at such
@@ -143,9 +171,6 @@ def _undeclared(entry: dict[str, str]) -> str:
     scripts/_routescan.py emits for the same case, so both languages report it
     the same way.
     """
-    tool = str(entry.get("tool", ""))
-    site = str(entry.get("site", ""))
-
     return f"{site}: undeclared tool {tool!r}"
 
 
@@ -155,9 +180,13 @@ def python_evidence(workdir: Path) -> _routescan.Evidence:
     The contract goes in because a call site that resolves its route from the
     proto names its tool and no path, so the declaration is where its route
     lives. Evidence for those call sites is that the tool is named and declared,
-    which is all there is to be right about once the path is single-sourced.
+    which is all there is to be right about once the path is single-sourced. It
+    goes in keyed by message too, for the call sites that name the tool's input
+    message to the typed lookup rather than the tool.
     """
-    return _routescan.scan_python(workdir, _REPO_ROOT, contract_routes())
+    return _routescan.scan_python(
+        workdir, _REPO_ROOT, contract_routes(), contract_messages()
+    )
 
 
 def coverage(go_routes: str | None = None) -> dict[str, Scanner]:
@@ -173,7 +202,9 @@ def coverage(go_routes: str | None = None) -> dict[str, Scanner]:
     descriptors at all.
     """
     return {
-        "go": lambda workdir: go_evidence(workdir, go_routes, contract_routes()),
+        "go": lambda workdir: go_evidence(
+            workdir, go_routes, contract_routes(), contract_messages()
+        ),
         "python": python_evidence,
     }
 

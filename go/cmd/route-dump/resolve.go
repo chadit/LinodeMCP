@@ -12,6 +12,17 @@ import (
 // agree across languages and the resolver never has to recover it.
 const pathParam = "{p}"
 
+// toolLookup is the linoderoute function that answers the tool a generated
+// *Input message declares, so a hand-written caller names the message type
+// instead of spelling the tool. This reader carries the message's name out as a
+// marker for the gate to resolve through the contract, since cmd/route-dump
+// never imports the descriptors.
+const toolLookup = "ToolOf"
+
+// messageMarker prefixes the value a typed lookup resolves to. NUL cannot occur
+// in source text, so no path or tool literal can collide with it.
+const messageMarker = "\x00MESSAGE:"
+
 // resolveRoot resolves an expression that produces a whole endpoint. The false
 // result means "not statically resolvable", which the caller reports rather
 // than guessing at.
@@ -84,6 +95,10 @@ func (pkg *clientPackage) resolveCall(node *ast.CallExpr, locals map[string]stri
 		return "", false
 	}
 
+	if name == toolLookup {
+		return lookupMessage(node)
+	}
+
 	if isFormatCall(node.Fun) {
 		return pkg.resolveFormat(node, locals)
 	}
@@ -94,6 +109,33 @@ func (pkg *clientPackage) resolveCall(node *ast.CallExpr, locals map[string]stri
 	}
 
 	return pkg.resolveResult(name, decl, node.Args, locals)
+}
+
+// lookupMessage resolves the message a typed lookup names: its one argument is
+// a pointer to a composite literal of the generated type, and that type's own
+// name is what the gate keys the contract by. Any other argument shape is a
+// message this reader cannot name, which the call site reports as unnamed.
+func lookupMessage(node *ast.CallExpr) (string, bool) {
+	if len(node.Args) != 1 {
+		return "", false
+	}
+
+	pointer, isPointer := node.Args[0].(*ast.UnaryExpr)
+	if !isPointer || pointer.Op != token.AND {
+		return "", false
+	}
+
+	literal, isLiteral := pointer.X.(*ast.CompositeLit)
+	if !isLiteral {
+		return "", false
+	}
+
+	name, named := calleeName(literal.Type)
+	if !named {
+		return "", false
+	}
+
+	return messageMarker + name, true
 }
 
 // isFormatCall reports whether the call is fmt.Sprintf, the one formatter the

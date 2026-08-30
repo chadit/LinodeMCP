@@ -232,7 +232,14 @@ marker is a comment so it never reaches the generated JSON Schema.
 Every declared route is one a client can actually build. The resolvers
 (`go/cmd/route-dump`, `scripts/_routescan.py`) walk the call graph out from
 the request primitive, so a path built from a base constant and a format verb
-still counts. Hard; a language not caught up records an annotated absence in
+still counts. A call site that names its tool to a route primitive resolves
+through the contract, and so does one that hands a generated `*Input` message
+to the typed lookup (`linoderoute.ToolOf`, `routes.tool_of`): the message
+maps to its tool and the tool to its route, both read off the descriptors, so
+the scope validator in `go/internal/profiles` and
+`python/src/linodemcp/profiles` spells no tool name and still leaves
+evidence. A message the contract does not know fails by name. Hard; a
+language not caught up records an annotated absence in
 `tool-parity-baseline.txt` instead.
 
 ## Generated-surface gates (venv)
@@ -288,17 +295,37 @@ names every site that pushed it there.
 No hand-coded tool code beside the generated tree. Scans every non-generated
 source tree each registered language owns (the working directory from
 `languages.txt`, less the trees `.gitignore` marks as regenerated, less tests)
-and fails by name on any function named after a tool. There is no allowed set
-and no count: nothing derives a hand-written function name from a tool, so such
-a function is code the contract does not account for, and the fix is a
-declaration on its `*Input` message.
+with two arms. The definition arm fails by name on any function named after a
+tool. The literal arm fails by name and line on any quoted string that spells a
+tool name as a whole word, whether the string is the one name or a comma-joined
+list of sixty: the generated tree is the only place a tool's name is handed to,
+so a hand-written file spelling one is calling, listing or dispatching on a
+tool the contract has no declaration for. There is no allowed set and no count:
+nothing derives a hand-written function name from a tool, so such a function is
+code the contract does not account for, and the fix is a declaration on its
+`*Input` message.
 
-Two limits worth knowing. A tool named by a single ordinary word (`version`,
-`hello`) is not matched, because `version` prefixes six legitimate definitions
-in this tree and an exemption list would be the one thing that could make the
-gate lie. And an argument check is named after what it checks rather than after
-a tool, so this scan cannot see one; `hand-validator-counts.txt` holds that
-population to zero and this gate reads the file.
+The literal arm alone leaves out the trees whose job is to call tools by name:
+`go/internal/cli`, `python/src/linodemcp/cli` and `python/src/linodemcp/tui`
+invoke tools through the same dispatcher a client uses. The script names them
+in `_TOOL_CALLERS` with that reason. It is a statement of scope rather than an
+exemption list: it names no tool, a function named after a tool inside those
+trees still fails the definition arm, and a tree whose path merely starts the
+same way is scanned by both.
+
+Three limits worth knowing. A tool named by a single ordinary word (`version`,
+`hello`) is matched by neither arm, because `version` prefixes six legitimate
+definitions in this tree, is the JSON key of every version answer, and an
+exemption list would be the one thing that could make the gate lie. An
+argument check is named after what it checks rather than after a tool, so
+neither arm can see one; `hand-validator-counts.txt` holds that population to
+zero and this gate reads the file. And the literal arm reads one line at a
+time, and a string only on the line that opens and closes it: a tool name
+built at run time, one split across two adjacent or +-joined literals, one
+inside a Go raw string or a Python triple-quoted string that spans lines, and
+a body that reaches a tool through nothing but a resource type all stay
+invisible, while a comment or docstring that quotes a tool name reads as a
+literal to it.
 
 ### hand-arms
 

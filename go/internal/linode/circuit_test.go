@@ -181,7 +181,7 @@ func TestExecuteWithRetryTripsCircuitOnExhaustion(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", cfg, linode.WithJitter(false))
 
 	// First exhaustion: 1 initial + 1 retry = 2 upstream calls.
-	_, err := client.GetProfile(t.Context())
+	_, err := readProfile(t.Context(), client)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -191,7 +191,7 @@ func TestExecuteWithRetryTripsCircuitOnExhaustion(t *testing.T) {
 	}
 
 	// Second exhaustion: another 2 calls, breaker trips after.
-	_, err = client.GetProfile(t.Context())
+	_, err = readProfile(t.Context(), client)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -201,7 +201,7 @@ func TestExecuteWithRetryTripsCircuitOnExhaustion(t *testing.T) {
 	}
 
 	// Third call: breaker open, must NOT touch upstream.
-	_, err = client.GetProfile(t.Context())
+	_, err = readProfile(t.Context(), client)
 	if !errors.Is(err, linode.ErrCircuitOpen) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrCircuitOpen)
 	}

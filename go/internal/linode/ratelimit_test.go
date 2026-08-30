@@ -163,7 +163,7 @@ func TestClientHonorsRateLimit(t *testing.T) {
 	client := linode.NewClient(srv.URL, "token", cfg, linode.WithJitter(false))
 
 	// First call drains the single-token bucket.
-	_, err := client.GetProfile(t.Context())
+	_, err := readProfile(t.Context(), client)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestClientHonorsRateLimit(t *testing.T) {
 	// token is ~60s away. Tight ctx deadline ensures the limiter cancels
 	// without waiting that long.
 	//
-	// GetProfile wraps makeRequest errors in a NetworkError (which is
+	// The routed read wraps request errors in a NetworkError (which is
 	// retryable), so the surfaced error chain is shaped by the retry loop,
 	// not the limiter directly. The signal that matters here is that the
 	// upstream was never hit a second time, proving the limiter
@@ -184,7 +184,7 @@ func TestClientHonorsRateLimit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
-	_, err = client.GetProfile(ctx)
+	_, err = readProfile(ctx, client)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

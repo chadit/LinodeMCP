@@ -213,14 +213,12 @@ def test_version_rows_maps_build_info() -> None:
         "git_branch": "main",
         "python_version": "3.13.0",
         "platform": "Linux/x86_64",
-        "features": {"tools": "..."},
     }
     rows = {r.label: r.value for r in extras.version_rows(info)}
     assert rows["version"] == "0.1.0"
     assert rows["git commit"] == "abc123"
     assert rows["platform"] == "Linux/x86_64"
-    # The nested features block is not surfaced here.
-    assert "features" not in rows
+    assert set(rows) == {"version", "git commit", "git branch", "python", "platform"}
 
 
 def test_metrics_pointer_enabled() -> None:

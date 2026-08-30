@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
@@ -362,6 +364,9 @@ func TestIsContractErrorNamesEveryFailureHere(t *testing.T) {
 
 	_, templateErr := broken.Endpoint(probeValue)
 	assertContractError(t, "template", templateErr)
+
+	_, messageErr := linoderoute.ToolOf(&linodev1.Profile{})
+	assertContractError(t, "message", messageErr)
 
 	if linoderoute.IsContractError(errors.New("connection refused")) {
 		t.Error("IsContractError() for a transport failure = true, want false")
@@ -779,5 +784,49 @@ func TestRepointableAcceptsOnlyADefaultSuffixedBase(t *testing.T) {
 		if got := linoderoute.Repointable(base); got != want {
 			t.Errorf("Repointable(%q) = %v, want %v", base, got, want)
 		}
+	}
+}
+
+// TestToolOfNamesTheDeclaredTool pins the two reads the scope validator makes
+// through the lookup rather than through a spelled tool name: each input
+// message answers the tool its tool_route option carries.
+func TestToolOfNamesTheDeclaredTool(t *testing.T) {
+	t.Parallel()
+
+	for _, expect := range []struct {
+		input proto.Message
+		tool  string
+	}{
+		{input: &linodev1.ProfileGetInput{}, tool: "linode_profile_get"},
+		{input: &linodev1.ProfileGrantsGetInput{}, tool: "linode_profile_grants_get"},
+		{input: &linodev1.TagDeleteInput{}, tool: tagDelete},
+	} {
+		got, err := linoderoute.ToolOf(expect.input)
+		if err != nil {
+			t.Fatalf("ToolOf(%T) error = %v", expect.input, err)
+		}
+
+		if got != expect.tool {
+			t.Errorf("ToolOf(%T) = %q, want %q", expect.input, got, expect.tool)
+		}
+	}
+}
+
+// TestToolOfRefusesAMessageWithNoRoute: a response type carries no tool_route,
+// and the refusal names it so the caller hears which type was handed over.
+func TestToolOfRefusesAMessageWithNoRoute(t *testing.T) {
+	t.Parallel()
+
+	got, err := linoderoute.ToolOf(&linodev1.Profile{})
+	if !errors.Is(err, linoderoute.ErrNoToolRoute) {
+		t.Fatalf("ToolOf(Profile) error = %v, want ErrNoToolRoute", err)
+	}
+
+	if want := "message declares no tool_route: linode.mcp.v1.Profile"; err.Error() != want {
+		t.Errorf("ToolOf(Profile) error = %q, want %q", err, want)
+	}
+
+	if got != "" {
+		t.Errorf("ToolOf(Profile) = %q, want no tool", got)
 	}
 }

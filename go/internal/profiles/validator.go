@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
 
 // ProfileIsElevated reports whether a profile permits any mutating
@@ -61,13 +63,11 @@ func (k TokenKind) String() string {
 	}
 }
 
-// TokenInspector is the minimal Linode client surface ValidateScopes
-// needs. The real *linode.RetryableClient satisfies this interface
-// without changes; tests inject a stub so scope validation logic stays
-// network-free.
+// TokenInspector is the client surface ValidateScopes reads through: the
+// contract-routed JSON read *linode.Client provides. Tests inject a stub
+// keyed by tool so scope validation logic stays network-free.
 type TokenInspector interface {
-	GetProfile(ctx context.Context) (*linode.Profile, error)
-	GetProfileGrants(ctx context.Context) (*linode.Grants, error)
+	CallRouteJSON(ctx context.Context, tool string, pathValues []any, out any) error
 }
 
 // ScopeValidationResult is what ValidateScopes returns to its caller.
@@ -103,17 +103,18 @@ type ScopeValidationResult struct {
 // the spec, but ValidateScopes itself returns nil error for that case
 // so callers can inspect both Missing and Excess in one place.
 //
-// Errors returned from this function are network/API failures only.
-// The PAT path returns ErrProfileFetchFailed wrapping the underlying
-// error; the OAuth path returns ErrGrantsFetchFailed.
+// Errors returned from this function are fetch failures only: the
+// network or API call behind a read, or a contract that declares no
+// route for it. The PAT path returns ErrProfileFetchFailed wrapping the
+// underlying error; the OAuth path returns ErrGrantsFetchFailed.
 func ValidateScopes(
 	ctx context.Context,
 	inspector TokenInspector,
 	required []Scope,
 ) (*ScopeValidationResult, error) {
-	profile, err := inspector.GetProfile(ctx)
+	profile, err := readProfile(ctx, inspector)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrProfileFetchFailed, err)
+		return nil, err
 	}
 
 	if profile.Scopes != "" {
@@ -127,9 +128,9 @@ func ValidateScopes(
 		}, nil
 	}
 
-	grants, err := inspector.GetProfileGrants(ctx)
+	grants, err := readGrants(ctx, inspector)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrGrantsFetchFailed, err)
+		return nil, err
 	}
 
 	actual := FlattenGrants(grants)
@@ -140,4 +141,45 @@ func ValidateScopes(
 		Comparison:   CompareScopes(required, actual),
 		Profile:      profile,
 	}, nil
+}
+
+// readProfile fetches the profile through the route its generated input
+// message declares, so the tool is named by the type rather than spelled
+// here in a string the contract cannot account for. Either failure, a
+// contract with no route for the type or the call behind it, comes back
+// under ErrProfileFetchFailed so callers match one sentinel; the two share
+// one return because the lookup cannot fail for a message the contract
+// routes, so its branch would otherwise be a line no test can reach.
+func readProfile(ctx context.Context, inspector TokenInspector) (*linode.Profile, error) {
+	var profile linode.Profile
+
+	tool, err := linoderoute.ToolOf(&linodev1.ProfileGetInput{})
+	if err == nil {
+		err = inspector.CallRouteJSON(ctx, tool, nil, &profile)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrProfileFetchFailed, err)
+	}
+
+	return &profile, nil
+}
+
+// readGrants fetches the token's grants the same way, under
+// ErrGrantsFetchFailed. A PAT answers a zero-valued payload here by design;
+// ValidateScopes tells a PAT from an OAuth token by the profile's scope
+// string before it gets here.
+func readGrants(ctx context.Context, inspector TokenInspector) (*linode.Grants, error) {
+	var grants linode.Grants
+
+	tool, err := linoderoute.ToolOf(&linodev1.ProfileGrantsGetInput{})
+	if err == nil {
+		err = inspector.CallRouteJSON(ctx, tool, nil, &grants)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrGrantsFetchFailed, err)
+	}
+
+	return &grants, nil
 }

@@ -15,7 +15,6 @@ from linodemcp.gentools import (
 from linodemcp.linode import NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
-from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
     from unittest.mock import AsyncMock
@@ -195,8 +194,3 @@ def test_linode_domain_import_registered() -> None:
     assert entry.capability is Capability.Write
     assert entry.tool.name == "linode_domain_import"
     assert entry.handle_fn is handle_linode_domain_import
-
-
-def test_linode_domain_import_in_version_features() -> None:
-    """Version metadata advertises the import tool."""
-    assert "linode_domain_import" in FEATURE_TOOLS_LIST.split(",")

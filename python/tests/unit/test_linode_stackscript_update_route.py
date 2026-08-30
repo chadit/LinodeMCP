@@ -15,7 +15,6 @@ from linodemcp.gentools import (
 from linodemcp.linode import NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
-from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
     from unittest.mock import AsyncMock
@@ -161,7 +160,3 @@ def test_linode_stackscript_update_registered() -> None:
     assert entry.capability is Capability.Write
     assert entry.tool.name == "linode_stackscript_update"
     assert entry.handle_fn is handle_linode_stackscript_update
-
-
-def test_linode_stackscript_update_in_version_features() -> None:
-    assert "linode_stackscript_update" in FEATURE_TOOLS_LIST.split(",")

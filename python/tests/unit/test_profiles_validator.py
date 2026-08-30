@@ -6,9 +6,12 @@ Mirrors ``go/internal/profiles/validator_test.go``. Uses a stub
 
 from __future__ import annotations
 
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-from linodemcp.linode import GlobalGrants, Grants, Profile
+from linodemcp.linode import RetryableClient
 from linodemcp.profiles import (
     GrantsFetchError,
     ProfileFetchError,
@@ -17,21 +20,27 @@ from linodemcp.profiles import (
     validate_scopes,
 )
 
+# The two tools the validator reads through, spelled here because a stub has
+# to dispatch on what the real client would be asked for.
+PROFILE_TOOL = "linode_profile_get"
+GRANTS_TOOL = "linode_profile_grants_get"
+
 
 class _FakeInspector:
     """Stub ``TokenInspector`` with programmable responses.
 
-    Each test dials in profile/grants payloads and optional exceptions
-    so PAT vs OAuth and the success/failure paths can be exercised
-    without spinning up an httpx mock.
+    Each test dials in profile/grants bodies and optional exceptions so PAT
+    vs OAuth and the success/failure paths can be exercised without spinning
+    up an httpx mock. Any other tool is refused, so a validator that reached
+    for a third route fails here by name.
     """
 
     def __init__(
         self,
         *,
-        profile: Profile | None = None,
+        profile: dict[str, Any] | None = None,
         profile_exc: Exception | None = None,
-        grants: Grants | None = None,
+        grants: dict[str, Any] | None = None,
         grants_exc: Exception | None = None,
     ) -> None:
         self._profile = profile
@@ -40,35 +49,36 @@ class _FakeInspector:
         self._grants_exc = grants_exc
         self.grants_called = False
 
-    async def get_profile(self) -> Profile:
-        if self._profile_exc is not None:
-            raise self._profile_exc
-        assert self._profile is not None, (
-            "test bug: profile must be set when profile_exc is None"
-        )
-        return self._profile
+    async def route_raw(self, tool: str, *values: object) -> Any:
+        assert not values, "the profile reads fill no path slot"
+        if tool == PROFILE_TOOL:
+            return self._answer(self._profile, self._profile_exc)
+        if tool == GRANTS_TOOL:
+            self.grants_called = True
+            return self._answer(self._grants, self._grants_exc)
+        msg = f"unexpected tool {tool}"
+        raise AssertionError(msg)
 
-    async def get_profile_grants(self) -> Grants:
-        self.grants_called = True
-        if self._grants_exc is not None:
-            raise self._grants_exc
-        assert self._grants is not None, (
-            "test bug: grants must be set when grants_exc is None"
-        )
-        return self._grants
+    @staticmethod
+    def _answer(body: dict[str, Any] | None, exc: Exception | None) -> Any:
+        if exc is not None:
+            raise exc
+        assert body is not None, "test bug: a body must be set when exc is None"
+        return body
 
 
-def _profile(scopes: str = "", username: str = "user") -> Profile:
-    return Profile(
-        username=username,
-        email="u@example.com",
-        timezone="UTC",
-        email_notifications=False,
-        restricted=False,
-        two_factor_auth=False,
-        uid=1,
-        scopes=scopes,
-    )
+def _profile(scopes: str = "", username: str = "user") -> dict[str, Any]:
+    """A /profile body, the shape the validator parses."""
+    return {
+        "username": username,
+        "email": "u@example.com",
+        "timezone": "UTC",
+        "email_notifications": False,
+        "restricted": False,
+        "two_factor_auth": False,
+        "uid": 1,
+        "scopes": scopes,
+    }
 
 
 async def test_validate_scopes_pat_path() -> None:
@@ -88,7 +98,7 @@ async def test_validate_scopes_pat_path() -> None:
     assert not result.comparison.has_missing
     assert not result.comparison.has_excess
     assert not inspector.grants_called, (
-        "GetProfileGrants must not be called on the PAT path"
+        "the grants route must not be read on the PAT path"
     )
 
 
@@ -116,15 +126,13 @@ async def test_validate_scopes_oauth_path() -> None:
     """Empty Profile.scopes triggers a grants fetch and uses flatten_grants."""
     inspector = _FakeInspector(
         profile=_profile(scopes=""),
-        grants=Grants(
-            global_=GlobalGrants(account_access="read_only", add_linodes=True)
-        ),
+        grants={"global": {"account_access": "read_only", "add_linodes": True}},
     )
 
     result = await validate_scopes(inspector, [Scope.LinodesReadWrite])
 
     assert result.kind == TokenKind.OAuth
-    assert inspector.grants_called, "OAuth path must call get_profile_grants"
+    assert inspector.grants_called, "OAuth path must read the grants route"
     assert not result.comparison.has_missing, (
         "add_linodes implies linodes:read_write, so nothing is missing"
     )
@@ -150,7 +158,7 @@ async def test_validate_scopes_reports_missing() -> None:
 
 
 async def test_validate_scopes_profile_error_wrapped() -> None:
-    """GetProfile failures bubble up as ProfileFetchError with __cause__ set."""
+    """A failed profile read bubbles up as ProfileFetchError with __cause__ set."""
     original = RuntimeError("network down")
     inspector = _FakeInspector(profile_exc=original)
 
@@ -163,7 +171,7 @@ async def test_validate_scopes_profile_error_wrapped() -> None:
 
 
 async def test_validate_scopes_grants_error_wrapped() -> None:
-    """OAuth-path GetProfileGrants failures raise GrantsFetchError."""
+    """An OAuth-path grants read failure raises GrantsFetchError."""
     original = RuntimeError("rate limited")
     inspector = _FakeInspector(
         profile=_profile(scopes=""),
@@ -181,3 +189,40 @@ def test_token_kind_string_values() -> None:
     assert TokenKind.Unknown.name == "Unknown"
     assert TokenKind.PAT.name == "PAT"
     assert TokenKind.OAuth.name == "OAuth"
+
+
+async def test_validate_scopes_reads_the_declared_profile_routes() -> None:
+    """The real client is proven to reach GET /profile and GET /profile/grants.
+
+    An empty scope string sends the validator down the OAuth path, the one
+    that makes both reads, so both routes are observed in one run.
+    """
+    bodies = {
+        "https://api.linode.com/v4/profile": _profile(username="oauthuser"),
+        "https://api.linode.com/v4/profile/grants": {"global": {"add_linodes": True}},
+    }
+
+    async def answer(method: str, url: str, **_: Any) -> MagicMock:
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = bodies[url]
+        return response
+
+    client = RetryableClient("https://api.linode.com/v4", "oauth-token")
+    with patch.object(client.client.client, "request", new_callable=AsyncMock) as req:
+        req.side_effect = answer
+
+        result = await validate_scopes(client, [Scope.LinodesReadWrite])
+
+        assert [call.args[:2] for call in req.await_args_list] == [
+            ("GET", "https://api.linode.com/v4/profile"),
+            ("GET", "https://api.linode.com/v4/profile/grants"),
+        ]
+
+    await client.close()
+
+    assert result.kind == TokenKind.OAuth
+    assert result.profile.username == "oauthuser"
+    assert not result.comparison.has_missing, (
+        "add_linodes implies linodes:read_write, so nothing is missing"
+    )

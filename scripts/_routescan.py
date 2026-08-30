@@ -99,6 +99,12 @@ _TOOL_DRIVERS = frozenset(
 # The keyword a driver call names its tool with.
 _TOOL_KEYWORD = "tool"
 
+# The routes-module function that answers the tool a generated *Input message
+# declares, so a hand-written caller names the message type instead of spelling
+# the tool. Its argument names the message, and the contract says which tool
+# that message belongs to.
+_TOOL_LOOKUP = "tool_of"
+
 # The driver-module helpers that carry a tool down to a route builder. They
 # name no tool either, so they are skipped rather than reported. Renaming one
 # without updating this list fails the gate by name, the safe direction.
@@ -203,16 +209,21 @@ class ScannerError(RuntimeError):
 
 
 def scan_python(
-    root: Path, repo_root: Path, declared: dict[str, str] | None = None
+    root: Path,
+    repo_root: Path,
+    declared: dict[str, str] | None = None,
+    messages: dict[str, str] | None = None,
 ) -> Evidence:
     """Resolve every route the Python tree under root can build.
 
     declared is the gate's contract, {tool: "<METHOD> <path>"}, and only
     route-builder call sites consult it: they name a tool instead of a path.
-    Left out, a call site that names a tool reports as unresolved rather than
-    quietly contributing nothing.
+    messages is the same contract keyed the other way, {input message: tool},
+    for the call sites that hand a message type to the typed lookup instead of
+    naming the tool. Left out, such a call site reports as unresolved rather
+    than quietly contributing nothing.
     """
-    return _Scan(root, repo_root, declared or {}).run()
+    return _Scan(root, repo_root, declared or {}, messages or {}).run()
 
 
 def _display_path(path: Path, root: Path, repo_root: Path) -> str:
@@ -271,6 +282,24 @@ def _driver_tool(call: ast.Call) -> ast.expr | None:
     for keyword in call.keywords:
         if keyword.arg == _TOOL_KEYWORD:
             return keyword.value
+
+    return None
+
+
+def _lookup_message(lookup: ast.Call) -> str | None:
+    """The message a typed lookup names, or None when it hands over a value.
+
+    The message arrives as the class itself, bare or as a module attribute,
+    and its own name is what the contract is keyed by.
+    """
+    if len(lookup.args) != 1:
+        return None
+
+    message = lookup.args[0]
+    if isinstance(message, ast.Name):
+        return message.id
+    if isinstance(message, ast.Attribute):
+        return message.attr
 
     return None
 
@@ -487,9 +516,16 @@ class _Scan:
     primitives until no new issuer appears.
     """
 
-    def __init__(self, root: Path, repo_root: Path, declared: dict[str, str]) -> None:
+    def __init__(
+        self,
+        root: Path,
+        repo_root: Path,
+        declared: dict[str, str],
+        messages: dict[str, str],
+    ) -> None:
         self.declarations = self._index(root, repo_root)
         self.declared = declared
+        self.messages = messages
         self.expressions = _Expressions(self.declarations)
         self.issuers = self._seed()
         self.routes: set[str] = set()
@@ -598,21 +634,48 @@ class _Scan:
     ) -> None:
         """Record the route the tool named at a route-builder call site declares.
 
-        A tool the contract does not list is reported rather than skipped: a
-        typo is a call that raises the first time it runs, and this is the
-        offline read that catches it.
+        The tool is a string written at the site, or the message type the site
+        hands to the typed lookup, which the contract maps back to its tool. A
+        tool the contract does not list is reported rather than skipped: a typo
+        is a call that raises the first time it runs, and this is the offline
+        read that catches it. A message the contract does not list is reported
+        the same way, by name.
         """
+        site = f"{display}:{call.lineno} {caller}"
         tool = _driver_tool(call) if driver else (call.args[0] if call.args else None)
-        if not isinstance(tool, ast.Constant) or not isinstance(tool.value, str):
-            self.unresolved.add(f"{display}:{call.lineno} {caller}: unnamed tool")
+        if isinstance(tool, ast.Call) and _callee_name(tool.func) == _TOOL_LOOKUP:
+            self._resolve_typed(tool, site)
 
             return
 
-        route = self.declared.get(tool.value)
+        if not isinstance(tool, ast.Constant) or not isinstance(tool.value, str):
+            self.unresolved.add(f"{site}: unnamed tool")
+
+            return
+
+        self._record_tool(tool.value, site)
+
+    def _resolve_typed(self, lookup: ast.Call, site: str) -> None:
+        """Record the route of the tool a typed lookup's message declares."""
+        message = _lookup_message(lookup)
+        if message is None:
+            self.unresolved.add(f"{site}: unnamed tool")
+
+            return
+
+        tool = self.messages.get(message)
+        if tool is None:
+            self.unresolved.add(f"{site}: unknown message {message!r}")
+
+            return
+
+        self._record_tool(tool, site)
+
+    def _record_tool(self, tool: str, site: str) -> None:
+        """File the route a named tool declares, or the site naming no such tool."""
+        route = self.declared.get(tool)
         if route is None:
-            self.unresolved.add(
-                f"{display}:{call.lineno} {caller}: undeclared tool {tool.value!r}"
-            )
+            self.unresolved.add(f"{site}: undeclared tool {tool!r}")
 
             return
 

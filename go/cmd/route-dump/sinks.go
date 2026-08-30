@@ -310,9 +310,13 @@ func (pkg *clientPackage) walkCalls(decl *ast.FuncDecl, found *surface) {
 // rebuilds a local from its own previous value resolves against the value it
 // held at that point. A local that stops resolving is dropped rather than left
 // holding a stale one.
+//
+// A two-name assignment binds its first name: the typed lookup answers a tool
+// beside an error, and no other two-result call resolves, since helpers only
+// resolve through single-value returns.
 func (pkg *clientPackage) trackAssign(node ast.Node, locals map[string]string) {
 	assign, isAssign := node.(*ast.AssignStmt)
-	if !isAssign || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+	if !isAssign || len(assign.Lhs) == 0 || len(assign.Rhs) != 1 {
 		return
 	}
 
@@ -366,10 +370,12 @@ func (pkg *clientPackage) visitCall(
 	}
 }
 
-// resolveContracted records the tool one contract-driven call site names. The
-// name has to be a literal or a constant that reduces to one: a tool assembled
-// at runtime leaves no route an offline reader can check, so it is reported as
-// unresolved rather than dropped.
+// resolveContracted records what one contract-driven call site names: a tool,
+// or the generated message the typed lookup answers a tool for. The tool has
+// to be a literal or a constant that reduces to one, and the message a type
+// written at the call site: a tool assembled at runtime leaves no route an
+// offline reader can check, so it is reported as unresolved rather than
+// dropped.
 func (pkg *clientPackage) resolveContracted(
 	call *ast.CallExpr,
 	caller *ast.FuncDecl,
@@ -388,6 +394,12 @@ func (pkg *clientPackage) resolveContracted(
 	tool, resolved := pkg.resolveRoot(call.Args[index], locals)
 	if !resolved || tool == "" {
 		found.unresolved[site+": unnamed tool"] = true
+
+		return
+	}
+
+	if message, typed := strings.CutPrefix(tool, messageMarker); typed {
+		found.contracted[contractedSite{Message: message, Site: site}] = true
 
 		return
 	}
@@ -566,7 +578,11 @@ func sortedCalls(set map[contractedSite]bool) []contractedSite {
 			return order
 		}
 
-		return strings.Compare(left.Tool, right.Tool)
+		if order := strings.Compare(left.Tool, right.Tool); order != 0 {
+			return order
+		}
+
+		return strings.Compare(left.Message, right.Message)
 	})
 
 	return calls

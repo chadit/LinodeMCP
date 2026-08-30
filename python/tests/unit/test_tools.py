@@ -304,7 +304,6 @@ from linodemcp.linode import (
     Profile,
 )
 from linodemcp.profiles import Capability
-from linodemcp.tools.linode_object_storage import object_storage_key_to_response_dict
 from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema as proto_schema
 
@@ -7037,8 +7036,6 @@ async def test_firewall_delete_dry_run_does_not_require_confirm(
     """dry_run path must bypass the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_firewall.return_value = {"id": 789, "label": "prod-fw"}
-        mock_client.list_firewall_devices.return_value = {"data": []}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -7765,8 +7762,6 @@ async def test_nodebalancer_delete_dry_run_does_not_require_confirm(
     """dry_run path must bypass the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer.return_value = {"id": 444, "label": "prod-lb"}
-        mock_client.list_nodebalancer_configs.return_value = {"data": []}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -7812,7 +7807,6 @@ async def test_nodebalancer_config_delete_dry_run_does_not_require_confirm(
     """dry_run path must bypass the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config.return_value = {"id": 222}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -7857,7 +7851,6 @@ async def test_nodebalancer_config_node_delete_dry_run_does_not_require_confirm(
     """dry_run path must bypass the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_nodebalancer_config_node.return_value = {"id": 333}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -8097,13 +8090,10 @@ async def test_handle_linode_object_storage_bucket_get_rejects_bad_path_params(
 async def test_linode_object_storage_cluster_get_removed_from_registry() -> None:
     """Deprecated Object Storage cluster get tool should not be registered."""
     from linodemcp.server import get_tool_registry
-    from linodemcp.version import FEATURE_TOOLS_LIST, REMOVED_FEATURE_TOOLS_LIST
 
     registry = {entry.name: entry for entry in get_tool_registry()}
 
     assert "linode_object_storage_cluster_get" not in registry
-    assert "linode_object_storage_cluster_get" not in FEATURE_TOOLS_LIST.split(",")
-    assert "linode_object_storage_cluster_get" in REMOVED_FEATURE_TOOLS_LIST.split(",")
 
 
 async def test_handle_linode_object_storage_types_list(
@@ -8140,50 +8130,6 @@ async def test_handle_linode_object_storage_types_list(
             {"id": "us-east", "hourly": 0.02, "monthly": 5.0},
         ]
         mock_client.route_raw.assert_called_once()
-
-
-def test_object_storage_key_to_response_dict_shapes_nested_grants() -> None:
-    """A fully populated key keeps its bucket_access and regions as object lists."""
-    shaped = object_storage_key_to_response_dict(
-        {
-            "id": 42,
-            "label": "prod-key",
-            "access_key": "AKIA",
-            "secret_key": "shh",
-            "limited": True,
-            "bucket_access": [
-                {
-                    "bucket_name": "assets",
-                    "region": "us-east",
-                    "permissions": "read_write",
-                },
-            ],
-            "regions": [
-                {"id": "us-east", "s3_endpoint": "us-east-1.linodeobjects.com"},
-            ],
-        }
-    )
-
-    assert shaped["id"] == 42
-    assert shaped["secret_key"] == "shh"
-    assert shaped["bucket_access"] == [
-        {"bucket_name": "assets", "region": "us-east", "permissions": "read_write"},
-    ]
-    assert shaped["regions"] == [
-        {"id": "us-east", "s3_endpoint": "us-east-1.linodeobjects.com"},
-    ]
-
-
-def test_object_storage_key_to_response_dict_defaults_missing_fields() -> None:
-    """Absent nested grants and a null secret coerce to safe defaults."""
-    shaped = object_storage_key_to_response_dict(
-        {"id": 7, "label": "minimal", "access_key": "AKIB", "secret_key": None}
-    )
-
-    assert shaped["secret_key"] == ""
-    assert shaped["bucket_access"] == []
-    assert shaped["regions"] == []
-    assert shaped["limited"] is False
 
 
 async def test_handle_linode_object_storage_types_list_error(
@@ -8935,7 +8881,6 @@ async def test_bucket_delete_dry_run_does_not_require_confirm(
     """
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_object_storage_bucket.return_value = {"label": "my-bucket"}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -9310,7 +9255,6 @@ async def test_ssl_delete_dry_run_does_not_require_confirm(
     """
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_bucket_ssl.return_value = {"ssl": True}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -10469,8 +10413,6 @@ async def test_vpc_delete_dry_run_does_not_require_confirm(
     """dry_run path must bypass the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_vpc.return_value = {"id": 123, "label": "prod-vpc"}
-        mock_client.list_vpc_subnets.return_value = []
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -10775,7 +10717,6 @@ async def test_vpc_subnet_delete_dry_run_does_not_require_confirm(
     """dry_run path must bypass the confirm gate."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_vpc_subnet.return_value = {"id": 10, "label": "web-subnet"}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client

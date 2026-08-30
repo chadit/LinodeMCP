@@ -54,9 +54,9 @@ func newRouteTestClient(t *testing.T, baseURL string) *linode.Client {
 	return linode.NewClient(baseURL, "test-token", nil, linode.WithMaxRetries(0))
 }
 
-// TestCallProtoRouteResolvesTheRouteTheToolDeclares names no path, so a wrong
-// path could only come from the contract, the one place it is written.
-func TestCallProtoRouteResolvesTheRouteTheToolDeclares(t *testing.T) {
+// TestCallProtoRouteQueryResolvesTheRouteTheToolDeclares names no path, so a
+// wrong path could only come from the contract, the one place it is written.
+func TestCallProtoRouteQueryResolvesTheRouteTheToolDeclares(t *testing.T) {
 	t.Parallel()
 
 	var (
@@ -76,8 +76,8 @@ func TestCallProtoRouteResolvesTheRouteTheToolDeclares(t *testing.T) {
 	client := newRouteTestClient(t, server.URL)
 	domain := &linodev1.Domain{}
 
-	if err := client.CallProtoRoute(t.Context(), domainGetTool, []any{5}, domain); err != nil {
-		t.Fatalf("CallProtoRoute: %v", err)
+	if err := client.CallProtoRouteQuery(t.Context(), domainGetTool, []any{5}, "", domain); err != nil {
+		t.Fatalf("CallProtoRouteQuery: %v", err)
 	}
 
 	if gotMethod != http.MethodGet {
@@ -93,9 +93,10 @@ func TestCallProtoRouteResolvesTheRouteTheToolDeclares(t *testing.T) {
 	}
 }
 
-// TestCallProtoRouteReportsTheAPIError pins the failure path: tool handlers wrap
-// whatever comes back in their own sentence and would otherwise report success.
-func TestCallProtoRouteReportsTheAPIError(t *testing.T) {
+// TestCallProtoRouteQueryReportsTheAPIError pins the failure path: tool
+// handlers wrap whatever comes back in their own sentence and would otherwise
+// report success.
+func TestCallProtoRouteQueryReportsTheAPIError(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -109,7 +110,7 @@ func TestCallProtoRouteReportsTheAPIError(t *testing.T) {
 
 	client := newRouteTestClient(t, server.URL)
 
-	err := client.CallProtoRoute(t.Context(), domainGetTool, []any{5}, &linodev1.Domain{})
+	err := client.CallProtoRouteQuery(t.Context(), domainGetTool, []any{5}, "", &linodev1.Domain{})
 
 	apiErr, isAPIError := errors.AsType[*linode.APIError](err)
 	if !isAPIError {
@@ -121,10 +122,10 @@ func TestCallProtoRouteReportsTheAPIError(t *testing.T) {
 	}
 }
 
-// TestCallProtoRouteRefusesAWrongPathValueCount: a path built from too few
-// values addresses the collection the resource sits in, which for a delete is
-// every resource in it, so the request must not be sent at all.
-func TestCallProtoRouteRefusesAWrongPathValueCount(t *testing.T) {
+// TestCallProtoRouteQueryRefusesAWrongPathValueCount: a path built from too
+// few values addresses the collection the resource sits in, which for a delete
+// is every resource in it, so the request must not be sent at all.
+func TestCallProtoRouteQueryRefusesAWrongPathValueCount(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -134,8 +135,8 @@ func TestCallProtoRouteRefusesAWrongPathValueCount(t *testing.T) {
 
 	client := newRouteTestClient(t, server.URL)
 
-	if err := client.CallProtoRoute(t.Context(), domainGetTool, nil, &linodev1.Domain{}); err == nil {
-		t.Fatal("CallProtoRoute succeeded with no path value, want a refusal")
+	if err := client.CallProtoRouteQuery(t.Context(), domainGetTool, nil, "", &linodev1.Domain{}); err == nil {
+		t.Fatal("CallProtoRouteQuery succeeded with no path value, want a refusal")
 	}
 }
 

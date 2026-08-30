@@ -13,7 +13,6 @@ from linodemcp.gentools import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.server import Server, get_tool_registry
-from linodemcp.version import get_version_info
 
 if TYPE_CHECKING:
     from unittest.mock import AsyncMock
@@ -79,13 +78,12 @@ async def test_handle_linode_lke_tier_version_get_rejects_invalid_path_params(
     mock_linode_client.route_raw.assert_not_called()
 
 
-def test_linode_lke_tier_version_get_exported_registered_and_versioned(
+def test_linode_lke_tier_version_get_exported_and_registered(
     sample_config: Any,
 ) -> None:
-    """Tier version get is exported, registered, and listed in features."""
+    """Tier version get is exported and registered."""
     registry_names = {entry.name for entry in get_tool_registry()}
     assert "linode_lke_tier_version_get" in registry_names
 
     srv = Server(sample_config)
     assert "linode_lke_tier_version_get" in srv.registered_tool_names
-    assert "linode_lke_tier_version_get" in get_version_info().features["tools"]

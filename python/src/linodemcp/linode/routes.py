@@ -275,6 +275,27 @@ def route_for(tool: str) -> Route:
     return route
 
 
+def tool_of(message: type[Message]) -> str:
+    """The tool a generated *Input message declares its route for.
+
+    A hand-written caller names the message type instead of spelling the tool
+    name in a string the contract cannot account for. A message carrying no
+    tool_route is refused by its own name, so a caller that reached for the
+    wrong type hears which one it handed over rather than sending a request
+    addressed to no tool. Go's linoderoute.ToolOf answers the same question.
+    """
+    descriptor = message.DESCRIPTOR
+    declared = descriptor.GetOptions()
+    options = _options()
+    tool = ""
+    if declared.HasExtension(options.tool_route):
+        tool = str(declared.Extensions[options.tool_route].tool)
+    if not tool:
+        msg = f"message {descriptor.full_name} declares no tool_route"
+        raise RouteError(msg)
+    return tool
+
+
 def all_routes() -> tuple[Route, ...]:
     """Every declared route, tool-sorted."""
     return tuple(sorted(_table().values(), key=lambda route: route.tool))

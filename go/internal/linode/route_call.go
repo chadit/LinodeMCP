@@ -13,30 +13,23 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
 
-// These primitives are the contract-driven twins of the hand-written methods in
-// methods_*.go: they take the tool name and response message as arguments, so
+// These primitives take the tool name and response message as arguments, so
 // cmd/toolgen can emit a call for any tool the contract declares without a
-// matching method existing first. Route resolution, decoding, and retry are
-// unchanged. The retry loop's operation label is the tool name because a
-// generated call site has no verb-and-noun like "GetDomain" to read, and
-// inventing one would put a fact in the generator that nothing else can check.
+// matching client method existing first. The retry loop's operation label is
+// the tool name because a generated call site has no verb-and-noun to read,
+// and inventing one would put a fact in the generator that nothing else can
+// check.
 
-// CallProtoRoute performs the route the named tool declares and decodes the
-// response into msg. pathValues fill the route template's slots in declared
-// order.
+// CallProtoRouteQuery performs the route the named tool declares and decodes
+// the response into msg. pathValues fill the route template's slots in
+// declared order. rawQuery is already encoded, the same form the list
+// primitives take, and carries what a single-resource route also reads from
+// its query: the page controls /databases/types/{id} publishes, or the object
+// key /object-storage/buckets/{r}/{l}/object-acl is addressed by.
 //
 // msg is reset per attempt because protojson merges into a message rather than
 // replacing it, so a retried attempt over a partly-filled msg would blend two
-// responses. Hand-written methods avoid that by allocating inside the attempt,
-// which a caller-supplied message rules out.
-func (c *Client) CallProtoRoute(ctx context.Context, tool string, pathValues []any, msg proto.Message) error {
-	return c.CallProtoRouteQuery(ctx, tool, pathValues, "", msg)
-}
-
-// CallProtoRouteQuery is CallProtoRoute for a single-resource route that also
-// takes query parameters: the page controls /databases/types/{id} publishes,
-// or the object key /object-storage/buckets/{r}/{l}/object-acl is addressed by.
-// rawQuery is already encoded, the same form the list primitives take.
+// responses.
 func (c *Client) CallProtoRouteQuery(
 	ctx context.Context, tool string, pathValues []any, rawQuery string, msg proto.Message,
 ) error {
@@ -168,8 +161,8 @@ func decodeStateMember(
 // preferences, managed stats. There is no message to decode into, so the map is
 // what the serializer sorts through a bare Struct.
 //
-// The map is cleared per attempt for the reason CallProtoRoute resets its
-// message: json.Unmarshal merges into a map rather than replacing it, so a
+// The map is cleared per attempt for the reason CallProtoRouteQuery resets
+// its message: json.Unmarshal merges into a map rather than replacing it, so a
 // retried attempt would blend two responses.
 func (c *Client) CallRouteObject(
 	ctx context.Context, tool string, pathValues []any, rawQuery string,
@@ -195,9 +188,33 @@ func (c *Client) CallRouteObject(
 	return object, err
 }
 
+// CallRouteJSON performs the read the named tool declares and decodes the JSON
+// answer into out, for the caller whose model of the answer is a hand-written
+// struct rather than a proto message: the scope validator reads the profile
+// and its grants into the types its grant flattening walks.
+//
+// Nothing resets out between attempts. A decode failure is not retried, and
+// every failure that is retried happens before the decode, so a partly-filled
+// out never meets a second answer.
+func (c *Client) CallRouteJSON(ctx context.Context, tool string, pathValues []any, out any) error {
+	return c.executeWithRetry(ctx, tool, func() error {
+		attemptCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		defer cancel()
+
+		resp, err := c.makeRouteRequest(attemptCtx, tool, nil, pathValues...)
+		if err != nil {
+			return wrapRequestError(tool, err)
+		}
+
+		defer drainClose(resp)
+
+		return c.handleResponse(resp, out)
+	})
+}
+
 // CallProtoRouteBody performs the route the named tool declares with body as
-// the JSON request body, decoding the response into msg. It is CallProtoRoute
-// for the mutating tiers, which differ from a read in two ways and no others:
+// the JSON request body, decoding the response into msg. It is
+// CallProtoRouteQuery for the mutating tiers, which differ from a read in two ways and no others:
 // they send something, and some of them must not be sent twice.
 //
 // The retry policy comes from the contract rather than from the caller. A
@@ -205,7 +222,7 @@ func (c *Client) CallRouteObject(
 // leaving a second resource nobody hears about, and letting a call site choose
 // would put that judgment in as many places as there are call sites.
 //
-// msg is reset per attempt for the reason CallProtoRoute documents: protojson
+// msg is reset per attempt for the reason CallProtoRouteQuery documents: protojson
 // merges into a message rather than replacing it.
 //
 // subject names the call in the report when the API answers with something

@@ -2,12 +2,33 @@ package profiles_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"slices"
+	"sync"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+)
+
+// The two tools the validator reads through, spelled here because a stub has
+// to dispatch on what the real client would be asked for.
+const (
+	profileTool = "linode_profile_get"
+	grantsTool  = "linode_profile_grants_get"
+)
+
+// oauthUsername is the username the OAuth fixtures answer with.
+const oauthUsername = "oauthuser"
+
+var (
+	errUnexpectedTool   = errors.New("unexpected tool")
+	errUnexpectedTarget = errors.New("unexpected decode target")
 )
 
 // fakeInspector is a stub TokenInspector for the validator tests. It
@@ -22,19 +43,41 @@ type fakeInspector struct {
 	grantsCalled bool
 }
 
-func (f *fakeInspector) GetProfile(_ context.Context) (*linode.Profile, error) {
-	return f.profile, f.profileErr
+// CallRouteJSON answers the two reads the validator makes and refuses any
+// other tool, so a validator that reached for a third route fails by name.
+func (f *fakeInspector) CallRouteJSON(_ context.Context, tool string, _ []any, out any) error {
+	switch tool {
+	case profileTool:
+		return fill(out, f.profile, f.profileErr)
+	case grantsTool:
+		f.grantsCalled = true
+
+		return fill(out, f.grants, f.grantsErr)
+	}
+
+	return fmt.Errorf("%w: %s", errUnexpectedTool, tool)
 }
 
-func (f *fakeInspector) GetProfileGrants(_ context.Context) (*linode.Grants, error) {
-	f.grantsCalled = true
+// fill copies a fixture into the validator's decode target the way the real
+// client's JSON decode would, so the stub proves the same wiring.
+func fill[T any](out any, fixture *T, err error) error {
+	if err != nil {
+		return err
+	}
 
-	return f.grants, f.grantsErr
+	target, ok := out.(*T)
+	if !ok {
+		return fmt.Errorf("%w: %T", errUnexpectedTarget, out)
+	}
+
+	*target = *fixture
+
+	return nil
 }
 
 // TestValidateScopesPATPath verifies the personal-access-token path:
 // Profile.Scopes is non-empty, so ParsePATScopes drives the actual
-// scope set and GetProfileGrants is never called.
+// scope set and the grants route is never read.
 func TestValidateScopesPATPath(t *testing.T) {
 	t.Parallel()
 
@@ -84,7 +127,7 @@ func TestValidateScopesOAuthPath(t *testing.T) {
 
 	inspector := &fakeInspector{
 		profile: &linode.Profile{
-			Username: "oauthuser",
+			Username: oauthUsername,
 			Scopes:   "",
 		},
 		grants: &linode.Grants{
@@ -161,8 +204,8 @@ func TestValidateScopesReportsMissing(t *testing.T) {
 	}
 }
 
-// TestValidateScopesProfileErrorWrapped confirms that GetProfile
-// failures bubble up wrapped in ErrProfileFetchFailed so callers can
+// TestValidateScopesProfileErrorWrapped confirms that a failed profile
+// read bubbles up wrapped in ErrProfileFetchFailed so callers can
 // pattern-match on it.
 func TestValidateScopesProfileErrorWrapped(t *testing.T) {
 	t.Parallel()
@@ -215,6 +258,72 @@ func TestValidateScopesGrantsErrorWrapped(t *testing.T) {
 
 	if !errors.Is(err, apiErr) {
 		t.Fatalf("error = %v, want %v", err, apiErr)
+	}
+}
+
+// TestValidateScopesReadsTheDeclaredProfileRoutes runs the real client
+// against a stub API, so the two typed reads are proven to reach GET
+// /profile and GET /profile/grants. An empty scope string sends the
+// validator down the OAuth path, the one that makes both reads.
+func TestValidateScopesReadsTheDeclaredProfileRoutes(t *testing.T) {
+	t.Parallel()
+
+	bodies := map[string]any{
+		"/profile":        linode.Profile{Username: oauthUsername},
+		"/profile/grants": linode.Grants{Global: linode.GlobalGrants{AddLinodes: true}},
+	}
+
+	var (
+		requestsMu sync.Mutex
+		requests   []string
+	)
+
+	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestsMu.Lock()
+
+		requests = append(requests, r.Method+" "+r.URL.Path)
+
+		requestsMu.Unlock()
+
+		body, known := bodies[r.URL.Path]
+		if !known {
+			http.NotFound(w, r)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			t.Errorf("encode %s: %v", r.URL.Path, err)
+		}
+	}))
+	defer httpSrv.Close()
+
+	client := linode.NewClient(httpSrv.URL, "oauth-token", nil, linode.WithMaxRetries(0))
+
+	got, err := profiles.ValidateScopes(t.Context(), client, []profiles.Scope{profiles.ScopeLinodesReadWrite})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	requestsMu.Lock()
+	defer requestsMu.Unlock()
+
+	if want := []string{"GET /profile", "GET /profile/grants"}; !slices.Equal(requests, want) {
+		t.Errorf("requests = %v, want %v", requests, want)
+	}
+
+	if got.Kind != profiles.TokenKindOAuth {
+		t.Errorf("got.Kind = %v, want %v", got.Kind, profiles.TokenKindOAuth)
+	}
+
+	if got.Profile.Username != oauthUsername {
+		t.Errorf("got.Profile.Username = %q, want %q", got.Profile.Username, oauthUsername)
+	}
+
+	if got.Comparison.HasMissing() {
+		t.Error("got.Comparison.HasMissing() = true, want false: add_linodes grants linodes:read_write")
 	}
 }
 

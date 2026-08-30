@@ -1416,18 +1416,14 @@ func TestEverySynthesizedStateFetchReadsItsOwnRoute(t *testing.T) {
 // synthesizedStateRead is the tool a removal's state fetch reads through, and
 // whether it synthesized one at all. A removal naming a hook has no such call.
 func synthesizedStateRead(literal string) (string, bool) {
-	for _, call := range []string{`client.CallProtoRoute(ctx, "`, `client.CallProtoRouteState(ctx, "`} {
-		_, rest, found := strings.Cut(literal, call)
-		if !found {
-			continue
-		}
-
-		tool, _, closed := strings.Cut(rest, `"`)
-
-		return tool, closed
+	_, rest, found := strings.Cut(literal, `client.CallProtoRouteState(ctx, "`)
+	if !found {
+		return "", false
 	}
 
-	return "", false
+	tool, _, closed := strings.Cut(rest, `"`)
+
+	return tool, closed
 }
 
 // removalTool is the tool name a destroy literal carries, which is what pairs

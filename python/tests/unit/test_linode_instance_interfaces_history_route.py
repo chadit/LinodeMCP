@@ -16,7 +16,6 @@ from linodemcp.gentools.instance import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
-from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
     from unittest.mock import AsyncMock
@@ -136,4 +135,3 @@ def test_linode_instance_interfaces_history_list_registered_and_exported() -> No
     assert entry.tool.name == "linode_instance_interface_history_list"
     assert entry.handle_fn is handle_linode_instance_interface_history_list
     assert exported_create_tool is create_linode_instance_interface_history_list_tool
-    assert "linode_instance_interface_history_list" in FEATURE_TOOLS_LIST

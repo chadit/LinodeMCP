@@ -12,8 +12,18 @@ import (
 )
 
 // clientDir is the Linode client package, two levels up from this command's
-// package directory (go test runs with that directory as cwd).
-const clientDir = "../../internal/linode"
+// package directory (go test runs with that directory as cwd). profilesDir is
+// the package whose scope validator reads two routes through the typed lookup,
+// which is the only hand-written route evidence left once the client names no
+// tool of its own.
+const (
+	clientDir   = "../../internal/linode"
+	profilesDir = "../../internal/profiles"
+)
+
+// fakeDeleteTool is the tool the contracted fixtures name at their one plain
+// call site.
+const fakeDeleteTool = "fake_thing_delete"
 
 // dump is the command's JSON contract, mirrored here rather than shared so a
 // change to the real struct has to be made deliberately in both places.
@@ -24,10 +34,12 @@ type dump struct {
 }
 
 // contractedSite mirrors one entry of the contracted list the gate looks up in
-// the proto contract.
+// the proto contract: a tool named at the site, or the message a typed lookup
+// there names in its place.
 type contractedSite struct {
-	Tool string `json:"tool"`
-	Site string `json:"site"`
+	Tool    string `json:"tool"`
+	Message string `json:"message"`
+	Site    string `json:"site"`
 }
 
 // runDump executes the command the way the Python gate does. Black-box on
@@ -92,7 +104,7 @@ func writeFixtureDir(t *testing.T, root, name, source string) string {
 const fixtureGeneratedCaller = `package gentools
 
 func handleThingGet(ctx context.Context, id string) error {
-	return client.CallProtoRoute(ctx, "fake_thing_get", []any{id})
+	return client.CallProtoRouteQuery(ctx, "fake_thing_get", []any{id})
 }
 `
 
@@ -349,8 +361,8 @@ func TestDumpNamesTheToolAContractedCallSiteUses(t *testing.T) {
 		t.Fatalf("contracted = %v, want the one call site that names its tool", got.Contracted)
 	}
 
-	if got.Contracted[0].Tool != "fake_thing_delete" {
-		t.Errorf("contracted tool = %q, want %q", got.Contracted[0].Tool, "fake_thing_delete")
+	if got.Contracted[0].Tool != fakeDeleteTool {
+		t.Errorf("contracted tool = %q, want %q", got.Contracted[0].Tool, fakeDeleteTool)
 	}
 
 	if !strings.Contains(got.Contracted[0].Site, "httpDeleteThing") {
@@ -514,12 +526,12 @@ func TestDumpAcceptsAClientWithNoBuiltPaths(t *testing.T) {
 	}
 }
 
-// hasContracted reports whether the dump names this tool at a call site in the
-// named function. The site carries a file and a line that shift with the
-// fixture, so only the function name is matched.
+// hasContracted reports whether the dump names this tool, or this message, at a
+// call site in the named function. The site carries a file and a line that
+// shift with the fixture, so only the function name is matched.
 func hasContracted(contracted []contractedSite, want contractedSite) bool {
 	for _, entry := range contracted {
-		if entry.Tool == want.Tool && strings.Contains(entry.Site, want.Site) {
+		if entry.Tool == want.Tool && entry.Message == want.Message && strings.Contains(entry.Site, want.Site) {
 			return true
 		}
 	}
@@ -588,7 +600,7 @@ func TestDumpWithoutARequestPrimitiveIsHardFail(t *testing.T) {
 func TestDumpResolvesTheRealClient(t *testing.T) {
 	t.Parallel()
 
-	got, stderr, err := runDump(t, clientDir)
+	got, stderr, err := runDump(t, clientDir+","+profilesDir)
 	if err != nil {
 		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
 	}
@@ -604,23 +616,112 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 		t.Errorf("hand-built routes survived the migration: %v", got.Routes)
 	}
 
-	// A migrated call site names its tool instead of assembling a path, so its
-	// evidence has to survive as a contracted entry or the migration silently
-	// costs the route its coverage.
-	const migratedTool = "linode_instance_get"
-
-	var migrated bool
-
+	// The client spells no tool of its own any more: the one hand-written read
+	// left, the scope validator's, names its generated message to the typed
+	// lookup, and that evidence has to survive as a contracted entry or the
+	// migration silently costs the route its coverage.
 	for _, site := range got.Contracted {
-		if site.Tool == migratedTool {
-			migrated = true
-
-			break
+		if site.Tool != "" {
+			t.Errorf("a hand-written call site still spells its tool: %+v", site)
 		}
 	}
 
-	if !migrated {
-		t.Errorf("contracted call sites are missing %q", migratedTool)
+	for _, message := range []string{"ProfileGetInput", "ProfileGrantsGetInput"} {
+		if !hasMessage(got.Contracted, message) {
+			t.Errorf("contracted call sites are missing the typed lookup of %q: %v", message, got.Contracted)
+		}
+	}
+}
+
+// hasMessage reports whether the dump names this message at some typed lookup.
+func hasMessage(contracted []contractedSite, message string) bool {
+	for _, entry := range contracted {
+		if entry.Message == message {
+			return true
+		}
+	}
+
+	return false
+}
+
+// fixtureTypedLookup is the shape the scope validator has: a builder in one
+// package that takes a tool, and a caller in another that names no tool at all,
+// handing a generated message type to the typed lookup instead. The second
+// caller hands the lookup a value rather than a type, which no offline reader
+// can name.
+const fixtureTypedLookup = `package validator
+
+func readThing(ctx context.Context, client Reader) error {
+	tool, err := linoderoute.ToolOf(&fakev1.ThingGetInput{})
+	if err != nil {
+		return err
+	}
+
+	var thing map[string]any
+
+	return client.CallRouteJSON(ctx, tool, nil, &thing)
+}
+
+func readWhatever(ctx context.Context, client Reader, input proto.Message) error {
+	tool, err := linoderoute.ToolOf(input)
+	if err != nil {
+		return err
+	}
+
+	return client.CallRouteJSON(ctx, tool, nil, nil)
+}
+`
+
+// fixtureJSONBuilder is the client half of that shape: the exported primitive
+// takes a tool and hands it to the route primitive, so callers elsewhere carry
+// the evidence.
+const fixtureJSONBuilder = fixtureChainedBuilder + `
+func (c *Client) CallRouteJSON(ctx context.Context, tool string, values []any, out any) error {
+	_, err := c.makeRouteRequest(ctx, tool, nil, values...)
+
+	return err
+}
+`
+
+// TestDumpNamesTheMessageATypedLookupHandsOver pins the typed call site: the
+// message named to the lookup travels out in the tool's place, so the gate can
+// resolve it through the contract, and a lookup handed a value it cannot read
+// is reported as an unnamed tool rather than dropped.
+func TestDumpNamesTheMessageATypedLookupHandsOver(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	client := writeFixtureDir(t, root, "client", fixtureJSONBuilder)
+	validator := writeFixtureDir(t, root, "validator", fixtureTypedLookup)
+
+	got, stderr, err := runDump(t, client+","+validator)
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	want := []contractedSite{
+		{Tool: fakeDeleteTool, Site: "httpDeleteThing"},
+		{Message: "ThingGetInput", Site: "readThing"},
+	}
+
+	if len(got.Contracted) != len(want) {
+		t.Fatalf("contracted = %v, want one entry per call site", got.Contracted)
+	}
+
+	for _, entry := range want {
+		if !hasContracted(got.Contracted, entry) {
+			t.Errorf("contracted = %v, missing %+v", got.Contracted, entry)
+		}
+	}
+
+	if len(got.Unresolved) != 1 {
+		t.Fatalf("unresolved = %v, want the one lookup handed a value", got.Unresolved)
+	}
+
+	for _, part := range []string{"readWhatever", "unnamed tool"} {
+		if !strings.Contains(got.Unresolved[0], part) {
+			t.Errorf("unresolved entry %q should mention %q", got.Unresolved[0], part)
+		}
 	}
 }
 
@@ -643,7 +744,7 @@ func (c *Client) makeRouteRequest(ctx context.Context, tool string, payload any,
 	return c.makeRequest(ctx, method, endpoint, payload)
 }
 
-func (c *Client) CallProtoRoute(ctx context.Context, tool string, values []any) error {
+func (c *Client) CallProtoRouteQuery(ctx context.Context, tool string, values []any) error {
 	_, err := c.makeRouteRequest(ctx, tool, nil, values...)
 
 	return err
@@ -669,12 +770,12 @@ func TestDumpTreatsAnExportedToolForwarderAsAPrimitive(t *testing.T) {
 	}
 
 	for _, entry := range got.Unresolved {
-		if strings.Contains(entry, "CallProtoRoute") {
+		if strings.Contains(entry, "CallProtoRouteQuery") {
 			t.Errorf("unresolved names the exported primitive: %q", entry)
 		}
 	}
 
-	if len(got.Contracted) != 1 || got.Contracted[0].Tool != "fake_thing_delete" {
+	if len(got.Contracted) != 1 || got.Contracted[0].Tool != fakeDeleteTool {
 		t.Errorf("contracted = %v, want only the call site that names its tool", got.Contracted)
 	}
 }

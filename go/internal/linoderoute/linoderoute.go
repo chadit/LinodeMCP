@@ -131,6 +131,25 @@ func For(tool string) (Route, error) {
 	return found, nil
 }
 
+// ToolOf is the tool the given generated *Input message declares its route
+// for, so a hand-written caller can name the message type instead of spelling
+// the tool's name in a string the contract cannot account for. A message with
+// no tool_route is refused by its own name: a caller that reached for the
+// wrong type hears which one it handed over, rather than sending a request
+// addressed to no tool.
+func ToolOf(input proto.Message) (string, error) {
+	descriptor := input.ProtoReflect().Descriptor()
+
+	declared, isRoute := proto.GetExtension(
+		descriptor.Options(), linodev1.E_ToolRoute,
+	).(*linodev1.ToolRoute)
+	if !isRoute || declared.GetTool() == "" {
+		return "", fmt.Errorf("%w: %s", ErrNoToolRoute, descriptor.FullName())
+	}
+
+	return declared.GetTool(), nil
+}
+
 // All returns every declared route, tool-sorted.
 func All() []Route {
 	routes := make([]Route, 0)

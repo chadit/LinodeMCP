@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, TypeVar, cast
-from unittest.mock import AsyncMock
+from typing import TYPE_CHECKING, Any
 
-import httpx
 import pytest
 
 from linodemcp.gentools import (
@@ -39,30 +37,11 @@ from linodemcp.gentools import (
     handle_linode_image_sharegroup_token_list,
     scopes_for,
 )
-from linodemcp.linode import Client, RetryableClient
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
-from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-
-T = TypeVar("T")
-
-
-class _CapturingRetryableClient(RetryableClient):
-    """RetryableClient test double that records retry callbacks."""
-
-    def __init__(self) -> None:
-        super().__init__("https://api.linode.com/v4", "test-token")
-        self.calls: list[Callable[..., Awaitable[Any]]] = []
-
-    async def _execute_with_retry(
-        self, func: Callable[..., Awaitable[T]], *args: Any
-    ) -> T:
-        self.calls.append(func)
-        return await func(*args)
+    from unittest.mock import AsyncMock
 
 
 def test_create_linode_image_sharegroups_by_image_list_tool_schema() -> None:
@@ -182,7 +161,6 @@ def test_linode_image_sharegroups_by_image_list_scopes_to_images_read() -> None:
     scopes = scopes_for("linode_image_sharegroup_by_image_list")
 
     assert scopes == ["images:read_only"]
-    assert "linode_image_sharegroup_by_image_list" in FEATURE_TOOLS_LIST
 
 
 def test_create_linode_images_sharegroups_list_tool_schema() -> None:
@@ -366,82 +344,6 @@ def test_linode_images_sharegroups_token_get_scopes_to_images_read() -> None:
     assert scopes == ["images:read_only"]
 
 
-def test_linode_images_sharegroups_token_get_in_version_features() -> None:
-    """Version metadata advertises the token get tool."""
-    assert "linode_image_sharegroup_token_get" in FEATURE_TOOLS_LIST.split(",")
-
-
-@pytest.mark.asyncio
-async def test_client_get_image_sharegroup_by_token_sends_exact_encoded_path() -> None:
-    """Low-level client sends GET /images/sharegroups/tokens/{tokenUuid}/sharegroup."""
-    seen: list[httpx.Request] = []
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(
-            200,
-            json={"uuid": "22222222-2222-4222-8222-222222222222"},
-        )
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        result = await client.get_image_sharegroup_by_token(token_uuid)
-    finally:
-        await client.close()
-
-    assert result["uuid"] == "22222222-2222-4222-8222-222222222222"
-    assert len(seen) == 1
-    request = seen[0]
-    assert request.method == "GET"
-    assert request.url.path == f"/v4/images/sharegroups/tokens/{token_uuid}/sharegroup"
-    assert request.url.query == b""
-    assert await request.aread() == b""
-    assert request.headers["Authorization"] == "Bearer test-token"
-
-
-@pytest.mark.asyncio
-async def test_client_get_image_sharegroup_by_token_encodes_path_param() -> None:
-    """Low-level client URL-encodes token_uuid before appending /sharegroup."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"uuid": "encoded"})
-
-    client = Client("https://api.linode.com/v4", "test-token")
-    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-    try:
-        await client.get_image_sharegroup_by_token("token/with?separator")
-    finally:
-        await client.close()
-
-    assert seen[0].url.raw_path == (
-        b"/v4/images/sharegroups/tokens/token%2Fwith%3Fseparator/sharegroup"
-    )
-
-
-@pytest.mark.asyncio
-async def test_retryable_client_get_image_sharegroup_by_token_uses_read_retry() -> None:
-    """Read-only share group by token get goes through the retry wrapper."""
-    retryable = _CapturingRetryableClient()
-    token_uuid = "11111111-1111-4111-8111-111111111111"
-    mock_get = AsyncMock(return_value={"uuid": "sharegroup-1"})
-    cast("Any", retryable.client).get_image_sharegroup_by_token = mock_get
-
-    try:
-        result = await retryable.get_image_sharegroup_by_token(token_uuid)
-    finally:
-        await retryable.close()
-
-    assert result["uuid"] == "sharegroup-1"
-    assert len(retryable.calls) == 1
-    mock_get.assert_awaited_once_with(token_uuid)
-
-
 def test_create_linode_images_sharegroups_token_sharegroup_get_tool_schema() -> None:
     """Tool schema requires the documented token UUID path param."""
     tool, capability = create_linode_image_sharegroup_by_token_get_tool()
@@ -515,11 +417,6 @@ def test_linode_images_sharegroups_token_sharegroup_get_scopes_to_images_read() 
     scopes = scopes_for("linode_image_sharegroup_by_token_get")
 
     assert scopes == ["images:read_only"]
-
-
-def test_linode_images_sharegroups_token_sharegroup_get_in_version_features() -> None:
-    """Version metadata advertises the share group by token tool."""
-    assert "linode_image_sharegroup_by_token_get" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_create_token_sharegroup_images_list_tool_schema() -> None:
@@ -620,13 +517,6 @@ def test_token_sharegroup_images_list_scopes_to_images_read() -> None:
     scopes = scopes_for("linode_image_sharegroup_token_image_list")
 
     assert scopes == ["images:read_only"]
-
-
-def test_token_sharegroup_images_list_in_version_features() -> None:
-    """Version metadata advertises the images by token tool."""
-    features = FEATURE_TOOLS_LIST.split(",")
-
-    assert "linode_image_sharegroup_token_image_list" in features
 
 
 def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
@@ -749,11 +639,6 @@ def test_linode_images_sharegroup_members_list_scopes_to_images_read() -> None:
     assert scopes == ["images:read_only"]
 
 
-def test_linode_images_sharegroup_members_list_in_version_features() -> None:
-    """Version metadata advertises the members by share group tool."""
-    assert "linode_image_sharegroup_member_list" in FEATURE_TOOLS_LIST.split(",")
-
-
 def test_create_linode_images_sharegroup_member_token_get_tool_schema() -> None:
     """Tool schema requires both documented path params."""
     tool, capability = create_linode_image_sharegroup_member_token_get_tool()
@@ -874,23 +759,11 @@ def test_linode_images_sharegroup_member_token_get_scopes_to_images_read() -> No
     assert scopes == ["images:read_only"]
 
 
-def test_linode_images_sharegroup_member_token_get_in_version_features() -> None:
-    """Version metadata advertises the member token get tool."""
-    assert "linode_image_sharegroup_member_token_get" in FEATURE_TOOLS_LIST.split(",")
-
-
 def test_linode_images_sharegroup_member_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = scopes_for("linode_image_sharegroup_member_token_update")
 
     assert scopes == ["images:read_write"]
-
-
-def test_linode_images_sharegroup_member_token_update_in_version_features() -> None:
-    """Version metadata advertises the member token update tool."""
-    assert "linode_image_sharegroup_member_token_update" in FEATURE_TOOLS_LIST.split(
-        ","
-    )
 
 
 def test_create_linode_images_sharegroup_member_token_delete_tool_schema() -> None:
@@ -978,13 +851,6 @@ def test_linode_images_sharegroup_member_token_delete_scopes_to_images_write() -
     scopes = scopes_for("linode_image_sharegroup_member_token_delete")
 
     assert scopes == ["images:read_write"]
-
-
-def test_linode_images_sharegroup_member_token_delete_in_version_features() -> None:
-    """Version metadata advertises the member token delete tool."""
-    assert "linode_image_sharegroup_member_token_delete" in FEATURE_TOOLS_LIST.split(
-        ","
-    )
 
 
 def test_create_linode_images_sharegroup_image_delete_tool_schema() -> None:
@@ -1087,21 +953,11 @@ def test_linode_images_sharegroup_image_delete_scopes_to_images_write() -> None:
     assert scopes == ["images:read_write"]
 
 
-def test_linode_images_sharegroup_image_delete_in_version_features() -> None:
-    """Version metadata advertises the delete-image tool."""
-    assert "linode_image_sharegroup_image_delete" in FEATURE_TOOLS_LIST.split(",")
-
-
 def test_linode_images_sharegroup_images_add_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = scopes_for("linode_image_sharegroup_image_add")
 
     assert scopes == ["images:read_write"]
-
-
-def test_linode_images_sharegroup_images_add_in_version_features() -> None:
-    """Version metadata advertises the add-images tool."""
-    assert "linode_image_sharegroup_image_add" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_linode_images_sharegroup_members_add_registered() -> None:
@@ -1118,11 +974,6 @@ def test_linode_images_sharegroup_members_add_scopes_to_images_write() -> None:
     scopes = scopes_for("linode_image_sharegroup_member_add")
 
     assert scopes == ["images:read_write"]
-
-
-def test_linode_images_sharegroup_members_add_in_version_features() -> None:
-    """Version metadata advertises the add-members tool."""
-    assert "linode_image_sharegroup_member_add" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_create_linode_images_sharegroup_images_list_tool_schema() -> None:
@@ -1306,21 +1157,11 @@ def test_linode_images_sharegroup_images_list_scopes_to_images_read() -> None:
     assert scopes == ["images:read_only"]
 
 
-def test_linode_images_sharegroup_images_list_in_version_features() -> None:
-    """Version metadata advertises the images by share group tool."""
-    assert "linode_image_sharegroup_image_list" in FEATURE_TOOLS_LIST.split(",")
-
-
 def test_linode_images_sharegroups_token_update_scopes_to_images_write() -> None:
     """Profile scope mapping keeps the route in the Images write category."""
     scopes = scopes_for("linode_image_sharegroup_token_update")
 
     assert scopes == ["images:read_write"]
-
-
-def test_linode_images_sharegroups_token_update_in_version_features() -> None:
-    """Version metadata advertises the token update tool."""
-    assert "linode_image_sharegroup_token_update" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_create_linode_images_sharegroups_token_delete_tool_schema() -> None:
@@ -1408,11 +1249,6 @@ def test_linode_images_sharegroups_token_delete_scopes_to_images_write() -> None
     assert scopes == ["images:read_write"]
 
 
-def test_linode_images_sharegroups_token_delete_in_version_features() -> None:
-    """Version metadata advertises the token delete tool."""
-    assert "linode_image_sharegroup_token_delete" in FEATURE_TOOLS_LIST.split(",")
-
-
 def test_create_linode_images_sharegroups_tokens_list_tool_schema() -> None:
     """Tool schema exposes the documented environment and pagination arguments."""
     tool, capability = create_linode_image_sharegroup_token_list_tool()
@@ -1490,11 +1326,6 @@ def test_linode_images_sharegroups_tokens_list_scopes_to_images_read() -> None:
     assert scopes == ["images:read_only"]
 
 
-def test_linode_images_sharegroups_tokens_list_in_version_features() -> None:
-    """Version metadata advertises the token list tool."""
-    assert "linode_image_sharegroup_token_list" in FEATURE_TOOLS_LIST.split(",")
-
-
 def test_linode_images_sharegroup_image_update_registered() -> None:
     """Dynamic registry exports the shared-image update tool and handler pair."""
     entries = {entry.name: entry for entry in get_tool_registry()}
@@ -1510,11 +1341,6 @@ def test_linode_images_sharegroup_image_update_scopes_to_images_write() -> None:
     scopes = scopes_for("linode_image_sharegroup_image_update")
 
     assert scopes == ["images:read_write"]
-
-
-def test_linode_images_sharegroup_image_update_in_version_features() -> None:
-    """Version metadata advertises the shared-image update tool."""
-    assert "linode_image_sharegroup_image_update" in FEATURE_TOOLS_LIST.split(",")
 
 
 def test_linode_image_delete_tool_schema_requires_confirm() -> None:
@@ -1550,8 +1376,3 @@ def test_linode_image_delete_is_registered() -> None:
 
     assert "linode_image_delete" in entries
     assert entries["linode_image_delete"].capability is Capability.Destroy
-
-
-def test_linode_image_delete_in_feature_list() -> None:
-    """Version feature list includes the image delete tool."""
-    assert "linode_image_delete" in FEATURE_TOOLS_LIST.split(",")

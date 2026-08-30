@@ -41,10 +41,15 @@ gate = _load_script("verify_route_evidence")
 routescan = _load_script("_routescan")
 
 
-def _scan(tmp_path: Path, source: str, declared: dict[str, str] | None = None) -> Any:
+def _scan(
+    tmp_path: Path,
+    source: str,
+    declared: dict[str, str] | None = None,
+    messages: dict[str, str] | None = None,
+) -> Any:
     """Scan one fixture module written into its own tree."""
     (tmp_path / "client.py").write_text(PRIMITIVE + source, encoding="utf-8")
-    return routescan.scan_python(tmp_path, tmp_path, declared)
+    return routescan.scan_python(tmp_path, tmp_path, declared, messages)
 
 
 # What a client method looks like once its route comes from the proto instead of
@@ -524,3 +529,98 @@ async def handle_linode_domain_get(arguments, cfg):
 
     assert evidence.routes == {"GET /domains/{p}"}
     assert evidence.unresolved == []
+
+
+# The typed shape the scope validator has: the call site names the tool's input
+# message to the lookup and spells no tool at all.
+TYPED_LOOKUP = (
+    ROUTE_BUILDER
+    + """
+class Raw(Routed):
+    async def route_raw(self, tool, *values, body=None, query=None):
+        response = await self.make_route_request(tool, *values, body=body)
+        return response.json()
+
+class Validator:
+    async def read_domain(self, client):
+        return await client.route_raw(tool_of(DomainGetInput))
+
+    async def read_any(self, client, message):
+        return await client.route_raw(tool_of(message))
+"""
+)
+
+
+def test_resolves_a_typed_lookup_call_through_the_contract(tmp_path: Path) -> None:
+    """A call site that names a message to the lookup is evidence for its tool.
+
+    The message maps to the tool and the tool to the route, both through the
+    contract, so nothing at the site spells either. A lookup handed a parameter
+    reads as a message of that name, which the contract does not know, so it is
+    reported by that name rather than dropped.
+    """
+    evidence = _scan(
+        tmp_path,
+        TYPED_LOOKUP,
+        {"linode_domain_get": "GET /domains/{p}"},
+        {"DomainGetInput": "linode_domain_get"},
+    )
+
+    assert evidence.routes == {"GET /domains/{p}"}
+    assert len(evidence.unresolved) == 1
+    assert "read_any: unknown message 'message'" in evidence.unresolved[0]
+
+
+def test_reports_a_typed_lookup_of_a_message_the_contract_never_declared(
+    tmp_path: Path,
+) -> None:
+    """A message no tool declares is named, the way an undeclared tool is."""
+    evidence = _scan(
+        tmp_path,
+        TYPED_LOOKUP,
+        {"linode_domain_get": "GET /domains/{p}"},
+        {},
+    )
+
+    assert evidence.routes == set()
+    assert any(
+        "read_domain: unknown message 'DomainGetInput'" in entry
+        for entry in evidence.unresolved
+    )
+
+
+def test_contract_messages_keys_the_same_contract_by_input_message() -> None:
+    """The typed lookup resolves through the message-to-tool half of the contract."""
+    messages = gate.contract_messages()
+
+    assert messages["ProfileGetInput"] == "linode_profile_get"
+    assert messages["ProfileGrantsGetInput"] == "linode_profile_grants_get"
+    assert set(messages.values()) == set(gate.contract_routes())
+
+
+def test_a_go_typed_lookup_resolves_through_the_contract(tmp_path: Path) -> None:
+    """The Go twin: the dump hands over the message and the gate resolves it."""
+    dump = tmp_path / "routes.json"
+    dump.write_text(
+        json.dumps(
+            {
+                "routes": [],
+                "contracted": [
+                    {"message": "TagDeleteInput", "site": "validator.go:12 f"},
+                    {"message": "TagDelteInput", "site": "validator.go:30 g"},
+                ],
+                "unresolved": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    evidence = gate.go_evidence(
+        tmp_path,
+        str(dump),
+        {"linode_tag_delete": "DELETE /tags/{p}"},
+        {"TagDeleteInput": "linode_tag_delete"},
+    )
+
+    assert evidence.routes == {"DELETE /tags/{p}"}
+    assert evidence.unresolved == ["validator.go:30 g: unknown message 'TagDelteInput'"]

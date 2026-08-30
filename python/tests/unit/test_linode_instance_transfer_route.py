@@ -14,7 +14,6 @@ from linodemcp.gentools import (
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.toolschemas import schema
-from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
     from unittest.mock import AsyncMock
@@ -66,7 +65,3 @@ def test_linode_instance_transfer_month_get_registered() -> None:
     entry = entries["linode_instance_transfer_month_get"]
     assert entry.capability is Capability.Read
     assert entry.handle_fn is handle_linode_instance_transfer_month_get
-
-
-def test_linode_instance_transfer_month_get_in_version_features() -> None:
-    assert "linode_instance_transfer_month_get" in FEATURE_TOOLS_LIST.split(",")

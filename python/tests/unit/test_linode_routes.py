@@ -15,9 +15,11 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
+from linodemcp.genpb.linode.mcp.v1 import profile_pb2
 from linodemcp.linode import (
     Client,
     LinodeError,
+    NetworkError,
     RetryableClient,
     RetryConfig,
 )
@@ -33,6 +35,7 @@ from linodemcp.linode.routes import (
     response_descriptor,
     route_for,
     surface_segment,
+    tool_of,
     validate,
 )
 
@@ -351,12 +354,44 @@ async def test_retryable_route_raw_makes_one_attempt_when_retry_is_off() -> None
     retryable.client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
     try:
-        with pytest.raises(httpx.ConnectError):
+        with pytest.raises(NetworkError):
             await retryable.route_raw("linode_domain_get", 7, retry=False)
     finally:
         await retryable.close()
 
     assert len(attempts) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_transport_failure_reaches_the_caller_as_a_network_error() -> None:
+    """Both routed primitives report a socket failure under the tool's name.
+
+    NetworkError is the class the retry layer replays, so a routed call that
+    let httpx's own error through would never be retried; the wrap is what
+    keeps Python's routed reads on the same retry policy as Go's.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        msg = "connection refused"
+        raise httpx.ConnectError(msg, request=request)
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError) as routed:
+            await client.make_route_request("linode_domain_get", 7)
+        with pytest.raises(NetworkError) as content_typed:
+            await client.make_route_request_content_type(
+                "linode_domain_get", 7, accept="application/json"
+            )
+    finally:
+        await client.close()
+
+    assert routed.value.operation == "linode_domain_get"
+    assert isinstance(routed.value.error, httpx.ConnectError)
+    assert content_typed.value.operation == "linode_domain_get"
+    assert isinstance(content_typed.value.error, httpx.ConnectError)
 
 
 def test_input_descriptor_answers_the_message_the_options_came_from() -> None:
@@ -573,3 +608,19 @@ async def test_content_type_route_request_sends_a_beta_route_to_the_beta_base() 
         content=b"png",
     )
     await client.close()
+
+
+def test_tool_of_names_the_declared_tool() -> None:
+    """The two reads the scope validator makes resolve their tool from the type.
+
+    Each input message answers the tool its tool_route option carries, so a
+    caller never spells the name itself.
+    """
+    assert tool_of(profile_pb2.ProfileGetInput) == "linode_profile_get"
+    assert tool_of(profile_pb2.ProfileGrantsGetInput) == "linode_profile_grants_get"
+
+
+def test_tool_of_refuses_a_message_with_no_route() -> None:
+    """A response type carries no tool_route, and the refusal names it."""
+    with pytest.raises(RouteError, match="Profile declares no tool_route"):
+        tool_of(profile_pb2.Profile)

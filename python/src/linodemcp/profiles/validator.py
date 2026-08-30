@@ -11,8 +11,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
+from linodemcp.genpb.linode.mcp.v1.profile_pb2 import (
+    ProfileGetInput,
+    ProfileGrantsGetInput,
+)
+from linodemcp.linode import parse_grants, parse_profile
+from linodemcp.linode.routes import tool_of
 from linodemcp.profiles.scopecheck import (
     compare_scopes,
     flatten_grants,
@@ -22,7 +28,7 @@ from linodemcp.profiles.scopecheck import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from linodemcp.linode import Grants, Profile
+    from linodemcp.linode import Profile
     from linodemcp.profiles.profile import Profile as ProfileModel
     from linodemcp.profiles.scopecheck import ScopeComparison
 
@@ -68,16 +74,14 @@ class TokenKind(IntEnum):
 
 
 class TokenInspector(Protocol):
-    """Minimal client surface ``validate_scopes`` needs.
+    """The client surface ``validate_scopes`` reads through: the
+    contract-routed JSON read ``RetryableClient`` provides.
 
-    The real ``RetryableClient`` satisfies this Protocol structurally;
-    tests inject a stub so the validator stays network-free. Both
-    methods are async because the production client is async.
+    Tests inject a stub keyed by tool so the validator stays network-free.
+    Async because the production client is async.
     """
 
-    async def get_profile(self) -> Profile: ...
-
-    async def get_profile_grants(self) -> Grants: ...
+    async def route_raw(self, tool: str, *values: object) -> Any: ...
 
 
 @dataclass(frozen=True)
@@ -125,14 +129,17 @@ async def validate_scopes(
     under the spec, but this function returns the result normally so
     callers can inspect ``missing`` and ``excess`` together.
 
+    Each read names the tool through its generated input message rather than
+    spelling the name here, so the route stays declared in one place.
+
     Raises:
-        ProfileFetchError: when ``get_profile`` fails. Wraps the
-            original exception in ``__cause__``.
-        GrantsFetchError: when ``get_profile_grants`` fails on the
-            OAuth branch. Wraps the original exception in ``__cause__``.
+        ProfileFetchError: when the profile read fails. Wraps the original
+            exception in ``__cause__``.
+        GrantsFetchError: when the grants read fails on the OAuth branch.
+            Wraps the original exception in ``__cause__``.
     """
     try:
-        profile = await inspector.get_profile()
+        profile = parse_profile(await inspector.route_raw(tool_of(ProfileGetInput)))
     except Exception as exc:
         raise ProfileFetchError("fetch /profile failed") from exc
 
@@ -146,7 +153,7 @@ async def validate_scopes(
         )
 
     try:
-        grants = await inspector.get_profile_grants()
+        grants = parse_grants(await inspector.route_raw(tool_of(ProfileGrantsGetInput)))
     except Exception as exc:
         raise GrantsFetchError("fetch /profile/grants failed") from exc
 

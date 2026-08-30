@@ -4,9 +4,9 @@
 Every tool's handler is generated from its *Input message, and every step a
 handler runs is something the message declares. Nothing derives a hand-written
 function name from a tool any more, so a function named after a tool is, by
-construction, code the contract does not account for. This scans every
-non-generated source tree a registered language owns and fails by name on each
-one it finds.
+construction, code the contract does not account for, and so is a string
+literal that spells a tool's name. This scans every non-generated source tree
+a registered language owns and fails by name on each of either it finds.
 
 The fix for a finding here is always a declaration on the tool's *Input message,
 never a line in a contract file. There is no allowed set and no count to raise:
@@ -19,21 +19,43 @@ regenerated output, less test code, less dot directories. Reading the ignore
 file rather than a path list is what keeps a new generated tree from being
 scanned as hand-written, or a renamed one from going unscanned.
 
-Which definitions are per-tool: the name with its case and underscores dropped
-starts with a tool name flattened the same way, so Go's LinodeAuditExportAnswer
-and Python's linode_audit_export_answer both reduce to the tool
-linode_audit_export. A tool named by a single ordinary word (version, hello) is
-NOT matched, and cannot be: `version` prefixes six legitimate definitions in
-this tree today, from a tracing helper to a response builder, and an exact-name
-rule still catches the tracing helper. That is a real hole in the scan, stated
-here rather than papered over with an exemption list, which is the one thing
-that could make this gate lie.
+Two arms read those files. The definition arm: a top-level function is
+per-tool when its name with case and underscores dropped starts with a tool
+name flattened the same way, so Go's LinodeAuditExportAnswer and Python's
+linode_audit_export_answer both reduce to the tool linode_audit_export. The
+literal arm: a quoted string that spells a tool name as a whole word fails,
+whether it holds the one name or a comma-joined list of sixty, because the
+generated tree is the only place a tool's name is handed to and a hand-written
+file spelling one is calling, listing or dispatching on a tool the contract has
+no declaration for. The literal arm alone leaves out the trees whose job is to
+call tools by name; _TOOL_CALLERS names them and says why. That is a statement
+of scope rather than an exemption list: it names no tool, and a function named
+after one inside those trees still fails the definition arm.
 
-Argument checks are a population of their own: they are named after what they
-check rather than after a tool, so this scan cannot see them.
-docs/contracts/hand-validator-counts.txt holds them to zero in both languages,
-and this gate reads that file and fails when any registered language's line is
-not zero.
+Three holes remain, stated here rather than papered over with an exemption
+list, which is the one thing that could make this gate lie:
+
+1. A tool named by a single ordinary word (version, hello) is matched by
+   neither arm, and cannot be: `version` prefixes six legitimate definitions
+   in this tree today, from a tracing helper to a response builder, an
+   exact-name rule still catches the tracing helper, and "version" is the JSON
+   key every version answer carries.
+2. Argument checks are a population of their own: they are named after what
+   they check rather than after a tool, so neither arm can see them.
+   docs/contracts/hand-validator-counts.txt holds them to zero in both
+   languages, and this gate reads that file and fails when any registered
+   language's line is not zero.
+3. Code named after nothing in particular. The definition arm reads names, so
+   a resource-shaped method that binds a tool inside its body was invisible.
+   The literal arm closes the part of that hole where the binding is a tool
+   name written out in a quoted string: a route lookup keyed on the name, a
+   dispatch table, a hand-kept list. It reads one line at a time, and a string
+   only on the line that opens and closes it, so it still cannot see a name
+   built at run time (a prefix joined to a variable, a format string), one
+   split across two literals (adjacent, or joined with +), a Go raw string or
+   a Python triple-quoted string that spans lines, or a body that reaches a
+   tool through nothing but a resource type; and a comment or docstring that
+   quotes a tool name reads as a literal to it.
 
 Four ways this could pass while measuring nothing are checked first: the
 contract declaring no tools (the descriptors did not load), a registered
@@ -103,6 +125,34 @@ class Definition(NamedTuple):
 
     path: str
     name: str
+
+
+class Literal(NamedTuple):
+    """One tool name spelled inside a string literal, with the line it sits on."""
+
+    path: str
+    line: int
+    tool: str
+
+
+# A quoted string on one line, in every quote kind the two languages have:
+# double, single, and Go's backtick raw string, which has no escapes. Go's
+# single quotes hold a rune, which no tool name fits in, so reading them costs
+# nothing; a string that spans lines is the hole the module docstring states.
+_QUOTED = re.compile(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|`[^`\n]*`')
+_WORD = re.compile(r"[A-Za-z_]\w*")
+
+# The trees whose job is to name tools, read by the definition arm and left out
+# of the literal arm only. Each is here because naming a tool is what its code
+# does rather than what it implements: the CLI subcommands and the TUI screens
+# invoke tools by name through the same dispatcher a client uses, and are the
+# only hand-written callers there are. A path is repo-relative so a language
+# cannot widen its own scope by moving a tree.
+_TOOL_CALLERS: tuple[str, ...] = (
+    "go/internal/cli",
+    "python/src/linodemcp/cli",
+    "python/src/linodemcp/tui",
+)
 
 
 # The directory patterns .gitignore names: anchored repo-relative paths, then
@@ -225,6 +275,57 @@ def source_files(root: Path, workdir: str, arm: Arm, ignored: Ignored) -> list[P
     return found
 
 
+def is_tool_caller(relative: Path) -> bool:
+    """Whether a repo-relative path sits in a tree that calls tools by name."""
+    posix = relative.as_posix()
+    return any(posix == tree or posix.startswith(tree + "/") for tree in _TOOL_CALLERS)
+
+
+def compound_tools(declared: Declared) -> frozenset[str]:
+    """The declared tool names the literal arm can claim, as spelled.
+
+    A single-word tool is left out for the reason classify leaves it out.
+    """
+    return frozenset(tool for tool in declared.tools.values() if "_" in tool)
+
+
+def tools_named(line: str, compound: frozenset[str]) -> list[str]:
+    """The tools one line's string literals spell out, in order of appearance.
+
+    A whole word only: linode_volume_create_preview is not linode_volume_create,
+    and a name inside a longer identifier is a definition arm matter.
+    """
+    return [
+        word
+        for quoted in _QUOTED.findall(line)
+        for word in _WORD.findall(quoted)
+        if word in compound
+    ]
+
+
+def named_literals(
+    root: Path, workdir: str, arm: Arm, ignored: Ignored, declared: Declared
+) -> list[Literal]:
+    """Every tool name one language's hand-written trees spell in a string.
+
+    The trees that call tools by name are left out here and nowhere else.
+    """
+    compound = compound_tools(declared)
+    found: list[Literal] = []
+    for path in source_files(root, workdir, arm, ignored):
+        relative = path.relative_to(root)
+        if is_tool_caller(relative):
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, 1):
+            found.extend(
+                Literal(relative.as_posix(), number, tool)
+                for tool in tools_named(line, compound)
+            )
+
+    return found
+
+
 def defined(root: Path, workdir: str, arm: Arm, ignored: Ignored) -> list[Definition]:
     """Every top-level definition one language's hand-written trees make."""
     found: list[Definition] = []
@@ -269,6 +370,18 @@ def attribute(
         " its *Input message declares, so this one is accounted for nowhere"
         for definition in definitions
         if (tool := classify(definition.name, declared)) is not None
+    ]
+
+
+def attribute_literals(language: str, literals: list[Literal]) -> list[str]:
+    """Report one language's string literals that spell a tool name."""
+    return [
+        f"{language}: {literal.path}:{literal.line} spells {literal.tool} in a"
+        " string literal, which is hand-coded tool code: the generated tree is"
+        " the only place a tool's name is handed to, so hand-written source"
+        " spelling one calls, lists or dispatches on a tool the contract does"
+        " not account for"
+        for literal in literals
     ]
 
 
@@ -323,6 +436,12 @@ def measure(root: Path, languages: list[Language], declared: Declared) -> list[s
             continue
 
         problems.extend(attribute(language.name, definitions, declared))
+        problems.extend(
+            attribute_literals(
+                language.name,
+                named_literals(root, language.workdir, arm, ignored, declared),
+            )
+        )
 
     return problems
 
