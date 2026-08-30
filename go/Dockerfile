@@ -43,7 +43,8 @@ FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=builder /out/linodemcp /usr/local/bin/linodemcp
 
-USER nonroot:nonroot
+# 65532 is distroless nonroot; numeric so the runtime can verify non-root.
+USER 65532:65532
 
 # The probe execs the profile CLI's usage path, which prints usage and
 # exits 0. That proves the binary is present and runnable without

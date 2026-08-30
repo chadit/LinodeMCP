@@ -42,7 +42,8 @@ COPY --chmod=0755 scripts/ci-container-entry.sh /usr/local/bin/ci-container-entr
 # Non-root, explicit UID. /work is the scratch checkout; go/npx/trivy runtime
 # caches land under the user's HOME.
 RUN useradd -m -u 1000 ci && mkdir -p /work && chown ci:ci /work
-USER ci
+# Numeric form so the runtime can verify non-root without reading passwd.
+USER 1000:1000
 ENV GOPATH=/home/ci/go
 WORKDIR /work
 

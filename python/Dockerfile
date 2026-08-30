@@ -20,13 +20,15 @@ RUN echo "# LinodeMCP" > /parent/README.md && \
 
 FROM python:3.14-slim
 
+# The wheel built above is the pinned artifact; deps resolve from the same dir.
 RUN --mount=type=bind,from=builder,source=/wheels,target=/tmp/wheels \
-    pip install --no-cache-dir --no-index --find-links=/tmp/wheels linodemcp
+    pip install --no-cache-dir --no-index --find-links=/tmp/wheels /tmp/wheels/linodemcp-*.whl
 
-RUN groupadd -r linodemcp && \
-    useradd -r -g linodemcp -d /home/linodemcp -m -s /sbin/nologin linodemcp
+RUN groupadd -r -g 65532 linodemcp && \
+    useradd -r -u 65532 -g linodemcp -d /home/linodemcp -m -s /sbin/nologin linodemcp
 
-USER linodemcp
+# Numeric form so the runtime can verify non-root without reading passwd.
+USER 65532:65532
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD ["linodemcp", "--help"]
