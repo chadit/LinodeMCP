@@ -154,10 +154,18 @@ func (s *JSONLSink) Write(ctx context.Context, event *Event) {
 	currentDay := utcDayString(s.clock())
 	if currentDay != s.openDay {
 		if err := s.rotateLocked(); err != nil {
+			// A failed rotation reopens the active log, so this event still
+			// lands on disk. A failure before the rename keeps the old day
+			// recorded and the next Write retries; a gzip failure does not,
+			// because the rename already moved that day's data aside.
 			s.onWriteErr(fmt.Errorf("audit: rotate failed: %w", err))
-			// On rotate failure, keep writing to the old file so
-			// events aren't lost. The next Write retries rotation.
 		}
+	}
+
+	if s.file == nil {
+		s.onWriteErr(ErrJSONLSinkNoActiveFile)
+
+		return
 	}
 
 	// The record's own canonical bytes rather than this language's struct
@@ -222,17 +230,30 @@ func (s *JSONLSink) Path() string {
 	return filepath.Join(s.dir, ActiveLogFileName)
 }
 
-// openActive opens (or creates) the active audit.log via the
-// scoped root. Caller must hold s.mu, or be a constructor that
-// hasn't published the sink yet.
+// openActive opens the active audit.log and records the day it
+// belongs to. Caller must hold s.mu, or be a constructor that hasn't
+// published the sink yet.
 func (s *JSONLSink) openActive() error {
+	if err := s.openActiveFile(); err != nil {
+		return err
+	}
+
+	s.openDay = utcDayString(s.clock())
+
+	return nil
+}
+
+// openActiveFile opens (or creates) the active audit.log via the
+// scoped root without touching the recorded open day, which is what
+// a failed rotation needs so the next Write tries again. Caller must
+// hold s.mu.
+func (s *JSONLSink) openActiveFile() error {
 	file, err := s.root.OpenFile(ActiveLogFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, auditFileMode)
 	if err != nil {
 		return fmt.Errorf("audit: open %s: %w", filepath.Join(s.dir, ActiveLogFileName), err)
 	}
 
 	s.file = file
-	s.openDay = utcDayString(s.clock())
 
 	return nil
 }
@@ -244,6 +265,16 @@ func (s *JSONLSink) openActive() error {
 // The rotated file's date is the OLD openDay value, not today: the
 // rotation fires "the day has rolled over" so the file being closed
 // is yesterday's data.
+//
+// Every failure path reopens audit.log before returning, so the event
+// that triggered the rotation still reaches disk. A failure before the
+// rename keeps the old day recorded, which is what makes the next Write
+// retry the whole rotation; a gzip failure does not, because the rename
+// already moved the closed day's data aside.
+//
+// A Close failure is reported only as context on a step that also failed.
+// Writes are unbuffered syscalls, so the day's records are already out of
+// this process before Close runs and a Close error cannot mean lost records.
 func (s *JSONLSink) rotateLocked() error {
 	if s.file == nil {
 		return s.openActive()
@@ -252,18 +283,29 @@ func (s *JSONLSink) rotateLocked() error {
 	oldDay := s.openDay
 	rotatedName := fmt.Sprintf("audit-%s.log", oldDay)
 
-	if err := s.file.Close(); err != nil {
-		return fmt.Errorf("close active: %w", err)
-	}
-
+	// Go closes the descriptor even when Close reports a failure, so the rename
+	// runs either way. Only the rename decides which day the reopened file
+	// belongs to, so a close failure rides alongside rather than steering.
+	closeErr := s.file.Close()
 	s.file = nil
 
 	if err := s.root.Rename(ActiveLogFileName, rotatedName); err != nil {
-		return fmt.Errorf("rename %s -> %s: %w", ActiveLogFileName, rotatedName, err)
+		// The day's data is still in audit.log, so reopening under the day it
+		// already had is what makes the next Write retry the whole rotation.
+		_ = s.openActiveFile()
+
+		return fmt.Errorf("close and rename %s -> %s: %w",
+			ActiveLogFileName, rotatedName, errors.Join(closeErr, err))
 	}
 
 	if err := gzipFileInRoot(s.root, rotatedName); err != nil {
-		return fmt.Errorf("gzip %s: %w", rotatedName, err)
+		// The rename already moved the closed day's data aside, so the file
+		// opened here belongs to the current day. Reopening under the old day
+		// would send the next Write to rename it over the rotated file this
+		// attempt already wrote.
+		_ = s.openActive()
+
+		return fmt.Errorf("close and gzip %s: %w", rotatedName, errors.Join(closeErr, err))
 	}
 
 	return s.openActive()

@@ -259,11 +259,13 @@ func loadWindowJSONL(dir string, since time.Time, includeMeta bool) ([]*Event, e
 }
 
 // sinceUnixNano converts a since bound to a Unix-nanosecond cutoff,
-// returning 0 (match everything) for the zero time.
+// returning 0 (match everything) for the zero time. The bound saturates
+// so a far-future window narrows the SQLite query instead of wrapping
+// into a cutoff that matches every row.
 func sinceUnixNano(since time.Time) int64 {
 	if since.IsZero() {
 		return 0
 	}
 
-	return since.UnixNano()
+	return unixNanoBound(since)
 }

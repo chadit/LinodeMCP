@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from linodemcp.audit.event import Capability, Event, Mode, event_timestamp
-from linodemcp.audit.reader import scan_events
+from linodemcp.audit.reader import scan_events, unix_ns_bound
 from linodemcp.audit.store import read_with_fallback
 from linodemcp.genlocal import AuditSummaryResponse, AuditSummaryRow
 
@@ -153,7 +153,7 @@ def _load_window_sqlite(
     path: str, since: datetime | None, include_meta: bool
 ) -> list[Event]:
     """Read windowed events from SQLite via a static parameterized query."""
-    since_ns = int(since.astimezone(UTC).timestamp() * 1_000_000_000) if since else 0
+    since_ns = unix_ns_bound(since) if since else 0
 
     conn = sqlite3.connect(path)
     try:

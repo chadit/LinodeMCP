@@ -1,8 +1,10 @@
 package audit_test
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"math"
 	"os"
@@ -22,9 +24,10 @@ const (
 	// either step of the rename-then-gzip sequence.
 	rotatedDay1Log  = "audit-2026-05-18.log"
 	rotatedDay1Gzip = "audit-2026-05-18.log.gz"
-	// day1Marker and day3Marker are result summaries the rotation tests grep
-	// for to tell which file an event landed in.
+	// day1Marker, day2Marker, and day3Marker are result summaries the rotation
+	// tests grep for to tell which file an event landed in.
 	day1Marker = "day-1-event"
+	day2Marker = "day-2-event"
 	day3Marker = "day-3-event"
 )
 
@@ -260,7 +263,7 @@ func TestJSONLSinkRotationFailureKeepsDayOneData(t *testing.T) {
 			defer func() { _ = sink.Close() }()
 
 			sink.Write(t.Context(), summarizedEvent(day1Marker))
-			sink.Write(t.Context(), summarizedEvent("day-2-event"))
+			sink.Write(t.Context(), summarizedEvent(day2Marker))
 			sink.Write(t.Context(), summarizedEvent(day3Marker))
 
 			if !anyContains(collector.messages(), "rotate failed") {
@@ -275,11 +278,150 @@ func TestJSONLSinkRotationFailureKeepsDayOneData(t *testing.T) {
 				t.Errorf("%s lost the day-1 event", tcase.keptIn)
 			}
 
+			if !anyContains(readLines(t, sink.Path()), day2Marker) {
+				t.Errorf("audit.log lost the event whose Write triggered the failed rotation")
+			}
+
 			if !anyContains(readLines(t, sink.Path()), day3Marker) {
 				t.Errorf("audit.log does not hold the event written after the failed rotation")
 			}
 		})
 	}
+}
+
+// TestJSONLSinkRetriesRotationAfterTheBlockerClears verifies the rotation a
+// blocked rename could not finish is retried on the next Write once the
+// blocker is gone, and that the events the sink kept appending to audit.log
+// meanwhile travel into the dated file the retry produces.
+func TestJSONLSinkRetriesRotationAfterTheBlockerClears(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	blocker := filepath.Join(dir, rotatedDay1Log)
+	if err := os.Mkdir(blocker, 0o750); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	day1 := time.Date(2026, time.May, 18, 23, 59, 0, 0, time.UTC)
+	day2 := time.Date(2026, time.May, 19, 0, 0, 1, 0, time.UTC)
+	clockCalls := []time.Time{day1, day1, day2, day2, day2}
+	collector := &errorCollector{}
+
+	sink, err := audit.NewJSONLSink(dir,
+		audit.WithClock(makeFixedClock(&clockCalls)),
+		audit.WithWriteErrorHandler(collector.record),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer func() { _ = sink.Close() }()
+
+	sink.Write(t.Context(), summarizedEvent(day1Marker))
+	sink.Write(t.Context(), summarizedEvent(day2Marker))
+
+	if err := os.Remove(blocker); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sink.Write(t.Context(), summarizedEvent(day3Marker))
+
+	body := readGzipBody(t, filepath.Join(dir, rotatedDay1Gzip))
+	for _, marker := range []string{day1Marker, day2Marker} {
+		if !strings.Contains(body, marker) {
+			t.Errorf("%s does not hold %s, so the retried rotation lost it", rotatedDay1Gzip, marker)
+		}
+	}
+
+	lines := readLines(t, sink.Path())
+	if len(lines) != 1 || !strings.Contains(lines[0], day3Marker) {
+		t.Errorf("audit.log = %v, want only the event written after the retried rotation", lines)
+	}
+}
+
+// TestJSONLSinkReportsTheEventItCannotPlace verifies that when a failed
+// rotation also cannot reopen audit.log the event is reported through the
+// handler rather than dropped in silence, so the log records the gap.
+func TestJSONLSinkReportsTheEventItCannotPlace(t *testing.T) {
+	t.Parallel()
+	requireNonRoot(t)
+
+	dir := t.TempDir()
+
+	day1 := time.Date(2026, time.May, 18, 23, 59, 0, 0, time.UTC)
+	day2 := time.Date(2026, time.May, 19, 0, 0, 1, 0, time.UTC)
+	clockCalls := []time.Time{day1, day2, day2}
+	collector := &errorCollector{}
+
+	sink, err := audit.NewJSONLSink(dir,
+		audit.WithClock(makeFixedClock(&clockCalls)),
+		audit.WithWriteErrorHandler(collector.record),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer func() { _ = sink.Close() }()
+
+	// With the active log gone the rename has nothing to move, and with the
+	// directory read-only the sink cannot create a replacement either.
+	if err := os.Remove(filepath.Join(dir, audit.ActiveLogFileName)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	sink.Write(t.Context(), summarizedEvent(day2Marker))
+
+	got := collector.messages()
+	if !anyContains(got, "rotate failed") {
+		t.Errorf("handler errors = %v, want one reporting the failed rotation", got)
+	}
+
+	if !anyContains(got, audit.ErrJSONLSinkNoActiveFile.Error()) {
+		t.Errorf("handler errors = %v, want one reporting the event had nowhere to land", got)
+	}
+
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	sink.Write(t.Context(), summarizedEvent(day3Marker))
+
+	if !anyContains(readLines(t, sink.Path()), day3Marker) {
+		t.Errorf("audit.log lost the event written after the directory took writes again")
+	}
+}
+
+// readGzipBody returns the decompressed contents of the gzip file at path.
+func readGzipBody(t *testing.T, path string) string {
+	t.Helper()
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer func() { _ = file.Close() }()
+
+	reader, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer func() { _ = reader.Close() }()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	return string(body)
 }
 
 // summarizedEvent builds a finalized read event whose result summary is

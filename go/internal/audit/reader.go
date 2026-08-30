@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path"
 	"slices"
@@ -138,15 +139,34 @@ func (q *RecentQuery) matches(event *Event) bool {
 		return false
 	}
 
-	if !q.Since.IsZero() && event.TsUnixNs < q.Since.UnixNano() {
+	if !q.Since.IsZero() && event.TsUnixNs < unixNanoBound(q.Since) {
 		return false
 	}
 
-	if !q.Until.IsZero() && event.TsUnixNs > q.Until.UnixNano() {
+	if !q.Until.IsZero() && event.TsUnixNs > unixNanoBound(q.Until) {
 		return false
 	}
 
 	return true
+}
+
+// unixNanoBound converts a query bound to the nanosecond count records
+// carry, saturating at the int64 ends rather than wrapping. Saturating
+// keeps the bound's meaning: a year-2999 lower bound came back as a small
+// number and matched the events it was meant to exclude.
+func unixNanoBound(bound time.Time) int64 {
+	// The instants where a nanosecond count stops fitting in an int64.
+	earliest := time.Unix(0, math.MinInt64)
+	latest := time.Unix(0, math.MaxInt64)
+
+	switch {
+	case bound.After(latest):
+		return math.MaxInt64
+	case bound.Before(earliest):
+		return math.MinInt64
+	default:
+		return bound.UnixNano()
+	}
 }
 
 // openReadRoot opens an os.Root on dir for reading. A missing

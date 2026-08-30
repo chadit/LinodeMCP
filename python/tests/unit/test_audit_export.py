@@ -111,6 +111,27 @@ def test_export_events_sqlite_full_record(tmp_path: Path) -> None:
     assert got.error == "boom"
 
 
+def test_export_events_sqlite_bound_past_the_nanosecond_range(
+    tmp_path: Path,
+) -> None:
+    """A lower bound past the years a nanosecond count fits in an int64
+    narrows the query instead of overflowing the SQLite binding, so both
+    languages answer the same empty export.
+    """
+    db_path = tmp_path / "audit.db"
+    sink = SQLiteSink(str(db_path), 5000)
+    sink.write(_event("linode_instance_list", 1))
+    sink.close()
+
+    query = RecentQuery(
+        limit=_DEFAULT_MAX,
+        since=datetime(2999, 1, 1, tzinfo=UTC),
+        include_meta=True,
+    )
+
+    assert export_events(str(db_path), str(tmp_path / "empty"), query) == []
+
+
 def _encoded(events: list[Event], export_format: str) -> str:
     """One export as text, written through the handle the encoder takes."""
     sink = io.StringIO()

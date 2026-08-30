@@ -242,6 +242,86 @@
           }
         ]
       }
+    },
+    {
+      "name": "a since past the nanosecond range matches nothing",
+      "audit_store": {
+        "events": [
+          {
+            "ts": "2026-05-19T10:00:00Z",
+            "ts_unix_ns": 1779184800000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9A",
+            "tool": "linode_instance_list",
+            "tool_capability": "read",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 12,
+            "result_summary": "listed 2 instances",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T11:00:00Z",
+            "ts_unix_ns": 1779188400000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9B",
+            "tool": "linode_instance_boot",
+            "tool_capability": "write",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "success",
+            "latency_ms": 34,
+            "result_summary": "booted instance 1",
+            "error": null,
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          },
+          {
+            "ts": "2026-05-19T12:00:00Z",
+            "ts_unix_ns": 1779192000000000000,
+            "event_id": "evt_01HQXY3ZKQ8M7VRBNP4W5T2J9C",
+            "tool": "linode_instance_delete",
+            "tool_capability": "destroy",
+            "environment": "default",
+            "profile": "full-access",
+            "mode": "normal",
+            "plan_id": null,
+            "args": {
+              "region": "us-east"
+            },
+            "args_redacted": [],
+            "status": "error",
+            "latency_ms": 56,
+            "result_summary": "",
+            "error": "instance 1 not found",
+            "linodemcp_version": "0.1.0",
+            "session_id": "sess-behavior-fixture",
+            "credential_generation": 0
+          }
+        ]
+      },
+      "args": {
+        "since": "2999-01-01T00:00:00Z"
+      },
+      "expect_result": {
+        "count": 0,
+        "events": []
+      }
     }
   ]
 }

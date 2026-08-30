@@ -11,6 +11,7 @@ import gzip
 import logging
 import shutil
 import threading
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
@@ -116,8 +117,8 @@ class JSONLSink:
                 try:
                     self._rotate_locked()
                 except OSError as exc:
-                    # Keep writing to the old file so events aren't lost;
-                    # the next write retries rotation.
+                    # A failed rotation leaves an open file behind, so this
+                    # event still lands on disk and the next write retries.
                     self._on_write_error(
                         OSError(f"audit: rotate failed: {exc}"),
                     )
@@ -133,10 +134,17 @@ class JSONLSink:
                 )
                 return
 
+            if self._file is None:
+                # Only reachable when a failed rotation could not reopen the
+                # log either; report the gap rather than dropping in silence.
+                self._on_write_error(
+                    OSError("audit: jsonl sink has no active file"),
+                )
+                return
+
             try:
-                if self._file is not None:
-                    self._file.write(line + "\n")
-                    self._file.flush()
+                self._file.write(line + "\n")
+                self._file.flush()
             except OSError as exc:
                 self._on_write_error(OSError(f"audit: write line: {exc}"))
 
@@ -157,14 +165,21 @@ class JSONLSink:
                 self._file = None
 
     def _open_active(self) -> None:
-        """Open or create the active ``audit.log`` for append.
+        """Open the active ``audit.log`` and record the day it belongs to.
 
         Caller holds the lock, or is the constructor before the sink
         is published.
         """
+        self._open_active_file()
+        self._open_day = _utc_day_string(self._clock())
+
+    def _open_active_file(self) -> None:
+        """Open or create the active ``audit.log`` for append, leaving the
+        recorded open day alone, which is what a failed rotation needs so the
+        next write tries again. Caller holds the lock.
+        """
         path = self._dir / ACTIVE_LOG_FILE_NAME
         self._file = path.open("a", encoding="utf-8")
-        self._open_day = _utc_day_string(self._clock())
 
     def _rotate_locked(self) -> None:
         """Rotate the active file to the dated gzip form.
@@ -172,6 +187,18 @@ class JSONLSink:
         Caller MUST hold the lock. The rotated file's date is the OLD
         ``open_day`` value: rotation fires because the day rolled over,
         so the file being closed holds the prior day's data.
+
+        Every failure path reopens ``audit.log`` before the error leaves, so
+        the event that triggered the rotation still reaches disk. A failure
+        before the rename keeps the old day recorded, which is what makes the
+        next write retry the whole rotation; a gzip failure does not, because
+        the rename already moved the closed day's data aside.
+
+        A close failure does not stop the rotation. Records are flushed per
+        write, so a close failure cannot mean lost records, and Python closes
+        the descriptor even when ``close`` reports a failure. Letting it out
+        here would leave ``_file`` pointing at a closed handle, which the
+        write that follows would hit with a ``ValueError`` no caller expects.
         """
         if self._file is None:
             self._open_active()
@@ -181,11 +208,29 @@ class JSONLSink:
         active_path = self._dir / ACTIVE_LOG_FILE_NAME
         rotated_path = self._dir / f"audit-{old_day}.log"
 
-        self._file.close()
+        with suppress(OSError):
+            self._file.close()
+
         self._file = None
 
-        active_path.rename(rotated_path)
-        _gzip_file(rotated_path)
+        try:
+            active_path.rename(rotated_path)
+        except OSError:
+            # The day's data is still in audit.log, so reopening under the day
+            # it already had is what makes the next write retry the rotation.
+            self._open_active_file()
+            raise
+
+        try:
+            _gzip_file(rotated_path)
+        except OSError:
+            # The rename already moved the closed day's data aside, so the file
+            # opened here belongs to the current day. Reopening under the old
+            # day would send the next write to rename it over the rotated file
+            # this attempt already wrote.
+            self._open_active()
+            raise
+
         self._open_active()
 
 

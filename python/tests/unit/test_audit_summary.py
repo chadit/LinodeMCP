@@ -121,6 +121,21 @@ def test_load_window_jsonl_and_sqlite_agree(tmp_path: Path) -> None:
     assert summarize(jsonl_events, ["tool"]) == summarize(sqlite_events, ["tool"])
 
 
+def test_load_window_bound_past_the_nanosecond_range(tmp_path: Path) -> None:
+    """A window starting past the years a nanosecond count fits in an int64
+    reaches SQLite as a bound the column can hold, so it answers an empty
+    window the way the Go twin does instead of failing the binding.
+    """
+    db_path = str(tmp_path / "audit.db")
+    sink = SQLiteSink(db_path, 5000)
+    sink.write(_event("linode_instance_list", Capability.READ, Status.SUCCESS, 8))
+    sink.close()
+
+    far_future = datetime(2999, 1, 1, tzinfo=UTC)
+
+    assert load_window(db_path, "", far_future, include_meta=True) == []
+
+
 def test_load_window_excludes_meta_by_default(tmp_path: Path) -> None:
     """include_meta=False drops meta events."""
     events = [

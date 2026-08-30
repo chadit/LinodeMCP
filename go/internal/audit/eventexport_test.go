@@ -47,6 +47,30 @@ func TestExportEventsJSONL(t *testing.T) {
 	}
 }
 
+// TestExportEventsSQLiteBoundPastTheNanosecondRange confirms a lower bound
+// past the years a Unix-nanosecond count can hold narrows the SQLite query
+// instead of wrapping into a cutoff every stored row clears.
+func TestExportEventsSQLiteBoundPastTheNanosecondRange(t *testing.T) {
+	t.Parallel()
+
+	dbPath := seededStore(t, makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(20, 8)))
+
+	query := &audit.RecentQuery{
+		Limit:       audit.DefaultExportMaxRecords,
+		Since:       farFutureBound(),
+		IncludeMeta: true,
+	}
+
+	events, err := audit.ExportEvents(t.Context(), dbPath, t.TempDir(), query)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(events) != 0 {
+		t.Errorf("len(events) = %d, want %d", len(events), 0)
+	}
+}
+
 // TestExportEventsSQLiteFullRecord confirms the SQLite-backed export
 // reconstructs the complete event, including the args map and a
 // nullable error, not just the summary columns.

@@ -284,6 +284,30 @@ func TestSummaryOverDegradesToTheLogBehindAWarning(t *testing.T) {
 	}
 }
 
+// TestSummaryOverBoundPastTheNanosecondRangeCountsNothing verifies a window
+// starting past the years a Unix-nanosecond count can hold reaches the SQLite
+// store as a bound the column can hold, so the answer is an empty window
+// rather than every row the store keeps.
+func TestSummaryOverBoundPastTheNanosecondRangeCountsNothing(t *testing.T) {
+	t.Parallel()
+
+	dbPath := seededStore(t, makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)))
+
+	answer, err := audit.SummaryOver(t.Context(), dbPath, t.TempDir(),
+		farFutureBound(), []string{colTool}, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if answer.TotalEvents != 0 {
+		t.Errorf("answer.TotalEvents = %v, want %v", answer.TotalEvents, 0)
+	}
+
+	if len(answer.Rows) != 0 {
+		t.Errorf("answer.Rows = %v, want no buckets", answer.Rows)
+	}
+}
+
 // TestSummaryOverReportsADirectoryItCannotRead is the one condition it answers.
 func TestSummaryOverReportsADirectoryItCannotRead(t *testing.T) {
 	t.Parallel()

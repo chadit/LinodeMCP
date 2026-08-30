@@ -8,6 +8,12 @@ import "errors"
 // against this sentinel.
 var ErrJSONLSinkClosed = errors.New("audit: jsonl sink is closed")
 
+// ErrJSONLSinkNoActiveFile indicates a rotation failed and could not
+// even reopen the active log, so the event had nowhere to land. The
+// sink reports it through the write-error handler rather than dropping
+// the event without a word.
+var ErrJSONLSinkNoActiveFile = errors.New("audit: jsonl sink has no active file")
+
 // ErrUnknownGroupByColumn indicates a summary query requested a
 // group-by column that is not in the allowlist. Returned by
 // ValidateGroupBy so a typo surfaces instead of producing an empty

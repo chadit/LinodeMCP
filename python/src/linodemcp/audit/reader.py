@@ -10,6 +10,7 @@ from __future__ import annotations
 import fnmatch
 import gzip
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
@@ -18,7 +19,7 @@ from linodemcp.audit.retention import parse_rotated_file_day
 from linodemcp.genlocal import audit_event_from_record
 
 if TYPE_CHECKING:
-    from datetime import date, datetime
+    from datetime import date
 
     from linodemcp.audit.event import Capability, Event, Status
 
@@ -28,6 +29,13 @@ DEFAULT_RECENT_LIMIT = 20
 
 # Hard cap so a single query can't pull an unbounded slice into memory.
 MAX_RECENT_LIMIT = 200
+
+# The int64 ends a query bound saturates at, written as shifts because they are
+# powers of two, beside the epoch a record's ts_unix_ns counts from.
+_INT64_MIN = -(1 << 63)
+_INT64_MAX = (1 << 63) - 1
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+_SECONDS_PER_DAY = 86400
 
 
 @dataclass
@@ -146,7 +154,23 @@ def event_matches(query: RecentQuery, event: Event) -> bool:
     if event.ts_unix_ns < _since_unix_ns(query.since):
         return False
 
-    return query.until is None or event.ts_unix_ns <= _until_unix_ns(query.until)
+    return query.until is None or event.ts_unix_ns <= unix_ns_bound(query.until)
+
+
+def unix_ns_bound(bound: datetime) -> int:
+    """A query bound as the nanosecond count a record carries, saturated to
+    the int64 range. Public so the SQLite readers bind the same value.
+
+    SQLite refuses an integer wider than int64, and the Go twin's clock type
+    wraps there, so both ends clamp instead: a far-future since matches
+    nothing, a far-future until matches everything.
+    """
+    elapsed = bound.astimezone(UTC) - _EPOCH
+    nanos = (
+        elapsed.days * _SECONDS_PER_DAY + elapsed.seconds
+    ) * 1_000_000_000 + elapsed.microseconds * 1000
+
+    return max(_INT64_MIN, min(_INT64_MAX, nanos))
 
 
 def _since_unix_ns(since: datetime | None) -> int:
@@ -154,12 +178,7 @@ def _since_unix_ns(since: datetime | None) -> int:
     if since is None:
         return 0
 
-    return int(since.timestamp()) * 1_000_000_000 + since.microsecond * 1000
-
-
-def _until_unix_ns(until: datetime) -> int:
-    """An upper bound as the nanosecond count a record carries."""
-    return int(until.timestamp()) * 1_000_000_000 + until.microsecond * 1000
+    return unix_ns_bound(since)
 
 
 def _ordered_audit_files(base: Path) -> list[str]:

@@ -69,9 +69,9 @@ func TestAuditRecentFlagsReachTheQuery(t *testing.T) {
 
 	recordVersionCall(t)
 
-	// One hour ahead is the shape a user types for "nothing yet"; a far
-	// future year would overflow the reader's nanosecond comparison.
-	futureSince := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
+	// A year past the range a nanosecond count fits in, which is the shape
+	// that used to wrap into the past and match the very call it excludes.
+	futureSince := time.Date(2999, time.January, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
 
 	cases := []struct {
 		name string

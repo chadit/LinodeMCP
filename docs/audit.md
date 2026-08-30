@@ -360,7 +360,7 @@ Until you get to it, `linode_audit_health`, `linode_audit_summary`, `linode_audi
 
 ### JSONL log gaps
 
-Rotation failures leave the active log in place (the sink keeps writing rather than risk dropping events). On the next rotation attempt the sink retries; gaps in rotated files are unusual but possible if the rotation race fails repeatedly. `linode_audit_health` surfaces the rotated file count and oldest rotated date so a missing day is visible.
+A failed rotation reopens the active log rather than risk dropping events, so the event that triggered it still lands. A failure before the rename keeps the old day recorded and the next write retries the whole rotation; a gzip failure does not retry, because the rename already moved that day's data aside and the uncompressed `audit-YYYY-MM-DD.log` stays readable. When the reopen fails too, the write reports `audit: jsonl sink has no active file` through the write-error handler instead of dropping in silence. Gaps in rotated files are unusual but possible if the rotation race fails repeatedly. `linode_audit_health` surfaces the rotated file count and oldest rotated date so a missing day is visible.
 
 ## Performance
 

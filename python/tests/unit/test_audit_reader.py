@@ -163,6 +163,42 @@ def test_read_recent_filters(tmp_path: Path) -> None:
     assert len(window) == 2
 
 
+@pytest.mark.parametrize(
+    ("query", "want"),
+    [
+        (RecentQuery(since=datetime(2999, 1, 1, tzinfo=UTC)), 0),
+        (RecentQuery(until=datetime(2999, 1, 1, tzinfo=UTC)), 1),
+        (RecentQuery(since=datetime(1000, 1, 1, tzinfo=UTC)), 1),
+        (RecentQuery(until=datetime(1000, 1, 1, tzinfo=UTC)), 0),
+    ],
+    ids=[
+        "since past the range excludes the seeded event",
+        "until past the range keeps the seeded event",
+        "since before the range keeps the seeded event",
+        "until before the range excludes the seeded event",
+    ],
+)
+def test_read_recent_bounds_outside_the_nanosecond_range(
+    tmp_path: Path, query: RecentQuery, want: int
+) -> None:
+    """A bound outside the years a Unix-nanosecond count fits in an int64
+    keeps its meaning: far-future since matches nothing, far-future until
+    matches everything, and the far past mirrors both.
+
+    This path answers the same with or without the saturating bound, because a
+    Python int does not wrap. The rows mirror the Go table so both languages
+    pin one answer per bound; the bound itself is load-bearing for the SQLite
+    readers, where test_audit_export and test_audit_summary pin it.
+    """
+    _write_jsonl(
+        tmp_path / "audit.log",
+        gzipped=False,
+        events=[_event("tool_ok", Capability.READ, Status.SUCCESS, 8)],
+    )
+
+    assert len(read_recent(str(tmp_path), query)) == want
+
+
 def test_read_recent_missing_dir_returns_empty(tmp_path: Path) -> None:
     """Querying before any audit exists is an empty result, not an error."""
     missing = tmp_path / "no-audit-yet"

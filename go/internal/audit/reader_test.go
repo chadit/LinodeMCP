@@ -398,9 +398,62 @@ func TestReadRecentSurfacesReadError(t *testing.T) {
 	}
 }
 
+// TestReadRecentBoundsOutsideTheNanosecondRange verifies a window bound past
+// the years a Unix-nanosecond count can hold keeps its meaning instead of
+// wrapping: a since that far out matches nothing and an until that far out
+// matches everything, with the far past mirroring both.
+//
+// Reading the bound's own UnixNano wrapped a year-2999 since into the past,
+// where it matched the very events the caller asked to exclude.
+func TestReadRecentBoundsOutsideTheNanosecondRange(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	writeJSONLFile(t, filepath.Join(dir, "audit.log"), false, []*audit.Event{
+		makeTestEvent(toolOK, audit.CapabilityRead, audit.StatusSuccess, day(19, 8)),
+	})
+
+	// Both sit outside the 1678-2262 window time.Time.UnixNano can represent.
+	farFuture := farFutureBound()
+	farPast := time.Date(1000, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		query *audit.RecentQuery
+		name  string
+		want  int
+	}{
+		{name: "since past the range excludes the seeded event", query: &audit.RecentQuery{Since: farFuture}, want: 0},
+		{name: "until past the range keeps the seeded event", query: &audit.RecentQuery{Until: farFuture}, want: 1},
+		{name: "since before the range keeps the seeded event", query: &audit.RecentQuery{Since: farPast}, want: 1},
+		{name: "until before the range excludes the seeded event", query: &audit.RecentQuery{Until: farPast}, want: 0},
+	}
+
+	for _, tcase := range cases {
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := audit.ReadRecent(dir, tcase.query)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(got) != tcase.want {
+				t.Errorf("len(got) = %d, want %d", len(got), tcase.want)
+			}
+		})
+	}
+}
+
 // day builds a UTC timestamp in testYear, May, at the given day-of-
 // month and hour. Year and month are fixed because the reader tests
 // only care about relative ordering within a short window.
 func day(dayOfMonth, hour int) time.Time {
 	return time.Date(testYear, time.May, dayOfMonth, hour, 0, 0, 0, time.UTC)
+}
+
+// farFutureBound is a query bound past the years a Unix-nanosecond count fits
+// in an int64, which is the input the saturating-bound cases send.
+func farFutureBound() time.Time {
+	return time.Date(2999, time.January, 1, 0, 0, 0, 0, time.UTC)
 }

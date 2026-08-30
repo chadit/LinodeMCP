@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from linodemcp.audit.event import Event, event_timestamp
-from linodemcp.audit.reader import event_matches, scan_matching
+from linodemcp.audit.reader import event_matches, scan_matching, unix_ns_bound
 from linodemcp.genlocal import record_audit_event, record_value
 
 if TYPE_CHECKING:
@@ -85,11 +85,7 @@ def _export_from_sqlite(path: str, query: RecentQuery) -> list[Event]:
     filters apply in Python via event_matches so the statement stays
     static. Rows come newest-first; the scan stops at the query limit.
     """
-    since_ns = (
-        int(query.since.astimezone(UTC).timestamp() * 1_000_000_000)
-        if query.since
-        else 0
-    )
+    since_ns = unix_ns_bound(query.since) if query.since else 0
 
     conn = sqlite3.connect(path)
     try:
