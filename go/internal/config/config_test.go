@@ -257,11 +257,11 @@ func TestSelectEnvironment(t *testing.T) {
 			name: "exact match",
 			cfg: &config.Config{
 				Environments: map[string]config.EnvironmentConfig{
-					"prod":    {Label: envLabelProduction},
-					"staging": {Label: "Staging"},
+					envKeyProd: {Label: envLabelProduction},
+					"staging":  {Label: "Staging"},
 				},
 			},
-			input:     "prod",
+			input:     envKeyProd,
 			wantLabel: envLabelProduction,
 		},
 		{
@@ -300,6 +300,16 @@ func TestSelectEnvironment(t *testing.T) {
 			cfg:     &config.Config{},
 			input:   "anything",
 			wantErr: config.ErrEnvironmentNotFound,
+		},
+		{
+			name: "unknown name with no default falls back to the only environment",
+			cfg: &config.Config{
+				Environments: map[string]config.EnvironmentConfig{
+					envKeyProd: {Label: envLabelProduction},
+				},
+			},
+			input:     "staging",
+			wantLabel: envLabelProduction,
 		},
 	}
 

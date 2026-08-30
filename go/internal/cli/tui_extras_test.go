@@ -278,3 +278,83 @@ func TestHealthLinesIncludesSQLite(t *testing.T) {
 		t.Errorf("SQLite health not rendered:\n%s", out)
 	}
 }
+
+// TestRenderAuditRowsTruncatesLongToolName checks a tool name wider than
+// its column is cut to the column width, so the capability cell still
+// sits under the CAP header instead of being pushed to the right.
+func TestRenderAuditRowsTruncatesLongToolName(t *testing.T) {
+	t.Parallel()
+
+	const longTool = "linode_object_storage_bucket_access_policy_rewrite_long"
+
+	rows := []cli.AuditEventRow{{
+		Timestamp:  "2026-06-14 09:15:30",
+		Tool:       longTool,
+		Capability: "write",
+		Mode:       "-",
+		Status:     "success",
+		PlanID:     "-",
+	}}
+
+	lines := strings.Split(cli.RenderAuditRows(rows), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("rendered %d lines, want header plus one row:\n%s", len(lines), strings.Join(lines, "\n"))
+	}
+
+	header, row := lines[0], lines[1]
+
+	capCol := strings.Index(header, "CAP")
+	if capCol < 0 || capCol >= len(row) {
+		t.Fatalf("CAP header column %d not usable against row %q", capCol, row)
+	}
+
+	if !strings.HasPrefix(row[capCol:], "write") {
+		t.Errorf("capability cell drifted from the CAP header column %d:\n%s\n%s", capCol, header, row)
+	}
+
+	if strings.Contains(row, longTool) {
+		t.Errorf("long tool name was not truncated to its column:\n%s", row)
+	}
+}
+
+// TestAuditEventRowsKeepsShortTimestamp checks a timestamp with no time
+// part is shown as-is: a bare date from an older log must not be sliced
+// or blow up the viewer.
+func TestAuditEventRowsKeepsShortTimestamp(t *testing.T) {
+	t.Parallel()
+
+	rows, err := cli.AuditEventRows(auditPayloadWith(`{
+		"ts":"2026-06-14","tool":"version","tool_capability":"meta",
+		"mode":"","status":"success","plan_id":null
+	}`))
+	if err != nil {
+		t.Fatalf("AuditEventRows: %v", err)
+	}
+
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+
+	if rows[0].Timestamp != "2026-06-14" {
+		t.Errorf("timestamp = %q, want the bare date unchanged", rows[0].Timestamp)
+	}
+}
+
+// TestHealthLinesShowsMissingActiveLogAsOff checks the active-log flag
+// renders "off" when the audit log file is absent, so an operator can tell
+// a sink that never wrote from one that did.
+func TestHealthLinesShowsMissingActiveLogAsOff(t *testing.T) {
+	t.Parallel()
+
+	info := appinfo.Info{Version: testVersion}
+
+	payload := `{
+		"jsonl_path":"/tmp/audit.log","active_log_exists":false,
+		"rotated_file_count":0,"disk_bytes":0,"dropped_events":0,"sqlite":null
+	}`
+
+	out := strings.Join(cli.HealthLines(payload, &info), "\n")
+
+	wantContains(t, "health output", out, "active log:     off")
+	wantNotContains(t, "health output", out, "active log:     on")
+}

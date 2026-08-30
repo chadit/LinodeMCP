@@ -118,6 +118,15 @@ func TestLoadReportsValidation(t *testing.T) {
 `,
 			wantErr: config.ErrReportScalarAndList,
 		},
+		"status scalar and list": {
+			reportsBlock: `    both-status:
+      output: "list"
+      filter:
+        status: "error"
+        status_in: ["success", "error"]
+`,
+			wantErr: config.ErrReportScalarAndList,
+		},
 		"bad duration": {
 			reportsBlock: `    bad-dur:
       output: "summary"

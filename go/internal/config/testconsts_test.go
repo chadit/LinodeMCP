@@ -5,6 +5,9 @@ const (
 	tcTestServer     = "TestServer"
 	tcTest           = "Test"
 	tcReloadedServer = "ReloadedServer"
+	// envKeyProd is the non-default environment key the SelectEnvironment
+	// rows share.
+	envKeyProd = "prod"
 )
 
 // reloadedServerYAML is the post-reload config body shared by the reload tests.

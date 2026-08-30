@@ -16,6 +16,10 @@ import (
 // under each of its categories, so the grouped list shows it everywhere it
 // belongs. linode_instance_backup_list is in both compute_deep and compute;
 // linode_volume_list is block_storage only.
+// categoryBlockStorage is the catalog category the volume tools file under,
+// shared by the grouping and ordering tests.
+const categoryBlockStorage = "block_storage"
+
 func TestCatalogEntriesGroupByCategory(t *testing.T) {
 	t.Parallel()
 
@@ -38,7 +42,7 @@ func TestCatalogEntriesGroupByCategory(t *testing.T) {
 		}
 	}
 
-	if got := categoriesByTool["linode_volume_list"]; !slices.Contains(got, "block_storage") {
+	if got := categoriesByTool["linode_volume_list"]; !slices.Contains(got, categoryBlockStorage) {
 		t.Errorf("linode_volume_list categories = %v, want to include block_storage", got)
 	}
 }
@@ -253,4 +257,30 @@ func specNames(specs []cli.FormFieldSpec) []string {
 	}
 
 	return names
+}
+
+// TestCatalogEntriesSortsNamesWithinCategory checks two tools sharing a
+// category come out in name order regardless of registration order, so a
+// category block reads alphabetically. The tools are given in reverse
+// order so an unsorted list would keep them that way.
+func TestCatalogEntriesSortsNamesWithinCategory(t *testing.T) {
+	t.Parallel()
+
+	entries := cli.CatalogEntries([]server.ToolInfo{
+		{Name: testVolumesListTool, Capability: profiles.CapRead},
+		{Name: "linode_volume_create", Capability: profiles.CapWrite},
+	})
+
+	var blockStorage []string
+
+	for _, entry := range entries {
+		if entry.Category == categoryBlockStorage {
+			blockStorage = append(blockStorage, entry.Name)
+		}
+	}
+
+	want := []string{"linode_volume_create", testVolumesListTool}
+	if !slices.Equal(blockStorage, want) {
+		t.Errorf("%s order = %v, want %v", categoryBlockStorage, blockStorage, want)
+	}
 }
