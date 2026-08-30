@@ -7,7 +7,7 @@ name = "linodemcp"
 version = "0.1.0"
 description = "MCP server for Linode API access"
 readme = "README.md"
-requires-python = ">=3.14.6"
+requires-python = ">=3.14.7"
 license = { text = "MIT" }
 authors = [{ name = "LinodeMCP Contributors" }]
 keywords = ["mcp", "linode", "api", "server"]
@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=2.0.0,<3.0",
+    "mcp>=2.1.1,<3.0",
     "httpx>=0.28.1",
     "pyyaml>=6.0.3",
     "structlog>=26.1.0",
@@ -30,7 +30,7 @@ dependencies = [
     # emit gencode 7.35.1, and ValidateProtobufRuntimeVersion raises on every
     # _pb2 import when the runtime is older than the gencode. Move the plugin
     # tags and this floor together, never one without the other.
-    "protobuf>=7.35.1",
+    "protobuf>=7.36.0",
     # Evaluates the buf.validate CEL constraints the proto contract carries, so
     # a rule is written once in the proto instead of once per language.
     "protovalidate==1.2.0",
