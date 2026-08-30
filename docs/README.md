@@ -1,99 +1,64 @@
 # LinodeMCP documentation
 
-The map of everything under `docs/`. Two kinds of files live here, and telling
-them apart is most of the orientation you need:
+The map of everything under `docs/`. Two kinds of file live here: **pages**
+(`.md`) are prose for people and agents, one topic each; **machine contracts**
+(under [`contracts/`](./contracts/), text apart from one pinned binary image)
+are read by the `make check` gates by exact path and tabled below so nobody
+mistakes them for reading material. The repo root carries an `llms.txt` with
+this same map, one line per page.
 
-- **Pages** (`.md`) are prose for people and agents. Each covers one topic and
-  links to its neighbors, so any page can be read on its own.
-- **Machine contracts** (under [`contracts/`](./contracts/), text apart from
-  one pinned binary image) are read by the `make check` gates by exact path and
-  listed in [Machine contracts](#machine-contracts) below so nobody mistakes
-  them for reading material.
-
-New here? Read the [root README](../README.md) for install and first-run, then
+New here? Read the [root README](../README.md) for install and first run, then
 [profiles](./profiles.md), [dry-run](./dry-run.md), and
-[two-stage writes](./two-stage-writes.md) for the safety model. The repo root
-also carries an `llms.txt` with this same map, one line per page.
+[two-stage writes](./two-stage-writes.md) for the safety model.
 
-## Permissions
+## Using the server
 
-- [Profiles](./profiles.md): the permission model. A profile names the set of
-  tools the connected AI client can see and call. Also covers capability tags,
-  the built-in catalog, config schema, token-scope validation, hot-reload, and
-  copy-paste recipes for common postures.
-
-## Write safety
-
+- [Profiles](./profiles.md): the permission model. Which tools the AI client can
+  see and call, plus capability tags, the built-in catalog, config schema,
+  token-scope validation, hot-reload, and copy-paste recipes.
 - [Dry-run, bypass-confirm, pre-check, and yolo](./dry-run.md): preview any
-  mutator before it runs. Destructive calls must be previewed or explicitly
-  waived.
-- [Two-stage writes](./two-stage-writes.md): plan a destructive call, review
-  it, apply it by id. The server refuses the apply if the resource changed.
-  Also covers what counts as drift and how to read each refusal
-  (`PLAN_DRIFT_DETECTED`, `PLAN_EXPIRED`, `PLAN_NOT_FOUND`).
-
-## Object Storage
-
+  mutator before it runs. Destructive calls must be previewed or waived.
+- [Two-stage writes](./two-stage-writes.md): plan a destructive call, review it,
+  apply it by id. Covers drift and how to read each refusal.
 - [Object Storage data plane](./object-storage-data-plane.md): moving object
-  bytes through a presigned URL, in both directions. Why no access key is
-  involved, what the server needs on its own filesystem, how to verify a stored
-  object, the single-part ceiling, and how a download guards the file it
-  writes.
-
-## Audit
-
-- [Audit](./audit.md): structured record of every tool invocation. Event
-  schema, redaction, the query tools, sinks, retention, recovery, and the
-  named-report filter grammar.
-
-## Host integrations
-
-- [Host integrations](./host-integrations/README.md): registering the server
-  with each MCP host, plus per-topic command wrappers
+  bytes through a presigned URL, both directions, no access key.
+- [Audit](./audit.md): the record of every tool invocation. Event schema,
+  redaction, query tools, sinks, retention, recovery, report grammar.
+- [Host integrations](./host-integrations/README.md): registering the server with
+  each MCP host, plus per-topic wrappers for Claude Code and Claude Desktop
   ([profiles](./host-integrations/profiles.md),
   [audit](./host-integrations/audit.md),
-  [two-stage](./host-integrations/two-stage.md)) for Claude Code and
-  Claude Desktop.
-
-## Running and operating
-
-- [CLI and server modes](./cli.md): one binary, two modes. Bare invocation is
-  the MCP stdio server; the verbs (`profile`, `call`, `tools`, `audit`,
-  `tui`, `version`) are shell commands that exit without starting it.
+  [two-stage](./host-integrations/two-stage.md)).
+- [CLI and server modes](./cli.md): bare invocation is the MCP stdio server; the
+  verbs run as shell commands and exit.
 - [Observability](./observability.md): Prometheus metrics on :8888, health
-  endpoints on :8889, and OTLP tracing. Metric names and labels, and which
-  probe goes where.
+  endpoints on :8889, OTLP tracing, and which probe goes where.
 
 ## Releases
 
-- [Release process](./release-process.md): maintainer runbook. The two
+- [Release process](./release-process.md): the maintainer runbook. The two
   workflows that cut a release, and everything a release ships.
-- [Verifying releases](./verifying-releases.md): copy-paste commands to check
+- [Verifying releases](./verifying-releases.md): copy-paste commands for
   checksums, container signatures, SBOMs, and SLSA provenance.
 
 ## Contributing
 
-- [Cross-language parity](./parity.md): how the implementations stay
-  wire-identical, and what pulls the other languages along when you change
-  one. The day-to-day playbook: adding, changing, or removing a tool;
-  landing one language first with a tracked absence; the commands.
+- [Cross-language parity](./parity.md): the day-to-day playbook. Adding,
+  changing, or removing a tool; landing one language first with a tracked
+  absence; the commands.
 - [Adding a language](./adding-a-language.md): the checklist for a new
-  language implementation. Everything derives from the proto contract, and
-  the gates fail you if you hand-write any of it.
-- [The check gates](./gates.md): every `make check` gate in one page. What
-  each one checks, the contract file it ratchets, and how to update it.
+  implementation. Everything derives from the proto contract.
+- [The check gates](./gates.md): every `make check` gate as one table row, plus
+  the network sync gates.
 - [Refreshing dependency versions](./dependency-updates.md): what
-  `make update-deps` moves, the pins it refuses and why (buf above all), and
-  how it coexists with Renovate, which manages the same writable surfaces
-  daily.
-- [Git hooks](./git-hooks.md): pre-commit setup for commit-time and push-time
-  checks (`make install-hooks`).
-- [Deprecated routes](./deprecated-routes.md): tools and routes removed from
-  the surface, with the replacement to use instead.
-- [TechDocs comparator](../tools/techdocs-proof/README.md): the tool project
-  that compares the proto contract against the rendered Linode TechDocs site,
-  its exclusion ledger, and its nine-chapter wiki. Its self-test is a `make
-  check` gate; the scrape runs on a schedule.
+  `make update-deps` moves, the pins it refuses, and how it coexists with
+  Renovate.
+- [Git hooks](./git-hooks.md): `make install-hooks` and what the hooks run.
+- [Deprecated routes](./deprecated-routes.md): removed tools and routes, with
+  the replacement to use instead.
+- [TechDocs comparator](../tools/techdocs-proof/README.md): the tool project that
+  compares the proto contract against the rendered Linode TechDocs site. Its
+  self-test is a `make check` gate; the scrape runs on a schedule.
 
 ## Machine contracts
 
@@ -103,7 +68,8 @@ holds its full rules and exact regenerate command. Baselines are ratchets:
 fixing an item removes its line, lines are never added by hand, and an accepted
 line carries a dated annotation citing a tracking-issue URL that
 `make sync-issues` resolves on the sync schedule (the two `*-exempt.txt` files
-may use a free-text reason instead).
+may use a free-text reason instead). Most gates carry no file at all; see
+[hard gates](./gates.md#hard-gates-carry-no-file).
 
 ### Registries
 
@@ -136,26 +102,12 @@ may use a free-text reason instead).
 | [api-techdocs-routes-baseline.txt](./contracts/api-techdocs-routes-baseline.txt) | Snapshot of every route the rendered TechDocs state, with its API surface and deprecation status. `make techdocs-routes` gates `proto/` against it offline; the weekly comparator run writes the refresh candidate (network; runs on the techdocs-drift schedule) | `tools/techdocs-proof` (`--emit-route-snapshot`), read by `scripts/verify_techdocs_routes.py` |
 | [wire-baseline.binpb.gz](./contracts/wire-baseline.binpb.gz) | The proto tree's wire shape at a reviewed revision, as a `buf build --exclude-source-info` image. `make wire-breaking` compares `proto/` against it offline, so a renumbered, retyped, or reused field number fails by name. The only binary contract here, and it refreshes in the same reviewed change as any field retirement, because `buf breaking` cannot tell a retirement from a careless drop | `buf breaking`, via `make wire-breaking` |
 
-### Hard gates (no baseline)
+### Shared fixtures
 
-Most gates hold their class at zero and carry no file at all: a finding fails
-by name, there is nothing to accept it into, and the fix ships with the change
-that caused it. `generated-form` (a hand-written tool surface), `behavior`
-coverage and its malformed-response rule, `messages`, `pagination`,
-`response-shapes`, `list-envelope` and `route-evidence` all work this way,
-along with the offline gates that never had a baseline (`tool-routes`,
-`field-location`, `tool-response`, `dryrun`, `env-parity`, `cli-surface`,
-`metrics-surface`, `system-params`).
-
-An empty baseline file used to say the same thing, and it also proved the gate
-still had a surface to look at. Nothing carries that second meaning now, so
-each hard gate reports what it measured and fails when that count is zero: a
-classifier that stops resolving handlers, a scan whose tree moved, or a
-snapshot that stopped parsing shows up as a failure instead of a clean run.
-
-A few cross-language pins live as shared fixtures under `testdata/` rather
-than contracts files, because a language's own unit tests consume them:
-`testdata/config/parity.yml` (config parsing), `testdata/observability/duration_buckets.json`
-(histogram bucket boundaries), and `testdata/audit/event_fields.json` (the
-audit JSONL field set). Each language asserts against the same fixture, so a
-one-sided edit fails that language's suite.
+A few cross-language pins live under `testdata/` rather than in contract files,
+because a language's own unit tests consume them: `testdata/config/parity.yml`
+(config parsing), `testdata/observability/duration_buckets.json` (histogram
+bucket boundaries), `testdata/audit/event_fields.json` (the audit JSONL field
+set), and `testdata/audit/record-bytes` (the bytes each export format writes).
+Each language asserts against the same fixture, so a one-sided edit fails that
+language's suite.

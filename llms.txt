@@ -4,23 +4,36 @@
 
 The proto contract lives in `proto/linode/mcp/v1`. Go lives in `go/`, Python in `python/`. Gate files under `docs/contracts/` pin the shared tool surface and ratchet the remaining conversion work; `make check` runs every gate for every registered language.
 
-## Documentation
+This file mirrors [the docs index](docs/README.md), one line per page. The index is the source; keep the two in step. `make docs-links` walks both.
 
-- [README](README.md): what the server is, install, quick start, design decisions
+## Start here
+
+- [README](README.md): what the server is, install, configure, client setup, design decisions
 - [Docs index](docs/README.md): map of every docs page and machine contract
-- [Profiles](docs/profiles.md): permission model: which tools the AI client can see and call, capability tags, config schema, token-scope validation, and copy-paste recipes
+
+## Using the server
+
+- [Profiles](docs/profiles.md): permission model. Which tools the AI client can see and call, capability tags, the built-in catalog, config schema, token-scope validation, hot-reload, and copy-paste recipes
 - [Dry-run and confirm](docs/dry-run.md): preview any mutator; destructive calls must be previewed or explicitly waived; pre-check and yolo
 - [Two-stage writes](docs/two-stage-writes.md): plan a destructive call, review it, apply by id; refused if the resource drifted, plus how to read each refusal code
+- [Object Storage data plane](docs/object-storage-data-plane.md): moving object bytes through presigned URLs in both directions, no access key
 - [Audit](docs/audit.md): event schema, redaction, the query tools, sinks, retention, recovery, and the named-report filter grammar
-- [Object Storage data plane](docs/object-storage-data-plane.md): moving object bytes through presigned URLs in both directions
 - [Host integrations](docs/host-integrations/README.md): registering the server with Claude Code, Claude Desktop, Gemini CLI, GitHub Copilot, and other MCP hosts
 - [CLI and server modes](docs/cli.md): bare invocation runs the MCP stdio server; the CLI verbs run and exit
 - [Observability](docs/observability.md): Prometheus metrics, health endpoints, OTLP tracing
+
+## Releases
+
 - [Release process](docs/release-process.md): maintainer runbook for cutting a release
 - [Verifying releases](docs/verifying-releases.md): checking checksums, signatures, SBOMs, and SLSA provenance
+
+## Contributing
+
 - [Cross-language parity](docs/parity.md): how a change in one language reaches the others; tool add/change/remove playbooks and the accepted-absence flow
 - [Adding a language](docs/adding-a-language.md): checklist and gates for a new language implementation
-- [The check gates](docs/gates.md): every make check gate in one page, what it checks and which contract file it ratchets
+- [The check gates](docs/gates.md): every `make check` gate as one table row, what it holds and which contract file it reads, plus the network sync gates
+- [Refreshing dependency versions](docs/dependency-updates.md): what `make update-deps` moves, the pins it refuses, and how it coexists with Renovate
+- [TechDocs comparator](tools/techdocs-proof/README.md): the tool project that compares the proto contract against the rendered Linode TechDocs site
 
 ## Machine contracts
 

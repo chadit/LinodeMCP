@@ -130,10 +130,10 @@ is allowed, but never silent:
    comes out.
 
 The same flow covers the dry-run preview ratchet when a partial landing
-touches it. It does not extend to the hard gates: behavior coverage,
-proto-routing, confirm text, pagination, fixture response shapes and route
-evidence have no list to add a line to, so a partial landing that breaks one
-of them is not a partial landing, it is a broken build.
+touches it. It does not extend to the
+[hard gates](./gates.md#hard-gates-carry-no-file), which have no list to add a
+line to, so a partial landing that breaks one of them is not a partial landing,
+it is a broken build.
 
 ### Changing a tool's input contract
 

@@ -6,7 +6,7 @@ An MCP (Model Context Protocol) server that gives AI assistants like Claude|Gemi
 
 ## What It Does
 
-LinodeMCP exposes Linode API operations as MCP tools. AI assistants can use these tools to query and manage your Linode infrastructure -- all through a standard protocol.
+LinodeMCP exposes Linode API operations as MCP tools, so an AI assistant can query and manage your Linode infrastructure over a standard protocol.
 
 ### Available tools
 
@@ -28,19 +28,11 @@ The docs index at [docs/README.md](docs/README.md) maps every page: profiles, dr
 
 ### Prerequisites
 
-**Go implementation:**
-
-- Go 1.26+
-- A Linode API token ([create one here](https://cloud.linode.com/profile/tokens))
-
-**Python implementation:**
-
-- Python 3.14.6+
-- A Linode API token
+A Linode API token ([create one here](https://cloud.linode.com/profile/tokens)), plus a toolchain only if you build from source: Go 1.26+ for the Go implementation, Python 3.14.6+ for the Python one. The prebuilt binaries below need neither.
 
 ### Configuration
 
-Both implementations read from the same config file at `~/.config/linodemcp/config.yml`. The server creates a template on first run, or you can create one manually:
+Both implementations read the same config file at `~/.config/linodemcp/config.yml`. The server creates a template on first run, or you can write one:
 
 ```yaml
 server:
@@ -111,9 +103,7 @@ You can also set configuration through environment variables:
 
 ### Install a prebuilt binary (no toolchain needed)
 
-Each release ships signed, prebuilt binaries for Linux, macOS, and Windows (amd64 and arm64), so you don't need a Go or Python toolchain to run the server or the CLI.
-
-Download the archive for your platform from the [latest release](https://github.com/chadit/LinodeMCP/releases/latest), verify its checksum, and put the binary on your `PATH`:
+Each release ships signed, prebuilt binaries for Linux, macOS, and Windows (amd64 and arm64). Download the archive for your platform from the [latest release](https://github.com/chadit/LinodeMCP/releases/latest), verify its checksum, and put the binary on your `PATH`:
 
 ```bash
 ver=v0.2.0
@@ -134,86 +124,33 @@ Swap `linux-amd64` for `darwin-arm64`, `windows-amd64` (a `.zip`), and so on. Re
 go install github.com/chadit/LinodeMCP/go/cmd/linodemcp@latest
 ```
 
-This builds and installs the `linodemcp` binary into `$(go env GOPATH)/bin`. Pin a version with `@v0.2.0` instead of `@latest` for reproducible installs.
+This installs the `linodemcp` binary into `$(go env GOPATH)/bin`. Pin a version with `@v0.2.0` instead of `@latest` for reproducible installs.
 
 ### Build from source
 
-#### Go
+Clone the repo, then build whichever implementation you want. Each language's Makefile carries the rest of its targets (`make help` lists them).
 
-1. Clone the repo and change into the Go directory:
+```bash
+git clone https://github.com/chadit/LinodeMCP.git
 
-   ```bash
-   git clone https://github.com/chadit/LinodeMCP.git
-   cd LinodeMCP/go/
-   ```
+cd LinodeMCP/go/     && make install-tools && make build   # -> go/bin/linodemcp
+cd LinodeMCP/python/ && make install-dev                   # -> python/.venv/bin/linodemcp
+```
 
-2. Install dev tooling:
-
-   ```bash
-   make install-tools
-   ```
-
-3. Build the binary:
-
-   ```bash
-   make build
-   ```
-
-   This puts the binary at `go/bin/linodemcp`. You'll need this absolute path for MCP client config below.
-
-4. Quick test run:
-
-   ```bash
-   make run
-   ```
-
-#### Python
-
-1. Clone the repo and change into the Python directory:
-
-   ```bash
-   git clone https://github.com/chadit/LinodeMCP.git
-   cd LinodeMCP/python/
-   ```
-
-2. Install with dev dependencies (creates a venv automatically):
-
-   ```bash
-   make install-dev
-   ```
-
-   The binary lands at `python/.venv/bin/linodemcp`. You'll need this absolute path for MCP client config below.
-
-3. Quick test run:
-
-   ```bash
-   make run
-   ```
+`make run` in either directory starts the server for a quick check. Note the absolute path of the binary you built; the MCP client config below needs it.
 
 ### Container
 
-Pull the released multi-arch image (linux/amd64 + linux/arm64) from GHCR:
+Pull the released multi-arch image (linux/amd64 + linux/arm64) from GHCR, or build one locally:
 
 ```bash
 docker pull ghcr.io/chadit/linodemcp:latest
-```
 
-Pin a version tag (`ghcr.io/chadit/linodemcp:v0.2.0`) when you want reproducible setups; `latest` and the floating minor tag only ever point at stable releases. Images are signed with cosign and ship SBOMs and SLSA provenance, see [Verifying releases](docs/verifying-releases.md).
-
-Or build a container image locally for either implementation:
-
-```bash
 make docker-build-go      # builds linodemcp:go
 make docker-build-python  # builds linodemcp:python
 ```
 
-To use Podman instead of Docker:
-
-```bash
-CONTAINER_ENGINE=podman make docker-build-go
-```
-
-See [Docker / Podman](#docker--podman) below for MCP client configuration with containers.
+Pin a version tag (`ghcr.io/chadit/linodemcp:v0.2.0`) for reproducible setups; `latest` and the floating minor tag only ever point at stable releases. Images are signed with cosign and ship SBOMs and SLSA provenance, see [Verifying releases](docs/verifying-releases.md). Set `CONTAINER_ENGINE=podman` to build with Podman. Client configuration for containers is under [Docker / Podman](#docker--podman).
 
 ## MCP Client Setup
 
@@ -256,7 +193,7 @@ Running LinodeMCP in a container avoids installing Go or Python locally. MCP use
 }
 ```
 
-The example uses a locally built image; substitute `ghcr.io/chadit/linodemcp:latest` (or a pinned version tag) to use the released image, and swap `"docker"` for `"podman"` in the command field for Podman. To use a config file instead of environment variables, add a `-v ~/.config/linodemcp:/home/linodemcp/.config/linodemcp:ro` mount to `args`.
+The example uses a locally built image; substitute `ghcr.io/chadit/linodemcp:latest` (or a pinned version tag) for the released one, and swap `"docker"` for `"podman"` in the command field. To use a config file instead of environment variables, add a `-v ~/.config/linodemcp:/home/linodemcp/.config/linodemcp:ro` mount to `args`.
 
 ### Context Forge (IBM MCP Gateway)
 
@@ -272,9 +209,9 @@ Profiles control which tools the AI client can see. The server filters the tool 
 
 Switch profiles via the CLI (`linodemcp profile list` / `show` / `use`); mutators write the config file atomically and the server hot-reloads without a restart. User-defined profiles live under `profiles:` in your config, and the AI can help compose them via the `linode_profile_*` builder tools; the user activates the saved profile separately.
 
-A profile is not Linode IAM. The profile is local: it picks which tools this server offers the AI, and it can only take reach away. [Linode IAM](https://techdocs.akamai.com/cloud-computing/docs/identity-and-access-cm) is role-based access control the API runs on Akamai's side, per calling user, and it is what actually decides whether a call succeeds. A request has to clear the active profile, the token's OAuth scopes, and the user's IAM roles, so effective access is the intersection of all three. The `iam-admin` built-in manages the second system through this server; it deliberately leaves out the deprecated per-user grants tools, since Akamai warns against running grants and IAM on one account.
+A profile is not Linode IAM. The profile is local: it picks which tools this server offers the AI, and it can only take reach away. [Linode IAM](https://techdocs.akamai.com/cloud-computing/docs/identity-and-access-cm) is role-based access control the API runs on Akamai's side, per calling user, and it is what actually decides whether a call succeeds. A request has to clear the active profile, the token's OAuth scopes, and the user's IAM roles, so effective access is the intersection of all three.
 
-For the full reference (schema, capability tags, [profiles versus Linode IAM](docs/profiles.md#profiles-are-not-linode-iam) with setup for both, builder workflow, token-scope validation, security model) and copy-paste recipes, see [docs/profiles.md](docs/profiles.md). For host-specific wiring, see [docs/host-integrations/](docs/host-integrations/README.md).
+Full reference (schema, capability tags, [profiles versus Linode IAM](docs/profiles.md#profiles-are-not-linode-iam) with setup for both, builder workflow, token-scope validation, security model) and copy-paste recipes: [docs/profiles.md](docs/profiles.md). Host-specific wiring: [docs/host-integrations/](docs/host-integrations/README.md).
 
 ## Dry-run & safety
 
@@ -301,16 +238,15 @@ Full reference (event schema, redaction model, query tools, sinks, retention, re
 
 ## Development
 
-Each implementation carries its own Makefile; `make help` in `go/` or `python/` lists every target (build, test, lint, format, coverage). The repo root's `make check` runs both languages' suites plus every cross-language gate; it is the whole pre-push bar. See [docs/gates.md](docs/gates.md) for what each gate checks and [docs/parity.md](docs/parity.md) for the cross-language workflow.
+Each implementation carries its own Makefile; `make help` in `go/` or `python/` lists every target (build, test, lint, format, coverage). The repo root's `make check` runs both languages' suites plus every cross-language gate; it is the whole pre-push bar. See [docs/gates.md](docs/gates.md) for what each gate holds and [docs/parity.md](docs/parity.md) for the cross-language workflow.
 
 ### Key Design Decisions
 
+- **Proto contract**: `proto/` is the single source of truth for tool input schemas and tool output messages in both languages. `buf` generates the Go and Python types and the MCP input JSON Schema from those `.proto` files, so the two implementations cannot drift by construction. `make check` gates keep it honest, backed by a cross-language conformance corpus that feeds shared fixtures through both languages and asserts byte-identical output.
 - **Dual implementation**: Go for performance and single-binary deployment, Python for quick prototyping and the MCP Python ecosystem. Both share the same config format.
-- **Proto contract**: The `proto/` directory is the single source of truth for both tool input schemas and tool output messages in both languages. `buf` generates the Go and Python types and the MCP input JSON Schema from those `.proto` files, so the two implementations cannot drift by construction. `make check` gates keep it honest, backed by a cross-language conformance corpus that feeds shared fixtures through both languages and asserts byte-identical output.
-- **Stdio transport**: Communicates over stdin/stdout per the MCP spec. This is what Claude Desktop and similar clients expect.
-- **Retry with backoff**: The Linode API client wraps all calls with configurable retry logic, exponential backoff, and circuit breaker protection.
-- **Path validation**: Config file loading validates paths against a list of dangerous system directories and restricts access to the user's home, working directory, and temp paths.
-- **Config caching**: Loaded configs are cached with mtime-based invalidation, so repeated loads don't re-read from disk unnecessarily.
+- **Stdio transport**: communicates over stdin/stdout per the MCP spec, which is what Claude Desktop and similar clients expect.
+- **Retry with backoff**: the Linode API client wraps every call with configurable retry logic, exponential backoff, and circuit breaker protection.
+- **Path validation and config caching**: config loading validates paths against a list of dangerous system directories and restricts access to the user's home, working directory, and temp paths; loaded configs are cached with mtime-based invalidation.
 
 ## Status
 
