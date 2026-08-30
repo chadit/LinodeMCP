@@ -98,13 +98,18 @@ func CatalogEntries(infos []server.ToolInfo) []CatalogEntry {
 // buildCatalogItems builds the bubbles list items from the sorted catalog
 // entries, sharing one toolMeta per tool so each item stays small. The
 // order matches CatalogEntries, so the list is grouped by category.
+//
+// The schema goes through effectiveInputSchema, the same resolution `tools
+// show` uses: a tool registered with a raw JSON schema leaves the structured
+// Properties empty, and reading that field alone gives the form no arguments
+// to render.
 func buildCatalogItems(infos []server.ToolInfo) []list.Item {
 	metas := make(map[string]*toolMeta, len(infos))
 	for idx := range infos {
 		metas[infos[idx].Name] = &toolMeta{
 			name:       infos[idx].Name,
 			capability: infos[idx].Capability,
-			schema:     infos[idx].InputSchema,
+			schema:     effectiveInputSchema(&infos[idx]),
 		}
 	}
 

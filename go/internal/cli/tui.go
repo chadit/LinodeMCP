@@ -92,11 +92,16 @@ type tuiModel struct {
 	height  int
 }
 
-// newTUIModel builds the root model from an open runtime. It seeds the
+// NewTUIModel builds the root model from an open runtime. It seeds the
 // catalog from the server's tool views and captures the configured
-// environment names for the form's environment picker. Returns a pointer
-// because the model satisfies tea.Model with pointer receivers.
-func newTUIModel(runtime *Runtime) *tuiModel {
+// environment names for the form's environment picker.
+//
+// Exported because Update and View are the whole state machine, and a
+// caller with no terminal (a test, or any host driving the screens itself)
+// has no other way in: RunTUICommand hands the model straight to Bubble
+// Tea, which needs a tty. The returned tea.Model is the same value that
+// program runs, so what a caller drives here is what a user drives.
+func NewTUIModel(runtime *Runtime) tea.Model {
 	catalog := newCatalogModel(runtime.Server)
 
 	return &tuiModel{
@@ -677,6 +682,15 @@ func capabilityFor(srv *server.Server, tool string) profiles.Capability {
 // errOut carries setup diagnostics. The program's own goroutines live only
 // for the duration of Run, so a clean exit leaves none behind.
 func RunTUICommand(out, errOut io.Writer) int {
+	return RunTUICommandWithInput(nil, out, errOut)
+}
+
+// RunTUICommandWithInput is RunTUICommand with an explicit key source.
+// A nil keys leaves Bubble Tea to find the controlling terminal, which is
+// what the production entry point wants; a caller with no terminal passes
+// a reader the key bytes arrive on, because Bubble Tea otherwise opens
+// /dev/tty and fails where there is none.
+func RunTUICommandWithInput(keys io.Reader, out, errOut io.Writer) int {
 	quietStartupLogging(errOut)
 
 	runtime, err := newRuntime(context.Background(), errOut)
@@ -687,7 +701,14 @@ func RunTUICommand(out, errOut io.Writer) int {
 	}
 	defer runtime.Close()
 
-	program := tea.NewProgram(newTUIModel(runtime), tea.WithOutput(out))
+	options := []tea.ProgramOption{tea.WithOutput(out)}
+	// WithInput(nil) disables input outright rather than falling back to the
+	// terminal, so the option only goes on when a reader was supplied.
+	if keys != nil {
+		options = append(options, tea.WithInput(keys))
+	}
+
+	program := tea.NewProgram(NewTUIModel(runtime), options...)
 	if _, runErr := program.Run(); runErr != nil {
 		writef(errOut, "tui error: %v\n", runErr)
 
