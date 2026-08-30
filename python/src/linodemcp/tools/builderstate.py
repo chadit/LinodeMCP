@@ -51,7 +51,7 @@ from linodemcp.genlocal import (
     catalog_can_run_buckets,
     catalog_can_run_words,
 )
-from linodemcp.profiles import Capability
+from linodemcp.profiles import CAPABILITY_PREFIX, Capability, capability_spelling
 from linodemcp.profiles.builder import (
     DraftExistsError,
     DraftNotFoundError,
@@ -75,10 +75,6 @@ if TYPE_CHECKING:
 # The sentence every builder tool answers when it was called with no state
 # attached. Go answers the same words.
 BUILDER_UNCONFIGURED = "draft registry not configured"
-
-# What every capability tag's long spelling opens with, so trimming it gives
-# the short form a caller may filter on instead.
-CAPABILITY_PREFIX = "Cap"
 
 
 def draft_answer(draft: Draft) -> ProfileDraftResponse:
@@ -119,12 +115,10 @@ def capability_matches(capability: Capability, wanted: str) -> bool:
     its prefix, case-insensitively, so a caller need not know which the tag
     uses.
     """
-    short = capability.name
+    long = capability_spelling(capability)
+    short = long.removeprefix(CAPABILITY_PREFIX)
 
-    return wanted.lower() in {
-        short.lower(),
-        f"{CAPABILITY_PREFIX}{short}".lower(),
-    }
+    return wanted.lower() in {short.lower(), long.lower()}
 
 
 @dataclass(frozen=True)
@@ -322,7 +316,7 @@ class BuilderState:
         items = [
             ProfileToolCatalogItem(
                 name=entry.name,
-                capability=f"{CAPABILITY_PREFIX}{entry.capability.name}",
+                capability=capability_spelling(entry.capability),
                 categories=list(entry.categories),
             )
             for entry in admitted
@@ -360,7 +354,7 @@ class BuilderState:
             words = catalog_can_run_words(
                 verdict,
                 call.tool,
-                "" if spelled is None else f"{CAPABILITY_PREFIX}{spelled.name}",
+                "" if spelled is None else capability_spelling(spelled),
             )
             results.append(_can_run_result(call.tool, verdict, words))
 

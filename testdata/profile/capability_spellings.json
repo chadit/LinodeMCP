@@ -1,0 +1,35 @@
+{
+  "description": "The spelling every capability tag shows, pinned identically in every language. A tool answer that names a tier (linode_profile_list_tools rows, the linode_profile_can_run capability sentence) carries this string, and so does a catalog filter a caller types, so the two engines have to spell one tier one way. Each row names the ToolCapability member the contract declares, the number it carries, and the spelling the runtime tag shows for it. Both languages read the member name off their own generated enum and derive the spelling from it, so a member renamed in the proto moves both engines at once and fails here rather than drifting into one language's answers. TOOL_CAPABILITY_UNSPECIFIED is the one row whose spelling the enum cannot supply: the contract calls the zero member unspecified while both runtimes have always shown the untagged marker as CapUnknown, so that name is written here and nowhere else.",
+  "spellings": [
+    {
+      "member": "TOOL_CAPABILITY_UNSPECIFIED",
+      "value": 0,
+      "spelling": "CapUnknown"
+    },
+    {
+      "member": "TOOL_CAPABILITY_READ",
+      "value": 1,
+      "spelling": "CapRead"
+    },
+    {
+      "member": "TOOL_CAPABILITY_WRITE",
+      "value": 2,
+      "spelling": "CapWrite"
+    },
+    {
+      "member": "TOOL_CAPABILITY_DESTROY",
+      "value": 3,
+      "spelling": "CapDestroy"
+    },
+    {
+      "member": "TOOL_CAPABILITY_ADMIN",
+      "value": 4,
+      "spelling": "CapAdmin"
+    },
+    {
+      "member": "TOOL_CAPABILITY_META",
+      "value": 5,
+      "spelling": "CapMeta"
+    }
+  ]
+}

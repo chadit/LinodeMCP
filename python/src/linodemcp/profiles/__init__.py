@@ -8,7 +8,11 @@ from linodemcp.profiles.builtin import (
     builtin_catalog_json,
     builtin_profiles,
 )
-from linodemcp.profiles.capability import Capability
+from linodemcp.profiles.capability import (
+    CAPABILITY_PREFIX,
+    Capability,
+    capability_spelling,
+)
 from linodemcp.profiles.errors import (
     ActiveProfileDisabledError,
     ActiveProfileUnknownError,
@@ -39,6 +43,7 @@ from linodemcp.profiles.validator import (
 )
 
 __all__ = [
+    "CAPABILITY_PREFIX",
     "DEFAULT_PROFILE_NAME",
     "ActiveProfileDisabledError",
     "ActiveProfileUnknownError",
@@ -56,6 +61,7 @@ __all__ = [
     "ToolDescriptor",
     "builtin_catalog_json",
     "builtin_profiles",
+    "capability_spelling",
     "compare_scopes",
     "flatten_grants",
     "lookup_profile",
