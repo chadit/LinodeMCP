@@ -134,6 +134,12 @@ VALIDATE_MESSAGE_OPTION = "[buf.validate.message]"
 # A rule is named after the field and the constraint, so the identifier is
 # where a declared requiredness is readable.
 VALIDATE_REQUIRED_SUFFIX = "required"
+# A `<tool>.<field>.known` rule holds a scalar field to its documented value
+# set, written as a CEL membership list so both languages run the one list.
+VALIDATE_KNOWN_SUFFIX = "known"
+# The vocabulary a string field's ENUM_MEMBER reader is held to, which is where
+# a set lives when the field carries a reader instead of a rule.
+READER_VALUES_OPTION = "[linode.mcp.v1.reader_values]"
 TECHDOCS_OPERATION_OPTION = "[techdocs.linode.api.operation]"
 TECHDOCS_PARAMETER_OPTION = "[techdocs.linode.api.api_parameter]"
 TECHDOCS_PROTO_FILE = "techdocs_contract.proto"
@@ -1148,6 +1154,71 @@ def declared_required_fields(message: dict[str, Any]) -> set[str]:
     return required
 
 
+def membership_literals(list_body: str) -> list[str]:
+    """The members of one CEL list literal, each rendered as the page would.
+
+    A string member drops its quotes and an integer member keeps its digits,
+    so `[1, 2, 3]` and `['a', 'b']` both compare against the rendered
+    `Allowed:` list as strings. Anything else in the list is a shape this
+    reader does not understand, and the whole set is left undeclared rather
+    than half read.
+    """
+    values: list[str] = []
+    for item in list_body.split(","):
+        token = item.strip()
+        if len(token) >= 2 and token[0] == token[-1] and token[0] in "'\"":
+            values.append(token[1:-1])
+        elif re.fullmatch(r"-?\d+", token):
+            values.append(token)
+        else:
+            return []
+    return values
+
+
+def declared_value_sets(message: dict[str, Any]) -> dict[str, list[str]]:
+    """Fields the input message holds to a value set through a validation rule.
+
+    A scalar field cannot carry an enum descriptor without changing the wire
+    type, so LinodeMCP declares its documented values as a `.known` rule whose
+    expression tests `this.<field> in [...]`. The rule is what the handler
+    runs, so the list is what the rendered `Allowed:` values are compared
+    against. A rule counts only when its identifier names the field and the
+    membership test reads that same field, which keeps a range rule and a
+    member rule such as `saml.identity_element.known` from landing a set on a
+    field they do not constrain.
+    """
+    options: dict[str, Any] = message.get("options") or {}
+    validation: dict[str, Any] = options.get(VALIDATE_MESSAGE_OPTION) or {}
+    rules: list[dict[str, Any]] = validation.get("cel") or []
+    value_sets: dict[str, list[str]] = {}
+    for rule in rules:
+        identifier = str(rule.get("id") or "").split(".")
+        if len(identifier) < 2 or identifier[-1] != VALIDATE_KNOWN_SUFFIX:
+            continue
+        field_name = identifier[-2]
+        expression = str(rule.get("expression") or "")
+        membership = re.search(
+            rf"\bthis\.{re.escape(field_name)} in \[([^\]]*)\]", expression
+        )
+        if membership is None:
+            continue
+        values = membership_literals(membership.group(1))
+        if values:
+            value_sets[field_name] = values
+    return value_sets
+
+
+def field_reader_values(field: dict[str, Any]) -> list[str]:
+    """The vocabulary an ENUM_MEMBER reader holds a string field to.
+
+    The option is a repeated string, and it is the last proto side of the enum
+    comparison: it is read only when the field carries no enum descriptor and
+    no `.known` rule.
+    """
+    raw = field.get("options", {}).get(READER_VALUES_OPTION) or []
+    return [str(value) for value in raw if str(value)]
+
+
 def extract_proto_tools(
     descriptor: dict[str, Any],
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
@@ -1214,6 +1285,7 @@ def extract_proto_tools(
             )
             parameters: list[dict[str, Any]] = []
             required_by_rule = declared_required_fields(message)
+            value_sets = declared_value_sets(message)
             for field_index, field in enumerate(message.get("field", [])):
                 comment = comments.get((4, message_index, 2, field_index), "")
                 repeated = field.get("label") == "LABEL_REPEATED"
@@ -1257,7 +1329,13 @@ def extract_proto_tools(
                         "required": required,
                         "repeated": repeated,
                         "map": map_field,
-                        "enum": field_enum_values(field, messages, enums),
+                        # An enum descriptor is the field's own vocabulary; a
+                        # scalar reads its declared rule, then its reader.
+                        "enum": (
+                            field_enum_values(field, messages, enums)
+                            or value_sets.get(field_name)
+                            or field_reader_values(field)
+                        ),
                         "deprecated": bool(field.get("options", {}).get("deprecated")),
                         "default": field.get("defaultValue"),
                         "comment": comment,
@@ -3581,6 +3659,78 @@ def run_self_test() -> None:
     # A member rule names the member, not the parent, and an at-least-one rule
     # names no field of the message, so neither makes anything required.
     assert declared_required_fields(required_message) == {"saml"}
+
+    # A `.known` rule is the value set the handler holds a scalar to, so it is
+    # the proto side of an enum comparison the way a `.required` rule is the
+    # proto side of requiredness. Only a membership list on the named field is
+    # readable: a range, a member rule, and a list with a shape this reader
+    # does not know each leave the field with no declared set.
+    value_set_descriptor = json.loads(json.dumps(required_descriptor))
+    value_set_message = value_set_descriptor["file"][1]["messageType"][0]
+    for number, name, field_type in (
+        (6, "policy", "TYPE_STRING"),
+        (7, "size", "TYPE_INT32"),
+        (8, "level", "TYPE_INT32"),
+        (9, "kind", "TYPE_STRING"),
+        (10, "mode", "TYPE_STRING"),
+    ):
+        value_set_message["field"].append(
+            {
+                "name": name,
+                "jsonName": name,
+                "number": number,
+                "label": "LABEL_OPTIONAL",
+                "type": field_type,
+                "options": {FIELD_LOCATION_OPTION: "FIELD_LOCATION_BODY"},
+            }
+        )
+    value_set_message["field"][-2]["options"][READER_VALUES_OPTION] = [
+        "anti_affinity:local"
+    ]
+    value_set_message["options"][VALIDATE_MESSAGE_OPTION]["cel"].extend(
+        [
+            {
+                "id": "widget_get.policy.known",
+                "message": "policy must be one of: linode/migrate, linode/power_off_on",
+                "expression": (
+                    "!has(this.policy) || this.policy in "
+                    "['linode/migrate', 'linode/power_off_on']"
+                ),
+            },
+            {
+                "id": "widget_get.size.known",
+                "message": "size must be one of: 1, 2, 3",
+                "expression": "this.size in [1,2,3]",
+            },
+            {
+                "id": "widget_get.level.known",
+                "message": "level must be one of: 0, 1, 2, 3",
+                "expression": "this.level >= 0 && this.level <= 3",
+            },
+            {
+                "id": "widget_get.mode.known",
+                "message": "mode must be one of: a, b",
+                "expression": "this.mode in [this.label, 'b']",
+            },
+            {
+                "id": "widget_get.saml.identity_element.known",
+                "message": "saml.identity_element must be one of: NAME_ID",
+                "expression": "this.saml.identity_element in ['NAME_ID']",
+            },
+        ]
+    )
+    value_set_tools, _ = extract_proto_tools(value_set_descriptor)
+    declared = {
+        item["name"]: item["enum"]
+        for item in value_set_tools["linode_widget_get"]["parameters"]
+    }
+    assert declared["policy"] == ["linode/migrate", "linode/power_off_on"], declared
+    assert declared["size"] == ["1", "2", "3"], declared
+    assert declared["kind"] == ["anti_affinity:local"], declared
+    assert declared["level"] == [], declared
+    assert declared["mode"] == [], declared
+    assert declared["saml"] == [], declared
+    assert declared["label"] == [], declared
 
     # A tool-location argument reaches no Linode route, so it is counted and
     # left out of the comparison rather than reported as an unreadable location.

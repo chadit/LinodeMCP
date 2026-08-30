@@ -2332,8 +2332,9 @@ enum FieldLocation {
   // wire.
   FIELD_LOCATION_LOCAL = 4;
   // The tool's own domain argument: it reaches no Linode route and is not MCP
-  // plumbing. Only a meta tool declares one, since every other tool's
-  // arguments address or fill a request.
+  // plumbing. A meta tool declares one for its domain argument, and a route
+  // tool declares one for an argument the handler consumes locally: the local
+  // path and overwrite flag the object_storage.proto transfer tools read.
   //
   // Separate from LOCAL because LOCAL is locked in both directions to the
   // `// system param` marker: reusing it here would either put a marker on a

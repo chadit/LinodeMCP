@@ -191,6 +191,20 @@ It ignores synthetic map-entry messages as ordinary request messages while retai
 
 Enum values named like `UNSPECIFIED` are excluded from documented allowed-value comparison because they generally represent protobuf initialization rather than an API option. Remaining enum values are normalized before comparison.
 
+A scalar field has no enum descriptor, and giving it one would change its wire
+type, so LinodeMCP declares a documented value set on a string or integer field
+in one of two places the descriptor already carries. A `(buf.validate.message).cel`
+rule named `<tool>.<field>.known` whose expression tests
+`this.<field> in ['a', 'b']` (or `in [1, 2, 3]`) is the set the handler runs;
+the extractor reads the list literal, string members without their quotes and
+integer members as digits, so both compare against the rendered `Allowed:`
+values as strings. A field carrying the `reader_values` option is held to that
+vocabulary by its ENUM_MEMBER reader instead, and the extractor reads the option.
+An enum descriptor wins over both. A rule the extractor cannot read as a
+membership list on the named field (a range, a member rule such as
+`saml.identity_element.known`, a list holding anything but literals) declares
+no set, so the field keeps reporting as a free scalar rather than as a wrong set.
+
 ## Requiredness evidence
 
 Protobuf requiredness is not a single boolean in modern proto syntax.

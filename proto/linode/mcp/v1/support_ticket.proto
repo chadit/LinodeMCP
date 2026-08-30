@@ -235,12 +235,12 @@ message SupportTicketCreateInput {
     message: "region must be a non-empty string"
     expression: "!has(this.region) || this.region.matches('[^ \\t\\r\\n]')"
   };
-  // severity stays an int on the wire, so its legal set is a range rule rather
-  // than an enum: an enum would send "3" where the API expects 3.
+  // severity stays an int on the wire, so its legal set is a membership rule
+  // rather than an enum: an enum would send "3" where the API expects 3.
   option (buf.validate.message).cel = {
-    id: "support_ticket_create.severity.range"
+    id: "support_ticket_create.severity.known"
     message: "severity must be one of: 1, 2, 3"
-    expression: "!has(this.severity) || (this.severity >= 1 && this.severity <= 3)"
+    expression: "!has(this.severity) || this.severity in [1, 2, 3]"
   };
   option (buf.validate.message).cel = {
     id: "support_ticket_create.vlan.non_blank"

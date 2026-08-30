@@ -600,9 +600,9 @@ message IPv6RangeCreateInput {
   // Fail-fast runs these in the order they are written, which is the order the
   // hand builders checked in: each argument on its own first, then the pair.
   option (buf.validate.message).cel = {
-    id: "ipv6_range_create.prefix_length.choice"
+    id: "ipv6_range_create.prefix_length.known"
     message: "prefix_length must be 56 or 64"
-    expression: "this.prefix_length == 56 || this.prefix_length == 64"
+    expression: "this.prefix_length in [56, 64]"
   };
   option (buf.validate.message).cel = {
     id: "ipv6_range_create.linode_id.positive"

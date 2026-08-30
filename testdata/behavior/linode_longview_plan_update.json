@@ -31,6 +31,11 @@
       "name": "requires confirm",
       "args": {"longview_subscription": "longview-10"},
       "expect_error": "This updates the Longview subscription plan. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a plan slug outside the documented set",
+      "args": { "longview_subscription": "longview-20", "confirm": true },
+      "expect_error": "longview_subscription must be a Longview plan ID like longview-10"
     }
   ]
 }

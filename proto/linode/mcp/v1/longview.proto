@@ -412,10 +412,11 @@ message LongviewPlanUpdateInput {
   // The rule below holds its peace on an empty slug: an absent slug and one
   // trimmed away both arrive as the empty string, and the required sentence
   // for that case is the PRESENT_TEXT reader's, which runs after the rules.
+  // The set is the four plans put-longview-plan documents.
   option (buf.validate.message).cel = {
-    id: "longview_plan_update.subscription.pattern"
+    id: "longview_plan_update.longview_subscription.known"
     message: "longview_subscription must be a Longview plan ID like longview-10"
-    expression: "this.longview_subscription == '' || this.longview_subscription.matches('^longview-[1-9][0-9]*$')"
+    expression: "this.longview_subscription == '' || this.longview_subscription in ['longview-3', 'longview-10', 'longview-40', 'longview-100']"
   };
 
   // Linode environment to use (optional, defaults to "default").

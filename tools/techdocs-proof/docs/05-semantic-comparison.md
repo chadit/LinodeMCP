@@ -262,6 +262,11 @@ null  != absent
 
 TechDocs allowed values and descriptor enum values are normalized and sorted before comparison. Ordering does not matter. Membership does.
 
+The proto side of a scalar field is its declared value set: a `.known` rule
+whose expression tests `this.<field> in [...]`, else the field's
+`reader_values` option, else nothing. Chapter 4 says how each is read. An enum
+descriptor on the field wins over both.
+
 Finding:
 
 ```text

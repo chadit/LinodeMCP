@@ -537,6 +537,17 @@
         "side_effects": [],
         "warnings": []
       }
+    },
+    {
+      "name": "rejects a severity outside the documented set",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "severity": 4,
+        "confirm": true
+      },
+      "expect_error": "severity must be one of: 0, 1, 2, 3"
     }
   ]
 }

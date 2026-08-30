@@ -341,7 +341,7 @@ message MonitorServiceAlertDefinitionCreateInput {
   option (buf.validate.message).cel = {
     id: "monitor_service_alert_definition_create.severity.known"
     message: "severity must be one of: 0, 1, 2, 3"
-    expression: "this.severity >= 0 && this.severity <= 3"
+    expression: "this.severity in [0, 1, 2, 3]"
   };
   option (buf.validate.message).cel = {
     id: "monitor_service_alert_definition_create.rule_criteria.non_empty"
@@ -457,7 +457,7 @@ message MonitorServiceAlertDefinitionCloneInput {
   option (buf.validate.message).cel = {
     id: "monitor_service_alert_definition_clone.severity.known"
     message: "severity must be one of: 0, 1, 2, 3"
-    expression: "!has(this.severity) || (this.severity >= 0 && this.severity <= 3)"
+    expression: "!has(this.severity) || this.severity in [0, 1, 2, 3]"
   };
   option (buf.validate.message).cel = {
     id: "monitor_service_alert_definition_clone.entity_ids.items"
@@ -550,12 +550,12 @@ message MonitorServiceAlertDefinitionUpdateInput {
   option (buf.validate.message).cel = {
     id: "monitor_service_alert_definition_update.severity.known"
     message: "severity must be one of: 0, 1, 2, 3"
-    expression: "!has(this.severity) || (this.severity >= 0 && this.severity <= 3)"
+    expression: "!has(this.severity) || this.severity in [0, 1, 2, 3]"
   };
   option (buf.validate.message).cel = {
     id: "monitor_service_alert_definition_update.status.known"
     message: "status must be enabled or disabled"
-    expression: "!has(this.status) || this.status == 'enabled' || this.status == 'disabled'"
+    expression: "!has(this.status) || this.status in ['enabled', 'disabled']"
   };
   option (buf.validate.message).cel = {
     id: "monitor_service_alert_definition_update.channel_ids.positive"

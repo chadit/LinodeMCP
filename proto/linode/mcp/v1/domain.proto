@@ -18,9 +18,9 @@ message DomainType {
   }
 }
 
-// DomainCreateStatus is the status POST /domains accepts. It is deliberately
-// narrower than the update endpoint's status, which also takes edit_mode: the
-// create operation documents only these two.
+// DomainCreateStatus is the status POST /domains accepts. PUT /domains/{}
+// documents the same two values; edit_mode is a state the API reports, not
+// one either route takes.
 message DomainCreateStatus {
   enum Value {
     unspecified = 0;
@@ -307,6 +307,13 @@ message DomainUpdateInput {
     message: "domain_id must be a positive integer"
     expression: "this.domain_id >= 1"
   };
+  // put-domain documents status as active or disabled; edit_mode is a state
+  // the API reports, not one this route takes.
+  option (buf.validate.message).cel = {
+    id: "domain_update.status.known"
+    message: "status must be one of: active, disabled"
+    expression: "!has(this.status) || this.status in ['active', 'disabled']"
+  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -318,7 +325,7 @@ message DomainUpdateInput {
   optional string soa_email = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New description (optional).
   optional string description = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // New status: 'active', 'disabled', or 'edit_mode' (optional).
+  // New status: 'active' or 'disabled' (optional).
   optional string status = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New default TTL in seconds (optional).
   optional int32 ttl_sec = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];

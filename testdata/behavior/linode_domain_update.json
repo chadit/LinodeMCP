@@ -313,6 +313,15 @@
         "side_effects": [],
         "warnings": []
       }
+    },
+    {
+      "name": "rejects a status the route does not offer",
+      "args": {
+        "domain_id": 123,
+        "status": "edit_mode",
+        "confirm": true
+      },
+      "expect_error": "status must be one of: active, disabled"
     }
   ]
 }

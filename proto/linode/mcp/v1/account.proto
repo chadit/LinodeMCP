@@ -1455,11 +1455,13 @@ message AccountPaymentMethodCreateInput {
     expression: "this.type.matches('(?s)^.*\\\\S.*$')"
   };
   // The API accepts only credit_card here; Google Pay and PayPal are added
-  // through the Cloud Manager, not this endpoint.
+  // through the Cloud Manager, not this endpoint. Written as a one-member
+  // set so the value vocabulary reads the same way every other documented set
+  // does (post-payment-method: Allowed: credit_card).
   option (buf.validate.message).cel = {
-    id: "account_payment_method_create.type.credit_card"
+    id: "account_payment_method_create.type.known"
     message: "type must be credit_card"
-    expression: "this.type == 'credit_card'"
+    expression: "this.type in ['credit_card']"
   };
   // An empty object is the same call as no object: there is no method to file
   // without the details, so both are refused with the one sentence.
@@ -1467,11 +1469,6 @@ message AccountPaymentMethodCreateInput {
     id: "account_payment_method_create.data.required"
     message: "data is required"
     expression: "size(this.data) > 0"
-  };
-  option (buf.validate.message).cel = {
-    id: "account_payment_method_create.type.known"
-    message: "type must be credit_card"
-    expression: "this.type == 'credit_card'"
   };
 
   // Linode environment to use (optional, defaults to "default").

@@ -174,7 +174,7 @@ TechDocs object vs proto bool
 }
 ```
 
-**Check:** naming transformations, excluded unspecified values, API version, and whether a protobuf enum contains internal states not accepted by the API.
+**Check:** naming transformations, excluded unspecified values, API version, and whether a protobuf enum contains internal states not accepted by the API. When the proto side is empty on a string or integer field, check whether the field's `.known` rule tests membership on that field (a range or an equality chain is not read) and whether a `reader_values` option carries the set instead.
 
 ### `parameter_deprecation_mismatch`
 
