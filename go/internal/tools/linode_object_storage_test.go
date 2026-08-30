@@ -14,7 +14,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -53,7 +52,7 @@ func TestLinodeObjectStorageBucketsListToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageBucketsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	buckets := []linode.ObjectStorageBucket{
+	buckets := []ObjectStorageBucket{
 		{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024},
 		{Label: tcBackups, Region: "us-southeast-1", Hostname: "backups.us-southeast-1.linodeobjects.com", Objects: 10, Size: 512},
 	}
@@ -170,7 +169,7 @@ func TestLinodeObjectStorageBucketsListByRegionToolSuccess(t *testing.T) {
 	// Each element carries a field the proto does not model so the DiscardUnknown
 	// decode must drop it, proving the list routes through the proto serializer.
 	buckets := []json.RawMessage{
-		withUnmodeledField(t, linode.ObjectStorageBucket{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024}),
+		withUnmodeledField(t, ObjectStorageBucket{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024}),
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -337,7 +336,7 @@ func TestLinodeObjectStorageBucketGetToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageBucketGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	bucket := linode.ObjectStorageBucket{
+	bucket := ObjectStorageBucket{
 		Label:    bucketTest,
 		Region:   regionUSEast1,
 		Hostname: bucketHostnameUSEast1,
@@ -457,7 +456,7 @@ func TestLinodeObjectStorageEndpointsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	s3Endpoint := objectStorageEndpointUSEast
-	endpoints := []linode.ObjectStorageEndpoint{
+	endpoints := []ObjectStorageEndpoint{
 		{Region: regionUSEast, S3Endpoint: &s3Endpoint, EndpointType: "E0"},
 	}
 
@@ -626,7 +625,7 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		types := []linode.ObjectStorageType{
+		types := []ObjectStorageType{
 			{ID: "objectstorage", Label: "Object Storage", Transfer: 1000},
 		}
 
@@ -717,13 +716,13 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 func TestLinodeObjectStorageTypeListDecodesRegionPrices(t *testing.T) {
 	t.Parallel()
 
-	types := []linode.ObjectStorageType{
+	types := []ObjectStorageType{
 		{
 			ID:       "objectstorage",
 			Label:    "Object Storage",
 			Transfer: 1000,
-			Price:    linode.Price{Hourly: 0.0107, Monthly: 5.0},
-			RegionPrices: []linode.ObjectStorageRegionPrice{
+			Price:    Price{Hourly: 0.0107, Monthly: 5.0},
+			RegionPrices: []ObjectStorageRegionPrice{
 				{ID: placementGroupCreateRegion, Hourly: 0.0107, Monthly: 5.0},
 			},
 		},
@@ -805,7 +804,7 @@ func TestLinodeObjectStorageQuotasListToolSuccess(t *testing.T) {
 
 	t.Parallel()
 
-	quotas := []linode.ObjectStorageQuota{
+	quotas := []ObjectStorageQuota{
 		{keyBetaID: quotaID, quotaIDKey: quotaID, "s3_endpoint": objectStorageEndpointUSEast},
 	}
 
@@ -985,7 +984,7 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		keys := []linode.ObjectStorageKey{
+		keys := []ObjectStorageKey{
 			{
 				ID:        1,
 				Label:     keyNameTest,
@@ -1102,12 +1101,12 @@ func TestLinodeObjectStorageKeyGetToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageKeyGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	key := linode.ObjectStorageKey{
+	key := ObjectStorageKey{
 		ID:        42,
 		Label:     keyNameTest,
 		AccessKey: objectStorageKey,
 		Limited:   true,
-		BucketAccess: []linode.ObjectStorageKeyBucketAccess{
+		BucketAccess: []ObjectStorageKeyBucketAccess{
 			{BucketName: bucketTest, Region: regionUSEast1, Permissions: "read_only"},
 		},
 	}
@@ -1694,7 +1693,7 @@ func TestLinodeObjectStorageBucketAccessGetToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageBucketAccessGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	access := linode.ObjectStorageBucketAccess{
+	access := ObjectStorageBucketAccess{
 		ACL:         aclPublicRead,
 		CORSEnabled: true,
 	}
@@ -1990,7 +1989,7 @@ func TestValidateBucketACLMessageReconciled(t *testing.T) {
 func TestLinodeObjectStorageBucketCreateToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	bucket := linode.ObjectStorageBucket{
+	bucket := ObjectStorageBucket{
 		Label:   bucketTest,
 		Region:  regionUSEast1,
 		Created: "2024-01-01T00:00:00",
@@ -2653,7 +2652,7 @@ func TestLinodeObjectStorageObjectACLGetToolMissingName(t *testing.T) {
 func TestLinodeObjectStorageObjectACLGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	acl := linode.ObjectACL{
+	acl := ObjectACL{
 		ACL:    aclPublicRead,
 		ACLXML: "<AccessControlPolicy>...</AccessControlPolicy>",
 	}
@@ -2812,7 +2811,7 @@ func TestLinodeObjectStorageObjectACLUpdateToolValidation(t *testing.T) {
 func TestLinodeObjectStorageObjectACLUpdateToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	resp := linode.ObjectACL{
+	resp := ObjectACL{
 		ACL:    aclPublicRead,
 		ACLXML: "<AccessControlPolicy>...</AccessControlPolicy>",
 	}
@@ -2902,7 +2901,7 @@ func TestLinodeObjectStorageSSLGetToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageSSLGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	resp := linode.BucketSSL{
+	resp := BucketSSL{
 		SSL: true,
 	}
 
@@ -3063,7 +3062,7 @@ func TestLinodeObjectStorageSSLUploadToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}); err != nil {
+		if err := json.NewEncoder(w).Encode(BucketSSL{SSL: true}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -3219,7 +3218,7 @@ func TestLinodeObjectStorageSSLUploadToolTraversalCase(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 				w.Header().Set("Content-Type", "application/json")
 
-				if err := json.NewEncoder(w).Encode(linode.BucketSSL{SSL: true}); err != nil {
+				if err := json.NewEncoder(w).Encode(BucketSSL{SSL: true}); err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
 			}))

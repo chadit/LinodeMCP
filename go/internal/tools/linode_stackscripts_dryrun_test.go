@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
@@ -126,7 +125,7 @@ func TestLinodeStackScriptUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/linode/stackscripts/456",
-			linode.StackScript{ID: 456, Label: testStackScriptLabel})
+			StackScript{ID: 456, Label: testStackScriptLabel})
 		_, _, handler := gentools.NewLinodeStackscriptUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -218,7 +217,7 @@ func TestLinodeStackScriptDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/linode/stackscripts/456",
-			linode.StackScript{ID: 456, Label: testStackScriptLabel})
+			StackScript{ID: 456, Label: testStackScriptLabel})
 		_, _, handler := gentools.NewLinodeStackscriptDeleteTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

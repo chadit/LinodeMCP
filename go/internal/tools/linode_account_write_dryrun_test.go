@@ -35,7 +35,7 @@ func TestLinodeAccountSettingsManagedEnableToolDryRun(t *testing.T) {
 	t.Run("preview without enabling", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, accountSettingsTestPath, linode.AccountSettings{})
+		cfg, methods := dryRunGetStateServer(t, accountSettingsTestPath, AccountSettings{})
 		_, _, handler := gentools.NewLinodeAccountSettingsManagedEnableTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -90,7 +90,7 @@ func TestLinodeAccountUserUpdateToolDryRun(t *testing.T) {
 	t.Run("preview reads user then would PUT", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, accountUserGetTestPath, linode.AccountUser{Username: accountLoginUsername})
+		cfg, methods := dryRunGetStateServer(t, accountUserGetTestPath, AccountUser{Username: accountLoginUsername})
 		_, _, handler := gentools.NewLinodeAccountUserUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

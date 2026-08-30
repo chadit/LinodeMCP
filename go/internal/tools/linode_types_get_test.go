@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -65,7 +64,7 @@ func TestLinodeTypeGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.InstanceType{ID: linodeTypeGetID, Label: linodeTypeGetLabel, Class: classStandard}); err != nil {
+		if err := json.NewEncoder(w).Encode(InstanceType{ID: linodeTypeGetID, Label: linodeTypeGetLabel, Class: classStandard}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

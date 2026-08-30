@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -49,8 +48,8 @@ func TestLinodeManagedCredentialsToolDefinition(t *testing.T) {
 func TestLinodeManagedCredentialsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	credentials := linode.PaginatedResponse[linode.ManagedCredential]{
-		Data: []linode.ManagedCredential{{
+	credentials := PaginatedResponse[ManagedCredential]{
+		Data: []ManagedCredential{{
 			ID:            9991,
 			Label:         managedCredentialsToolLabel,
 			LastDecrypted: managedCredentialsToolLastDecrypted,

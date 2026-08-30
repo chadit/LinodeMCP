@@ -13,7 +13,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 // End-to-end verification of VPC listing and filtering.
@@ -39,7 +38,7 @@ func TestLinodeVPCsListToolDefinition(t *testing.T) {
 func TestLinodeVPCsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	vpcs := []linode.VPC{
+	vpcs := []VPC{
 		{ID: 1, Label: labelProdVPC, Region: regionUSEast, Description: "Production VPC"},
 		{ID: 2, Label: "dev-vpc", Region: regionEUWest, Description: "Development VPC"},
 	}
@@ -98,7 +97,7 @@ func TestLinodeVPCsListToolSuccess(t *testing.T) {
 func TestLinodeVPCsListToolFilterByLabel(t *testing.T) {
 	t.Parallel()
 
-	vpcs := []linode.VPC{
+	vpcs := []VPC{
 		{ID: 1, Label: labelProdVPC, Region: regionUSEast},
 		{ID: 2, Label: "dev-vpc", Region: regionEUWest},
 		{ID: 3, Label: "staging-prod", Region: regionUSWest},
@@ -225,7 +224,7 @@ func TestLinodeVPCGetToolValidation(t *testing.T) {
 func TestLinodeVPCGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	vpc := linode.VPC{ID: 123, Label: labelProdVPC, Region: regionUSEast, Description: "Production VPC"}
+	vpc := VPC{ID: 123, Label: labelProdVPC, Region: regionUSEast, Description: "Production VPC"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != tcVpcs123 {
@@ -305,7 +304,7 @@ func TestLinodeVPCIPsListTool(t *testing.T) {
 
 		addr1 := "10.0.0.1"
 		addr2 := "10.0.1.1"
-		ips := []linode.VPCIP{
+		ips := []VPCIP{
 			{Address: &addr1, VPCID: 1, SubnetID: 10, Region: regionUSEast, Active: true},
 			{Address: &addr2, VPCID: 1, SubnetID: 11, Region: regionUSEast, Active: false},
 		}
@@ -420,7 +419,7 @@ func TestLinodeVPCIPListToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	addr := "10.0.0.5"
-	ips := []linode.VPCIP{
+	ips := []VPCIP{
 		{Address: &addr, VPCID: 456, SubnetID: 20, Region: regionUSEast, Active: true},
 	}
 
@@ -528,7 +527,7 @@ func TestLinodeVPCSubnetsListToolCaseMissingVPCID(t *testing.T) {
 func TestLinodeVPCSubnetsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	subnets := []linode.VPCSubnet{
+	subnets := []VPCSubnet{
 		{ID: 10, Label: labelWebSubnet, IPv4: cidrV4},
 		{ID: 11, Label: "db-subnet", IPv4: "10.0.1.0/24"},
 	}
@@ -655,7 +654,7 @@ func TestLinodeVPCSubnetGetToolValidation(t *testing.T) {
 func TestLinodeVPCSubnetGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	subnet := linode.VPCSubnet{ID: 10, Label: labelWebSubnet, IPv4: cidrV4}
+	subnet := VPCSubnet{ID: 10, Label: labelWebSubnet, IPv4: cidrV4}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != tcVpcs123Subnets10 {

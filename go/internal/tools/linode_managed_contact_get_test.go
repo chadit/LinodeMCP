@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -138,11 +137,11 @@ func TestLinodeManagedContactGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.ManagedContact{
+		if err := json.NewEncoder(w).Encode(ManagedContact{
 			ID:    managedContactIDValue,
 			Name:  "John Doe",
 			Email: managedContactEmailValue,
-			Phone: linode.ManagedContactPhone{Primary: &phone},
+			Phone: ManagedContactPhone{Primary: &phone},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

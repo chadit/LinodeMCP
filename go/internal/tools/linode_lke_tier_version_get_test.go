@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -103,7 +102,7 @@ func TestLinodeLKETierVersionGetToolTestCase(t *testing.T) {
 func TestLinodeLKETierVersionGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	tierVersion := linode.LKETierVersion{ID: lkeVersion129, Tier: classStandard}
+	tierVersion := LKETierVersion{ID: lkeVersion129, Tier: classStandard}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

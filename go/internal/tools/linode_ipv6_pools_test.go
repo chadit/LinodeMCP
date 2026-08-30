@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -47,8 +46,8 @@ func TestLinodeIPv6PoolsListToolDefinition(t *testing.T) {
 func TestLinodeIPv6PoolsListToolSuccessWithPagination(t *testing.T) {
 	t.Parallel()
 
-	pools := linode.PaginatedResponse[linode.IPv6Pool]{
-		Data: []linode.IPv6Pool{{
+	pools := PaginatedResponse[IPv6Pool]{
+		Data: []IPv6Pool{{
 			Range:  ipv6RangeFixture,
 			Region: regionUSEast,
 			Prefix: 124,

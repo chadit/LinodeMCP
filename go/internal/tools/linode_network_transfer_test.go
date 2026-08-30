@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -40,11 +39,11 @@ func TestLinodeNetworkTransferPricesToolDefinition(t *testing.T) {
 func TestLinodeNetworkTransferPricesToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	prices := linode.PaginatedResponse[linode.NetworkTransferPrice]{
-		Data: []linode.NetworkTransferPrice{{
+	prices := PaginatedResponse[NetworkTransferPrice]{
+		Data: []NetworkTransferPrice{{
 			ID:       "network_transfer",
 			Label:    "Network Transfer",
-			Price:    linode.Price{Hourly: 0.005},
+			Price:    Price{Hourly: 0.005},
 			Transfer: 0,
 		}},
 		Page:    1,

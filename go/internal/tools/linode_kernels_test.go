@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestLinodeKernelListToolDefinition(t *testing.T) {
@@ -37,7 +36,7 @@ func TestLinodeKernelListToolDefinition(t *testing.T) {
 func TestLinodeKernelListToolSuccessWithPagination(t *testing.T) {
 	t.Parallel()
 
-	kernels := []linode.Kernel{{ID: "linode/latest-64bit", Label: "Latest 64 bit", Version: "6.15.7", KVM: true, Architecture: "x86_64", PVOPS: true}}
+	kernels := []Kernel{{ID: "linode/latest-64bit", Label: "Latest 64 bit", Version: "6.15.7", KVM: true, Architecture: "x86_64", PVOPS: true}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/linode/kernels" {

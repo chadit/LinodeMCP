@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -139,11 +138,11 @@ func TestLinodeManagedLinodeSettingsGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.ManagedLinodeSettings{
+		if err := json.NewEncoder(w).Encode(ManagedLinodeSettings{
 			ID:    managedLinodeSettingsToolIDValue,
 			Label: managedLinodeSettingsToolLabelValue,
 			Group: managedLinodeSettingsGroup,
-			SSH: linode.ManagedLinodeSettingsSSH{
+			SSH: ManagedLinodeSettingsSSH{
 				Access: true,
 				IP:     "203.0.113.1",
 				Port:   &sshPort,

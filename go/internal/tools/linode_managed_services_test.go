@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -59,8 +58,8 @@ func TestLinodeManagedServicesToolDefinition(t *testing.T) {
 func TestLinodeManagedServicesToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	services := linode.PaginatedResponse[linode.ManagedService]{
-		Data: []linode.ManagedService{{
+	services := PaginatedResponse[ManagedService]{
+		Data: []ManagedService{{
 			ID:          9944,
 			Label:       managedServicesToolLabel,
 			ServiceType: managedServiceTypeURL,

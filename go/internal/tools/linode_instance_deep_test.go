@@ -13,7 +13,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -74,12 +73,12 @@ func TestLinodeInstanceBackupsListToolCaseMissingLinodeID(t *testing.T) {
 func TestLinodeInstanceBackupsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	backupsResp := linode.InstanceBackupsResponse{
-		Automatic: []linode.InstanceBackup{
+	backupsResp := InstanceBackupsResponse{
+		Automatic: []InstanceBackup{
 			{ID: 100, Label: "auto-2024-01-01", Status: statusSuccessful, Type: "auto"},
 		},
-		Snapshot: linode.InstanceBackupSnapshots{
-			Current: &linode.InstanceBackup{ID: 200, Label: "my-snapshot", Status: statusSuccessful, Type: wordSnapshot},
+		Snapshot: InstanceBackupSnapshots{
+			Current: &InstanceBackup{ID: 200, Label: "my-snapshot", Status: statusSuccessful, Type: wordSnapshot},
 		},
 	}
 
@@ -227,7 +226,7 @@ func TestLinodeInstanceConfigsListToolValidation(t *testing.T) {
 func TestLinodeInstanceConfigsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	configs := []linode.InstanceConfig{
+	configs := []InstanceConfig{
 		{ID: 77, Label: "boot-config", Kernel: configKernelLatest, RootDevice: "/dev/sda"},
 	}
 
@@ -457,7 +456,7 @@ func TestLinodeInstanceConfigInterfacesListToolValidation(t *testing.T) {
 func TestLinodeInstanceConfigInterfacesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	interfaces := []linode.ConfigInterfaceResponse{
+	interfaces := []ConfigInterfaceResponse{
 		{ID: 202, Active: true, Purpose: purposeVPC},
 		{ID: 101, Active: true, Purpose: keyPublic},
 	}
@@ -650,7 +649,7 @@ func TestLinodeInstanceBackupGetToolValidation(t *testing.T) {
 func TestLinodeInstanceBackupGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	backup := linode.InstanceBackup{ID: 100, Label: "my-backup", Status: statusSuccessful, Type: wordSnapshot}
+	backup := InstanceBackup{ID: 100, Label: "my-backup", Status: statusSuccessful, Type: wordSnapshot}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/linode/instances/123/backups/100" {
@@ -1182,7 +1181,7 @@ func TestLinodeInstanceDisksListToolCaseMissingLinodeID(t *testing.T) {
 func TestLinodeInstanceDisksListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	disks := []linode.InstanceDisk{
+	disks := []InstanceDisk{
 		{ID: 10, Label: imageUbuntu2404, Size: 51200, Filesystem: filesystemExt4, Status: statusReady},
 		{ID: 11, Label: "512 MB Swap Image", Size: 512, Filesystem: "swap", Status: statusReady},
 	}
@@ -1309,7 +1308,7 @@ func TestLinodeInstanceDiskGetToolValidation(t *testing.T) {
 func TestLinodeInstanceDiskGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	disk := linode.InstanceDisk{ID: 10, Label: imageUbuntu2404, Size: 51200, Filesystem: filesystemExt4, Status: statusReady}
+	disk := InstanceDisk{ID: 10, Label: imageUbuntu2404, Size: 51200, Filesystem: filesystemExt4, Status: statusReady}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != tcLinodeInstances123Disks10 {
@@ -1417,12 +1416,12 @@ func TestLinodeInstanceIPsListToolCaseMissingLinodeID(t *testing.T) {
 func TestLinodeInstanceIPsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	ips := linode.InstanceIPAddresses{
-		IPv4: &linode.InstanceIPv4{
-			Public: []linode.IPAddress{
+	ips := InstanceIPAddresses{
+		IPv4: &InstanceIPv4{
+			Public: []IPAddress{
 				{Address: testNetIPv4AddressOne, Public: true, Type: keyIPv4, Region: regionUSEast},
 			},
-			Private: []linode.IPAddress{
+			Private: []IPAddress{
 				{Address: privateIPv4AddressOne, Public: false, Type: keyIPv4, Region: regionUSEast},
 			},
 		},
@@ -1549,7 +1548,7 @@ func TestLinodeInstanceIPGetToolValidation(t *testing.T) {
 func TestLinodeInstanceIPGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	ipAddr := linode.IPAddress{
+	ipAddr := IPAddress{
 		Address: testNetIPv4AddressOne, Gateway: "203.0.113.0", SubnetMask: subnetMaskFixture,
 		Prefix: 24, Type: keyIPv4, Public: true, Region: regionUSEast, LinodeID: 123,
 	}
@@ -1694,7 +1693,7 @@ func TestLinodeInstanceVolumesListToolValidation(t *testing.T) {
 func TestLinodeInstanceVolumesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	volumes := []linode.Volume{
+	volumes := []Volume{
 		{ID: 321, Label: "data-volume", Status: statusActive, Size: 50, Region: regionUSEast},
 	}
 

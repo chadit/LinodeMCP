@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -61,12 +60,12 @@ func TestLinodeManagedLinodeSettingsToolSuccess(t *testing.T) {
 
 	port := 2222
 	user := keyGrantLinode
-	settings := linode.PaginatedResponse[linode.ManagedLinodeSettings]{
-		Data: []linode.ManagedLinodeSettings{{
+	settings := PaginatedResponse[ManagedLinodeSettings]{
+		Data: []ManagedLinodeSettings{{
 			ID:    123,
 			Label: managedLinodeSettingsLabel,
 			Group: managedLinodeSettingsGroup,
-			SSH: linode.ManagedLinodeSettingsSSH{
+			SSH: ManagedLinodeSettingsSSH{
 				Access: true,
 				IP:     "203.0.113.1",
 				Port:   &port,

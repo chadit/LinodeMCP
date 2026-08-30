@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -53,7 +52,7 @@ func TestLinodeStackScriptGetToolDefinition(t *testing.T) {
 func TestLinodeStackScriptGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	script := linode.StackScript{ID: 123, Label: "deploy-base", Description: "Base deploy script"}
+	script := StackScript{ID: 123, Label: "deploy-base", Description: "Base deploy script"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

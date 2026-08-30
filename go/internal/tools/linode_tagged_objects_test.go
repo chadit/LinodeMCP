@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -59,8 +58,8 @@ func TestLinodeTaggedObjectsToolDefinition(t *testing.T) {
 func TestLinodeTaggedObjectsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	objects := linode.PaginatedResponse[linode.TaggedObject]{
-		Data: []linode.TaggedObject{{
+	objects := PaginatedResponse[TaggedObject]{
+		Data: []TaggedObject{{
 			keyType:  monitorAlertDefinitionToolServiceType,
 			keyLabel: taggedObjectLabelFixture,
 			keyData:  map[string]any{keyBetaID: float64(123), keyLabel: taggedObjectLabelFixture},

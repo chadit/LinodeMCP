@@ -105,11 +105,10 @@ message LKEClusterListInput {
 }
 
 // LKENodePoolCreateItem is one node-pool definition in the node_pools array of
-// linode_lke_cluster_create. It mirrors the fields the create handler reads from
-// each pool object (linode.CreateLKEClusterNodePool): type and count are the
-// required pair, autoscaler is a small open object, and tags is an optional
-// string list. autoscaler stays a map so the generator emits a plain object
-// without pinning its inner shape.
+// linode_lke_cluster_create. It mirrors the fields the create handler reads
+// from each pool object: type and count are the required pair, autoscaler is
+// a small open object, and tags is an optional string list. autoscaler stays
+// a map so the generator emits a plain object without pinning its inner shape.
 message LKENodePoolCreateItem {
   // Linode type for the pool's nodes (e.g. g6-standard-2).
   string type = 1;

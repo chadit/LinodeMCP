@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -47,8 +46,8 @@ func TestLinodeIPv6RangesListToolDefinition(t *testing.T) {
 func TestLinodeIPv6RangesListToolSuccessWithPagination(t *testing.T) {
 	t.Parallel()
 
-	ranges := linode.PaginatedResponse[linode.IPv6Range]{
-		Data: []linode.IPv6Range{{
+	ranges := PaginatedResponse[IPv6Range]{
+		Data: []IPv6Range{{
 			Range:  ipv6RangeFixture,
 			Region: regionUSEast,
 			Prefix: 124,
@@ -238,7 +237,7 @@ func TestLinodeIPv6RangeGetToolSuccess(t *testing.T) {
 	// dropped by the DiscardUnknown decode, proving the output routes through the
 	// proto serializer.
 	rangeResult := struct {
-		linode.IPv6Range
+		IPv6Range
 
 		NotInProto string `json:"not_in_proto"`
 		Linodes    []int  `json:"linodes"`

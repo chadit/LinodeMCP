@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 // TestLinodeVPCDeleteToolDryRunDependencies exercises the Phase 2 Tier A walk:
@@ -19,10 +18,10 @@ func TestLinodeVPCDeleteToolDryRunDependencies(t *testing.T) {
 	t.Parallel()
 
 	cfg, methods := dryRunRouteServer(t, map[string]any{
-		"/vpcs/888": linode.VPC{ID: 888, Label: "prod-vpc"},
-		"/vpcs/888/subnets": linode.PaginatedResponse[linode.VPCSubnet]{
-			Data: []linode.VPCSubnet{
-				{ID: 1, Label: "subnet-a", Linodes: []linode.VPCSubnetLinode{{ID: 456}}},
+		"/vpcs/888": VPC{ID: 888, Label: "prod-vpc"},
+		"/vpcs/888/subnets": PaginatedResponse[VPCSubnet]{
+			Data: []VPCSubnet{
+				{ID: 1, Label: "subnet-a", Linodes: []VPCSubnetLinode{{ID: 456}}},
 				{ID: 2, Label: "subnet-b"},
 			},
 		},

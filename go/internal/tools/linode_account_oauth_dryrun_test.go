@@ -9,7 +9,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 const (
@@ -91,7 +90,7 @@ func TestLinodeAccountOAuthClientResetSecretToolDryRun(t *testing.T) {
 	t.Run("preview reads client metadata not the secret", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, accountOAuthClientGetTestPath, linode.OAuthClient{ID: oauthClientTestID, Label: "my-app"})
+		cfg, methods := dryRunGetStateServer(t, accountOAuthClientGetTestPath, OAuthClient{ID: oauthClientTestID, Label: "my-app"})
 		_, _, handler := gentools.NewLinodeAccountOauthClientSecretResetTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

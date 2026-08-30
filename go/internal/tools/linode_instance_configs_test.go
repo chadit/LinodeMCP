@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -113,7 +112,7 @@ func TestLinodeInstanceConfigInterfaceGetToolSuccessfulGet(t *testing.T) {
 	t.Parallel()
 
 	primary := true
-	gotInterface := linode.ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposeVPC, Primary: primary}
+	gotInterface := ConfigInterfaceResponse{ID: 456, Active: true, Purpose: purposeVPC, Primary: primary}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != tcLinodeInstances123Configs789Interfaces456 {

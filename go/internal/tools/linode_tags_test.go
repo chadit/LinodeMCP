@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -44,8 +43,8 @@ func TestLinodeTagsToolSuccess(t *testing.T) {
 
 	t.Parallel()
 
-	tags := linode.PaginatedResponse[linode.Tag]{
-		Data:    []linode.Tag{{Label: tagLabel}},
+	tags := PaginatedResponse[Tag]{
+		Data:    []Tag{{Label: tagLabel}},
 		Page:    2,
 		Pages:   3,
 		Results: 51,
@@ -244,7 +243,7 @@ func TestLinodeTagCreateToolLabelOnlySuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.Tag{Label: tagCreateLabelFixture}); err != nil {
+		if err := json.NewEncoder(w).Encode(Tag{Label: tagCreateLabelFixture}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -348,7 +347,7 @@ func TestLinodeTagCreateToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.Tag{Label: tagCreateLabelFixture}); err != nil {
+		if err := json.NewEncoder(w).Encode(Tag{Label: tagCreateLabelFixture}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

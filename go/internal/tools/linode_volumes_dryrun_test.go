@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestLinodeVolumeCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
@@ -134,7 +133,7 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 	t.Run("preview without attaching", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
+		cfg, methods := dryRunGetStateServer(t, "/volumes/333", Volume{ID: 333, Label: testVolumeLabel})
 		_, _, handler := gentools.NewLinodeVolumeAttachTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -222,7 +221,7 @@ func TestLinodeVolumeDetachToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 func TestLinodeVolumeDetachToolDryRunPreviewWithoutDetaching(t *testing.T) {
 	t.Parallel()
 
-	cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
+	cfg, methods := dryRunGetStateServer(t, "/volumes/333", Volume{ID: 333, Label: testVolumeLabel})
 	_, _, handler := gentools.NewLinodeVolumeDetachTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -270,7 +269,7 @@ func TestLinodeVolumeDetachToolDryRunPreviewSurfacesCurrentAttachment(t *testing
 
 	attachedTo := 444
 	cfg, _ := dryRunGetStateServer(t, "/volumes/333",
-		linode.Volume{ID: 333, Label: testVolumeLabel, LinodeID: &attachedTo})
+		Volume{ID: 333, Label: testVolumeLabel, LinodeID: &attachedTo})
 	_, _, handler := gentools.NewLinodeVolumeDetachTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -337,7 +336,7 @@ func TestLinodeVolumeResizeToolDryRunPreviewWithoutResizing(t *testing.T) {
 	t.Parallel()
 
 	cfg, methods := dryRunGetStateServer(t, "/volumes/333",
-		linode.Volume{ID: 333, Label: testVolumeLabel, Size: 50})
+		Volume{ID: 333, Label: testVolumeLabel, Size: 50})
 	_, _, handler := gentools.NewLinodeVolumeResizeTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -435,7 +434,7 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 	t.Run("preview without updating", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, "/volumes/333", linode.Volume{ID: 333, Label: testVolumeLabel})
+		cfg, methods := dryRunGetStateServer(t, "/volumes/333", Volume{ID: 333, Label: testVolumeLabel})
 		_, _, handler := gentools.NewLinodeVolumeUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -521,7 +520,7 @@ func TestLinodeVolumeDeleteToolDryRunDependencies(t *testing.T) {
 	attachedLabel := "attached-host"
 
 	cfg, methods := dryRunRouteServer(t, map[string]any{
-		"/volumes/789": linode.Volume{
+		"/volumes/789": Volume{
 			ID:          789,
 			Label:       testVolumeLabel,
 			LinodeID:    &linodeID,

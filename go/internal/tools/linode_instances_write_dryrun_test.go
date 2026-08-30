@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 const instanceGetPath = "/linode/instances/123"
@@ -28,7 +27,7 @@ func TestLinodeInstanceResizeToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 func TestLinodeInstanceResizeToolDryRunPreviewWithoutResizing(t *testing.T) {
 	t.Parallel()
 
-	cfg, methods := dryRunGetStateServer(t, instanceGetPath, linode.Instance{ID: 123, Type: typeG6Nanode1})
+	cfg, methods := dryRunGetStateServer(t, instanceGetPath, Instance{ID: 123, Type: typeG6Nanode1})
 	_, _, handler := gentools.NewLinodeInstanceResizeTool(cfg)
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

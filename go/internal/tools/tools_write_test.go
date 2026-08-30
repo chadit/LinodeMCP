@@ -14,7 +14,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -105,7 +104,7 @@ func TestLinodeSSHKeyCreateToolValidation(t *testing.T) {
 func TestLinodeSSHKeyCreateToolSuccessfulCreation(t *testing.T) {
 	t.Parallel()
 
-	createdKey := linode.SSHKey{
+	createdKey := SSHKey{
 		ID:    123,
 		Label: keyNameTest,
 	}
@@ -353,7 +352,7 @@ func TestLinodeSSHKeyUpdateToolApiFailureReturnsToolError(t *testing.T) {
 func TestLinodeSSHKeyUpdateToolSuccessfulUpdate(t *testing.T) {
 	t.Parallel()
 
-	updatedKey := linode.SSHKey{
+	updatedKey := SSHKey{
 		ID:    123,
 		Label: keyNameTest,
 	}
@@ -371,7 +370,7 @@ func TestLinodeSSHKeyUpdateToolSuccessfulUpdate(t *testing.T) {
 			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
 		}
 
-		var req linode.UpdateSSHKeyRequest
+		var req UpdateSSHKeyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -532,17 +531,17 @@ func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
 	t.Parallel()
 
 	firewallID := 12345
-	respBody := linode.Instance{
+	respBody := Instance{
 		ID:                  321,
 		Label:               firewallDeviceLabelFixture,
 		Status:              statusRunning,
 		Region:              regionUSEast,
 		InterfaceGeneration: "linode",
-		Interfaces: []linode.InstanceInterface{
+		Interfaces: []InstanceInterface{
 			{
 				ID:           1,
-				Public:       &linode.InterfacePublicConfig{},
-				DefaultRoute: &linode.InterfaceDefaultRoute{IPv4: true, IPv6: true},
+				Public:       &InterfacePublicConfig{},
+				DefaultRoute: &InterfaceDefaultRoute{IPv4: true, IPv6: true},
 				FirewallID:   &firewallID,
 			},
 		},
@@ -589,7 +588,7 @@ func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
 	// Parse the JSON response and assert structurally so the test does not
 	// depend on the marshaler's whitespace choices. The GET handler returns
 	// the Instance unwrapped at the top level.
-	var parsed linode.Instance
+	var parsed Instance
 
 	if err := json.Unmarshal([]byte(textContent.Text), &parsed); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1484,7 +1483,7 @@ func TestLinodeDomainImportToolValidation(t *testing.T) {
 func TestLinodeDomainImportToolSuccessfulImport(t *testing.T) {
 	t.Parallel()
 
-	domain := linode.Domain{
+	domain := Domain{
 		ID:     111,
 		Domain: domainExample,
 		Type:   keyMaster,
@@ -1725,7 +1724,7 @@ func TestLinodeDomainCloneToolValidation(t *testing.T) {
 func TestLinodeDomainCloneToolSuccessfulClone(t *testing.T) {
 	t.Parallel()
 
-	domain := linode.Domain{ID: 222, Domain: domainExample, Type: keyMaster, Status: statusActive}
+	domain := Domain{ID: 222, Domain: domainExample, Type: keyMaster, Status: statusActive}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/domains/111/clone" {
@@ -1898,7 +1897,7 @@ func TestLinodeDomainCreateToolValidation(t *testing.T) {
 func TestLinodeDomainCreateToolSuccessfulCreation(t *testing.T) {
 	t.Parallel()
 
-	domain := linode.Domain{
+	domain := Domain{
 		ID:     111,
 		Domain: domainExample,
 		Type:   keyMaster,
@@ -2049,7 +2048,7 @@ func TestLinodeDomainUpdateToolCaseNegativeDomainID(t *testing.T) {
 func TestLinodeDomainUpdateToolSuccessfulUpdate(t *testing.T) {
 	t.Parallel()
 
-	domain := linode.Domain{
+	domain := Domain{
 		ID:     111,
 		Domain: domainExample,
 		Type:   keyMaster,
@@ -2678,7 +2677,7 @@ func TestLinodeDomainRecordCreateToolValidation(t *testing.T) {
 func TestLinodeDomainRecordCreateToolSuccessfulCreation(t *testing.T) {
 	t.Parallel()
 
-	record := linode.DomainRecord{
+	record := DomainRecord{
 		ID:     222,
 		Type:   "A",
 		Name:   hostWWW,
@@ -2829,7 +2828,7 @@ func TestLinodeDomainRecordUpdateToolValidation(t *testing.T) {
 func TestLinodeDomainRecordUpdateToolSuccessfulUpdate(t *testing.T) {
 	t.Parallel()
 
-	record := linode.DomainRecord{
+	record := DomainRecord{
 		ID:     222,
 		Type:   "A",
 		Name:   hostWWW,
@@ -2978,7 +2977,7 @@ func TestLinodeVolumeCreateToolValidation(t *testing.T) {
 func TestLinodeVolumeCreateToolSuccessfulCreation(t *testing.T) {
 	t.Parallel()
 
-	volume := linode.Volume{
+	volume := Volume{
 		ID:     333,
 		Label:  labelDataVol,
 		Region: regionUSEast,
@@ -3124,7 +3123,7 @@ func TestLinodeVolumeAttachToolSuccessfulAttachment(t *testing.T) {
 	t.Parallel()
 
 	linodeID := 123
-	volume := linode.Volume{
+	volume := Volume{
 		ID:       333,
 		Label:    labelDataVol,
 		Region:   regionUSEast,
@@ -3374,7 +3373,7 @@ func TestLinodeVolumeResizeToolValidation(t *testing.T) {
 func TestLinodeVolumeResizeToolSuccessfulResize(t *testing.T) {
 	t.Parallel()
 
-	volume := linode.Volume{
+	volume := Volume{
 		ID:     333,
 		Label:  labelDataVol,
 		Region: regionUSEast,
@@ -4105,7 +4104,7 @@ func TestLinodeVolumeUpdateToolSuccessfulUpdateWithLabel(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: "updated-volume", Size: 20, Region: "us-east", Status: "active"}); err != nil {
+		if err := json.NewEncoder(w).Encode(Volume{ID: 333, Label: "updated-volume", Size: 20, Region: "us-east", Status: "active"}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -4159,7 +4158,7 @@ func TestLinodeVolumeUpdateToolSuccessfulUpdateWithTags(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.Volume{ID: 444, Label: "tagged-volume", Size: 50, Region: "us-west", Status: "active", Tags: []string{"production", "db"}}); err != nil {
+		if err := json.NewEncoder(w).Encode(Volume{ID: 444, Label: "tagged-volume", Size: 50, Region: "us-west", Status: "active", Tags: []string{"production", "db"}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -4363,7 +4362,7 @@ func TestLinodeStackScriptCreateToolValidation(t *testing.T) {
 func TestLinodeStackScriptCreateToolSuccessfulCreation(t *testing.T) {
 	t.Parallel()
 
-	created := linode.StackScript{
+	created := StackScript{
 		ID:       456,
 		Label:    testStackScriptLabel,
 		Script:   testStackScriptWithWhitespace,

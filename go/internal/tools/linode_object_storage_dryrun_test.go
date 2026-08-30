@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 const objStorageAccessPath = "/object-storage/buckets/us-east-1/my-bucket/access"
@@ -123,7 +122,7 @@ func TestLinodeObjectStorageObjectACLUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		cfg, methods := dryRunGetStateServer(t, "/object-storage/buckets/us-east-1/my-bucket/object-acl",
-			linode.ObjectACL{ACL: aclPrivate})
+			ObjectACL{ACL: aclPrivate})
 		_, _, handler := gentools.NewLinodeObjectStorageObjectACLUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

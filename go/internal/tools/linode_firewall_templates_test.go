@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -48,10 +47,10 @@ func TestLinodeFirewallTemplatesListToolDefinition(t *testing.T) {
 func TestLinodeFirewallTemplatesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	templates := linode.PaginatedResponse[linode.FirewallTemplate]{
-		Data: []linode.FirewallTemplate{{
+	templates := PaginatedResponse[FirewallTemplate]{
+		Data: []FirewallTemplate{{
 			Slug: purposeVPC,
-			Rules: linode.FirewallRules{
+			Rules: FirewallRules{
 				InboundPolicy:  policyDrop,
 				OutboundPolicy: policyAccept,
 			},

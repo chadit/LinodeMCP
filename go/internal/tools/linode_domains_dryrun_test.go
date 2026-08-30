@@ -13,7 +13,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 // dryRunNoCallServer returns a cfg pointed at a server that fails on ANY
@@ -124,7 +123,7 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 	t.Run("preview without cloning", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, "/domains/333", linode.Domain{ID: 333, Domain: domainExample})
+		cfg, methods := dryRunGetStateServer(t, "/domains/333", Domain{ID: 333, Domain: domainExample})
 		_, _, handler := gentools.NewLinodeDomainCloneTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -388,7 +387,7 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 		// naming a value the resource does not carry is dropped rather than
 		// reported with a gap in it.
 		cfg, methods := dryRunGetStateServer(t, "/domains/333/records/555",
-			linode.DomainRecord{ID: 555, Type: "A", Target: "192.0.2.1"})
+			DomainRecord{ID: 555, Type: "A", Target: "192.0.2.1"})
 		_, _, handler := gentools.NewLinodeDomainRecordUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -472,9 +471,9 @@ func TestLinodeDomainDeleteToolDryRunDependencies(t *testing.T) {
 	t.Parallel()
 
 	cfg, methods := dryRunRouteServer(t, map[string]any{
-		"/domains/888": linode.Domain{ID: 888, Domain: "dry.example.com"},
-		"/domains/888/records": linode.PaginatedResponse[linode.DomainRecord]{
-			Data: []linode.DomainRecord{
+		"/domains/888": Domain{ID: 888, Domain: "dry.example.com"},
+		"/domains/888/records": PaginatedResponse[DomainRecord]{
+			Data: []DomainRecord{
 				{ID: 1, Type: "NS", Target: "ns1.linode.com"},
 				{ID: 2, Type: "A", Name: "www", Target: "1.2.3.4"},
 			},

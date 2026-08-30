@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -95,7 +94,7 @@ func TestLinodeInstanceNodeBalancersListToolValidation(t *testing.T) {
 func TestLinodeInstanceNodeBalancersListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	nodeBalancers := []linode.NodeBalancer{{ID: 456, Label: "app-lb", Region: regionUSEast}}
+	nodeBalancers := []NodeBalancer{{ID: 456, Label: "app-lb", Region: regionUSEast}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -51,7 +50,7 @@ func TestLinodeVolumeGetToolDefinition(t *testing.T) {
 func TestLinodeVolumeGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	volume := linode.Volume{ID: 1234, Label: volumeGetFixtureLabel, Status: statusActive, Size: 80, Region: regionUSEast}
+	volume := Volume{ID: 1234, Label: volumeGetFixtureLabel, Status: statusActive, Size: 80, Region: regionUSEast}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -216,7 +215,7 @@ func TestLinodeLongviewClientGetToolInvalidLongviewClientIdRejectsBeforeClient(t
 func TestLongviewClientGetOmitsSecretFields(t *testing.T) {
 	t.Parallel()
 
-	payload, err := json.Marshal(linode.LongviewClient{ID: 789, Label: longviewClientLabelFixture})
+	payload, err := json.Marshal(LongviewClient{ID: 789, Label: longviewClientLabelFixture})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

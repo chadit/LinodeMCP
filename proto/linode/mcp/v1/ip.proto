@@ -1209,7 +1209,7 @@ message IPAddressAllocateInput {
 
 // NetworkingIPAssignmentItem is one address-to-Linode binding submitted by the
 // IP assign tools: the IP address and the Linode that should receive it. It
-// mirrors the linode.IPAssignment request struct (address, linode_id), so the
+// mirrors the API's IP-assignment request object (address, linode_id), so the
 // generated array item preserves the object shape rather than regressing to a
 // bare Struct.
 message NetworkingIPAssignmentItem {

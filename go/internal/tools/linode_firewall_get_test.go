@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -52,13 +51,13 @@ func TestLinodeFirewallGetToolDefinition(t *testing.T) {
 func TestLinodeFirewallGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	firewall := linode.Firewall{
+	firewall := Firewall{
 		ID:     55,
 		Label:  firewallGetFixtureLabel,
 		Status: statusEnabled,
-		Rules: linode.FirewallRules{
-			Inbound:  []linode.FirewallRule{{}, {}},
-			Outbound: []linode.FirewallRule{{}},
+		Rules: FirewallRules{
+			Inbound:  []FirewallRule{{}, {}},
+			Outbound: []FirewallRule{{}},
 		},
 	}
 

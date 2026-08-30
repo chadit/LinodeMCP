@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -136,7 +135,7 @@ func TestLinodeManagedServiceGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.ManagedService{
+		if err := json.NewEncoder(w).Encode(ManagedService{
 			ID:          managedServiceToolIDValue,
 			Label:       managedServiceToolLabelValue,
 			ServiceType: managedServiceTypeURL,

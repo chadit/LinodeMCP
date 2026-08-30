@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -62,7 +61,7 @@ func TestLinodePlacementGroupListToolDefinition(t *testing.T) {
 func TestLinodePlacementGroupListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	groups := []linode.PlacementGroup{{ID: 123, Label: "pg-east", Region: regionUSEast, PlacementGroupType: "anti_affinity:local", PlacementGroupPolicy: "strict", IsCompliant: true}}
+	groups := []PlacementGroup{{ID: 123, Label: "pg-east", Region: regionUSEast, PlacementGroupType: "anti_affinity:local", PlacementGroupPolicy: "strict", IsCompliant: true}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -398,7 +397,7 @@ func TestLinodePlacementGroupUpdateToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 123, Label: placementGroupUpdatedLabel, Region: regionUSEast}); err != nil {
+		if err := json.NewEncoder(w).Encode(PlacementGroup{ID: 123, Label: placementGroupUpdatedLabel, Region: regionUSEast}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

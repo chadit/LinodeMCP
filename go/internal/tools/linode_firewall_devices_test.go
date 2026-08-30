@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -48,10 +47,10 @@ func TestLinodeFirewallDevicesListToolDefinition(t *testing.T) {
 func TestLinodeFirewallDevicesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	devices := linode.PaginatedResponse[linode.FirewallDevice]{
-		Data: []linode.FirewallDevice{{
+	devices := PaginatedResponse[FirewallDevice]{
+		Data: []FirewallDevice{{
 			ID: 456,
-			Entity: linode.FirewallDeviceEntity{
+			Entity: FirewallDeviceEntity{
 				ID:    123,
 				Label: firewallDeviceLabelFixture,
 				Type:  monitorAlertDefinitionToolServiceType,
@@ -265,9 +264,9 @@ func TestLinodeFirewallDeviceGetToolDefinition(t *testing.T) {
 func TestLinodeFirewallDeviceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	device := linode.FirewallDevice{
+	device := FirewallDevice{
 		ID: 456,
-		Entity: linode.FirewallDeviceEntity{
+		Entity: FirewallDeviceEntity{
 			ID:    123,
 			Label: firewallDeviceLabelFixture,
 			Type:  monitorAlertDefinitionToolServiceType,

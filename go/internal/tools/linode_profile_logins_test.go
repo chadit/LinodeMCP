@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -65,8 +64,8 @@ func TestLinodeProfileLoginsToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.AccountLogin]{
-			Data: []linode.AccountLogin{{ID: 321, Username: accountLoginUsername, IP: "203.0.113.20"}},
+		if err := json.NewEncoder(w).Encode(PaginatedResponse[AccountLogin]{
+			Data: []AccountLogin{{ID: 321, Username: accountLoginUsername, IP: "203.0.113.20"}},
 			Page: 2,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)

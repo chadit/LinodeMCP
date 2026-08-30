@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -316,7 +315,7 @@ func TestLinodePlacementGroupCreateToolSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
 		}
 
-		var got linode.CreatePlacementGroupRequest
+		var got CreatePlacementGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -339,7 +338,7 @@ func TestLinodePlacementGroupCreateToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 123, Label: placementGroupCreateLabel, Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}); err != nil {
+		if err := json.NewEncoder(w).Encode(PlacementGroup{ID: 123, Label: placementGroupCreateLabel, Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -51,7 +50,7 @@ func TestLinodeImageShareGroupTokenImagesListToolDefinition(t *testing.T) {
 func TestLinodeImageShareGroupTokenImagesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	images := []linode.Image{
+	images := []Image{
 		{ID: "private/123", Label: "shared-ubuntu", Type: typeManualImage, Status: statusAvailable, Created: "2025-01-01T00:00:00", Size: 2500},
 	}
 

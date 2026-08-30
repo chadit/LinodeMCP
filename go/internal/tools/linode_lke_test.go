@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 // The cluster and pool read paths the LKE cases assert on. Rehomed here when
@@ -44,7 +43,7 @@ func TestLinodeLKEClustersListToolDefinition(t *testing.T) {
 func TestLinodeLKEClustersListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	clusters := []linode.LKECluster{
+	clusters := []LKECluster{
 		{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
 		{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
 	}
@@ -106,7 +105,7 @@ func TestLinodeLKEClustersListToolSuccess(t *testing.T) {
 func TestLinodeLKEClustersListToolFilterByLabel(t *testing.T) {
 	t.Parallel()
 
-	clusters := []linode.LKECluster{
+	clusters := []LKECluster{
 		{ID: 1, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady},
 		{ID: 2, Label: "dev-cluster", Region: regionEUWest, K8sVersion: lkeVersion128, Status: statusReady},
 		{ID: 3, Label: "staging-prod", Region: regionUSWest, K8sVersion: lkeVersion129, Status: statusReady},
@@ -236,7 +235,7 @@ func TestLinodeLKEClusterGetToolValidation(t *testing.T) {
 func TestLinodeLKEClusterGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	cluster := linode.LKECluster{
+	cluster := LKECluster{
 		ID: 123, Label: labelProdCluster, Region: regionUSEast, K8sVersion: lkeVersion129, Status: statusReady,
 	}
 
@@ -346,7 +345,7 @@ func TestLinodeLKEPoolsListToolCaseMissingClusterID(t *testing.T) {
 func TestLinodeLKEPoolsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	pools := []linode.LKENodePool{
+	pools := []LKENodePool{
 		{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3},
 		{ID: 11, ClusterID: 123, Type: "g6-standard-4", Count: 2},
 	}
@@ -477,7 +476,7 @@ func TestLinodeLKEPoolGetToolValidation(t *testing.T) {
 func TestLinodeLKEPoolGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	pool := linode.LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3}
+	pool := LKENodePool{ID: 10, ClusterID: 123, Type: typeG6Standard2, Count: 3}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != lkePoolGetPath {
@@ -595,7 +594,7 @@ func TestLinodeLKENodeGetToolValidation(t *testing.T) {
 func TestLinodeLKENodeGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	node := linode.LKENode{ID: idAbc123, InstanceID: 456, Status: statusReady}
+	node := LKENode{ID: idAbc123, InstanceID: 456, Status: statusReady}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/lke/clusters/123/nodes/abc-123" {
@@ -703,7 +702,7 @@ func TestLinodeLKEKubeconfigGetToolCaseMissingClusterID(t *testing.T) {
 func TestLinodeLKEKubeconfigGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	kubeconfig := linode.LKEKubeconfig{
+	kubeconfig := LKEKubeconfig{
 		Kubeconfig: "YXBpVmVyc2lvbjogdjEKY2x1c3RlcnM6Ci0gY2x1c3Rlcg==",
 	}
 
@@ -779,7 +778,7 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		dashboard := linode.LKEDashboard{URL: "https://dashboard.lke.example.com"}
+		dashboard := LKEDashboard{URL: "https://dashboard.lke.example.com"}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/lke/clusters/123/dashboard" {
@@ -854,7 +853,7 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		endpoints := []linode.LKEAPIEndpoint{
+		endpoints := []LKEAPIEndpoint{
 			{Endpoint: "https://abc123.us-east.lke.example.com:443"},
 		}
 
@@ -933,7 +932,7 @@ func TestLinodeLKEVersionsListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		versions := []linode.LKEVersion{{ID: lkeVersion129}, {ID: lkeVersion128}, {ID: "1.27"}}
+		versions := []LKEVersion{{ID: lkeVersion129}, {ID: lkeVersion128}, {ID: "1.27"}}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/lke/versions" {
@@ -1086,7 +1085,7 @@ func TestLinodeLKEVersionGetToolInvalidVersionPathParameter(t *testing.T) {
 func TestLinodeLKEVersionGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	version := linode.LKEVersion{ID: lkeVersion129}
+	version := LKEVersion{ID: lkeVersion129}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/lke/versions/1.29" {
@@ -1160,10 +1159,10 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		types := []linode.LKEType{
+		types := []LKEType{
 			{
 				ID: typeG6Standard2, Label: typeLinode4GB, Transfer: 4000,
-				Price: linode.LKETypePrice{Hourly: 0.036, Monthly: 24.0},
+				Price: LKETypePrice{Hourly: 0.036, Monthly: 24.0},
 			},
 		}
 
@@ -1256,7 +1255,7 @@ func TestLinodeLKETierVersionsListToolDefinition(t *testing.T) {
 func TestLinodeLKETierVersionsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	tierVersions := []linode.LKETierVersion{
+	tierVersions := []LKETierVersion{
 		{ID: lkeVersion129, Tier: classStandard},
 		{ID: lkeVersion128, Tier: classStandard},
 	}

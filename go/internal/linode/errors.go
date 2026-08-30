@@ -33,11 +33,6 @@ var ErrWriteResponseNotObject = errors.New("response must be a JSON object")
 // remove, which a plan would then hash and a preview would show.
 var ErrStateMemberMissing = errors.New("state response carries no member")
 
-// ErrFirewallHistoryNotObject rejects a firewall history body that is not the
-// documented firewall-shaped object, so a shape change upstream fails loudly
-// instead of decoding into an empty snapshot.
-var ErrFirewallHistoryNotObject = errors.New("firewall history response is not a firewall object")
-
 // ErrCircuitOpen is returned when the circuit breaker is open and rejecting
 // requests. Callers can check this sentinel to distinguish "we never tried"
 // from "we tried and the upstream failed".
@@ -47,102 +42,6 @@ var ErrCircuitOpen = errors.New("circuit breaker open")
 // while a goroutine is blocked waiting for a token. The breaker shouldn't
 // count this; it's a caller-side decision, not an upstream-health signal.
 var ErrRateLimitWaitCanceled = errors.New("rate limit wait canceled")
-
-// ErrUpdateImageRequestRequired is returned when UpdateImage is called without a request body.
-var ErrUpdateImageRequestRequired = errors.New("update image request is required")
-
-// ErrPlacementGroupUnassignLinodesRequired is returned when a placement group unassign request has no Linode IDs.
-var ErrPlacementGroupUnassignLinodesRequired = errors.New("linodes must include at least one ID")
-
-// ErrIPv6RangePrefixRange is returned when an IPv6 range prefix length is outside the IPv6 CIDR range.
-var ErrIPv6RangePrefixRange = errors.New("prefix_length must be an integer between 1 and 128")
-
-// ErrIPv6RangeRouteTargetInvalid is returned when an IPv6 range route target is not a valid IPv6 address.
-var ErrIPv6RangeRouteTargetInvalid = errors.New("route_target must be a valid IPv6 address")
-
-// ErrRegionRequired is returned when a region argument is empty.
-var ErrRegionRequired = errors.New("region is required")
-
-// ErrRegionIDRequired is returned when a region_id argument is empty.
-var ErrRegionIDRequired = errors.New("region_id is required")
-
-// ErrLabelRequired is returned when a label argument is empty.
-var ErrLabelRequired = errors.New("label is required")
-
-// ErrRDNSRequired is returned when a reverse DNS update has no rdns value.
-var ErrRDNSRequired = errors.New("rdns is required")
-
-// ErrIPAssignmentsRequired is returned when an IP assignment request has no assignments.
-var ErrIPAssignmentsRequired = errors.New("at least one IP assignment is required")
-
-// ErrStackScriptIDPositive is returned when a StackScript ID argument is not positive.
-var ErrStackScriptIDPositive = errors.New("stackscript_id must be a positive integer")
-
-// ErrStackScriptUpdateRequired is returned when a StackScript update request has no editable fields.
-var ErrStackScriptUpdateRequired = errors.New("at least one editable field is required")
-
-// ErrTransferYearPositive is returned when a transfer year argument is not positive.
-var ErrTransferYearPositive = errors.New("year must be a positive integer")
-
-// ErrTransferMonthRange is returned when a transfer month argument is outside 1-12.
-var ErrTransferMonthRange = errors.New("month must be an integer between 1 and 12")
-
-// ErrDiskIDPositive is returned when a disk ID argument is not positive.
-var ErrDiskIDPositive = errors.New("disk_id must be a positive integer")
-
-// ErrCreateConfigRequestRequired is returned when CreateInstanceConfig is called without a request body.
-var ErrCreateConfigRequestRequired = errors.New("create config request is required")
-
-// ErrCreateNodeBalancerNodeRequestRequired is returned when CreateNodeBalancerNode is called without a request body.
-var ErrCreateNodeBalancerNodeRequestRequired = errors.New("create nodebalancer node request is required")
-
-// ErrUpdateNodeBalancerNodeRequestRequired is returned when UpdateNodeBalancerNode is called without a request body.
-var ErrUpdateNodeBalancerNodeRequestRequired = errors.New("update nodebalancer node request is required")
-
-// ErrUpdateConfigRequestRequired is returned when UpdateInstanceConfig is called without a request body.
-var ErrUpdateConfigRequestRequired = errors.New("update config request is required")
-
-// ErrRebuildConfigRequestRequired is returned when RebuildNodeBalancerConfig is called without a request body.
-var ErrRebuildConfigRequestRequired = errors.New("rebuild config request is required")
-
-// ErrAddConfigInterfaceRequestRequired is returned when AddInstanceConfigInterface is called without a request body.
-var ErrAddConfigInterfaceRequestRequired = errors.New("add config interface request is required")
-
-// ErrAddInstanceInterfaceRequestRequired is returned when AddInstanceInterface is called without a request body.
-var ErrAddInstanceInterfaceRequestRequired = errors.New("add instance interface request is required")
-
-// ErrUpdateInterfaceSettingsRequestRequired is returned when UpdateInstanceInterfaceSettings is called without a request body.
-var ErrUpdateInterfaceSettingsRequestRequired = errors.New("interface settings update request is required")
-
-// ErrUpdateInstanceInterfaceRequestRequired is returned when UpdateInstanceInterface is called without a request body.
-var ErrUpdateInstanceInterfaceRequestRequired = errors.New("update instance interface request is required")
-
-// ErrUpdateConfigInterfaceRequestRequired is returned when UpdateInstanceConfigInterface is called without a request body.
-var ErrUpdateConfigInterfaceRequestRequired = errors.New("update config interface request is required")
-
-// ErrReorderConfigInterfacesRequestRequired is returned when ReorderInstanceConfigInterfaces is called without a request body.
-var ErrReorderConfigInterfacesRequestRequired = errors.New("reorder config interfaces request is required")
-
-// ErrUpdateInstanceFirewallsRequestRequired is returned when UpdateInstanceFirewalls is called without a request body.
-var ErrUpdateInstanceFirewallsRequestRequired = errors.New("firewall_ids is required")
-
-// ErrUpdateNodeBalancerFirewallsRequestRequired is returned when UpdateNodeBalancerFirewalls is called without a request body.
-var ErrUpdateNodeBalancerFirewallsRequestRequired = errors.New("firewall_ids is required")
-
-// ErrInvalidFirewallTemplateSlug is returned when a firewall template slug is not documented.
-var ErrInvalidFirewallTemplateSlug = errors.New("firewall template slug must be one of public or vpc")
-
-// ErrFirewallDeviceTypeRequired is returned when a firewall device type is missing.
-var ErrFirewallDeviceTypeRequired = errors.New("device type is required")
-
-// ErrInvalidFirewallDeviceType is returned when a firewall device type is not documented.
-var ErrInvalidFirewallDeviceType = errors.New("device type must be one of linode, nodebalancer, or linode_interface")
-
-// ErrFirewallRulesRequired is returned when a firewall rules update request is missing.
-var ErrFirewallRulesRequired = errors.New("firewall rules request is required")
-
-// ErrFirewallRuleVersionPositive is returned when a firewall rule version is not positive.
-var ErrFirewallRuleVersionPositive = errors.New("version must be a positive integer")
 
 // APIError represents an error returned by the Linode API.
 // RetryAfter carries the server's Retry-After hint when present so the retry

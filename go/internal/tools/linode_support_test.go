@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -51,8 +50,8 @@ func TestLinodeSupportTicketsToolDefinition(t *testing.T) {
 func TestLinodeSupportTicketsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	tickets := linode.PaginatedResponse[linode.SupportTicket]{
-		Data:    []linode.SupportTicket{{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}},
+	tickets := PaginatedResponse[SupportTicket]{
+		Data:    []SupportTicket{{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -248,8 +247,8 @@ func TestLinodeSupportTicketRepliesToolDefinition(t *testing.T) {
 func TestLinodeSupportTicketRepliesToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	replies := linode.PaginatedResponse[linode.SupportTicketReply]{
-		Data:    []linode.SupportTicketReply{{ID: 22222, Description: "We are investigating this ticket.", CreatedBy: supportTicketOpenedBy}},
+	replies := PaginatedResponse[SupportTicketReply]{
+		Data:    []SupportTicketReply{{ID: 22222, Description: "We are investigating this ticket.", CreatedBy: supportTicketOpenedBy}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -448,7 +447,7 @@ func TestLinodeSupportTicketGetToolDefinition(t *testing.T) {
 func TestLinodeSupportTicketGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	ticket := linode.SupportTicket{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}
+	ticket := SupportTicket{ID: 11111, Summary: supportTicketSummary, Status: "ticket-open", OpenedBy: supportTicketOpenedBy}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -46,10 +45,10 @@ func TestLinodeFirewallRulesListToolDefinition(t *testing.T) {
 func TestLinodeFirewallRulesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	rules := linode.FirewallRules{
+	rules := FirewallRules{
 		InboundPolicy:  policyDrop,
 		OutboundPolicy: policyAccept,
-		Inbound: []linode.FirewallRule{{
+		Inbound: []FirewallRule{{
 			Action:   policyAccept,
 			Protocol: "TCP",
 			Ports:    "443",

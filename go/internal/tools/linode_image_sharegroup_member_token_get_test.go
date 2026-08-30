@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -54,7 +53,7 @@ func TestLinodeImageShareGroupMemberTokenGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	updated := "2025-08-05T10:09:09"
-	member := linode.ImageShareGroupMember{
+	member := ImageShareGroupMember{
 		TokenUUID: shareGroupTokenGetUUID,
 		Status:    statusActive,
 		Label:     "Engineering - Backend",

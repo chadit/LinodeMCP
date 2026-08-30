@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -118,7 +117,7 @@ func TestLinodeInstanceFirewallListToolValidation(t *testing.T) {
 func TestLinodeInstanceFirewallListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	firewalls := []linode.Firewall{{ID: 456, Label: labelWebFirewall, Status: statusEnabled}}
+	firewalls := []Firewall{{ID: 456, Label: labelWebFirewall, Status: statusEnabled}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -319,7 +318,7 @@ func TestLinodeInstanceInterfaceFirewallsListToolValidation(t *testing.T) {
 func TestLinodeInstanceInterfaceFirewallsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	firewalls := []linode.Firewall{{ID: 789, Label: labelAssignedInstanceFirewall, Status: statusEnabled}}
+	firewalls := []Firewall{{ID: 789, Label: labelAssignedInstanceFirewall, Status: statusEnabled}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -336,7 +335,7 @@ func TestLinodeInstanceInterfaceFirewallsListToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.Firewall]{
+		if err := json.NewEncoder(w).Encode(PaginatedResponse[Firewall]{
 			Data:    firewalls,
 			Page:    1,
 			Pages:   1,

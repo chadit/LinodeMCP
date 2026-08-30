@@ -8,16 +8,15 @@ import (
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestLinodeNodeBalancerDeleteToolDryRunDependencies(t *testing.T) {
 	t.Parallel()
 
 	cfg, methods := dryRunRouteServer(t, map[string]any{
-		"/nodebalancers/888": linode.NodeBalancer{ID: 888, Label: "prod-lb"},
-		"/nodebalancers/888/configs": linode.PaginatedResponse[linode.NodeBalancerConfig]{
-			Data: []linode.NodeBalancerConfig{
+		"/nodebalancers/888": NodeBalancer{ID: 888, Label: "prod-lb"},
+		"/nodebalancers/888/configs": PaginatedResponse[NodeBalancerConfig]{
+			Data: []NodeBalancerConfig{
 				{ID: 10, Port: 80, Protocol: "http"},
 				{ID: 11, Port: 443, Protocol: "https"},
 			},

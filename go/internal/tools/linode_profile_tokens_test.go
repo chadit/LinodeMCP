@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -70,8 +69,8 @@ func TestLinodeProfileTokensToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
-			Data: []linode.ProfileToken{{keyID: float64(67890), keyLabel: profileTokenLabel}},
+		if err := json.NewEncoder(w).Encode(PaginatedResponse[ProfileToken]{
+			Data: []ProfileToken{{keyID: float64(67890), keyLabel: profileTokenLabel}},
 			Page: 1, Pages: 1, Results: 1,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -123,8 +122,8 @@ func TestLinodeProfileTokensToolDropsSecret(t *testing.T) {
 		// The Linode list endpoint returns a token value; the metadata-only
 		// proto element has no token field, so the DiscardUnknown decode must
 		// drop it before the tool ever serializes a response.
-		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
-			Data: []linode.ProfileToken{{
+		if err := json.NewEncoder(w).Encode(PaginatedResponse[ProfileToken]{
+			Data: []ProfileToken{{
 				keyID: float64(67890), keyLabel: profileTokenLabel, keyToken: tokenSecret,
 			}},
 			Page: 1, Pages: 1, Results: 1,

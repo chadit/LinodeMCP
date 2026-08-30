@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -139,7 +138,7 @@ func TestLinodeAccountUserGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.AccountUser{Username: accountLoginUsername, Email: "user@example.com", UserType: "default"}); err != nil {
+		if err := json.NewEncoder(w).Encode(AccountUser{Username: accountLoginUsername, Email: "user@example.com", UserType: "default"}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

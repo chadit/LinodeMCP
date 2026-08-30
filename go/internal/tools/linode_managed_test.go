@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -55,8 +54,8 @@ func TestLinodeManagedContactsToolDefinition(t *testing.T) {
 func TestLinodeManagedContactsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	contacts := linode.PaginatedResponse[linode.ManagedContact]{
-		Data: []linode.ManagedContact{{
+	contacts := PaginatedResponse[ManagedContact]{
+		Data: []ManagedContact{{
 			ID:    567,
 			Name:  managedContactsToolName,
 			Email: managedContactsToolEmail,

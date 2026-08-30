@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -52,7 +51,7 @@ func TestLinodeImageShareGroupsByImageListToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	description := shareGroupDescription
-	shareGroups := []linode.ImageShareGroup{{
+	shareGroups := []ImageShareGroup{{
 		ID:           1,
 		UUID:         shareGroupUUIDExample,
 		Label:        "base-images",

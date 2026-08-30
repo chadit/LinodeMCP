@@ -13,7 +13,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -130,7 +129,7 @@ func TestLinodeStackScriptUpdateToolValidation(t *testing.T) {
 func TestLinodeStackScriptUpdateToolSuccessfulUpdate(t *testing.T) {
 	t.Parallel()
 
-	updated := linode.StackScript{ID: 12345, Label: testStackScriptLabel, Script: testStackScriptWithWhitespace, Images: []string{testDebian12Image}, RevNote: stackScriptRevNoteUpdated, IsPublic: true}
+	updated := StackScript{ID: 12345, Label: testStackScriptLabel, Script: testStackScriptWithWhitespace, Images: []string{testDebian12Image}, RevNote: stackScriptRevNoteUpdated, IsPublic: true}
 
 	var requestCount atomic.Int32
 

@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -102,7 +101,7 @@ func TestLinodeInstanceInterfaceGetToolValidation(t *testing.T) {
 func TestLinodeInstanceInterfaceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	instanceInterface := linode.InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02"}
+	instanceInterface := InstanceInterface{ID: 456, MACAddress: "22:00:AB:CD:EF:02"}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -282,7 +281,7 @@ func TestLinodeInstanceInterfacesListToolValidation(t *testing.T) {
 func TestLinodeInstanceInterfacesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	interfaces := []linode.InstanceInterface{{ID: 1234, MACAddress: macAddressFixture}}
+	interfaces := []InstanceInterface{{ID: 1234, MACAddress: macAddressFixture}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

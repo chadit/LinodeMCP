@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -138,7 +137,7 @@ func TestLinodeProfileTokenGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: "api-token", profileTokenScopesParam: "*", "token": "super-secret-token-value"}); err != nil {
+		if err := json.NewEncoder(w).Encode(ProfileToken{keyID: float64(12345), keyLabel: "api-token", profileTokenScopesParam: "*", "token": "super-secret-token-value"}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

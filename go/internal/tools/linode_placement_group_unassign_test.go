@@ -13,7 +13,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -247,7 +246,7 @@ func TestLinodePlacementGroupUnassignToolSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
 		}
 
-		var got linode.PlacementGroupUnassignRequest
+		var got PlacementGroupUnassignRequest
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -258,7 +257,7 @@ func TestLinodePlacementGroupUnassignToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 789, Label: "pg-test", Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}); err != nil {
+		if err := json.NewEncoder(w).Encode(PlacementGroup{ID: 789, Label: "pg-test", Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -320,7 +319,7 @@ func TestLinodePlacementGroupUnassignToolDryRun(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.PlacementGroup{ID: 789, Label: "pg-test", Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}); err != nil {
+		if err := json.NewEncoder(w).Encode(PlacementGroup{ID: 789, Label: "pg-test", Region: placementGroupCreateRegion, PlacementGroupType: placementGroupType, PlacementGroupPolicy: placementGroupCreatePolicy, IsCompliant: true}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

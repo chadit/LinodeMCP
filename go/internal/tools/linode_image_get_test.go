@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -50,7 +49,7 @@ func TestLinodeImageGetToolDefinition(t *testing.T) {
 func TestLinodeImageGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	image := linode.Image{ID: "linode/debian11", Label: imageUbuntu2204, Type: typeManualImage, Status: statusAvailable, Created: shareGroupCreated, Size: 2500}
+	image := Image{ID: "linode/debian11", Label: imageUbuntu2204, Type: typeManualImage, Status: statusAvailable, Created: shareGroupCreated, Size: 2500}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {

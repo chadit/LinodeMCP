@@ -9,7 +9,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 const (
@@ -103,7 +102,7 @@ func TestLinodeLongviewPlanUpdateToolDryRun(t *testing.T) {
 	t.Run("preview reads plan then would PUT", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, longviewPlanBasePath, linode.LongviewSubscription{ID: "longview-3"})
+		cfg, methods := dryRunGetStateServer(t, longviewPlanBasePath, LongviewSubscription{ID: "longview-3"})
 		_, _, handler := gentools.NewLinodeLongviewPlanUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -157,7 +156,7 @@ func TestLinodeLongviewClientDeleteToolDryRun(t *testing.T) {
 	t.Run("preview without deleting", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, longviewClientGetPath, linode.LongviewClient{ID: 123})
+		cfg, methods := dryRunGetStateServer(t, longviewClientGetPath, LongviewClient{ID: 123})
 		_, _, handler := gentools.NewLinodeLongviewClientDeleteTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

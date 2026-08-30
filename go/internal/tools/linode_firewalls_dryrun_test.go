@@ -8,18 +8,17 @@ import (
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestLinodeFirewallDeleteToolDryRunDependencies(t *testing.T) {
 	t.Parallel()
 
 	cfg, methods := dryRunRouteServer(t, map[string]any{
-		"/networking/firewalls/789": linode.Firewall{ID: 789, Label: "prod-fw"},
-		"/networking/firewalls/789/devices": linode.PaginatedResponse[linode.FirewallDevice]{
-			Data: []linode.FirewallDevice{
-				{ID: 1, Entity: linode.FirewallDeviceEntity{ID: 456, Type: keyDefaultFirewallLinode, Label: "fw-host"}},
-				{ID: 2, Entity: linode.FirewallDeviceEntity{ID: 99, Type: fwDeviceTypeNodeBalancer, Label: "fw-lb"}},
+		"/networking/firewalls/789": Firewall{ID: 789, Label: "prod-fw"},
+		"/networking/firewalls/789/devices": PaginatedResponse[FirewallDevice]{
+			Data: []FirewallDevice{
+				{ID: 1, Entity: FirewallDeviceEntity{ID: 456, Type: keyDefaultFirewallLinode, Label: "fw-host"}},
+				{ID: 2, Entity: FirewallDeviceEntity{ID: 99, Type: fwDeviceTypeNodeBalancer, Label: "fw-lb"}},
 			},
 		},
 	})

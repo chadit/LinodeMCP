@@ -328,7 +328,7 @@ func TestLinodeInstancesListToolIncompleteConfig(t *testing.T) {
 func TestLinodeInstancesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	instances := []linode.Instance{
+	instances := []Instance{
 		{ID: 1, Label: "web-1", Status: statusRunning},
 		{ID: 2, Label: "db-1", Status: "stopped"},
 	}
@@ -573,7 +573,7 @@ func TestLinodeInstanceGetToolInvalidInstanceID(t *testing.T) {
 func TestLinodeInstanceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	instance := linode.Instance{
+	instance := Instance{
 		ID:     123,
 		Label:  "test-instance",
 		Status: statusRunning,
@@ -658,7 +658,7 @@ func TestLinodeAccountTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		account := linode.Account{
+		account := Account{
 			FirstName: "Test",
 			LastName:  "User",
 			Email:     "test@example.com",
@@ -753,11 +753,11 @@ func TestLinodeAccountTransferToolDefinition(t *testing.T) {
 func TestLinodeAccountTransferToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	transfer := linode.AccountTransfer{
+	transfer := AccountTransfer{
 		Billable: 10,
 		Quota:    4000,
 		Used:     123,
-		RegionTransfers: []linode.AccountRegionTransfer{{
+		RegionTransfers: []AccountRegionTransfer{{
 			ID:       "us-east",
 			Billable: 2,
 			Quota:    1000,
@@ -924,7 +924,7 @@ func TestLinodeAccountSettingsToolSuccess(t *testing.T) {
 
 	longviewSubscription := "longview-3"
 	objectStorage := statusActive
-	settings := linode.AccountSettings{
+	settings := AccountSettings{
 		BackupsEnabled:          true,
 		Managed:                 false,
 		NetworkHelper:           true,
@@ -1095,7 +1095,7 @@ func TestLinodeAccountAgreementsToolDefinition(t *testing.T) {
 func TestLinodeAccountAgreementsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	agreements := linode.AccountAgreements{
+	agreements := AccountAgreements{
 		BillingAgreement:       true,
 		EUModel:                true,
 		MasterServiceAgreement: true,
@@ -1263,9 +1263,9 @@ func TestLinodeAccountMaintenanceToolSuccess(t *testing.T) {
 
 	t.Parallel()
 
-	maintenance := linode.PaginatedResponse[linode.AccountMaintenance]{
-		Data: []linode.AccountMaintenance{{
-			Entity: linode.AccountMaintenanceEntity{ID: 123, Label: accountMaintenanceLabel, Type: accountMaintenanceEntityType, URL: accountMaintenanceURL},
+	maintenance := PaginatedResponse[AccountMaintenance]{
+		Data: []AccountMaintenance{{
+			Entity: AccountMaintenanceEntity{ID: 123, Label: accountMaintenanceLabel, Type: accountMaintenanceEntityType, URL: accountMaintenanceURL},
 			Reason: "Scheduled migration",
 			Status: statusPending,
 			Type:   "reboot",
@@ -1473,8 +1473,8 @@ func TestLinodeMaintenancePoliciesToolSuccess(t *testing.T) {
 
 	t.Parallel()
 
-	policies := linode.PaginatedResponse[linode.MaintenancePolicy]{
-		Data: []linode.MaintenancePolicy{{
+	policies := PaginatedResponse[MaintenancePolicy]{
+		Data: []MaintenancePolicy{{
 			Slug:                  maintenancePolicySlug,
 			Label:                 maintenancePolicyLabel,
 			Description:           "Migrates the Linode during maintenance.",
@@ -1677,7 +1677,7 @@ func TestLinodeAccountAvailabilityGetToolDefinition(t *testing.T) {
 func TestLinodeAccountAvailabilityGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	availability := linode.AccountAvailability{
+	availability := AccountAvailability{
 		Available:   []string{serviceLinodes, serviceNodeBalancers},
 		Region:      regionUSEast,
 		Unavailable: []string{"Kubernetes", serviceBlockStorage},
@@ -1892,8 +1892,8 @@ func TestLinodeAccountNotificationsToolDefinition(t *testing.T) {
 func TestLinodeAccountNotificationsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	notifications := linode.PaginatedResponse[linode.AccountNotification]{
-		Data: []linode.AccountNotification{{
+	notifications := PaginatedResponse[AccountNotification]{
+		Data: []AccountNotification{{
 			Label:    "Scheduled maintenance",
 			Message:  "Maintenance is scheduled for a Linode.",
 			Severity: "major",
@@ -2110,8 +2110,8 @@ func TestLinodeBetasToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	description := "This beta lets users try an example feature."
-	betas := linode.PaginatedResponse[linode.BetaProgram]{
-		Data: []linode.BetaProgram{{
+	betas := PaginatedResponse[BetaProgram]{
+		Data: []BetaProgram{{
 			BetaClass:      "open",
 			Description:    &description,
 			Ended:          nil,
@@ -2344,7 +2344,7 @@ func TestLinodeBetaGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	description := "This beta lets users try an example feature."
-	beta := linode.BetaProgram{
+	beta := BetaProgram{
 		BetaClass:      "open",
 		Description:    &description,
 		Ended:          nil,
@@ -2567,8 +2567,8 @@ func TestLinodeAccountBetasToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	description := "This is an open public beta for an example feature."
-	betas := linode.PaginatedResponse[linode.AccountBetaProgram]{
-		Data: []linode.AccountBetaProgram{{
+	betas := PaginatedResponse[AccountBetaProgram]{
+		Data: []AccountBetaProgram{{
 			Description: &description,
 			Ended:       nil,
 			Enrolled:    "2023-09-11T00:00:00",
@@ -2785,7 +2785,7 @@ func TestLinodeAccountInvoiceGetToolDefinition(t *testing.T) {
 func TestLinodeAccountInvoiceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	invoice := linode.AccountInvoice{ID: accountInvoiceID, Date: "2024-01-31T00:00:00", Label: "Invoice #12345", Total: 11.00}
+	invoice := AccountInvoice{ID: accountInvoiceID, Date: "2024-01-31T00:00:00", Label: "Invoice #12345", Total: 11.00}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -3950,14 +3950,14 @@ func TestLinodeAccountChildAccountGetToolDefinition(t *testing.T) {
 func TestLinodeAccountChildAccountGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	childAccount := linode.ChildAccount{
+	childAccount := ChildAccount{
 		EUUID:         childAccountEUUID,
 		Company:       companyAcme,
 		Email:         "jkowalski@example.com",
 		FirstName:     "John",
 		LastName:      "Smith",
 		BillingSource: "external",
-		CreditCard: linode.ChildAccountCreditCard{
+		CreditCard: ChildAccountCreditCard{
 			Expiry:   "11/2024",
 			LastFour: "0111",
 		},
@@ -4175,8 +4175,8 @@ func TestLinodeAccountEventsToolDefinition(t *testing.T) {
 func TestLinodeAccountEventsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	events := linode.PaginatedResponse[linode.AccountEvent]{
-		Data:    []linode.AccountEvent{{ID: 123, Action: "ticket_create", Status: "failed", Username: "adevi"}},
+	events := PaginatedResponse[AccountEvent]{
+		Data:    []AccountEvent{{ID: 123, Action: "ticket_create", Status: "failed", Username: "adevi"}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -4382,8 +4382,8 @@ func TestLinodeAccountUsersToolDefinition(t *testing.T) {
 func TestLinodeAccountUsersToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	users := linode.PaginatedResponse[linode.AccountUser]{
-		Data:    []linode.AccountUser{{Username: accountLoginUsername, Email: "user@example.com", Restricted: true, TFAEnabled: true}},
+	users := PaginatedResponse[AccountUser]{
+		Data:    []AccountUser{{Username: accountLoginUsername, Email: "user@example.com", Restricted: true, TFAEnabled: true}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -4589,8 +4589,8 @@ func TestLinodeAccountLoginsToolDefinition(t *testing.T) {
 func TestLinodeAccountLoginsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	logins := linode.PaginatedResponse[linode.AccountLogin]{
-		Data:    []linode.AccountLogin{{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}},
+	logins := PaginatedResponse[AccountLogin]{
+		Data:    []AccountLogin{{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -4792,7 +4792,7 @@ func TestLinodeProfileLoginGetToolDefinition(t *testing.T) {
 func TestLinodeProfileLoginGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}
+	login := AccountLogin{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -4993,7 +4993,7 @@ func TestLinodeAccountLoginGetToolDefinition(t *testing.T) {
 func TestLinodeAccountLoginGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	login := linode.AccountLogin{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}
+	login := AccountLogin{ID: 123, Username: accountLoginUsername, IP: testNetIPv4AddressTen, Status: statusSuccessful}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -5185,15 +5185,15 @@ func TestLinodeAccountChildAccountsToolDefinition(t *testing.T) {
 func TestLinodeAccountChildAccountsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	childAccounts := linode.PaginatedResponse[linode.ChildAccount]{
-		Data: []linode.ChildAccount{{
+	childAccounts := PaginatedResponse[ChildAccount]{
+		Data: []ChildAccount{{
 			EUUID:         childAccountEUUID,
 			Company:       companyAcme,
 			Email:         "jkowalski@example.com",
 			FirstName:     "John",
 			LastName:      "Smith",
 			BillingSource: "external",
-			CreditCard: linode.ChildAccountCreditCard{
+			CreditCard: ChildAccountCreditCard{
 				Expiry:   "11/2024",
 				LastFour: "0111",
 			},
@@ -6125,7 +6125,7 @@ func TestLinodeAccountOAuthClientResetSecretToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.OAuthClientSecret{Secret: "new-secret-once"}); err != nil {
+		if err := json.NewEncoder(w).Encode(OAuthClientSecret{Secret: "new-secret-once"}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -6366,7 +6366,7 @@ func TestLinodeAccountOAuthClientCreateToolSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Content-Type"), "application/json")
 		}
 
-		var got linode.CreateOAuthClientRequest
+		var got CreateOAuthClientRequest
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -6381,7 +6381,7 @@ func TestLinodeAccountOAuthClientCreateToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.CreatedOAuthClient{
+		if err := json.NewEncoder(w).Encode(CreatedOAuthClient{
 			ID: oauthClientID, Label: oauthClientLabel, RedirectURI: oauthClientRedirectURI, Secret: "secret-once",
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -6515,8 +6515,8 @@ func TestLinodeAccountInvoiceItemsToolDefinition(t *testing.T) {
 func TestLinodeAccountInvoiceItemsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	items := linode.PaginatedResponse[linode.AccountInvoiceItem]{
-		Data:    []linode.AccountInvoiceItem{{Label: invoiceItemLabel, Quantity: 1, Total: 5.00, Type: "linode", UnitPrice: 5.00}},
+	items := PaginatedResponse[AccountInvoiceItem]{
+		Data:    []AccountInvoiceItem{{Label: invoiceItemLabel, Quantity: 1, Total: 5.00, Type: "linode", UnitPrice: 5.00}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -6723,8 +6723,8 @@ func TestLinodeAccountPaymentMethodsToolDefinition(t *testing.T) {
 func TestLinodeAccountPaymentMethodsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	methods := linode.PaginatedResponse[linode.AccountPaymentMethod]{
-		Data:    []linode.AccountPaymentMethod{{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}}},
+	methods := PaginatedResponse[AccountPaymentMethod]{
+		Data:    []AccountPaymentMethod{{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -6942,7 +6942,7 @@ func TestLinodeAccountPaymentMethodGetToolSuccess(t *testing.T) {
 
 	// The extra top-level field the proto does not model must be dropped by
 	// the DiscardUnknown decode, proving proto-canonical output.
-	method := withUnmodeledField(t, linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}})
+	method := withUnmodeledField(t, AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -7131,8 +7131,8 @@ func TestLinodeAccountPaymentsToolDefinition(t *testing.T) {
 func TestLinodeAccountPaymentsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	payments := linode.PaginatedResponse[linode.AccountPayment]{
-		Data:    []linode.AccountPayment{{ID: 654, Date: "2024-02-01T00:00:00", USD: 20.25}},
+	payments := PaginatedResponse[AccountPayment]{
+		Data:    []AccountPayment{{ID: 654, Date: "2024-02-01T00:00:00", USD: 20.25}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -7348,7 +7348,7 @@ func TestLinodeAccountPaymentGetToolDefinition(t *testing.T) {
 func TestLinodeAccountPaymentGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	payment := linode.AccountPayment{ID: 654, Date: "2024-02-01T00:00:00", USD: 20.25}
+	payment := AccountPayment{ID: 654, Date: "2024-02-01T00:00:00", USD: 20.25}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -7554,8 +7554,8 @@ func TestLinodeAccountInvoicesToolDefinition(t *testing.T) {
 func TestLinodeAccountInvoicesToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	invoices := linode.PaginatedResponse[linode.AccountInvoice]{
-		Data:    []linode.AccountInvoice{{ID: 987, Date: "2024-01-31T00:00:00", Label: "Invoice 987", Total: 42.50}},
+	invoices := PaginatedResponse[AccountInvoice]{
+		Data:    []AccountInvoice{{ID: 987, Date: "2024-01-31T00:00:00", Label: "Invoice 987", Total: 42.50}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -7775,9 +7775,9 @@ func TestLinodeAccountServiceTransfersToolDefinition(t *testing.T) {
 func TestLinodeAccountServiceTransfersToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	transfers := linode.PaginatedResponse[linode.AccountEntityTransfer]{
-		Data: []linode.AccountEntityTransfer{{
-			Entities: linode.AccountEntityTransferEntities{Linodes: []int{111, 222}},
+	transfers := PaginatedResponse[AccountEntityTransfer]{
+		Data: []AccountEntityTransfer{{
+			Entities: AccountEntityTransferEntities{Linodes: []int{111, 222}},
 			IsSender: true,
 			Status:   statusPending,
 			Token:    accountEntityTransferToken,
@@ -8014,7 +8014,7 @@ func TestLinodeAccountEventGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.AccountEvent{
+		if err := json.NewEncoder(w).Encode(AccountEvent{
 			ID:     accountEventID,
 			Action: accountEventAction,
 			Status: statusSuccessful,
@@ -8198,8 +8198,8 @@ func TestLinodeAccountServiceTransferGetToolDefinition(t *testing.T) {
 func TestLinodeAccountServiceTransferGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	transfer := linode.AccountEntityTransfer{
-		Entities: linode.AccountEntityTransferEntities{Linodes: []int{111, 222}},
+	transfer := AccountEntityTransfer{
+		Entities: AccountEntityTransferEntities{Linodes: []int{111, 222}},
 		IsSender: true,
 		Status:   statusPending,
 		Token:    accountServiceTransferToken,
@@ -8422,7 +8422,7 @@ func TestLinodeAccountBetaGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	description := "This is an open public beta for an example feature."
-	beta := linode.AccountBetaProgram{
+	beta := AccountBetaProgram{
 		Description: &description,
 		Ended:       nil,
 		Enrolled:    "2023-09-11T00:00:00",
@@ -8626,8 +8626,8 @@ func TestLinodeAccountAvailabilityToolDefinition(t *testing.T) {
 func TestLinodeAccountAvailabilityToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	availability := linode.PaginatedResponse[linode.AccountAvailability]{
-		Data: []linode.AccountAvailability{{
+	availability := PaginatedResponse[AccountAvailability]{
+		Data: []AccountAvailability{{
 			Available:   []string{serviceLinodes, serviceNodeBalancers},
 			Region:      regionUSEast,
 			Unavailable: []string{"Kubernetes", serviceBlockStorage},
@@ -8837,7 +8837,7 @@ func TestLinodeRegionsListToolDefinition(t *testing.T) {
 func TestLinodeRegionsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	regions := []linode.Region{
+	regions := []Region{
 		{ID: regionUSEast, Label: regionLabelNewark, Country: countryUS, Capabilities: []string{"Linodes", serviceBlockStorage}, Status: statusOK},
 		{ID: regionEUWest, Label: "London, UK", Country: "uk", Capabilities: []string{"Linodes"}, Status: statusOK},
 	}
@@ -8902,7 +8902,7 @@ func TestLinodeRegionsListToolSuccess(t *testing.T) {
 func TestLinodeRegionsListToolFilterByCountry(t *testing.T) {
 	t.Parallel()
 
-	regions := []linode.Region{
+	regions := []Region{
 		{ID: regionUSEast, Label: regionLabelNewark, Country: countryUS, Status: statusOK},
 		{ID: regionUSWest, Label: "Fremont, CA", Country: countryUS, Status: statusOK},
 		{ID: regionEUWest, Label: "London, UK", Country: "uk", Status: statusOK},
@@ -8992,7 +8992,7 @@ func TestLinodeTypesListToolDefinition(t *testing.T) {
 func TestLinodeTypesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	types := []linode.InstanceType{
+	types := []InstanceType{
 		{ID: typeG6Nanode1, Label: invoiceItemLabel, Class: "nanode", Disk: 25600, Memory: 1024, VCPUs: 1},
 		{ID: typeG6Standard2, Label: typeLinode4GB, Class: classStandard, Disk: 81920, Memory: 4096, VCPUs: 2},
 	}
@@ -9065,7 +9065,7 @@ func TestLinodeTypesListToolSuccess(t *testing.T) {
 func TestLinodeTypesListToolFilterByClass(t *testing.T) {
 	t.Parallel()
 
-	types := []linode.InstanceType{
+	types := []InstanceType{
 		{ID: typeG6Nanode1, Label: invoiceItemLabel, Class: "nanode"},
 		{ID: typeG6Standard2, Label: typeLinode4GB, Class: classStandard},
 		{ID: "g6-standard-4", Label: "Linode 8GB", Class: classStandard},
@@ -9151,7 +9151,7 @@ func TestLinodeVolumeTypesListToolDefinition(t *testing.T) {
 func TestLinodeVolumeTypesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	volumeTypes := []linode.VolumeType{{
+	volumeTypes := []VolumeType{{
 		keyBetaID: "storage",
 		keyLabel:  "Block Storage",
 	}}
@@ -9305,7 +9305,7 @@ func TestLinodeVolumesListToolDefinition(t *testing.T) {
 func TestLinodeVolumesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	volumes := []linode.Volume{
+	volumes := []Volume{
 		{ID: 1, Label: labelDataVol, Status: statusActive, Size: 100, Region: regionUSEast},
 		{ID: 2, Label: labelBackupVol, Status: statusActive, Size: 50, Region: regionEUWest},
 	}
@@ -9370,7 +9370,7 @@ func TestLinodeVolumesListToolSuccess(t *testing.T) {
 func TestLinodeVolumesListToolFilterByRegion(t *testing.T) {
 	t.Parallel()
 
-	volumes := []linode.Volume{
+	volumes := []Volume{
 		{ID: 1, Label: labelDataVol, Region: regionUSEast},
 		{ID: 2, Label: labelBackupVol, Region: regionEUWest},
 	}
@@ -9435,7 +9435,7 @@ func TestLinodeVolumesListToolFilterByRegion(t *testing.T) {
 func TestLinodeVolumesListToolFilterByLabel(t *testing.T) {
 	t.Parallel()
 
-	volumes := []linode.Volume{
+	volumes := []Volume{
 		{ID: 1, Label: labelDataVol, Region: regionUSEast},
 		{ID: 2, Label: labelBackupVol, Region: regionEUWest},
 		{ID: 3, Label: "data-backup", Region: regionUSWest},
@@ -9521,7 +9521,7 @@ func TestLinodeImagesListToolDefinition(t *testing.T) {
 func TestLinodeImagesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	images := []linode.Image{
+	images := []Image{
 		{ID: imageIDUbuntu2204, Label: imageUbuntu2204, Type: typeManualImage, IsPublic: true, Deprecated: false},
 		{ID: privateImage12345Fixture, Label: "Custom Image", Type: typeManualImage, IsPublic: false, Deprecated: false},
 	}
@@ -9586,7 +9586,7 @@ func TestLinodeImagesListToolSuccess(t *testing.T) {
 func TestLinodeImagesListToolFilterByPublic(t *testing.T) {
 	t.Parallel()
 
-	images := []linode.Image{
+	images := []Image{
 		{ID: imageIDUbuntu2204, Label: imageUbuntu2204, IsPublic: true},
 		{ID: privateImage12345Fixture, Label: "Custom Image", IsPublic: false},
 	}
@@ -9651,7 +9651,7 @@ func TestLinodeImagesListToolFilterByPublic(t *testing.T) {
 func TestLinodeImagesListToolFilterByDeprecated(t *testing.T) {
 	t.Parallel()
 
-	images := []linode.Image{
+	images := []Image{
 		{ID: imageIDUbuntu2204, Label: imageUbuntu2204, Deprecated: false},
 		{ID: "linode/ubuntu18.04", Label: "Ubuntu 18.04", Deprecated: true},
 	}
@@ -9752,7 +9752,7 @@ func TestLinodeImageShareGroupTokensListToolSuccess(t *testing.T) {
 
 	updated := "2025-08-04T11:09:09"
 	expiry := "2025-09-04T10:09:09"
-	tokens := []linode.ImageShareGroupToken{
+	tokens := []ImageShareGroupToken{
 		{
 			TokenUUID:              "13428362-5458-4dad-b14b-8d0d4d648f8c",
 			Status:                 statusActive,
@@ -9962,7 +9962,7 @@ func TestLinodeImageShareGroupsListToolSuccess(t *testing.T) {
 
 	description := shareGroupDescription
 	updated := shareGroupUpdated
-	shareGroups := []linode.ImageShareGroup{
+	shareGroups := []ImageShareGroup{
 		{
 			ID:           1,
 			UUID:         shareGroupUUIDExample,
@@ -10306,7 +10306,7 @@ func TestLinodeSSHKeyGetToolNegativeSshkeyId(t *testing.T) {
 func TestLinodeSSHKeyGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	sshKey := withUnmodeledField(t, linode.SSHKey{ID: 42, Label: testKeyLabel, SSHKey: "ssh-rsa AAAA test@example.com", Created: "2024-01-01T00:00:00Z"})
+	sshKey := withUnmodeledField(t, SSHKey{ID: 42, Label: testKeyLabel, SSHKey: "ssh-rsa AAAA test@example.com", Created: "2024-01-01T00:00:00Z"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/profile/sshkeys/42" {

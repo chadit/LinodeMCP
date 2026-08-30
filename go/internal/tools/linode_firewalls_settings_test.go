@@ -11,7 +11,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -47,7 +46,7 @@ func TestLinodeFirewallSettingsListToolDefinition(t *testing.T) {
 func TestLinodeFirewallSettingsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	settings := linode.FirewallSettings{DefaultFirewallIDs: linode.FirewallDefaultIDs{
+	settings := FirewallSettings{DefaultFirewallIDs: FirewallDefaultIDs{
 		Linode: 100, NodeBalancer: 101, PublicInterface: 200, VPCInterface: 201,
 	}}
 

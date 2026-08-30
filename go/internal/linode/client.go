@@ -40,7 +40,10 @@ const (
 	requestTimeout = 30 * time.Second
 )
 
-// Option configures a Client.
+// Option configures a Client. Only tests construct one: they need a zero-retry
+// or sub-millisecond-backoff client, and cfg.Resilience can express neither,
+// because NewClient layers MaxRetries only when it is positive and
+// ResilienceConfig carries no backoff factor or jitter flag.
 type Option func(*retryConfig)
 
 // Client is the Linode API client with built-in retry, a token-bucket rate

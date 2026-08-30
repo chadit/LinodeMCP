@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -139,11 +138,11 @@ func TestLinodeManagedIssueGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.ManagedIssue{
+		if err := json.NewEncoder(w).Encode(ManagedIssue{
 			ID:       managedIssueIDValue,
 			Created:  managedIssueToolCreated,
 			Services: []int{654},
-			Entity: linode.ManagedIssueEntity{
+			Entity: ManagedIssueEntity{
 				ID:    98765,
 				Label: managedIssuesToolLabel,
 				Type:  "ticket",
@@ -261,12 +260,12 @@ func TestLinodeManagedIssuesToolDefinition(t *testing.T) {
 func TestLinodeManagedIssuesToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	issues := linode.PaginatedResponse[linode.ManagedIssue]{
-		Data: []linode.ManagedIssue{{
+	issues := PaginatedResponse[ManagedIssue]{
+		Data: []ManagedIssue{{
 			ID:       823,
 			Created:  "2018-01-01T00:01:01",
 			Services: []int{654},
-			Entity: linode.ManagedIssueEntity{
+			Entity: ManagedIssueEntity{
 				ID:    98765,
 				Label: managedIssuesToolLabel,
 				Type:  "ticket",

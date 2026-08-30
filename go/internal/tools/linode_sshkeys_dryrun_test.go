@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestLinodeSSHKeyCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
@@ -137,7 +136,7 @@ func TestLinodeSSHKeyUpdateToolDryRun(t *testing.T) {
 	t.Run("preview without updating", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, "/profile/sshkeys/123", linode.SSHKey{ID: 123, Label: keyNameTest})
+		cfg, methods := dryRunGetStateServer(t, "/profile/sshkeys/123", SSHKey{ID: 123, Label: keyNameTest})
 		_, _, handler := gentools.NewLinodeSshkeyUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
@@ -228,7 +227,7 @@ func TestLinodeSSHKeyDeleteToolDryRun(t *testing.T) {
 	t.Run("preview without deleting", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, "/profile/sshkeys/123", linode.SSHKey{ID: 123, Label: keyNameTest})
+		cfg, methods := dryRunGetStateServer(t, "/profile/sshkeys/123", SSHKey{ID: 123, Label: keyNameTest})
 		_, _, handler := gentools.NewLinodeSshkeyDeleteTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{

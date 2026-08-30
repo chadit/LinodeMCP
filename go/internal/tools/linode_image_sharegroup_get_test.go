@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -53,7 +52,7 @@ func TestLinodeImageShareGroupGetToolSuccess(t *testing.T) {
 
 	description := shareGroupDescription
 	updated := shareGroupUpdated
-	shareGroup := linode.ImageShareGroup{
+	shareGroup := ImageShareGroup{
 		ID:           123,
 		UUID:         shareGroupUUIDFixture,
 		Label:        shareGroupLabelFixture,

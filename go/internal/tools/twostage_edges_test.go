@@ -165,7 +165,7 @@ func TestTwoStageApplyKeepsThePlanWhenTheRefetchFails(t *testing.T) {
 			return
 		}
 
-		writeJSON(t, w, linode.Instance{ID: 123, Label: labelWebProd, Status: statusRunning})
+		writeJSON(t, w, Instance{ID: 123, Label: labelWebProd, Status: statusRunning})
 	}))
 	t.Cleanup(srv.Close)
 

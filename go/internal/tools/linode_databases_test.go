@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -111,7 +110,7 @@ func TestLinodeDatabaseEngineListToolDefinition(t *testing.T) {
 func TestLinodeDatabaseEngineListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	engines := []linode.DatabaseEngine{{ID: databaseEngineID, Engine: databaseEngineName, Version: databaseVersion}}
+	engines := []DatabaseEngine{{ID: databaseEngineID, Engine: databaseEngineName, Version: databaseVersion}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -331,15 +330,15 @@ func TestLinodeDatabaseTypeListToolDefinition(t *testing.T) {
 func TestLinodeDatabaseTypeListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	types := []linode.DatabaseType{{
+	types := []DatabaseType{{
 		ID:     databaseTypeID,
 		Label:  databaseTypeLabel,
 		Class:  "dedicated",
 		Disk:   25600,
 		Memory: 1024,
 		VCPUs:  1,
-		Engines: linode.DatabaseTypeEngines{
-			MySQL: []linode.DatabaseTypeEngine{{Quantity: 1, Price: linode.Price{Hourly: 0.03, Monthly: 20}}},
+		Engines: DatabaseTypeEngines{
+			MySQL: []DatabaseTypeEngine{{Quantity: 1, Price: Price{Hourly: 0.03, Monthly: 20}}},
 		},
 	}}
 
@@ -576,7 +575,7 @@ func TestLinodeDatabaseTypeGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}); err != nil {
+		if err := json.NewEncoder(w).Encode(DatabaseType{ID: databaseTypeID, Label: databaseTypeLabel}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -1116,7 +1115,7 @@ func TestLinodeDatabaseInstanceListToolDefinition(t *testing.T) {
 func TestLinodeDatabaseInstanceListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}}
+	instances := []DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -1336,7 +1335,7 @@ func TestLinodeDatabasePostgreSQLInstanceListToolDefinition(t *testing.T) {
 func TestLinodeDatabasePostgreSQLInstanceListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	instances := []linode.DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}}
+	instances := []DatabaseInstance{{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEnginePostgreSQL, Version: databaseVersion, Status: statusActive}}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -1552,7 +1551,7 @@ func TestLinodeDatabaseInstanceGetToolDefinition(t *testing.T) {
 func TestLinodeDatabaseInstanceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	body := withUnmodeledField(t, linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive})
+	body := withUnmodeledField(t, DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -1774,7 +1773,7 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolDefinition(t *testing.T) {
 func TestLinodeDatabasePostgreSQLInstanceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	body := withUnmodeledField(t, linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive})
+	body := withUnmodeledField(t, DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -1993,7 +1992,7 @@ func TestLinodeDatabaseInstanceSSLGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
+		if err := json.NewEncoder(w).Encode(DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -2209,7 +2208,7 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
+		if err := json.NewEncoder(w).Encode(DatabaseSSL{CACertificate: databaseSSLCACertificate}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -2630,7 +2629,7 @@ func TestLinodeDatabaseInstanceDeleteToolDryRunPreviewWithoutMutating(t *testing
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 
-			if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Status: statusActive}); err != nil {
+			if err := json.NewEncoder(w).Encode(DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Status: statusActive}); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 
@@ -2975,7 +2974,7 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunPreviewWithoutMutating(
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 
-			if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Status: statusActive}); err != nil {
+			if err := json.NewEncoder(w).Encode(DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Status: statusActive}); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 
@@ -3109,7 +3108,7 @@ func TestLinodeDatabaseEngineGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineName, Version: databaseVersion}); err != nil {
+		if err := json.NewEncoder(w).Encode(DatabaseEngine{ID: databaseEngineID, Engine: databaseEngineName, Version: databaseVersion}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

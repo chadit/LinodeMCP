@@ -12,7 +12,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
@@ -52,8 +51,8 @@ func TestLinodeNetworkingIPsListToolDefinition(t *testing.T) {
 func TestLinodeNetworkingIPsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	ips := linode.PaginatedResponse[linode.IPAddress]{
-		Data: []linode.IPAddress{{
+	ips := PaginatedResponse[IPAddress]{
+		Data: []IPAddress{{
 			Address: networkingIPAddressFixture,
 			Type:    keyIPv4,
 			Public:  true,
@@ -189,7 +188,7 @@ func TestLinodeNetworkingIPGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.IPAddress{
+		if err := json.NewEncoder(w).Encode(IPAddress{
 			Address: networkingIPAddressFixture,
 			Type:    keyIPv4,
 			Public:  true,
@@ -335,7 +334,7 @@ func TestLinodeNetworkingIPGetToolIPv6Success(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.IPAddress{Address: networkingIPv6AddressFixture}); err != nil {
+		if err := json.NewEncoder(w).Encode(IPAddress{Address: networkingIPv6AddressFixture}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

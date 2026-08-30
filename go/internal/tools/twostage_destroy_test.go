@@ -50,7 +50,7 @@ const (
 // writes between sequential calls.
 func twoStageDeleteServer(
 	t *testing.T,
-	state *atomic.Pointer[linode.Instance],
+	state *atomic.Pointer[Instance],
 	deleted *atomic.Bool,
 ) *config.Config {
 	t.Helper()
@@ -80,9 +80,9 @@ func twoStageDeleteServer(
 	}}
 }
 
-func instanceState() *atomic.Pointer[linode.Instance] {
-	box := &atomic.Pointer[linode.Instance]{}
-	box.Store(&linode.Instance{ID: 123, Label: labelWebProd, Status: statusRunning})
+func instanceState() *atomic.Pointer[Instance] {
+	box := &atomic.Pointer[Instance]{}
+	box.Store(&Instance{ID: 123, Label: labelWebProd, Status: statusRunning})
 
 	return box
 }
@@ -183,7 +183,7 @@ func TestInstanceDeleteTwoStageApplyDrift(t *testing.T) {
 
 	id := makePlan(ctx, t, handler)
 
-	state.Store(&linode.Instance{ID: 123, Label: "web-prod-01", Status: "offline"})
+	state.Store(&Instance{ID: 123, Label: "web-prod-01", Status: "offline"})
 
 	applyResult, err := handler(ctx, createRequestWithArgs(t, map[string]any{
 		keyInstanceID: float64(123),
@@ -256,7 +256,7 @@ func TestTwoStagePlanIncludesDependencies(t *testing.T) {
 // applies the rebuild, returning the instance body so the client decode passes.
 func rebuildServer(
 	t *testing.T,
-	state *atomic.Pointer[linode.Instance],
+	state *atomic.Pointer[Instance],
 	rebuilt *atomic.Bool,
 ) *config.Config {
 	t.Helper()
@@ -284,7 +284,7 @@ func rebuildServer(
 // stable across plan and apply, so only an intentional change would drift.
 func resizeServer(
 	t *testing.T,
-	state *atomic.Pointer[linode.Instance],
+	state *atomic.Pointer[Instance],
 	resized *atomic.Bool,
 ) *config.Config {
 	t.Helper()
@@ -320,8 +320,8 @@ func resizeServer(
 func TestInstanceResizeTwoStageOptInPlanThenApply(t *testing.T) {
 	t.Parallel()
 
-	box := &atomic.Pointer[linode.Instance]{}
-	box.Store(&linode.Instance{ID: 123, Label: labelWebProd, Type: typeG6Nanode1, Status: statusRunning})
+	box := &atomic.Pointer[Instance]{}
+	box.Store(&Instance{ID: 123, Label: labelWebProd, Type: typeG6Nanode1, Status: statusRunning})
 
 	resized := &atomic.Bool{}
 	cfg := resizeServer(t, box, resized)
@@ -384,8 +384,8 @@ func TestInstanceResizeTwoStageOptInPlanThenApply(t *testing.T) {
 func TestInstanceResizeTwoStageDefaultOff(t *testing.T) {
 	t.Parallel()
 
-	box := &atomic.Pointer[linode.Instance]{}
-	box.Store(&linode.Instance{ID: 123, Type: typeG6Nanode1})
+	box := &atomic.Pointer[Instance]{}
+	box.Store(&Instance{ID: 123, Type: typeG6Nanode1})
 
 	resized := &atomic.Bool{}
 	cfg := resizeServer(t, box, resized)
@@ -423,8 +423,8 @@ func TestInstanceResizeTwoStageDefaultOff(t *testing.T) {
 func TestInstanceResizeTwoStageRefusesABadArgumentBeforeReadingState(t *testing.T) {
 	t.Parallel()
 
-	box := &atomic.Pointer[linode.Instance]{}
-	box.Store(&linode.Instance{ID: 123, Type: typeG6Nanode1})
+	box := &atomic.Pointer[Instance]{}
+	box.Store(&Instance{ID: 123, Type: typeG6Nanode1})
 
 	resized := &atomic.Bool{}
 	cfg := resizeServer(t, box, resized)
@@ -589,8 +589,8 @@ func makePlan(
 func TestInstanceDeleteTwoStageIgnoresCosmeticDrift(t *testing.T) {
 	t.Parallel()
 
-	state := &atomic.Pointer[linode.Instance]{}
-	state.Store(&linode.Instance{
+	state := &atomic.Pointer[Instance]{}
+	state.Store(&Instance{
 		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: instanceUpdatedStamp,
 	})
 
@@ -604,7 +604,7 @@ func TestInstanceDeleteTwoStageIgnoresCosmeticDrift(t *testing.T) {
 	id := makePlan(ctx, t, handler)
 
 	// Only the cosmetic "updated" timestamp moves; this must not be drift.
-	state.Store(&linode.Instance{
+	state.Store(&Instance{
 		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: tsCosmeticBump,
 	})
 

@@ -13,7 +13,6 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
 func TestLinodeVolumeCloneToolDefinition(t *testing.T) {
@@ -100,7 +99,7 @@ func TestLinodeVolumeCloneToolValidation(t *testing.T) {
 func TestLinodeVolumeCloneToolSuccessfulClone(t *testing.T) {
 	t.Parallel()
 
-	volume := linode.Volume{ID: 444, Label: labelDataVol, Region: regionUSEast, Status: statusCreating}
+	volume := Volume{ID: 444, Label: labelDataVol, Region: regionUSEast, Status: statusCreating}
 
 	var requestCount atomic.Int32
 
@@ -189,7 +188,7 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.Volume{ID: 333, Label: testVolumeLabel, Region: regionUSEast}); err != nil {
+		if err := json.NewEncoder(w).Encode(Volume{ID: 333, Label: testVolumeLabel, Region: regionUSEast}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
