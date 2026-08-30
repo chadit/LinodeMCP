@@ -1,41 +1,14 @@
-"""Linode account tool - authenticated user account information."""
+"""The path-segment readers, answering the sentences one declaration words.
 
-import base64
-import binascii
+Two contract members read a text argument that is spliced into one URL path
+segment. They live here rather than beside the account tools that first wrote
+them because the emitter names them for every family that declares a segment,
+and a family-named file reads as per-tool code that could be retired with it.
+"""
+
 from typing import Any
 
 from linodemcp.tools.helpers import declared_or
-
-
-def oauth_client_thumbnail_png(
-    arguments: dict[str, Any],
-) -> tuple[bytes | None, str | None]:
-    """Decode the thumbnail_png_base64 argument; return (bytes, error message).
-
-    Answers the three sentences Go's reader answers, absent apart from present
-    but unusable, which is what the generated tool reaches through its validate
-    hook and its execute hook takes the bytes from.
-    """
-    if "thumbnail_png_base64" not in arguments:
-        return None, "thumbnail_png_base64 is required"
-    value = arguments["thumbnail_png_base64"]
-    if not isinstance(value, str) or not value.strip():
-        return None, "thumbnail_png_base64 must be a non-empty string"
-    try:
-        # validate=True rejects non-alphabet characters, matching Go's strict
-        # base64.StdEncoding.DecodeString rather than silently dropping them.
-        thumbnail_png = base64.b64decode(value, validate=True)
-    except (binascii.Error, ValueError):
-        return None, "thumbnail_png_base64 must be valid standard base64"
-    return thumbnail_png, None
-
-
-_ACCOUNT_AGREEMENT_FIELDS = (
-    "billing_agreement",
-    "eu_model",
-    "master_service_agreement",
-    "privacy_policy",
-)
 
 
 def required_pathsafe_segment(arguments: dict[str, Any], name: str) -> tuple[str, str]:

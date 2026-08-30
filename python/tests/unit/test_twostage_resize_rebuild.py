@@ -15,7 +15,6 @@ from linodemcp.gentools import (
     handle_linode_instance_rebuild,
     handle_linode_instance_resize,
 )
-from linodemcp.linode import parse_instance
 from linodemcp.twostage import reset_plan_store, set_plan_store
 from linodemcp.twostage.store import PlanStore
 
@@ -39,7 +38,6 @@ async def test_rebuild_plan_then_apply(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
     mock_linode_client.route_raw.return_value = {"id": 123, "status": "offline"}
-    mock_linode_client.list_instance_disks.return_value = []
 
     rebuild_args: dict[str, Any] = {
         "linode_id": 123,
@@ -137,11 +135,6 @@ async def test_resize_default_off_falls_through(
 ) -> None:
     # Without a config opt-in, a mode:"plan" resize call must NOT produce a plan;
     # CapWrite does not opt in by default.
-    mock_linode_client.get_instance.return_value = parse_instance(
-        {"id": 123, "type": "g6-nanode-1"}
-    )
-    mock_linode_client.list_instance_disks.return_value = []
-
     store = PlanStore()
     token = set_plan_store(store)
     try:
@@ -177,6 +170,6 @@ async def test_resize_plan_refuses_a_bad_argument_before_reading_state(
 
         assert result[0].text == "Error: type is required"
         assert await store.length() == 0
-        mock_linode_client.get_instance.assert_not_awaited()
+        mock_linode_client.route_raw.assert_not_awaited()
     finally:
         reset_plan_store(token)

@@ -98,7 +98,7 @@ func TestCallProtoRouteQueryRefusesANonObjectBody(t *testing.T) {
 	defer server.Close()
 
 	err := newRouteTestClient(t, server.URL).
-		CallProtoRoute(t.Context(), domainGetTool, []any{5}, &linodev1.Domain{})
+		CallProtoRouteQuery(t.Context(), domainGetTool, []any{5}, "", &linodev1.Domain{})
 	if err == nil {
 		t.Fatal("expected a refusal for a body that is not an object")
 	}

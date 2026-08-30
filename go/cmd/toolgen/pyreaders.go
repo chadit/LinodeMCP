@@ -11,14 +11,14 @@ import (
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-// The reader helpers that live beside the account parsers they were extracted
-// from rather than in linodemcp.tools.helpers, space-bounded so one lookup
-// covers the group.
-const pyAccountModuleReaders = " required_pathsafe_segment" +
+// The path-segment readers, which live in linodemcp.tools.segment_readers
+// rather than in linodemcp.tools.helpers, space-bounded so one lookup covers
+// the group.
+const pySegmentModuleReaders = " required_pathsafe_segment" +
 	" declared_pathsafe_segment declared_fragment_safe_segment "
 
 // pyHelpersModuleReaders is which readers linodemcp.tools.helpers exports,
-// which is every one this renderer writes except the account group above.
+// which is every one this renderer writes except the segment group above.
 const pyHelpersModuleReaders = " required_int_id required_bounded_int_id" +
 	" member_choice present_text present_bool declared_int_id" +
 	" declared_member_choice declared_present_text declared_present_bool" +

@@ -354,13 +354,13 @@ func (c *Client) handleResponse(resp *http.Response, target any) error {
 	return nil
 }
 
-// handleProtoResponse mirrors handleResponse for the proto-backed read path,
-// decoding with protojson and discarding fields the message does not model,
-// since the Linode API may return more fields than a message declares.
-func (c *Client) handleProtoResponse(resp *http.Response, msg proto.Message) error {
-	_, err := c.handleProtoResponseSubject(resp, "", msg)
+// IsObjectBody reports whether a decoded API body is a JSON object. Raw routes
+// pass bodies through untouched so documented explicit nulls survive, and the
+// bytes have already parsed as JSON, so the opening token settles the check.
+func IsObjectBody(raw json.RawMessage) bool {
+	opening := bytes.TrimLeft(raw, " \t\r\n")
 
-	return err
+	return len(opening) > 0 && opening[0] == '{'
 }
 
 // handleProtoResponseSubject also answers with the body it decoded, for the
@@ -477,43 +477,4 @@ func parseRetryAfter(resp *http.Response) time.Duration {
 	}
 
 	return 0
-}
-
-// routedGet resolves the tool's contracted route, issues the request, and
-// decodes the answer into one T, so a typed getter states only its tool,
-// operation, and path values. It resolves the route and calls makeRequest
-// itself because cmd/route-dump reads a tool-carrying builder only one hop
-// from the request layer.
-func routedGet[T any](ctx context.Context, client *Client, operation, tool string, values ...any) (*T, error) {
-	method, endpoint, segment, err := routedRequest(tool, "", values)
-	if err != nil {
-		return nil, wrapRequestError(operation, err)
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := client.onSurface(segment).makeRequest(ctx, method, endpoint, nil)
-	if err != nil {
-		return nil, wrapRequestError(operation, err)
-	}
-
-	defer drainClose(resp)
-
-	var out T
-	if err := client.handleResponse(resp, &out); err != nil {
-		return nil, err
-	}
-
-	return &out, nil
-}
-
-// listData unwraps a fetched paginated envelope, passing a fetch error
-// through, so list methods can ride routedGet without restating the unwrap.
-func listData[T any](response *PaginatedResponse[T], err error) ([]T, error) {
-	if err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
 }

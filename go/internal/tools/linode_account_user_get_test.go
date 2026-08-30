@@ -14,7 +14,6 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
-	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 const (
@@ -225,46 +224,5 @@ func TestLinodeAccountUserGetToolApiError(t *testing.T) {
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
 		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
-	}
-}
-
-// TestAccountUsernamePathArgumentRefusals pins the two sentences the shared
-// username reader answers. The grants update is the one caller left that reads
-// a username through it rather than through its contract, so its refusals are
-// covered here rather than through a generated tool.
-func TestAccountUsernamePathArgumentRefusals(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		args map[string]any
-		name string
-		want string
-	}{
-		{name: caseMissingUsername, args: map[string]any{}, want: errUsernameRequired},
-		{name: caseEmptyUsername, args: map[string]any{keyUsername: ""}, want: errUsernameNonEmpty},
-		{name: caseNumericUsername, args: map[string]any{keyUsername: 7}, want: errUsernameNonEmpty},
-		{
-			name: "separator in username",
-			args: map[string]any{keyUsername: "alice/dev"},
-			want: errUsernamePathParamInvalid,
-		},
-		{
-			name: "fragment in username",
-			args: map[string]any{keyUsername: "alice#dev"},
-			want: errUsernamePathParamInvalid,
-		},
-		{name: "usable username", args: map[string]any{keyUsername: "alice"}, want: ""},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			request := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: testCase.args}}
-
-			if _, got := tools.AccountUsernamePathArgument(&request); got != testCase.want {
-				t.Errorf("AccountUsernamePathArgument = %q, want %q", got, testCase.want)
-			}
-		})
 	}
 }

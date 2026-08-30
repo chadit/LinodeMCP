@@ -557,8 +557,8 @@ func pyModuleImports(tools []*pyTool) ([]string, error) {
 		return nil, err
 	}
 
-	if account := pyNamedIn(readers, pyAccountModuleReaders); len(account) > 0 {
-		lines = append(lines, "from linodemcp.tools.linode_account import "+strings.Join(account, ", "))
+	if account := pyNamedIn(readers, pySegmentModuleReaders); len(account) > 0 {
+		lines = append(lines, "from linodemcp.tools.segment_readers import "+strings.Join(account, ", "))
 	}
 
 	lines = append(lines, "from linodemcp.tools.constraints import check as check_constraints")

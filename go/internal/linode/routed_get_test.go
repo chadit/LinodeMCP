@@ -8,14 +8,18 @@ import (
 	"sync/atomic"
 	"testing"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
 
-// An empty type ID would collapse "/linode/types/{type_id}" to the collection
-// route, so the typed getter refuses before anything is sent and reports the
-// argument class, not a network failure.
-func TestClientGetTypeEmptyIDReachesNoRequest(t *testing.T) {
+// profileAppGetTool is the single-resource read both tests below drive.
+const profileAppGetTool = "linode_profile_app_get"
+
+// An empty path value would collapse "/profile/apps/{app_id}" to the
+// collection route, so the routed read refuses before anything is sent and
+// reports the argument class, not a network failure.
+func TestCallProtoRouteQueryEmptyPathValueReachesNoRequest(t *testing.T) {
 	t.Parallel()
 
 	var requestCount atomic.Int32
@@ -28,9 +32,9 @@ func TestClientGetTypeEmptyIDReachesNoRequest(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetType(t.Context(), "")
+	err := client.CallProtoRouteQuery(t.Context(), profileAppGetTool, []any{""}, "", &linodev1.ProfileApp{})
 	if !errors.Is(err, linoderoute.ErrEmptyValue) {
-		t.Fatalf("GetType(\"\") error = %v, want ErrEmptyValue", err)
+		t.Fatalf("CallProtoRouteQuery(\"\") error = %v, want ErrEmptyValue", err)
 	}
 
 	argErr, ok := errors.AsType[*linode.ArgumentError](err)
@@ -38,13 +42,13 @@ func TestClientGetTypeEmptyIDReachesNoRequest(t *testing.T) {
 		t.Fatalf("error %v is not *linode.ArgumentError", err)
 	}
 
-	if argErr.Operation != "GetType" {
-		t.Errorf("argErr.Operation = %v, want GetType", argErr.Operation)
+	if argErr.Operation != profileAppGetTool {
+		t.Errorf("argErr.Operation = %v, want %v", argErr.Operation, profileAppGetTool)
 	}
 
 	// The message is the only surface a tool caller sees, so the shape that
 	// names the operation before the cause is pinned here.
-	wantMessage := "invalid arguments for GetType: " + argErr.Err.Error()
+	wantMessage := "invalid arguments for linode_profile_app_get: " + argErr.Err.Error()
 	if argErr.Error() != wantMessage {
 		t.Errorf("argErr.Error() = %q, want %q", argErr.Error(), wantMessage)
 	}
@@ -54,9 +58,10 @@ func TestClientGetTypeEmptyIDReachesNoRequest(t *testing.T) {
 	}
 }
 
-// A body that ends before its declared length is a transport failure the proto
-// read path has to surface, not a decode complaint over half a message.
-func TestClientGetProfileAppProtoReportsATruncatedBody(t *testing.T) {
+// A body cut short of its declared Content-Length is a read failure, not an
+// empty answer, so the proto read reports it rather than decoding a partial
+// message.
+func TestCallProtoRouteQueryReportsATruncatedBody(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -71,8 +76,8 @@ func TestClientGetProfileAppProtoReportsATruncatedBody(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetProfileAppProto(t.Context(), 1)
+	err := client.CallProtoRouteQuery(t.Context(), profileAppGetTool, []any{1}, "", &linodev1.ProfileApp{})
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
-		t.Fatalf("GetProfileAppProto() error = %v, want an unexpected-EOF read failure", err)
+		t.Fatalf("CallProtoRouteQuery() error = %v, want an unexpected-EOF read failure", err)
 	}
 }

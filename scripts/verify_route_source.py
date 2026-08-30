@@ -4,11 +4,10 @@
 Each tool's route is declared once, as a `linode.mcp.v1.tool_route` option on
 its proto input message, and each client now has request primitives that
 resolve the method and path from that declaration: Go's makeRouteRequest,
-makeRouteRequestQuery and makeRouteRequestContentType plus the generic
-routedGet helper, Python's make_route_request and
-make_route_request_content_type. A call
-site that reaches one of those names its tool and passes the path values, so
-the URL exists in the proto and nowhere else.
+makeRouteRequestQuery and makeRouteRequestContentType, Python's
+make_route_request and make_route_request_content_type. A call site that
+reaches one of those names its tool and passes the path values, so the URL
+exists in the proto and nowhere else.
 
 Every other call site still spells the route out again in its own language.
 That is the duplication tool_route was added to remove, and it is the reason
@@ -153,10 +152,6 @@ _CLIENTS: dict[str, Client] = {
             "makeRouteRequest",
             "makeRouteRequestQuery",
             "makeRouteRequestContentType",
-            # The generic typed helper resolves its route from the proto
-            # before touching makeRequest, so its body is plumbing and its
-            # call sites are proto-resolved.
-            "routedGet",
         ),
         # The shared list transport: every endpoint it forwards was resolved
         # from the proto by a routed list fetcher, so its one request call is
@@ -186,12 +181,7 @@ def call_pattern(names: Iterable[str]) -> Pattern[str]:
     """
     alternatives = "|".join(re.escape(name) for name in names)
 
-    # The undotted branch is for Go's generic helpers, reached as plain
-    # functions with a type argument (routedGet[Domain](...)); requiring the
-    # bracket keeps every other undotted mention out of the count.
-    return re.compile(
-        rf"(?:\.(?:{alternatives})|(?<![.\w])(?:{alternatives})\[[^\]]*\])\("
-    )
+    return re.compile(rf"\.(?:{alternatives})\(")
 
 
 def is_test_path(relative: Path) -> bool:

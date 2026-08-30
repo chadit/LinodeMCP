@@ -11,8 +11,6 @@ import json
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-import pytest
-
 from linodemcp.config import TwoStageConfig
 from linodemcp.gentools import handle_linode_instance_delete
 from linodemcp.profiles import Capability
@@ -28,16 +26,6 @@ if TYPE_CHECKING:
     from unittest.mock import AsyncMock
 
     from linodemcp.config import Config
-
-
-@pytest.fixture(autouse=True)
-def stub_instance_walk(mock_linode_client: AsyncMock) -> None:
-    """Stub the sub-fetches the instance plan-time walk makes so the walk runs
-    cleanly; the config tests only care about plan TTL and opt-in behavior.
-    """
-    mock_linode_client.list_instance_volumes.return_value = {"data": []}
-    mock_linode_client.list_instance_ips.return_value = {"ipv4": {"public": []}}
-    mock_linode_client.list_instance_firewalls.return_value = {"data": []}
 
 
 async def test_config_opt_out_falls_through(

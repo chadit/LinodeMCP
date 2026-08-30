@@ -12,10 +12,11 @@ import (
 )
 
 // TestInstanceProtoCanonicalOutput pins the proto-canonical serialization the
-// instance read handlers emit. The Python instance_to_response_dict output is
-// verified identical for the same input, so these invariants keep the two
-// implementations in lockstep: a repeated field is always present (here,
-// interfaces), and an unset message field is omitted (here, last_successful).
+// instance read handlers emit. Python serializes the same message through
+// proto_to_canonical_dict in tools/proto_response.py, so these invariants keep
+// the two implementations in lockstep: a repeated field is always present
+// (here, interfaces), and an unset message field is omitted (here,
+// last_successful).
 func TestInstanceProtoCanonicalOutput(t *testing.T) {
 	t.Parallel()
 
@@ -58,8 +59,8 @@ func TestInstanceProtoCanonicalOutput(t *testing.T) {
 
 // TestVolumeProtoCanonicalOutput pins the proto-canonical serialization the
 // volume_get handler emits: linode_id and linode_label are omitted when the
-// volume is detached (optional message fields unset), matching the Python
-// _volume_to_dict output for the same input.
+// volume is detached (optional message fields unset), matching what Python's
+// proto_to_canonical_dict emits for the same message.
 func TestVolumeProtoCanonicalOutput(t *testing.T) {
 	t.Parallel()
 
@@ -142,7 +143,7 @@ func TestVpcProtoCanonicalOutput(t *testing.T) {
 // TestPlacementGroupProtoCanonicalOutput pins the proto-canonical serialization
 // the placement group write handlers emit: members is always present (a repeated
 // field), and migrations is omitted when the group is not migrating (an optional
-// message). The Python placement_group_to_response_dict output matches this.
+// message).
 func TestPlacementGroupProtoCanonicalOutput(t *testing.T) {
 	t.Parallel()
 
@@ -421,8 +422,7 @@ func TestAccountTransferProtoCanonicalOutput(t *testing.T) {
 
 // TestObjectStorageKeyProtoCanonicalOutput pins the proto-canonical serialization
 // the object_storage_key_get handler emits: bucket_access and regions are always
-// present (repeated fields), even when the key has none. The Python
-// object_storage_key_to_response_dict output matches this.
+// present (repeated fields), even when the key has none.
 func TestObjectStorageKeyProtoCanonicalOutput(t *testing.T) {
 	t.Parallel()
 

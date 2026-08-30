@@ -169,3 +169,51 @@ func nonBlankText(request *mcp.CallToolRequest, name, absent, unusable string) (
 
 	return value, ""
 }
+
+// RequiredPathSafeArgument reads a string that goes into a path segment,
+// rejecting the separators and traversal segments that would let a value
+// address a route it was not given. The three arguments spelled this way
+// (euuid, client_id, token) share one implementation so their wording cannot
+// drift apart, and it is exported because the generated read tools reach it
+// through their validate hooks.
+func RequiredPathSafeArgument(request *mcp.CallToolRequest, name string) (string, string) {
+	return DeclaredPathSafeArgument(request, name, "", "", "")
+}
+
+// DeclaredPathSafeArgument is the path-safe reader answering the sentences one
+// declaration words. The segment tools name the characters they refuse in five
+// different ways, which is why the words are the declaration's and only the
+// accepted set is the member's.
+func DeclaredPathSafeArgument(request *mcp.CallToolRequest, name, absent, unusable, refused string) (string, string) {
+	return segmentArgument(request, name, "/?", absent, unusable, refused)
+}
+
+// DeclaredFragmentSafeArgument is the same reader over the narrower set that
+// also refuses the fragment marker. An OAuth client id may carry one and the
+// ids these routes address may not, which is a difference in what is accepted
+// rather than in what is said, so it is a member of its own.
+func DeclaredFragmentSafeArgument(request *mcp.CallToolRequest, name, absent, unusable, refused string) (string, string) {
+	return segmentArgument(request, name, "/?#", absent, unusable, refused)
+}
+
+// segmentArgument reads a text argument that has to survive being spliced into
+// one path segment, refusing the characters in guarded along with a traversal
+// segment or untrimmed padding.
+func segmentArgument(request *mcp.CallToolRequest, name, guarded, absent, unusable, refused string) (string, string) {
+	raw, exists := request.GetArguments()[name]
+	if !exists {
+		return "", declaredOr(absent, name+" is required")
+	}
+
+	value, ok := raw.(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return "", declaredOr(unusable, name+" must be a non-empty string")
+	}
+
+	if value != strings.TrimSpace(value) || strings.ContainsAny(value, guarded) || strings.Contains(value, "..") {
+		return "", declaredOr(refused,
+			name+" must not contain path separators, query separators, or traversal segments")
+	}
+
+	return value, ""
+}

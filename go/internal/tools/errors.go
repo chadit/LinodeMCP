@@ -27,15 +27,6 @@ var (
 	ErrBucketRegionRequired = errors.New("region is required")
 )
 
-// Sentinel errors for placement group validation.
-var (
-	ErrPlacementGroupLinodesRequired  = errors.New("linodes is required")
-	ErrPlacementGroupLinodesJSON      = errors.New("linodes must be a JSON array of positive integer Linode IDs")
-	ErrPlacementGroupLinodesEmpty     = errors.New("linodes must include at least one Linode ID")
-	ErrPlacementGroupLinodesPositive  = errors.New("linodes must contain only positive integer Linode IDs")
-	ErrPlacementGroupLinodesDuplicate = errors.New("linodes entries must be unique")
-)
-
 // The profile-builder tools word their refusals as tool results rather than
 // errors, so their sentences live beside the handlers that answer them
 // (builderstate.go and linode_profile_draft_save.go) rather than here.

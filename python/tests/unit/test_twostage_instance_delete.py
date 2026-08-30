@@ -12,8 +12,6 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-import pytest
-
 from linodemcp.gentools import handle_linode_instance_delete
 from linodemcp.twostage import reset_plan_store, set_plan_store
 from linodemcp.twostage.store import PlanStore
@@ -22,16 +20,6 @@ if TYPE_CHECKING:
     from unittest.mock import AsyncMock
 
     from linodemcp.config import Config
-
-
-@pytest.fixture(autouse=True)
-def stub_instance_walk(mock_linode_client: AsyncMock) -> None:
-    """Stub the sub-fetches the plan-time dependency walk makes so the walk
-    runs cleanly; production fetches them from the API.
-    """
-    mock_linode_client.list_instance_volumes.return_value = {"data": []}
-    mock_linode_client.list_instance_ips.return_value = {"ipv4": {"public": []}}
-    mock_linode_client.list_instance_firewalls.return_value = {"data": []}
 
 
 def _instance_state(status: str = "running") -> dict[str, Any]:

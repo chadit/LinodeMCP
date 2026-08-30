@@ -7,20 +7,22 @@ import (
 	"sync/atomic"
 	"testing"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
 
-// The routed list fetchers resolve their path from the tool's declared route
-// instead of taking one their caller built. These tests pin the URL the resolver
-// produces and the class a resolution failure comes back in.
+// The routed list fetcher resolves its path from the tool's declared route
+// instead of taking one its caller built. This test pins the class a
+// resolution failure comes back in.
 
-// opListTaggedObjects is the operation name both tagged-object list methods
-// stamp on whichever error class they report.
-const opListTaggedObjects = "ListTaggedObjects"
+// tagObjectListTool is the tool whose one path slot the empty label leaves
+// unfilled; the routed primitive stamps the tool name on the error class it
+// reports.
+const tagObjectListTool = "linode_tag_object_list"
 
-// routedListToken is non-empty only because the client requires a token; these
-// tests assert on URLs, not on auth.
+// routedListToken is non-empty only because the client requires a token; the
+// assertions cover what reached the wire, not auth.
 const routedListToken = "routed-list-token"
 
 // refusingServer answers no request and reports any it receives, so a test can
@@ -69,15 +71,16 @@ func assertRefusedBeforeSending(t *testing.T, err error, operation string, recei
 	}
 }
 
-// Same proof for the request primitive that carries a query string: it resolves
-// its route the same way but reaches the wire directly, not through a list fetcher.
-func TestRoutedQueryRequestRefusesAnEmptyPathValue(t *testing.T) {
+// An empty tag label would collapse "/tags/{tag_label}" to the collection
+// route, so the fetcher refuses before anything is sent.
+func TestListProtoRouteRefusesAnEmptyPathValue(t *testing.T) {
 	t.Parallel()
 
 	srv, received := refusingServer(t)
 	client := linode.NewClient(srv.URL, routedListToken, nil, linode.WithMaxRetries(0))
 
-	_, err := client.ListTaggedObjects(t.Context(), "", 2, 25)
+	_, err := linode.ListProtoRoute(t.Context(), client, tagObjectListTool, []any{""}, "", 2, 25,
+		func() *linodev1.TaggedObject { return &linodev1.TaggedObject{} })
 
-	assertRefusedBeforeSending(t, err, opListTaggedObjects, received)
+	assertRefusedBeforeSending(t, err, tagObjectListTool, received)
 }

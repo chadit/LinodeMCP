@@ -14,7 +14,6 @@ from typing import Any
 import pytest
 
 from linodemcp.tools.helpers import free_text, id_list, present_string
-from linodemcp.tools.linode_account import oauth_client_thumbnail_png
 
 
 @pytest.mark.parametrize(
@@ -78,44 +77,3 @@ def test_free_text_answers_its_own_sentences(
 
     assert got == value
     assert message == expected
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected"),
-    [
-        ({}, "thumbnail_png_base64 is required"),
-        (
-            {"thumbnail_png_base64": "  "},
-            "thumbnail_png_base64 must be a non-empty string",
-        ),
-        (
-            {"thumbnail_png_base64": 7},
-            "thumbnail_png_base64 must be a non-empty string",
-        ),
-        (
-            {"thumbnail_png_base64": "not!!base64"},
-            "thumbnail_png_base64 must be valid standard base64",
-        ),
-    ],
-)
-def test_thumbnail_reader_answers_every_unusable_shape(
-    arguments: dict[str, Any], expected: str
-) -> None:
-    """The execute hook decodes through this, so every refusal still has a home.
-
-    The rules answer the same sentences ahead of the call; this is the reader
-    the hook that sends the bytes reaches for, and it owes the caller the same
-    words when it is the one that finds the problem.
-    """
-    payload, message = oauth_client_thumbnail_png(arguments)
-
-    assert payload is None
-    assert message == expected
-
-
-def test_thumbnail_reader_hands_back_the_decoded_image() -> None:
-    """A decodable image reaches the execute hook as bytes, with no message."""
-    payload, message = oauth_client_thumbnail_png({"thumbnail_png_base64": "aGVsbG8="})
-
-    assert payload == b"hello"
-    assert message is None

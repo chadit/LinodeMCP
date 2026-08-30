@@ -80,11 +80,3 @@ func newUnreachableRoutedClient(t *testing.T) *linode.Client {
 
 	return linode.NewClient(baseURL, routedTransportToken, nil, linode.WithMaxRetries(0))
 }
-
-// Path values chosen to pass each method's own argument guard. A rejected value
-// short-circuits ahead of the transport, so the case would assert a validation
-// error instead of the wrap.
-const (
-	testIPv4      = "198.51.100.7"
-	testIPv6Range = "2001:db8::/64"
-)

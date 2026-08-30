@@ -96,6 +96,36 @@ func TestListToolsSendPageQuery(t *testing.T) {
 	}
 }
 
+// TestListToolsReadAnInt64Page pins the page reader's third number form: a
+// caller handing the pair over as int64 rather than as the JSON float64 or the
+// platform int reaches the same query.
+func TestListToolsReadAnInt64Page(t *testing.T) {
+	t.Parallel()
+
+	var gotQuery string
+
+	srv := listPageServer(t, listPagePathDomains, &gotQuery)
+	defer srv.Close()
+
+	_, _, handler := gentools.NewLinodeDomainListTool(newTestConfig(srv.URL))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyPage:     int64(2),
+		keyPageSize: int64(50),
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Errorf("result.IsError = true, want false")
+	}
+
+	if gotQuery != listPageQuery {
+		t.Errorf("query = %q, want %q", gotQuery, listPageQuery)
+	}
+}
+
 // TestListToolsOmitUnsetPageQuery is the other half of the contract: with no
 // page pair the request carries no query, so the API's own default page applies
 // and the request matches the pre-pagination one byte for byte.

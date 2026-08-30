@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
@@ -405,5 +406,33 @@ func TestRequiredPresentArgumentReadsPresenceNotValue(t *testing.T) {
 				t.Errorf("RequiredPresentArgument = %q, want %q", got, testCase.want)
 			}
 		})
+	}
+}
+
+// TestToolsCallTheEnvironmentTheCallerNames is the found half of the
+// environment lookup. The default environment points at a closed port so the
+// call can only succeed by reaching the one the caller named.
+func TestToolsCallTheEnvironmentTheCallerNames(t *testing.T) {
+	t.Parallel()
+
+	var gotQuery string
+
+	srv := listPageServer(t, listPagePathDomains, &gotQuery)
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: "http://127.0.0.1:1", Token: tokenTest}},
+		envProd:       {Label: envProd, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+
+	_, _, handler := gentools.NewLinodeDomainListTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{keyEnvironment: envProd}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("result = %q, want the named environment's server answer", resultText(t, result))
 	}
 }

@@ -54,9 +54,6 @@ var ErrUpdateImageRequestRequired = errors.New("update image request is required
 // ErrPlacementGroupUnassignLinodesRequired is returned when a placement group unassign request has no Linode IDs.
 var ErrPlacementGroupUnassignLinodesRequired = errors.New("linodes must include at least one ID")
 
-// ErrLinodeIDPositive is returned when a Linode ID argument is not positive.
-var ErrLinodeIDPositive = errors.New("linode_id must be a positive integer")
-
 // ErrIPv6RangePrefixRange is returned when an IPv6 range prefix length is outside the IPv6 CIDR range.
 var ErrIPv6RangePrefixRange = errors.New("prefix_length must be an integer between 1 and 128")
 
@@ -72,20 +69,8 @@ var ErrRegionIDRequired = errors.New("region_id is required")
 // ErrLabelRequired is returned when a label argument is empty.
 var ErrLabelRequired = errors.New("label is required")
 
-// ErrIPAddressRequired is returned when an IP address argument is empty.
-var ErrIPAddressRequired = errors.New("IP address is required")
-
 // ErrRDNSRequired is returned when a reverse DNS update has no rdns value.
 var ErrRDNSRequired = errors.New("rdns is required")
-
-// ErrIPAddressInvalid is returned when an IP address argument is not a valid IPv4 or IPv6 address.
-var ErrIPAddressInvalid = errors.New("IP address must be a valid IPv4 or IPv6 address")
-
-// ErrIPv6RangeInvalid is returned when an IPv6 range argument is not a valid IPv6 prefix.
-var ErrIPv6RangeInvalid = errors.New("ipv6_range must be a valid IPv6 prefix")
-
-// ErrIPv4AddressInvalid is returned when an IPv4-only route receives a non-IPv4 address.
-var ErrIPv4AddressInvalid = errors.New("IP address must be a valid IPv4 address")
 
 // ErrIPAssignmentsRequired is returned when an IP assignment request has no assignments.
 var ErrIPAssignmentsRequired = errors.New("at least one IP assignment is required")
@@ -102,20 +87,8 @@ var ErrTransferYearPositive = errors.New("year must be a positive integer")
 // ErrTransferMonthRange is returned when a transfer month argument is outside 1-12.
 var ErrTransferMonthRange = errors.New("month must be an integer between 1 and 12")
 
-// ErrConfigIDPositive is returned when a config ID argument is not positive.
-var ErrConfigIDPositive = errors.New("config_id must be a positive integer")
-
-// ErrNodeBalancerIDPositive is returned when a NodeBalancer ID argument is not positive.
-var ErrNodeBalancerIDPositive = errors.New("nodebalancer_id must be a positive integer")
-
-// ErrNodeIDPositive is returned when a node ID argument is not positive.
-var ErrNodeIDPositive = errors.New("node_id must be a positive integer")
-
 // ErrDiskIDPositive is returned when a disk ID argument is not positive.
 var ErrDiskIDPositive = errors.New("disk_id must be a positive integer")
-
-// ErrInterfaceIDPositive is returned when an interface ID argument is not positive.
-var ErrInterfaceIDPositive = errors.New("interface_id must be a positive integer")
 
 // ErrCreateConfigRequestRequired is returned when CreateInstanceConfig is called without a request body.
 var ErrCreateConfigRequestRequired = errors.New("create config request is required")
@@ -159,17 +132,11 @@ var ErrUpdateNodeBalancerFirewallsRequestRequired = errors.New("firewall_ids is 
 // ErrInvalidFirewallTemplateSlug is returned when a firewall template slug is not documented.
 var ErrInvalidFirewallTemplateSlug = errors.New("firewall template slug must be one of public or vpc")
 
-// ErrFirewallDeviceIDPositive is returned when a firewall device ID is not positive.
-var ErrFirewallDeviceIDPositive = errors.New("device id must be a positive integer")
-
 // ErrFirewallDeviceTypeRequired is returned when a firewall device type is missing.
 var ErrFirewallDeviceTypeRequired = errors.New("device type is required")
 
 // ErrInvalidFirewallDeviceType is returned when a firewall device type is not documented.
 var ErrInvalidFirewallDeviceType = errors.New("device type must be one of linode, nodebalancer, or linode_interface")
-
-// ErrFirewallIDPositive is returned when a firewall ID argument is not positive.
-var ErrFirewallIDPositive = errors.New("firewall_id must be a positive integer")
 
 // ErrFirewallRulesRequired is returned when a firewall rules update request is missing.
 var ErrFirewallRulesRequired = errors.New("firewall rules request is required")

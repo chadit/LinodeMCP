@@ -96,20 +96,6 @@ func (c *Client) makeRouteRequestContentType(
 	return c.makeRequestWithContentType(ctx, method, endpoint, body)
 }
 
-// routedGet is the generic typed read: it resolves its route from the proto
-// and reaches makeRequest one hop down, the same skip the other routed
-// primitives earn.
-func routedGet[T any](
-	ctx context.Context, client *Client, operation, tool string, values ...any,
-) (*T, error) {
-	method, endpoint, err := routedRequest(tool, "", values)
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, client.makeRequest(ctx, method, endpoint, nil)
-}
-
 // fetchList is the plumbing tuple's entry: its endpoints only ever arrive
 // contract-resolved from the routed fetchers, so its one hop to makeRequest
 // must not count either.
@@ -144,10 +130,6 @@ func (c *Client) uploadThumbnail(ctx context.Context, id int, body io.Reader) er
 	return c.makeRouteRequestContentType(
 		ctx, "linode_thing_thumbnail_update", "image/png", body, id,
 	)
-}
-
-func (c *Client) getTypedThing(ctx context.Context, id int) (*Thing, error) {
-	return routedGet[Thing](ctx, c, "GetThing", "linode_thing_get", id)
 }
 """
 
@@ -199,7 +181,7 @@ class Things(Client):
 
 # What the two fixture clients measure: the calls in the methods files only.
 GO_HANDBUILT = 2
-GO_ROUTED = 4
+GO_ROUTED = 3
 PY_HANDBUILT = 2
 PY_ROUTED = 2
 MEASURED_COUNTS = f"go {GO_HANDBUILT}\npython {PY_HANDBUILT}\n"
@@ -353,7 +335,6 @@ def test_each_language_declares_the_routed_primitives_it_counts() -> None:
         "makeRouteRequest",
         "makeRouteRequestQuery",
         "makeRouteRequestContentType",
-        "routedGet",
     )
     assert gate._CLIENTS["go"].plumbing == ("fetchList",)
     assert gate._CLIENTS["python"].routed == (

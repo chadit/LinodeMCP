@@ -260,8 +260,7 @@ def version_rows(version_info: dict[str, Any]) -> list[HealthRow]:
     """Map the build/version info dict to label/value rows for the health view.
 
     Shows the fields a user wants when reporting a problem: version, git commit
-    and branch, the Python version, and the platform. Nested ``features`` is
-    omitted (the catalog is the better surface for that).
+    and branch, the Python version, and the platform.
     """
     fields = (
         ("version", "version"),

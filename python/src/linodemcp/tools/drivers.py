@@ -2424,7 +2424,6 @@ async def run_destructive_tool(
     error_action: str,
     id_args: Mapping[str, str | int],
     fetch_state: Callable[[RetryableClient], Awaitable[Any]],
-    execute: Callable[[RetryableClient], Awaitable[None]] | None = None,
     dependency_walk: Callable[[RetryableClient, Any], Awaitable[DryRunDetails]]
     | None = None,
     error: str | None = None,
@@ -2446,10 +2445,6 @@ async def run_destructive_tool(
     once at the call site and never again. A value is a string or an integer,
     the pair a path slot takes, since a resource can be addressed by label as
     readily as by number.
-
-    execute is for the callers whose removal still goes through a typed client
-    method. Leaving it out takes the routed primitive instead, which is what a
-    generated destroy hands over: the tool and its ids are the whole call.
 
     body is what a removal that is a rebuild rather than a delete sends, and
     redact_preview names the members a preview stands in for so a root password
@@ -2486,13 +2481,6 @@ async def run_destructive_tool(
         return _destroy_answer(tool, message(), echo, payload_field, decoded)
 
     async def execute_and_report(client: RetryableClient) -> dict[str, Any]:
-        # A caller passes execute only where the delete still goes through a
-        # typed client method, and its removal answers with nothing to decode.
-        if execute is not None:
-            await execute(client)
-
-            return answer(None)
-
         return answer(await _routed_removal(client, tool, values, body))
 
     staging = _staged(arguments)

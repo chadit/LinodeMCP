@@ -1929,3 +1929,43 @@ func TestSetIntOmitsAnExplicitNull(t *testing.T) {
 		t.Errorf("body = %s, want %s", got, want)
 	}
 }
+
+// TestWriteBodySetTagsReadsEveryForm covers the tags reader's inputs the write
+// tools do not reach on their own: the JSON-encoded array a client that cannot
+// send arrays falls back to, the JSON null that decodes to no array at all, and
+// a native array carrying an entry that is not a string.
+func TestWriteBodySetTagsReadsEveryForm(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		raw     any
+		name    string
+		want    string
+		message string
+	}{
+		{name: "json-encoded array", raw: `[" team-a ","team-b"]`, want: `{"tags":["team-a","team-b"]}`},
+		{name: "json null", raw: "null", message: errTagsNotJSONArray},
+		{name: "native array with a number entry", raw: []any{"team-a", 5}, message: errTagsNotJSONArray},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := tools.NewWriteBody(bodyRequest(map[string]any{keyTags: testCase.raw}), 1)
+			body.SetTags(keyTags)
+
+			if got := body.Message(); got != testCase.message {
+				t.Fatalf("message = %q, want %q", got, testCase.message)
+			}
+
+			if testCase.message != "" {
+				return
+			}
+
+			if got := marshalBody(t, body); got != testCase.want {
+				t.Errorf("body = %s, want %s", got, testCase.want)
+			}
+		})
+	}
+}

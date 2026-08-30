@@ -12,8 +12,8 @@ as a successful empty list in one language only.
 
 The rule is narrow on purpose: `or []` is flagged only inside a function that
 itself calls serialize_list_response or serialize_keyed_list_response. The same
-idiom in a per-element shaping helper (linode_domains, linode_object_storage)
-coerces a documented-nullable field and is untouched.
+idiom in a per-element shaping helper coerces a documented-nullable field and
+is untouched.
 
 Use serialize_keyed_list_response, which checks the root object and hands the
 member to the array and element checks unexamined.

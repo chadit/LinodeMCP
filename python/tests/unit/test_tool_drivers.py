@@ -423,9 +423,6 @@ async def test_destroy_driver_refuses_an_undeclared_message_with_no_override(
     async def fetch(_client: RetryableClient) -> Any:
         return {}
 
-    async def execute(_client: RetryableClient) -> None:
-        pytest.fail("the call must be refused before anything is deleted")
-
     client = _client()
     with (
         patch("linodemcp.tools.helpers.RetryableClient", return_value=client),
@@ -439,8 +436,9 @@ async def test_destroy_driver_refuses_an_undeclared_message_with_no_override(
             error_action="delete DNS record",
             id_args={"domain_id": 5, "record_id": 7},
             fetch_state=fetch,
-            execute=execute,
         )
+
+    client.route_call.assert_not_awaited()
 
 
 async def test_destroy_driver_uses_the_supplied_prose_when_none_is_declared(
@@ -458,9 +456,6 @@ async def test_destroy_driver_uses_the_supplied_prose_when_none_is_declared(
     async def fetch(_client: RetryableClient) -> Any:
         return {}
 
-    async def execute(_client: RetryableClient) -> None:
-        return None
-
     client = _client()
     with (
         patch("linodemcp.tools.helpers.RetryableClient", return_value=client),
@@ -473,7 +468,6 @@ async def test_destroy_driver_uses_the_supplied_prose_when_none_is_declared(
             error_action="delete DNS record",
             id_args={"domain_id": 5, "record_id": 7},
             fetch_state=fetch,
-            execute=execute,
             success_message="record 7 is gone",
         )
 
@@ -495,9 +489,6 @@ async def test_destroy_driver_refuses_an_echo_it_cannot_fill(
     async def fetch(_client: RetryableClient) -> Any:
         return {}
 
-    async def execute(_client: RetryableClient) -> None:
-        return None
-
     client = _client()
     with (
         patch("linodemcp.tools.helpers.RetryableClient", return_value=client),
@@ -511,22 +502,19 @@ async def test_destroy_driver_refuses_an_echo_it_cannot_fill(
             error_action="delete the SSL certificate",
             id_args={"region": "us-east", "label": "assets"},
             fetch_state=fetch,
-            execute=execute,
             success_message="gone",
         )
+
+    client.route_call.assert_not_awaited()
 
 
 async def test_destroy_driver_fills_the_echo_from_the_ids(
     sample_config: Config,
 ) -> None:
     """Every echo field named by an id is filled from the value given."""
-    deleted: list[str] = []
 
     async def fetch(_client: RetryableClient) -> Any:
         return {"id": 7}
-
-    async def execute(_client: RetryableClient) -> None:
-        deleted.append("done")
 
     client = _client()
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
@@ -537,12 +525,13 @@ async def test_destroy_driver_fills_the_echo_from_the_ids(
             error_action="delete DNS record",
             id_args={"domain_id": 5, "record_id": 7},
             fetch_state=fetch,
-            execute=execute,
             success_message="Record 7 removed successfully from domain 5",
         )
 
     body = result[0].text
-    assert deleted == ["done"]
+    client.route_call.assert_awaited_once_with(
+        "linode_domain_record_delete", 5, 7, retry=False
+    )
     assert '"domain_id": 5' in body
     assert '"record_id": 7' in body
     assert '"message": "Record 7 removed successfully from domain 5"' in body
@@ -956,11 +945,10 @@ async def test_destroy_driver_refuses_a_response_with_nothing_to_report_under(
     async def fetch(_client: RetryableClient) -> Any:
         return {}
 
-    async def execute(_client: RetryableClient) -> None:
-        pytest.fail("the call must be refused before anything is deleted")
-
     broken = _broken("linode_domain_delete", response="linode.mcp.v1.Domain")
+    client = _client()
     with (
+        patch("linodemcp.tools.helpers.RetryableClient", return_value=client),
         patch("linodemcp.linode.routes.contract_for", return_value=broken),
         pytest.raises(DriverError, match="has no message field to report under"),
     ):
@@ -971,9 +959,10 @@ async def test_destroy_driver_refuses_a_response_with_nothing_to_report_under(
             error_action="delete domain",
             id_args={"domain_id": 5},
             fetch_state=fetch,
-            execute=execute,
             success_message="gone",
         )
+
+    client.route_call.assert_not_awaited()
 
 
 async def test_get_driver_answers_the_declared_response(
@@ -1421,7 +1410,7 @@ async def test_write_driver_reports_the_declared_failure_sentence(
 async def test_destroy_driver_removes_through_the_routed_primitive(
     sample_config: Config,
 ) -> None:
-    """A caller that hands over no execute leaves the removal to the route.
+    """The removal is the route and nothing else.
 
     A delete sends no body and reads nothing back, so the tool and its ids are
     the whole call, and the generated destroys pass neither a client method nor

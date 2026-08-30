@@ -133,10 +133,9 @@ def walk_page_items(page: Any) -> list[dict[str, Any]]:
 def preview_state_str(state: Any, field: str) -> str:
     """Read a string field from a fetched preview state.
 
-    Instance previews serialize their state through instance_preview_state
-    (a plain dict mirroring Go's struct marshal), while other resources still
-    pass their dataclass through, so walks read fields through this accessor
-    instead of committing to one shape.
+    Fetched state arrives either as a plain dict (a declared fetch mirrors
+    Go's struct marshal) or as a dataclass, so walks read fields through this
+    accessor instead of committing to one shape.
     """
     if isinstance(state, dict):
         value = cast("dict[str, Any]", state).get(field, "")
@@ -160,10 +159,9 @@ def keyword_escape_dict_factory(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _dataclass_json_default(obj: Any) -> Any:
-    """json.dumps ``default`` that serializes Linode dataclass models (e.g.
-    the ``Instance`` returned by ``get_instance``) as plain dicts. Without
-    this, a dry-run whose ``current_state`` is a dataclass would raise
-    "Object of type X is not JSON serializable".
+    """json.dumps ``default`` that serializes Linode dataclass models as plain
+    dicts. Without this, a dry-run whose ``current_state`` is a dataclass would
+    raise "Object of type X is not JSON serializable".
 
     A declared fetch's state answers the projected object, which is the bare
     resource the preview reports and the plan hashes, never a wrapper naming
@@ -1219,7 +1217,7 @@ def _tag_element_list(raw: object) -> list[object] | None:
 def optional_tags_argument(
     arguments: dict[str, Any],
 ) -> tuple[list[str] | None, str]:
-    """Read the optional ``tags`` body array, mirroring Go's optionalTagsField.
+    """Read the optional ``tags`` body array, mirroring Go's tagsValueFromToolArg.
 
     Returns ``(tags, "")`` when the argument is absent (tags is None) or valid,
     and ``(None, message)`` otherwise. Entries are trimmed and an entry that is

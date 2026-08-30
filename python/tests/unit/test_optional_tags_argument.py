@@ -1,7 +1,7 @@
 """Unit checks for the shared tags body-argument reader.
 
-The Go twin is optionalTagsField / tagsValueFromToolArg in
-go/internal/tools/linode_images_write.go. Both accept a native array and a
+The Go twin is tagsValueFromToolArg in
+go/internal/tools/argument_readers.go. Both accept a native array and a
 JSON-encoded string, trim entries, and reject the same shapes with the same
 text, so a client that reaches one implementation reaches the other the same
 way.

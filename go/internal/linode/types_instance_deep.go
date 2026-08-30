@@ -160,12 +160,6 @@ type ReorderConfigInterfacesRequest struct {
 	IDs []int `json:"ids"`
 }
 
-// InstanceInterfaceSettings represents interface settings for a Linode instance.
-type InstanceInterfaceSettings struct {
-	DefaultRoute  *InterfaceSettingsDefaultRoute `json:"default_route,omitempty"`
-	NetworkHelper *bool                          `json:"network_helper,omitempty"`
-}
-
 // InterfaceSettingsDefaultRoute names the interface each address family routes
 // through. The settings route addresses them by interface id, where an
 // interface's own default_route carries booleans, so the two cannot share a

@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import json
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import TYPE_CHECKING, Any
 
-import httpx
 import pytest
 
 from linodemcp.gentools import (
     create_linode_stackscript_get_tool,
     handle_linode_stackscript_get,
 )
-from linodemcp.linode import Client, NetworkError, RetryableClient, StackScript
 from linodemcp.profiles import Capability
+
+if TYPE_CHECKING:
+    from unittest.mock import AsyncMock
 
 
 def _stackscript_payload(stackscript_id: int = 123) -> dict[str, Any]:
@@ -35,82 +35,6 @@ def _stackscript_payload(stackscript_id: int = 123) -> dict[str, Any]:
         "user_defined_fields": [],
         "rev_note": "first cut",
     }
-
-
-def _stackscript(stackscript_id: int = 123) -> StackScript:
-    data = _stackscript_payload(stackscript_id)
-    return StackScript(**data)
-
-
-@pytest.mark.asyncio
-async def test_client_get_stackscript_sends_exact_route() -> None:
-    """Low-level client sends GET /linode/stackscripts/{stackscriptId}."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    response = MagicMock()
-    response.json.return_value = _stackscript_payload(123)
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = response
-
-        result = await client.get_stackscript(123)
-
-    assert result.id == 123
-    assert result.label == "my-script"
-    mock_request.assert_called_once_with("GET", "/linode/stackscripts/123")
-
-    await client.close()
-
-
-@pytest.mark.asyncio
-async def test_client_get_stackscript_url_encodes_stackscript_id() -> None:
-    """Low-level client URL-encodes StackScript IDs at the path boundary."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    response = MagicMock()
-    response.json.return_value = _stackscript_payload(123)
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = response
-
-        await client.get_stackscript("123/../456?x=1")
-
-    mock_request.assert_called_once_with(
-        "GET", "/linode/stackscripts/123%2F..%2F456%3Fx%3D1"
-    )
-
-    await client.close()
-
-
-@pytest.mark.asyncio
-async def test_client_get_stackscript_wraps_http_error() -> None:
-    """StackScript get wraps client HTTP errors."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.side_effect = httpx.HTTPError("boom")
-
-        with pytest.raises(NetworkError, match="GetStackScript"):
-            await client.get_stackscript(123)
-
-    await client.close()
-
-
-@pytest.mark.asyncio
-async def test_retryable_get_stackscript_delegates_with_retry() -> None:
-    """Retryable client delegates read-only StackScript get through retry."""
-    client = RetryableClient("https://api.linode.com/v4", "test-token")
-    stackscript = _stackscript()
-
-    with patch.object(
-        client.client, "get_stackscript", new_callable=AsyncMock
-    ) as mock_get:
-        mock_get.return_value = stackscript
-
-        result = await client.get_stackscript(123)
-
-    assert result is stackscript
-    mock_get.assert_awaited_once_with(123)
-
-    await client.close()
 
 
 def test_create_linode_stackscript_get_tool_schema() -> None:
@@ -178,4 +102,4 @@ async def test_handle_linode_stackscript_get_rejects_invalid_ids(
         "Error: stackscript_id is required",
         "Error: stackscript_id must be a positive integer",
     )
-    mock_linode_client.get_stackscript.assert_not_called()
+    mock_linode_client.route_raw.assert_not_called()

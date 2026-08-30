@@ -76,7 +76,6 @@ const (
 	invalidBetaIDQuery               = "example?open=1"
 	invalidBetaIDPadded              = " example_open "
 	keyPublic                        = "public"
-	keyThumbnailPNGBase64            = "thumbnail_png_base64"
 	accountPaymentsTestPath          = "/account/payments"
 	accountPaymentMethodsTestPath    = "/account/payment-methods"
 	accountServiceTransfersTestPath  = "/account/service-transfers"

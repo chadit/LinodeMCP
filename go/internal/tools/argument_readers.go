@@ -1,16 +1,20 @@
 package tools
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
-
-	"github.com/chadit/LinodeMCP/go/internal/config"
 )
 
-// boolTrue is used for boolean string comparison in filter functions.
-const boolTrue = "true"
+// The argument readers: the id, presence, id-list, pagination and tags bodies
+// that generated code and the hand-written plumbing read tool arguments
+// through. They live here rather than beside the family that first wrote them
+// because each is shared by definition, and a family-named file reads as
+// per-tool code that could be retired with the family.
 
 // RequiredIDArgument parses a required positive-integer id path argument,
 // returning the Option-B pair used repo-wide: "<name> is required" when the
@@ -150,31 +154,164 @@ func RequireAnyArgument(request *mcp.CallToolRequest, sentence string, names ...
 	return sentence
 }
 
-func selectEnvironment(cfg *config.Config, environment string) (*config.EnvironmentConfig, error) {
-	if environment != "" {
-		if env, exists := cfg.Environments[environment]; exists {
-			return &env, nil
+// MaxJSONSafeID is the largest integer a JSON number carries exactly (2^53-1).
+// An id above it has already been rounded by the time a handler sees it, so a
+// lookup would address a resource the caller never named. Exported because the
+// generated read tools reach it through their validate hooks.
+const MaxJSONSafeID = 9007199254740991
+
+// IntSliceArgument reads an ID-array tool argument. Exported because the
+// generated write tools reach it through their hooks.
+func IntSliceArgument(raw any, name string) ([]int, string) {
+	switch values := raw.(type) {
+	case []int:
+		if len(values) == 0 {
+			return nil, name + " must include at least one ID"
 		}
 
-		return nil, fmt.Errorf("%w: %s", ErrEnvironmentNotFound, environment)
-	}
+		ids := make([]int, 0, len(values))
+		for _, value := range values {
+			if value <= 0 {
+				return nil, name + " must be an array of positive integers"
+			}
 
-	selectedEnv, err := cfg.SelectEnvironment("default")
-	if err != nil {
-		return nil, fmt.Errorf("failed to select default environment: %w", err)
-	}
+			ids = append(ids, value)
+		}
 
-	return selectedEnv, nil
+		return ids, ""
+	case []any:
+		return intSliceFromAnySlice(values, name)
+	default:
+		return nil, name + " must be an array of positive integers"
+	}
 }
 
-// linodeConfigComplete reports whether an environment carries what a client
-// needs. Named apart from the argument readers on purpose: this judges the
-// deployment's own configuration rather than anything a caller sent, and the
-// hand-validator scan counts by that naming convention.
-func linodeConfigComplete(env *config.EnvironmentConfig) error {
-	if env.Linode.APIURL == "" || env.Linode.Token == "" {
-		return ErrLinodeConfigIncomplete
+func intSliceFromAnySlice(values []any, name string) ([]int, string) {
+	if len(values) == 0 {
+		return nil, name + " must include at least one ID"
 	}
 
-	return nil
+	ids := make([]int, 0, len(values))
+
+	for _, value := range values {
+		switch number := value.(type) {
+		case float64:
+			// math.MaxInt64 has no exact float64 representation: float64(math.MaxInt64)
+			// rounds up to 2^63 (math.MaxInt64+1). Use >= against that float so any
+			// value at or above the representable boundary is rejected. math.Trunc
+			// rejects fractional values without going through an int conversion that
+			// overflows for out-of-range floats.
+			if number <= 0 || number >= float64(math.MaxInt64) || math.Trunc(number) != number {
+				return nil, name + " must be an array of positive integers"
+			}
+
+			ids = append(ids, int(number))
+		case int:
+			if number <= 0 {
+				return nil, name + " must be an array of positive integers"
+			}
+
+			ids = append(ids, number)
+		default:
+			return nil, name + " must be an array of positive integers"
+		}
+	}
+
+	return ids, ""
+}
+
+func optionalPaginationInt(args map[string]any, name string, minValue, maxValue int) (int, string) {
+	raw, exists := args[name]
+	if !exists {
+		return 0, ""
+	}
+
+	var value int
+
+	switch typed := raw.(type) {
+	case int:
+		value = typed
+	case int64:
+		value = int(typed)
+	case float64:
+		value = int(typed)
+		if typed != float64(value) {
+			return 0, name + " must be an integer"
+		}
+	default:
+		return 0, name + " must be an integer"
+	}
+
+	if value < minValue || (maxValue > 0 && value > maxValue) {
+		if maxValue > 0 {
+			return 0, name + " must be an integer from " + strconv.Itoa(minValue) + " through " + strconv.Itoa(maxValue)
+		}
+
+		return 0, name + " must be an integer greater than or equal to 1"
+	}
+
+	return value, ""
+}
+
+func tagsValueFromToolArg(rawTags any) ([]string, string) {
+	switch tags := rawTags.(type) {
+	case string:
+		tagsText := strings.TrimSpace(tags)
+
+		var values []string
+		if err := json.Unmarshal([]byte(tagsText), &values); err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrTagsMustBeJSONStringArray, err).Error()
+		}
+
+		if values == nil {
+			return nil, ErrTagsMustBeJSONStringArray.Error()
+		}
+
+		return normalizeTags(values)
+	case []string:
+		return normalizeTags(tags)
+	case []any:
+		values := make([]string, 0, len(tags))
+		for _, tag := range tags {
+			tagText, ok := tag.(string)
+			if !ok {
+				return nil, ErrTagsMustBeJSONStringArray.Error()
+			}
+
+			values = append(values, tagText)
+		}
+
+		return normalizeTags(values)
+	default:
+		return nil, ErrTagsMustBeJSONStringArray.Error()
+	}
+}
+
+func normalizeTags(values []string) ([]string, string) {
+	normalized := make([]string, len(values))
+	for index, value := range values {
+		normalized[index] = strings.TrimSpace(value)
+		if normalized[index] == "" {
+			return nil, ErrTagsEntriesNonEmpty.Error()
+		}
+	}
+
+	return normalized, ""
+}
+
+func numberArgToInt(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		if typed != float64(int(typed)) {
+			return 0, false
+		}
+
+		return int(typed), true
+	default:
+		return 0, false
+	}
 }
