@@ -222,7 +222,8 @@ func TestEmitsThePythonMetaShellForARoutelessTool(t *testing.T) {
 		"    ), Capability.Meta",
 		"    Answers from local state and reaches no Linode route.",
 		"async def handle_hello(arguments: dict[str, Any], _cfg: Config) -> list[TextContent]:",
-		`    name = arguments.get("name", "World")`,
+		"from linodemcp.tools.argreader import tool_string",
+		`    name = tool_string(arguments, "name", "World")`,
 		"    return meta_response(",
 		`        "linode.mcp.v1.HelloResponse",`,
 	} {

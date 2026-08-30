@@ -1,6 +1,6 @@
 {
   "tool": "hello",
-  "description": "CapMeta smoke-test greeting (no Linode API call). The greeting comes from the contract's success_message template, so both cases pin the template's two halves: the default the empty call falls back to, and the name a caller supplies.",
+  "description": "CapMeta smoke-test greeting (no Linode API call). The greeting comes from the contract's success_message template, so the cases pin the template's halves: the default the empty call falls back to, the name a caller supplies, and the default a name the contract cannot hold falls back to instead of being rendered as itself.",
   "cases": [
     {
       "name": "greets the default name",
@@ -14,6 +14,13 @@
       "args": { "name": "Ada" },
       "expect_result": {
         "message": "Hello, Ada! LinodeMCP server is running and ready."
+      }
+    },
+    {
+      "name": "greets the default name when the name is not a string",
+      "args": { "name": 5 },
+      "expect_result": {
+        "message": "Hello, World! LinodeMCP server is running and ready."
       }
     }
   ]

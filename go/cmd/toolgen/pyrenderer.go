@@ -522,6 +522,15 @@ func pyModuleImports(tools []*pyTool) ([]string, error) {
 
 	lines := []string{"from linodemcp.profiles import Capability"}
 
+	argReaders, err := pyMetaReaderImports(tools)
+	if err != nil {
+		return nil, err
+	}
+
+	if argReaders != "" {
+		lines = append(lines, "from linodemcp.tools.argreader import "+argReaders)
+	}
+
 	// Only where a declared walk reads it: the reader refuses any other state,
 	// so a module with no walk never names it.
 	if slices.ContainsFunc(tools, func(tool *pyTool) bool {

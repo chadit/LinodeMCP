@@ -1,6 +1,6 @@
 {
   "tool": "linode_region_list",
-  "description": "Region list pins the shared pagination rejections and the query string both languages must build. The country filter is client-side, so it never reaches the request path.",
+  "description": "Region list pins the shared pagination rejections and the query string both languages must build. The country filter is client-side, so it never reaches the request path, and a country the contract cannot hold narrows nothing in either language rather than being read as the text it spells.",
   "cases": [
     {
       "name": "rejects non-integer page",
@@ -44,6 +44,37 @@
       "expect_request": {
         "method": "GET",
         "path": "/regions"
+      }
+    },
+    {
+      "name": "a country that is not a string narrows nothing",
+      "args": {
+        "country": 5
+      },
+      "api_response": {
+        "data": [
+          {
+            "id": "us-east",
+            "label": "Newark, NJ",
+            "country": "us"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_result": {
+        "count": 1,
+        "regions": [
+          {
+            "id": "us-east",
+            "label": "Newark, NJ",
+            "country": "us",
+            "capabilities": [],
+            "status": "",
+            "site_type": ""
+          }
+        ]
       }
     },
     {

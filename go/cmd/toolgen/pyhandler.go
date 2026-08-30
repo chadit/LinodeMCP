@@ -159,25 +159,35 @@ func pyMeta(tool *pyTool) ([]string, error) {
 // operation: its declared sentence. The arguments it names are read above it rather than inside the
 // literal, so the rendered line stays under the budget however many it names.
 func pyMetaSentence(tool *pyTool) ([]string, error) {
-	reads, rendered, err := pyMetaMessage(tool)
+	answer, err := pyMetaMessage(tool)
 	if err != nil {
 		return nil, err
 	}
 
-	return append(reads,
+	return append(answer.reads,
 		"    return meta_response(",
 		"        "+pyQuote(string(tool.c.ResponseGo.FullName))+",",
-		"        "+messageFieldName+"="+rendered+",",
+		"        "+messageFieldName+"="+answer.rendered+",",
 		"    )",
 	), nil
+}
+
+// pyMetaAnswer is a meta tool's declared sentence: the reads that stand above
+// the f-string, the argreader names those reads go through, and the f-string
+// itself. The readers travel beside the reads so the module's import list is
+// decided from the same walk that emitted them.
+type pyMetaAnswer struct {
+	rendered string
+	reads    []string
+	readers  []string
 }
 
 // pyMetaMessage is a meta tool's declared sentence as the reads it needs and
 // the f-string. The arguments come off the request through the same accessor Go
 // reads them with, defaults included, so a template written once renders
 // identically in each language.
-func pyMetaMessage(tool *pyTool) ([]string, string, error) {
-	reads := make([]string, 0)
+func pyMetaMessage(tool *pyTool) (pyMetaAnswer, error) {
+	answer := pyMetaAnswer{reads: make([]string, 0), readers: make([]string, 0)}
 	rest := tool.c.SuccessMessage
 
 	var rendered strings.Builder
@@ -187,31 +197,24 @@ func pyMetaMessage(tool *pyTool) ([]string, string, error) {
 	for {
 		opened := strings.Index(rest, "{")
 		if opened < 0 {
-			return reads, `f"` + rendered.String() + pyEscaped(rest) + `"`, nil
+			answer.rendered = `f"` + rendered.String() + pyEscaped(rest) + `"`
+
+			return answer, nil
 		}
 
 		closed := strings.Index(rest[opened:], "}")
 		if closed < 0 {
-			return reads, `f"` + rendered.String() + pyEscaped(rest) + `"`, nil
+			answer.rendered = `f"` + rendered.String() + pyEscaped(rest) + `"`
+
+			return answer, nil
 		}
 
 		closed += opened
 
 		name, form, fallback := pySplitPlaceholder(rest[opened+1 : closed])
 
-		entry, err := pyLocalArgument(tool, name)
-		if err != nil {
-			return nil, "", err
-		}
-
-		read, err := pyLocalArgumentRead(tool, entry, fallback)
-		if err != nil {
-			return nil, "", err
-		}
-
-		line := "    " + pyLocal(name) + " = " + read
-		if !slices.Contains(reads, line) {
-			reads = append(reads, line)
+		if err := pyMetaRead(tool, &answer, name, fallback); err != nil {
+			return pyMetaAnswer{}, err
 		}
 
 		rendered.WriteString(pyEscaped(rest[:opened]))
@@ -222,6 +225,31 @@ func pyMetaMessage(tool *pyTool) ([]string, string, error) {
 
 		rest = rest[closed+1:]
 	}
+}
+
+// pyMetaRead records the read one placeholder needs, and the argreader it goes
+// through, on the answer under construction.
+func pyMetaRead(tool *pyTool, answer *pyMetaAnswer, name, fallback string) error {
+	entry, err := pyLocalArgument(tool, name)
+	if err != nil {
+		return err
+	}
+
+	read, err := pyLocalArgumentRead(tool, entry, fallback)
+	if err != nil {
+		return err
+	}
+
+	line := "    " + pyLocal(name) + " = " + read
+	if !slices.Contains(answer.reads, line) {
+		answer.reads = append(answer.reads, line)
+	}
+
+	if reader := pyMetaArgumentReader(entry); !slices.Contains(answer.readers, reader) {
+		answer.readers = append(answer.readers, reader)
+	}
+
+	return nil
 }
 
 // pySplitPlaceholder is one placeholder as its field name, its format spec, and
@@ -252,30 +280,58 @@ func pyLocalArgument(tool *pyTool, name string) (protoreflect.FieldDescriptor, e
 		errPyRender, tool.c.Name, name, tool.c.InputMessage)
 }
 
+// The two argreader functions a declared sentence reads its arguments through,
+// named here because the read and the import list both spell them.
+const (
+	pyToolStringReader = "tool_string"
+	pyToolIntReader    = "tool_int"
+)
+
+// pyMetaArgumentReader is the shared reader one TOOL argument is read through,
+// "" for a kind no declared sentence can name. Text and a number are the only
+// kinds covered because Go prints a flag as true and Python as True; the caller
+// refuses every other kind rather than rendering it differently on each side.
+func pyMetaArgumentReader(entry protoreflect.FieldDescriptor) string {
+	if pyRepeated(entry) {
+		return ""
+	}
+
+	kind := entry.Kind()
+	if kind == protoreflect.StringKind {
+		return pyToolStringReader
+	}
+
+	if kind == protoreflect.Int32Kind || kind == protoreflect.Int64Kind {
+		return pyToolIntReader
+	}
+
+	return ""
+}
+
 // pyLocalArgumentRead is the read one TOOL argument reaches a sentence through.
-// Text and a number are the only kinds it covers: Go prints a flag as true and
-// Python as True, so every other kind is refused rather than rendered
-// differently on each side.
+//
+// It goes through the argreader layer rather than `arguments.get`, because a
+// bare get answers whatever the caller sent while Go's GetString and GetInt
+// answer the declared default for a value the field cannot hold: a name sent
+// as the number 5 rendered as "5" here and as the default in Go.
 func pyLocalArgumentRead(
 	tool *pyTool, entry protoreflect.FieldDescriptor, fallback string,
 ) (string, error) {
-	kind := entry.Kind()
-	numeric := kind == protoreflect.Int32Kind || kind == protoreflect.Int64Kind
-
-	if pyRepeated(entry) || (kind != protoreflect.StringKind && !numeric) {
+	reader := pyMetaArgumentReader(entry)
+	if reader == "" {
 		return "", fmt.Errorf("%w: %s success_message names %s, which has no rendering both languages share",
 			errPyRender, tool.c.Name, entry.Name())
 	}
 
 	name := pyQuote(string(entry.Name()))
 
-	if kind == protoreflect.StringKind {
+	if reader == pyToolStringReader {
 		absent := emptyLiteral
 		if fallback != "" {
 			absent = pyQuote(fallback)
 		}
 
-		return "arguments.get(" + name + ", " + absent + ")", nil
+		return reader + "(arguments, " + name + ", " + absent + ")", nil
 	}
 
 	if fallback != "" {
@@ -289,7 +345,35 @@ func pyLocalArgumentRead(
 		fallback = "0"
 	}
 
-	return "arguments.get(" + name + ", " + fallback + ")", nil
+	return reader + "(arguments, " + name + ", " + fallback + ")", nil
+}
+
+// pyMetaReaderImports is the linodemcp.tools.argreader names a module's
+// declared sentences read their arguments through, "" when no sentence names
+// an argument.
+func pyMetaReaderImports(tools []*pyTool) (string, error) {
+	wanted := make([]string, 0, 2)
+
+	for _, tool := range tools {
+		if tool.c.Tier != tierMeta || tool.c.answersLocally() {
+			continue
+		}
+
+		answer, err := pyMetaMessage(tool)
+		if err != nil {
+			return "", err
+		}
+
+		for _, reader := range answer.readers {
+			if !slices.Contains(wanted, reader) {
+				wanted = append(wanted, reader)
+			}
+		}
+	}
+
+	slices.Sort(wanted)
+
+	return strings.Join(wanted, ", "), nil
 }
 
 // pyConstraintCall is the contract's own answers over the whole argument map,
