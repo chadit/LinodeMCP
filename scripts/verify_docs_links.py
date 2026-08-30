@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Offline gate: every internal link in README.md and docs/ resolves.
+"""Offline gate: every internal link in README.md, llms.txt and docs/ resolves.
 
 Markdown links rot silently: a moved contract file or renamed doc page
 leaves a dead link no test notices. This walks every relative link target
-in README.md, docs/**/*.md, and the prose each tool project ships beside
-its code under tools/ (external URLs and pure #anchors excluded, anchors
-on internal links stripped before the existence check) and fails on the
-first pass listing every target that does not exist on disk.
+in README.md, llms.txt, docs/**/*.md, and the prose each tool project
+ships beside its code under tools/ (external URLs and pure #anchors
+excluded, anchors on internal links stripped before the existence check)
+and fails on the first pass listing every target that does not exist on
+disk.
 
 tools/ is in scope because a tool project's own wiki cross-links its
 chapters and points back at repo paths. Those links became movable the
 moment the wiki came in-repo, so leaving them unwalked would carve a hole
 in the one gate that notices.
+
+llms.txt is in scope for the same reason and it is the file most exposed
+to it: it is a second copy of the docs index written for agents, so every
+page this repo moves rots a line there while docs/ stays green.
 
 Stdlib only, so no venv is needed. Run via `make docs-links` (in `make check`).
 """
@@ -30,12 +35,22 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 _LINK = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
 _EXTERNAL_PREFIXES = ("http://", "https://", "mailto:")
 
+# The two walked files that live at the repo root rather than inside a
+# globbed tree. A glob that matches nothing is invisible, so these are
+# named and their absence is reported.
+_ROOT_DOCS = ("README.md", "llms.txt")
+
 
 def _doc_files() -> list[Path]:
-    files = [_REPO_ROOT / "README.md"]
+    files = [_REPO_ROOT / name for name in _ROOT_DOCS]
     files.extend(sorted((_REPO_ROOT / "docs").rglob("*.md")))
     files.extend(sorted((_REPO_ROOT / "tools").rglob("*.md")))
-    return files
+    return [path for path in files if path.is_file()]
+
+
+def missing_root_docs() -> list[str]:
+    """Named root files the walk expects and did not find."""
+    return [name for name in _ROOT_DOCS if not (_REPO_ROOT / name).is_file()]
 
 
 def broken_links() -> list[str]:
@@ -54,6 +69,13 @@ def broken_links() -> list[str]:
 
 
 def main() -> int:
+    missing = missing_root_docs()
+    if missing:
+        print("docs-links gate: a file it walks by name is gone:", file=sys.stderr)
+        for name in missing:
+            print(f"  {name}, so its links go unwalked", file=sys.stderr)
+        return 1
+
     problems = broken_links()
     if problems:
         print("dead internal links in the docs:", file=sys.stderr)

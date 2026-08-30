@@ -74,8 +74,9 @@ _DRYRUN_HEADER = (
 
 
 def _load_fixtures() -> dict[str, list[dict[str, Any]]]:
-    """Return {tool: cases} for every behavior fixture."""
+    """Return {tool: cases} for every behavior fixture, one file per tool."""
     fixtures: dict[str, list[dict[str, Any]]] = {}
+    sources: dict[str, str] = {}
 
     if not _BEHAVIOR_DIR.exists():
         return fixtures
@@ -93,6 +94,18 @@ def _load_fixtures() -> dict[str, list[dict[str, Any]]]:
             msg = f"{path.name}: fixture has no cases"
             raise SystemExit(msg)
 
+        # Every rule below reads one entry per tool, so a second file naming the
+        # same tool would overwrite the first and take its safety, dry-run and
+        # malformed-response cases out of the gate's reach with nothing said.
+        if tool in sources:
+            msg = (
+                f"{path.name} and {sources[tool]} both declare tool {tool}."
+                " Every rule here reads one entry per tool, so merge the cases"
+                " into a single file named after the tool."
+            )
+            raise SystemExit(msg)
+
+        sources[tool] = path.name
         fixtures[tool] = cases
 
     return fixtures

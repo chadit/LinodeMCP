@@ -1,9 +1,10 @@
 """Offline tests for the docs link gate.
 
-verify_docs_links.py walks internal link targets in README.md, docs/, and
-the prose tool projects ship under tools/. These tests pin the target
-classification (external skipped, anchor stripped, relative resolution
-from the linking file), the walked scope, and the live tree.
+verify_docs_links.py walks internal link targets in README.md, llms.txt,
+docs/, and the prose tool projects ship under tools/. These tests pin the
+target classification (external skipped, anchor stripped, relative
+resolution from the linking file), the walked scope, the refusal when a
+file walked by name is gone, and the live tree.
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ def test_broken_and_healthy_links_classified(
         "[external](https://example.com/missing) [dead](docs/gone.md)\n",
         encoding="utf-8",
     )
+    (tmp_path / "llms.txt").write_text("no links here\n", encoding="utf-8")
     docs = tmp_path / "docs"
     docs.mkdir()
     (docs / "real.md").write_text(
@@ -63,6 +65,7 @@ def test_tool_project_prose_is_walked(
 ) -> None:
     """A tool project's own wiki is in scope, chapter cross-links included."""
     (tmp_path / "README.md").write_text("no links here\n", encoding="utf-8")
+    (tmp_path / "llms.txt").write_text("no links here\n", encoding="utf-8")
     wiki = tmp_path / "tools" / "proofer" / "docs"
     wiki.mkdir(parents=True)
     (wiki / "README.md").write_text("[ch1](01-first.md)\n", encoding="utf-8")
@@ -74,6 +77,34 @@ def test_tool_project_prose_is_walked(
     assert gate.broken_links() == ["tools/proofer/docs/01-first.md: 02-second.md"]
 
 
+def test_llms_txt_links_are_walked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The agent index rots like any other page, so the gate reads it too."""
+    (tmp_path / "README.md").write_text("no links here\n", encoding="utf-8")
+    (tmp_path / "llms.txt").write_text(
+        "- [index](docs/README.md)\n- [moved](docs/renamed.md)\n", encoding="utf-8"
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "README.md").write_text("no links here\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
+
+    assert gate.broken_links() == ["llms.txt: docs/renamed.md"]
+
+
+def test_root_doc_gone_is_reported_not_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A deleted llms.txt must fail rather than drop out of the walk."""
+    (tmp_path / "README.md").write_text("no links here\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
+
+    assert gate.missing_root_docs() == ["llms.txt"]
+    assert gate.main() == 1
+
+
 def test_live_docs_have_no_dead_internal_links() -> None:
     """The gate itself as a test: the shipped docs resolve everywhere."""
+    assert gate.missing_root_docs() == []
     assert gate.broken_links() == []

@@ -1,15 +1,19 @@
-"""Focused tests for the behavior gate's malformed-response rule.
+"""Focused tests for the behavior gate's fixture loader and its rules.
 
-A mutating fixture that decodes an API response body must also prove the tool
-rejects a malformed one, since decoding is hand-written per language. These
-pin the predicate: what counts as decoding, what counts as proof, and which
-fixtures the rule leaves alone. Synthetic fixtures throughout, so the rule is
-tested independently of whatever the real testdata tree currently holds.
+The loader owes one entry per tool: two files naming the same tool have to
+fail by name rather than let the later one replace the earlier one's cases.
+The malformed-response rule owes the rest: a mutating fixture that decodes an
+API response body must also prove the tool rejects a malformed one, since
+decoding is hand-written per language, so these pin what counts as decoding,
+what counts as proof, and which fixtures the rule leaves alone. Synthetic
+fixtures throughout, so both are tested independently of whatever the real
+testdata tree currently holds.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -46,6 +50,76 @@ def _load_script(name: str) -> ModuleType:
 
 
 gate = _load_script("verify_behavior")
+
+
+def _behavior_tree(tmp_path: Path, files: dict[str, object]) -> Path:
+    """Write a synthetic behavior fixture tree and return its directory."""
+    directory = tmp_path / "behavior"
+    directory.mkdir()
+    for name, fixture in files.items():
+        (directory / name).write_text(json.dumps(fixture), encoding="utf-8")
+
+    return directory
+
+
+def test_two_files_declaring_one_tool_fail_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tool split across two files loses one file's cases, so it must fail."""
+    monkeypatch.setattr(
+        gate,
+        "_BEHAVIOR_DIR",
+        _behavior_tree(
+            tmp_path,
+            {
+                f"{_TOOL}.json": {"tool": _TOOL, "cases": [_DECODE_CASE]},
+                f"{_TOOL}_more.json": {
+                    "tool": _TOOL,
+                    "cases": [
+                        {
+                            "name": "rejects top-level array",
+                            "api_response": [],
+                            "expect_api_error": "create widget",
+                        }
+                    ],
+                },
+            },
+        ),
+    )
+
+    with pytest.raises(SystemExit) as failure:
+        gate._load_fixtures()
+
+    message = str(failure.value)
+    assert _TOOL in message
+    assert f"{_TOOL}.json" in message
+    assert f"{_TOOL}_more.json" in message
+
+
+def test_one_file_per_tool_keeps_every_tool_and_its_cases(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The duplicate check must leave an ordinary fixture tree alone."""
+    read_case: dict[str, object] = {"name": "reads a widget"}
+    monkeypatch.setattr(
+        gate,
+        "_BEHAVIOR_DIR",
+        _behavior_tree(
+            tmp_path,
+            {
+                f"{_TOOL}.json": {"tool": _TOOL, "cases": [_DECODE_CASE]},
+                "linode_widget_get.json": {
+                    "tool": "linode_widget_get",
+                    "cases": [read_case],
+                },
+            },
+        ),
+    )
+
+    assert gate._load_fixtures() == {
+        _TOOL: [_DECODE_CASE],
+        "linode_widget_get": [read_case],
+    }
 
 
 def _missing(
