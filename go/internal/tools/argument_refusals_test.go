@@ -122,8 +122,9 @@ func TestUnknownArgumentsFillsTheDeclaredPlaceholder(t *testing.T) {
 	}
 }
 
-// The string member accepts a blank where its text sibling refuses one: an
-// empty longview_subscription is the value that cancels the subscription.
+// The string member accepts a blank where its text sibling refuses one: no rule
+// on account settings holds object_storage to a value, so a blank one travels
+// to the route, and a reader that refused it would refuse that call here.
 func TestPresentStringArgumentAcceptsABlankAndRefusesANonString(t *testing.T) {
 	t.Parallel()
 

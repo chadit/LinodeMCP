@@ -1952,17 +1952,50 @@ func TestEmitsABodyReadThatAssemblesItsEnvelope(t *testing.T) {
 		}
 	}
 
-	// A route declaring no body member still sends one, which is what lets the
-	// tier take a read whose whole request is the empty object.
-	if want := `body := tools.NewWriteBody(request, 0)`; !strings.Contains(source, want) {
-		t.Errorf("emitted body is missing %q:\n%s", want,
-			handlerBody(t, source, "linodeMonitorServiceMetricQueryBody"))
+	// The query members are the whole request, so every declared field has to
+	// reach the body: a dropped one narrows the query without saying so.
+	for _, want := range []string{
+		`body.SetString("entity_region")`,
+		`body.SetObjectList("filters")`,
+		`body.SetStringList("group_by")`,
+		`body.SetMessageList("metrics", []tools.ItemField{`,
+		`body.SetObject("time_granularity")`,
+		`body.SetObject("relative_time_duration")`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Errorf("emitted body is missing %q:\n%s", want,
+				handlerBody(t, source, "linodeMonitorServiceMetricQueryBody"))
+		}
 	}
 
 	for _, unwanted := range []string{confirmGate, dryRunGate} {
 		if strings.Contains(handler, unwanted) {
 			t.Errorf("emitted handler carries %q:\n%s", unwanted, handler)
 		}
+	}
+}
+
+// A route declaring no body member still builds and sends one, which is what
+// lets a call whose whole request is the empty object go out the same seam as
+// every other write. The TFA enable declares system params only, so its body
+// builder is the emitter's zero-member arm.
+func TestEmitsTheEmptyBodyARouteWithNoMemberStillSends(t *testing.T) {
+	t.Parallel()
+
+	source := readGenerated(t, runGen(t), "profile.gen.go")
+	body := handlerBody(t, source, "linodeProfileTfaEnableBody")
+
+	if want := `body := tools.NewWriteBody(request, 0)`; !strings.Contains(body, want) {
+		t.Errorf("emitted body is missing %q:\n%s", want, body)
+	}
+
+	if want := `return body, body.Message()`; !strings.Contains(body, want) {
+		t.Errorf("emitted body is missing %q:\n%s", want, body)
+	}
+
+	if !strings.Contains(handlerBody(t, source, "handleLinodeProfileTfaEnable"),
+		"linodeProfileTfaEnableBody(request)") {
+		t.Error("handler does not build its body through the shared builder")
 	}
 }
 

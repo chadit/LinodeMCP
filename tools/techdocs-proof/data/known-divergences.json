@@ -54,60 +54,6 @@
     "reason": "Single-item GET; the documentation page renders the collection pagination block for the sibling list route."
   },
   {
-    "category": "repo_enum_superset",
-    "kind": "parameter_enum_mismatch",
-    "method": "POST",
-    "shape": "/nodebalancers/{}/configs",
-    "location": "body",
-    "parameter": "algorithm",
-    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
-  },
-  {
-    "category": "repo_enum_superset",
-    "kind": "parameter_enum_mismatch",
-    "method": "POST",
-    "shape": "/nodebalancers/{}/configs",
-    "location": "body",
-    "parameter": "protocol",
-    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
-  },
-  {
-    "category": "repo_enum_superset",
-    "kind": "parameter_enum_mismatch",
-    "method": "POST",
-    "shape": "/nodebalancers/{}/configs",
-    "location": "body",
-    "parameter": "stickiness",
-    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
-  },
-  {
-    "category": "repo_enum_superset",
-    "kind": "parameter_enum_mismatch",
-    "method": "PUT",
-    "shape": "/nodebalancers/{}/configs/{}",
-    "location": "body",
-    "parameter": "algorithm",
-    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
-  },
-  {
-    "category": "repo_enum_superset",
-    "kind": "parameter_enum_mismatch",
-    "method": "PUT",
-    "shape": "/nodebalancers/{}/configs/{}",
-    "location": "body",
-    "parameter": "protocol",
-    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
-  },
-  {
-    "category": "repo_enum_superset",
-    "kind": "parameter_enum_mismatch",
-    "method": "PUT",
-    "shape": "/nodebalancers/{}/configs/{}",
-    "location": "body",
-    "parameter": "stickiness",
-    "reason": "The documentation renders one branch of a conditional schema; the repo enumerates every protocol branch."
-  },
-  {
     "category": "techdocs_path_type_inconsistent",
     "kind": "parameter_type_mismatch",
     "method": "GET",
@@ -756,5 +702,518 @@
         "parameter": ""
       }
     ]
+  },
+  {
+    "category": "docs_required_with_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/databases/postgresql/instances/{}/connection-pools",
+    "location": "body",
+    "parameter": "mode",
+    "reason": "The reference page marks mode required and publishes a default for it in the same block, rendering `mode string / enum / required / Defaults to transaction`. A member the API defaults is one the API accepts without, so the required marker states a documentation convention rather than a call the tool would be refused for omitting. The same run reads that default off the page and reports it as parameter_default_unrepresented_in_proto on this key. The proto keeps mode optional so an omitted argument leaves the key off the body and the API applies transaction, which the create fixture pins in its 'omits the members the caller left out' case. Requiring mode would refuse a call the documented default exists to serve."
+  },
+  {
+    "category": "docs_required_with_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/databases/postgresql/instances/{}/connection-pools",
+    "location": "body",
+    "parameter": "size",
+    "reason": "The reference page marks size required and publishes a default for it in the same block, rendering `size integer / required / Defaults to 10`. The API supplies 10 when the member is absent, so the required marker does not describe a call the API refuses. The same run reads that default off the page and reports it as parameter_default_unrepresented_in_proto on this key. The proto keeps size optional so an omitted argument leaves the key off the body, which the create fixture pins in its 'omits the members the caller left out' case, where the response comes back with size 10 the caller never sent."
+  },
+  {
+    "category": "docs_required_with_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/databases/postgresql/instances/{}/connection-pools",
+    "location": "body",
+    "parameter": "username",
+    "reason": "The reference page marks username required while typing it `string | null` and publishing `Defaults to null`, with the prose adding that `The default of null reuses the inbound user`. A member the API defaults to null is one the API accepts without, so the required marker does not describe a refusal. The proto keeps username optional with body_nullable so an omitted argument leaves the key off the body and an explicit null travels as null, both of which the create fixture pins. A required rule could refuse neither case separately: an omitted field and an explicit null reach a CEL rule as the same unset field."
+  },
+  {
+    "category": "docs_required_with_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/databases/postgresql/instances/{}/connection-pools/{}",
+    "location": "body",
+    "parameter": "mode",
+    "reason": "The reference page marks mode required and publishes a default for it in the same block, rendering `mode string / enum / required / Defaults to transaction`, the same block the create page carries. A member the API defaults is one the API accepts without. The same run reads that default off the page and reports it as parameter_default_unrepresented_in_proto on this key. The proto keeps mode optional so an omitted argument leaves the key off the body, which the update fixture pins in its 'sends an explicit null username' and 'previews the connection pool update request' cases."
+  },
+  {
+    "category": "docs_required_with_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/databases/postgresql/instances/{}/connection-pools/{}",
+    "location": "body",
+    "parameter": "size",
+    "reason": "The reference page marks size required and publishes a default for it in the same block, rendering `size integer / required / Defaults to 10`. The API supplies 10 when the member is absent, so the required marker does not describe a call the API refuses. The same run reads that default off the page and reports it as parameter_default_unrepresented_in_proto on this key. The proto keeps size optional so an omitted argument leaves the key off the body, which the update fixture pins in its 'sends an explicit null username' case."
+  },
+  {
+    "category": "docs_required_with_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/databases/postgresql/instances/{}/connection-pools/{}",
+    "location": "body",
+    "parameter": "username",
+    "reason": "The reference page marks username required while typing it `string | null` and publishing `Defaults to null`, with the prose adding that `The default of null reuses the inbound user`. A member the API defaults to null is one the API accepts without. The proto keeps username optional with body_nullable so an omitted argument leaves the key off the body and an explicit null travels as null, both of which the update fixture pins. A required rule could refuse neither case separately: an omitted field and an explicit null reach a CEL rule as the same unset field."
+  },
+  {
+    "category": "repo_reader_declares_requiredness",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/linode/instances/{}/ips/{}",
+    "location": "body",
+    "parameter": "rdns",
+    "reason": "The page marks rdns required and the tool does require it: the generated handler calls RequiredPresentArgument on the argument map and answers 'rdns is required' when the key is absent, which the behavior fixture pins in its 'rejects missing rdns once confirmed' case. The field carries proto3 optional with body_nullable so an explicit null can travel, because null is the API's spelling for resetting the reverse DNS to the Linode default. Requiredness is therefore declared through argument_reader = ARGUMENT_READER_PRESENT, and the comparator reads the proto side only from proto3 presence and from a <field>.required CEL rule id, so it cannot see that declaration. A CEL rule could not restate it: an omitted rdns and an explicit null both reach a rule as an unset field, so a required rule would also refuse the explicit null the fixture pins."
+  },
+  {
+    "category": "repo_presence_free_bool_sends_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/account/oauth-clients",
+    "location": "body",
+    "parameter": "public",
+    "reason": "post-client renders `public boolean` with `Defaults to false` and no required line, and marks label and redirect_uri required in the same block, so the page does record requiredness here. account.proto declares a proto3 bool with no `optional`, which carries no presence, so the field travels on every call and an omitted argument sends the documented default of false. The request the API receives matches the documented contract; the comparator is reading the missing presence bit as a requiredness claim."
+  },
+  {
+    "category": "repo_required_create_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/account/payments",
+    "location": "body",
+    "parameter": "usd",
+    "reason": "post-payment renders no required line on any member of its Body Params block, including the amount the route exists to charge. account.proto declares usd required through the PRESENT_TEXT reader and both languages answer `usd is required`, pinned by the behavior fixture. The documentation omits the marker on a member the route cannot work without, so the repo is stricter than the rendered page and correct about the API."
+  },
+  {
+    "category": "repo_required_docs_state_conditional",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/domains/{}/records",
+    "location": "body",
+    "parameter": "target",
+    "reason": "post-domain-record states target's requiredness as prose conditioned on the record type (`whether it is required depends on the type of record this represents`, plus per-type `Required.` lines) instead of a required marker on the parameter block, while marking type required in the same block. domain.proto requires target unconditionally through a named rule whose sentence both languages answer and the behavior fixture pins. The documented fact is conditional and lives in a form the parameter extractor cannot read."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/images/{}/regions",
+    "location": "body",
+    "parameter": "regions",
+    "reason": "post-replicate-image renders one body member and no required marker on it. image.proto declares regions required through a named rule, and it is the only body member the route has, so an omitted argument would POST an empty body and replicate nothing. The tool answers a named refusal instead of issuing a write that does nothing."
+  },
+  {
+    "category": "repo_guardrail_narrower_than_docs",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/linode/instances",
+    "location": "body",
+    "parameter": "firewall_id",
+    "reason": "post-linode-instance documents firewall_id as optional and nullable, with -1 meaning no firewall device and absence meaning the account default firewall, and marks region and type required in the same block. instance.proto requires a positive id and refuses both documented opt-outs on purpose: the proto comment states the firewall is the tool's own guardrail rather than the API's, and three behavior fixture cases pin the sentence. The narrower contract is a deliberate repo policy, not drift."
+  },
+  {
+    "category": "repo_required_create_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/linode/instances/{}/disks",
+    "location": "body",
+    "parameter": "label",
+    "reason": "post-add-linode-disk marks size required and leaves label unmarked, so the documented source omits the marker rather than the page dropping it. instance_disk.proto requires a non-blank label through a named rule whose sentence the behavior fixture pins, because a disk created with no label cannot be addressed afterwards. The repo is stricter than the rendered contract on a create member."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/longview/clients",
+    "location": "body",
+    "parameter": "label",
+    "reason": "post-longview-client renders one body member and no required marker on it. longview.proto requires a non-empty label through a named rule whose sentence two behavior fixture cases pin, and it is the only body member the create has, so an omitted argument would POST an empty body. The tool refuses by name rather than issuing a create that carries nothing."
+  },
+  {
+    "category": "repo_required_beyond_documented_default",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/nodebalancers/{}/configs",
+    "location": "body",
+    "parameter": "port",
+    "reason": "post-node-balancer-config renders port with a range and `Defaults to 80` and no required line, and marks nodes required in the same rendered block, so the documented side states this parameter's requiredness. nodebalancer_config.proto declares port with no presence and lets the range rule answer an absent port, which the behavior fixture pins as `port must be an integer from 1 through 65535`. The create route therefore requires a port the documentation defaults, and the sibling update and rebuild routes leave it optional; the documented default of 80 is not reachable through the create tool."
+  },
+  {
+    "category": "repo_required_create_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/nodebalancers/{}/configs/{}/nodes",
+    "location": "body",
+    "parameter": "address",
+    "reason": "post-node-balancer-node renders address in the variant the page did publish (UDP config) with no required marker, and marks nothing required anywhere in the block, so the unrendered TCP/HTTP/HTTPS variant does not explain this row. nodebalancer_config_node.proto requires a non-blank address through a named rule the behavior fixture pins, because a backend node with no address routes nothing."
+  },
+  {
+    "category": "repo_required_create_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/nodebalancers/{}/configs/{}/nodes",
+    "location": "body",
+    "parameter": "label",
+    "reason": "post-node-balancer-node renders label in the variant the page did publish (UDP config) with no required marker, and marks nothing required anywhere in the block, so the unrendered variant does not explain this row. nodebalancer_config_node.proto requires a non-blank label through a named rule the behavior fixture pins, so the repo is stricter than the rendered contract on a create member."
+  },
+  {
+    "category": "repo_required_create_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/object-storage/keys",
+    "location": "body",
+    "parameter": "label",
+    "reason": "post-object-storage-keys renders label in the variant the page did publish (Limited access key) with no required marker, so the unrendered Unlimited variant does not explain this row. object_storage.proto requires a non-empty label through a named rule the behavior fixture pins, because the key's label is the only thing that identifies it afterwards."
+  },
+  {
+    "category": "repo_required_create_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/profile/sshkeys",
+    "location": "body",
+    "parameter": "label",
+    "reason": "post-add-ssh-key renders no required marker on either body member, and documents label with `length between 0 and 64`, which permits an empty string. sshkey.proto requires a non-empty label through a named rule the behavior fixture pins, because the label is what identifies the key in every later list and update call."
+  },
+  {
+    "category": "repo_required_create_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/profile/sshkeys",
+    "location": "body",
+    "parameter": "ssh_key",
+    "reason": "post-add-ssh-key renders no required marker on any body member, including the key material the route exists to store. sshkey.proto requires a non-empty ssh_key through a named rule the behavior fixture pins. The documentation omits the marker on the one member without which the create cannot succeed, so the repo is correct about the API and stricter than the rendered page."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/profile/tfa-enable-confirm",
+    "location": "body",
+    "parameter": "tfa_code",
+    "reason": "post-tfa-confirm renders one body member and no required marker on it, on a route whose only job is checking that code. profile.proto declares tfa_code through a non_blank rule on a presence-free string, so the rule answers an absent code as well as a blank one, and the behavior fixture pins the sentence. An omitted argument would POST an empty body and confirm nothing."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/lke/clusters/{}/control_plane_acl",
+    "location": "body",
+    "parameter": "acl",
+    "reason": "put-lke-cluster-acl renders one body member and no required marker on it, while its prose says the object requires the enabled and addresses keys. lke.proto requires a non-empty acl through a named rule whose sentence two behavior fixture cases pin, and it is the only body member the route has, so an omitted argument would PUT an empty body and replace nothing."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/longview/clients/{}",
+    "location": "body",
+    "parameter": "label",
+    "reason": "put-longview-client renders one body member and no required marker on it. longview.proto declares label required through the PRESENT_TEXT reader, and the pattern rule beside it is written to stand aside on an empty label so the reader answers, which the proto comment states. It is the only body member the update has, so an omitted argument would PUT an empty body and change nothing."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/longview/plan",
+    "location": "body",
+    "parameter": "longview_subscription",
+    "reason": "put-longview-plan renders one body member and no required marker on it. longview.proto declares the slug required through the PRESENT_TEXT reader, and the allowed-values rule beside it is written to stand aside on an empty slug so the reader answers, which the proto comment states. It is the only body member the route has, so an omitted argument would PUT an empty body and change no plan."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/managed/credentials/{}",
+    "location": "body",
+    "parameter": "label",
+    "reason": "put-managed-credential renders one body member and no required marker on it. managed.proto requires a non-empty label through a named rule whose sentence two behavior fixture cases pin, and it is the only body member the update has, so an omitted argument would PUT an empty body and change nothing."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/managed/linode-settings/{}",
+    "location": "body",
+    "parameter": "ssh",
+    "reason": "put-managed-linode-setting renders one body member and no required marker on it. managed.proto requires a non-empty ssh object through a named rule, using size because a map carries no presence bit, so one sentence answers an absent object and an empty one. It is the only body member the route has, so an omitted argument would PUT an empty body and change no setting."
+  },
+  {
+    "category": "repo_required_nullable_reset_unsupported",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/networking/ips/{}",
+    "location": "body",
+    "parameter": "rdns",
+    "reason": "put-ip types rdns as `string | null` and documents a Linode-provided default applied when it is not explicitly set, marking nothing required in the block. ip.proto declares rdns required through the PRESENT_TEXT reader with an explicit `rdns is required` sentence the behavior fixture pins, and the reader also refuses the documented null, so the tool asks for a reverse DNS value on every call to this route."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/placement/groups/{}",
+    "location": "body",
+    "parameter": "label",
+    "reason": "put-placement-group renders one body member and no required marker on it. placement.proto declares label required through the PRESENT_TEXT reader with its own absent sentence, and the pattern rule beside it is written to stand aside on an empty label so the reader answers. It is the only body member the update has, so an omitted argument would PUT an empty body and change nothing."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/profile/sshkeys/{}",
+    "location": "body",
+    "parameter": "label",
+    "reason": "put-ssh-key renders one body member and no required marker on it. sshkey.proto declares label required through the PRESENT_TEXT reader and the behavior fixture pins `label is required`. It is the only body member the update has, so an omitted argument would PUT an empty body and rename nothing."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/profile/tokens/{}",
+    "location": "body",
+    "parameter": "label",
+    "reason": "put-personal-access-token renders one body member and no required marker on it. profile.proto declares a presence rule on the optional label field, and the proto comment records that the label is the only field a token update can change, so a call that omits it has nothing to send. The behavior fixture pins the refusal."
+  },
+  {
+    "category": "repo_required_sole_body_member",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "PUT",
+    "shape": "/vpcs/{}/subnets/{}",
+    "location": "body",
+    "parameter": "label",
+    "reason": "put-vpc-subnet renders one body member and no required marker on it. vpc.proto requires a non-blank label through a named rule whose sentence two behavior fixture cases pin, and it is the only body member the update has, so an omitted argument would PUT an empty body and change nothing."
+  },
+  {
+    "category": "repo_flat_argument_folds_into_documented_parent",
+    "kind": "proto_parameter_not_in_techdocs",
+    "reason": "Each of these is a flat tool argument the contract folds into a member of an object the page does document, so the request body carries only the documented shape. account_service_transfer.proto:229-236 folds linode_ids into entities.linodes, instance.proto:1067-1090 folds route_ipv4 and route_ipv6 into the synthesized interfaces element's default_route, and firewall.proto:282-297 folds inbound_policy and outbound_policy into rules. The rendered parameter tables stop at the parent and list no members: post-service-transfer:653-656 prints `entities object` and `required` then repeats `entities object` with nothing between, post-linode-instance:850-853 prints `interfaces array of objects` then `interfaces ADD object`, and post-firewalls:659-664 prints `rules object` and `required` the same way. The members are documented elsewhere in the same corpus: the CLI examples at post-service-transfer:639-640 and post-firewalls:634-635 spell --entities.linodes, --rules.outbound_policy and --rules.inbound_policy, and post-linode-interface:670-673 documents the default_route object carrying an IPv4 and an IPv6 member. Removing any of the five would drop an input the route accepts, so the gap is the depth the page renders.",
+    "entries": [
+      {
+        "method": "POST",
+        "shape": "/account/service-transfers",
+        "location": "body",
+        "parameter": "linode_ids"
+      },
+      {
+        "method": "POST",
+        "shape": "/linode/instances",
+        "location": "body",
+        "parameter": "route_ipv4"
+      },
+      {
+        "method": "POST",
+        "shape": "/linode/instances",
+        "location": "body",
+        "parameter": "route_ipv6"
+      },
+      {
+        "method": "POST",
+        "shape": "/networking/firewalls",
+        "location": "body",
+        "parameter": "inbound_policy"
+      },
+      {
+        "method": "POST",
+        "shape": "/networking/firewalls",
+        "location": "body",
+        "parameter": "outbound_policy"
+      }
+    ]
+  },
+  {
+    "category": "repo_argument_names_unnamed_body",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "PUT",
+    "shape": "/profile/preferences",
+    "location": "body",
+    "parameter": "preferences",
+    "reason": "put-user-preferences:622-625 renders the whole Body Params section as `Arbitrary JSON of your choosing. Overwrites any existing preferences for this user.` with a length cap and names no parameter, so the page offers no name for the map to match. profile.proto:408-414 marks the field body_root, which sends its entries as the request body itself rather than under a member of it, and a tool argument still needs a name even when the body it becomes has none."
+  },
+  {
+    "category": "read_only_property_removal_deferred",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "PUT",
+    "shape": "/account/settings",
+    "location": "body",
+    "parameter": "object_storage",
+    "reason": "The reference page renders four writable settings under Body Params and not this one, and linode-api-openapi 4.229.1, the release docs/contracts/api-defaults-baseline.txt was reviewed at, marks object_storage readOnly with default disabled inside that same PUT request body, which is the default docs/contracts/api-defaults-baseline.txt:67 carries. Its two read-only siblings, managed and longview_subscription, are removed under REQ-D8. This one is held back because testdata/behavior/linode_account_settings_update.json pins the sentence 'object_storage must be a string' for a non-string value, and the unknown-argument refusal declared at account.proto:1716 answers that call first once the field is gone. Retire this entry when the removal lands together with that fixture case."
+  },
+  {
+    "category": "raw_body_transport_argument",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "PUT",
+    "shape": "/account/oauth-clients/{}/thumbnail",
+    "location": "body",
+    "parameter": "thumbnail_png_base64",
+    "reason": "The route's request body is a raw image/png upload, so the reference page prints its Body Params heading with nothing between it and Responses after telling the caller to upload a PNG image file. oauth_client_thumbnail.proto declares execute_transport.raw_body with direction UP, content_type image/png, and source_argument thumbnail_png_base64, so the argument names the bytes that become the whole body rather than a JSON member the page could list, and the comparator reads the declared BODY location without reading that transport. The one declaration that would drop the finding, FIELD_LOCATION_LOCAL, would also drop the argument from the previewed body that testdata/behavior/linode_account_oauth_client_thumbnail_update.json pins, and the system-parameter marker cannot apply because the field declares a location and the bytes really are sent."
+  },
+  {
+    "category": "repo_query_string_passthrough",
+    "kind": "parameter_type_mismatch",
+    "method": "GET",
+    "shape": "/object-storage/buckets/{}/{}/object-list",
+    "location": "query",
+    "parameter": "page_size",
+    "reason": "The tool declares this query value as a string and the generated handler forwards it into the query string unconverted, so the request carries page_size=100 either way and the wire has no type to disagree about. The page types it integer with a 25 to 500 range, which the string argument does not express, and object_storage.proto:492-495 records the string as the shape the hand-built schema shipped. Changing field 7's type is refused by make wire-breaking, so what diverges is the argument a caller types, not the call the tool makes."
+  },
+  {
+    "category": "deprecated_route_retained",
+    "kind": "deprecated_route_still_in_proto",
+    "method": "GET",
+    "shape": "/account/child-accounts",
+    "location": "",
+    "parameter": "",
+    "reason": "The page renders the operation deprecated and sends callers to the IAM delegation List child accounts operation (get-child-accounts page, lines 604 and 609). The repo already serves that replacement as linode_iam_delegation_child_account_list (iam_delegation.proto:97), and the contract records why this tool stays: the replacement answers with the company and euuid alone rather than the whole account record (account.proto:856-861). The replacement is also v4 only while this route serves both v4 and v4beta (api-techdocs-routes-baseline.txt:78 and :135), so retiring the tool would narrow the surface a caller can reach. The route is still published, so the tool stays until the API withdraws it."
+  },
+  {
+    "category": "deprecated_route_retained",
+    "kind": "deprecated_route_still_in_proto",
+    "method": "GET",
+    "shape": "/account/child-accounts/{}",
+    "location": "",
+    "parameter": "",
+    "reason": "The page renders the operation deprecated and sends callers to the delegation profile Get a child account operation (get-child-account page, lines 604 and 609). The repo serves that replacement as linode_iam_delegation_profile_child_account_get (iam_delegation.proto:289), and the contract records why this tool stays: the replacement answers with the company and euuid alone rather than the whole account record (account.proto:828-833). The route is still published, so the tool stays until the API withdraws it."
+  },
+  {
+    "category": "deprecated_route_retained",
+    "kind": "deprecated_route_still_in_proto",
+    "method": "GET",
+    "shape": "/account/users/{}/grants",
+    "location": "",
+    "parameter": "",
+    "reason": "The page renders the operation deprecated and points callers at the IAM Get a user's access level operation (get-user-grants page, lines 604 and 609). The repo serves that replacement as linode_iam_user_role_permission_get (iam.proto:100) and keeps this tool so callers still reading the old grants object are not cut off (account_user.proto:176-180). The role-permissions route is v4 only while the grants route serves both v4 and v4beta (api-techdocs-routes-baseline.txt:104 and :147), so the two are not interchangeable for every caller."
+  },
+  {
+    "category": "deprecated_route_retained",
+    "kind": "deprecated_route_still_in_proto",
+    "method": "PUT",
+    "shape": "/account/users/{}/grants",
+    "location": "",
+    "parameter": "",
+    "reason": "The page renders the operation deprecated and points callers at the IAM Update a user's access level operation (put-user-grants page, lines 604 and 609). The repo serves that replacement as linode_iam_user_role_permission_update (iam.proto:132) and keeps this tool so callers still writing the old grants object are not cut off (account_user.proto:389-399). The role-permissions route is v4 only while the grants route serves both v4 and v4beta (api-techdocs-routes-baseline.txt:476 and :488), so the two are not interchangeable for every caller."
+  },
+  {
+    "category": "deprecated_route_withdrawal_announced",
+    "kind": "deprecated_route_still_in_proto",
+    "method": "POST",
+    "shape": "/account/child-accounts/{}/token",
+    "location": "",
+    "parameter": "",
+    "reason": "The page renders the operation deprecated and its callout goes further than the sibling child-account pages: it says the operation is no longer available, names Create a delegate user token as the successor, and links the migrated-partner change notes (post-child-account-token page, lines 604 and 609). The route is still published with its path params and responses, the repo already serves the successor as linode_iam_delegation_profile_child_account_token_create (iam_delegation.proto:320), and the contract records why the old tool stays: the two mint tokens through different account models (account.proto:882-888). Of the six deprecated routes this repo serves, this is the one to retire first if the owner wants a smaller deprecated surface, and this entry is reported in known_divergences_unmatched once the route leaves the documented set."
+  },
+  {
+    "category": "deprecated_route_backing_feature_decommissioned",
+    "kind": "deprecated_route_still_in_proto",
+    "method": "GET",
+    "shape": "/lke/clusters/{}/dashboard",
+    "location": "",
+    "parameter": "",
+    "reason": "The page renders the operation deprecated and its callout records that Akamai decommissioned the LKE-hosted Kubernetes Dashboard in May 2026, so the dashboard is gone for existing clusters and cannot deploy to new ones (get-lke-cluster-dashboard page, lines 604, 605 and 609). The page names no replacement operation, so there is nothing to point callers at, and the route itself is still published with its path params and responses. The tool stays while the API publishes the route; this entry stops matching and is reported in known_divergences_unmatched once the route leaves the documented set, which is the signal to retire the tool."
+  },
+  {
+    "category": "repo_enum_subset",
+    "kind": "parameter_enum_mismatch",
+    "reason": "The page lists a fifth value, custom, that the route does not take as input: Cloud Manager only displays custom when a bucket carries non-canned S3 grants, and linodego has no ACLCustom constant. scripts/verify_sync_enums.py drops custom from the spec side for that reason, so the contract's four canned ACLs are a deliberate subset of the documented list.",
+    "entries": [
+      {
+        "method": "POST",
+        "shape": "/object-storage/buckets/{}/{}/access",
+        "location": "body",
+        "parameter": "acl"
+      },
+      {
+        "method": "PUT",
+        "shape": "/object-storage/buckets/{}/{}/access",
+        "location": "body",
+        "parameter": "acl"
+      },
+      {
+        "method": "PUT",
+        "shape": "/object-storage/buckets/{}/{}/object-acl",
+        "location": "body",
+        "parameter": "acl"
+      }
+    ]
+  },
+  {
+    "category": "repo_reader_precedes_value_set",
+    "kind": "parameter_enum_mismatch",
+    "method": "GET",
+    "shape": "/longview/subscriptions/{}",
+    "location": "path",
+    "parameter": "subscription_id",
+    "reason": "The page allows four subscription slugs and the field already carries the fragment-safe-text reader, which both generated handlers run after the message rules. A membership rule would answer a separator-bearing id with the set sentence in place of the reader's path-separator sentence, which testdata/behavior/linode_longview_subscription_get.json pins, so the reader stays the single guard on this path segment."
+  },
+  {
+    "category": "repo_fixture_names_undocumented_id",
+    "kind": "parameter_enum_mismatch",
+    "reason": "The page allows one value, keys, while both behavior fixtures GET obj-objects-global, an id no page in the run documents; the sibling per-endpoint quota route documents free-form <quota_type>-<s3_endpoint> ids instead. Declaring the single-value set would refuse the fixture id, so the set stays off the contract until the fixture id is checked against a live account.",
+    "entries": [
+      {
+        "method": "GET",
+        "shape": "/object-storage/global-quotas/{}",
+        "location": "path",
+        "parameter": "obj_global_quota_id"
+      },
+      {
+        "method": "GET",
+        "shape": "/object-storage/global-quotas/{}/usage",
+        "location": "path",
+        "parameter": "obj_global_quota_id"
+      }
+    ]
+  },
+  {
+    "category": "doc_template_artifact",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "POST",
+    "shape": "/monitor/services/{}/metrics",
+    "location": "body",
+    "parameter": "add",
+    "reason": "ReadMe renders the array-add affordance as a bare 'ADD object' line at page line 692, between the metrics item schema and time_granularity, so the flat extractor reads a button label as a body parameter. The two IAM role-permission routes already carry the same artifact under this category."
+  },
+  {
+    "category": "techdocs_nested_member_flattened",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "POST",
+    "shape": "/monitor/services/{}/metrics",
+    "location": "body",
+    "parameter": "aggregate_function",
+    "reason": "aggregate_function is a member of the metrics array item, not a top-level body parameter: page line 676 opens the item schema with 'metrics * object' and line 677 renders aggregate_function inside it, closing at the 'ADD object' line 692. The rendered page carries no indentation, so the flat extractor hoists the member to the top of the body. The proto carries it as MonitorServiceMetricItem.aggregate_function, which the comparator's top-level parameter model cannot see."
+  },
+  {
+    "category": "techdocs_nested_member_flattened",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "POST",
+    "shape": "/monitor/services/{}/metrics",
+    "location": "body",
+    "parameter": "name",
+    "reason": "name is a member of the metrics array item, not a top-level body parameter: page line 689 renders it inside the item schema that line 676 opens with 'metrics * object' and line 692 closes with the array-add affordance. The rendered page carries no indentation, so the flat extractor hoists the member to the top of the body. The proto carries it as MonitorServiceMetricItem.name, which the comparator's top-level parameter model cannot see."
+  },
+  {
+    "category": "docs_required_only_in_rendered_variant",
+    "kind": "parameter_requiredness_mismatch",
+    "method": "POST",
+    "shape": "/monitor/services/{}/metrics",
+    "location": "body",
+    "parameter": "entity_region",
+    "reason": "post-read-metric renders one of four body variants, marked at page line 629 as '[variants: Relative Time - Object Storage, Absolute Time - Object Storage, Relative Time - All other services, Absolute Time - All other services; rendered: Relative Time - Object Storage]'. entity_region takes its required marker at page lines 631-632 from that Object Storage variant, and the parameter's own text scopes it to Object Storage: 'The slug value for the Akamai Cloud Computing region, where the target Object Storage buckets live.' openapi.json 4.229.1 carries the same four variants as a oneOf on POST /{apiVersion}/monitor/services/{serviceType}/metrics and names entity_region in required only for the two Object Storage members; the two 'All other services' members do not carry the property at all and require entity_ids instead. The tool takes service_type as a path argument and serves every supported service type, so monitor.proto:203 keeps the field optional, which the field comment above it states. testdata/behavior/linode_monitor_service_metric_query.json pins the omission in its 'posts the empty body to the metrics route' case, a dbaas query that sends an empty body. Requiring entity_region would refuse every query outside Object Storage."
+  },
+  {
+    "category": "body_constant_fixed_value",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "POST",
+    "shape": "/object-storage/buckets/{}/{}/object-url",
+    "location": "body",
+    "parameter": "method",
+    "reason": "The documentation marks method required with a default of GET (page lines 643-646). Both transfer tools on this route send it through the body_constant option instead of a field, because neither lets the caller choose the verb: object_storage.proto:1159-1162 pins GET for the download and 1264-1267 pins PUT for the upload. The comparator builds its proto side from input-message fields, so a pinned body member reads as absent. The presigned-URL create on the same route declares method as a field instead, which is what a caller-chosen verb looks like; its own enum disagreement with the page is a separate open row."
+  },
+  {
+    "category": "body_member_scoped_to_other_verbs",
+    "kind": "techdocs_parameter_missing_from_proto",
+    "method": "POST",
+    "shape": "/object-storage/buckets/{}/{}/object-url",
+    "location": "body",
+    "parameter": "content_type",
+    "reason": "Page lines 633-638 scope content_type to the verbs that are not GET or DELETE: 'Required for all methods except GET or DELETE.' The download pins method to GET (object_storage.proto:1159-1162), so the documentation asks nothing of it there. The presign body still carries a content type, filled by the transport at go/internal/tools/transport.go:70 so the signed request and the transfer agree. A caller argument would sign a URL whose signature covers a Content-Type header the download's own GET never sends (transport.go:243-254 and objectdata.Download set no such header), so the endpoint would refuse a URL the tool just minted. The upload declares the field at object_storage.proto:1350 and the presigned-URL create at 1052, where the verb makes it meaningful."
   }
 ]

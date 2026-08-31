@@ -1696,7 +1696,7 @@ message AccountSettingsUpdateInput {
   option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_ACCOUNT_READ_WRITE};
   option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_ACCOUNT};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountSettingsWriteResponse";
-  option (linode.mcp.v1.tool_description) = "Updates account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy.";
+  option (linode.mcp.v1.tool_description) = "Updates account-wide settings such as backups, network helper, object storage, interfaces, and maintenance policy.";
   option (linode.mcp.v1.error_message) = "Failed to update account settings: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates account-wide settings. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Account settings updated successfully";
@@ -1718,10 +1718,8 @@ message AccountSettingsUpdateInput {
   };
   option (linode.mcp.v1.require_any_of) = {
     fields: "backups_enabled"
-    fields: "managed"
     fields: "network_helper"
     fields: "interfaces_for_new_linodes"
-    fields: "longview_subscription"
     fields: "maintenance_policy"
     fields: "object_storage"
     message: "at least one account settings field is required"
@@ -1737,25 +1735,25 @@ message AccountSettingsUpdateInput {
   // Default interface generation mode for new Linodes (optional).
   optional string interfaces_for_new_linodes = 3 [
     (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    // The map read is the only answer left for a value the caller did not send
+    // as a string, because a body field that is not one stops the message being
+    // built. The string member rather than the text one so a blank reaches the
+    // CEL rule that names the modes the account offers.
     (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
   ];
-  // Longview subscription tier, or an empty string to disable it (optional).
-  // The blank is why these four read through the string member rather than the
-  // text one: it is the value that cancels the subscription.
-  optional string longview_subscription = 4 [
-    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
-    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
-  ];
+  reserved 4;
+  reserved "longview_subscription";
   // Default maintenance policy for the account (optional).
   optional string maintenance_policy = 5 [
     (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    // The map read is the only answer left for a value the caller did not send
+    // as a string, because a body field that is not one stops the message being
+    // built. The string member rather than the text one so a blank reaches the
+    // CEL rule that names the policies the account offers.
     (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
   ];
-  // Whether managed services are enabled for the account (optional).
-  optional bool managed = 6 [
-    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
-    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
-  ];
+  reserved 6;
+  reserved "managed";
   // Whether Network Helper is enabled by default (optional).
   optional bool network_helper = 7 [
     (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
@@ -1764,6 +1762,10 @@ message AccountSettingsUpdateInput {
   // Object Storage subscription status or tier (optional).
   optional string object_storage = 8 [
     (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    // The map read is the only answer left for a value the caller did not send
+    // as a string, because a body field that is not one stops the message being
+    // built. The string member rather than the text one because no rule holds
+    // this field to a value: a blank travels to the route.
     (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_STRING
   ];
   // Must be true to confirm account settings update. Ignored when

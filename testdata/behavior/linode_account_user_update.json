@@ -32,6 +32,11 @@
       "args": { "username": "alice", "email": "new@example.com", "confirm": true },
       "api_response": 7,
       "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "rejects a call naming only ssh_keys, which the route documents as read-only",
+      "args": { "username": "alice", "ssh_keys": ["ssh-rsa AAA"], "confirm": true },
+      "expect_error": "at least one account user field is required"
     }
   ]
 }

@@ -76,7 +76,12 @@ func TestRedactReplacesSensitiveTopLevelKeys(t *testing.T) {
 	}
 }
 
-func TestRedactAccountUserUpdateSensitiveFields(t *testing.T) {
+// Redaction matches an exact key name, not a tool's declared arguments.
+// password_created and ssh_keys are on the list as the names an account user
+// payload spells (both are AccountUser response fields, and no tool takes
+// either as an argument), so the walker has to scrub them wherever an argument
+// map carries the name.
+func TestRedactScrubsPasswordCreatedAndSSHKeys(t *testing.T) {
 	t.Parallel()
 
 	args := map[string]any{

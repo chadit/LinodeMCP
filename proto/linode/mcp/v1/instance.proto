@@ -2366,8 +2366,11 @@ message InstanceConfigUpdateInput {
     message: "config_id must be a positive integer"
     expression: "this.config_id >= 1"
   };
+  // The route changes whichever fields the call names, so an omitted label is
+  // no error. The rule answers a label that was sent and cannot be stored,
+  // which is the same shape ProfileTokenUpdateInput spells .non_blank.
   option (buf.validate.message).cel = {
-    id: "instance_config_update.label.required"
+    id: "instance_config_update.label.non_blank"
     message: "label is required"
     expression: "!has(this.label) || this.label.matches('[^ \\t\\r\\n]')"
   };

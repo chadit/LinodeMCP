@@ -126,11 +126,26 @@ message MonitorServiceAlertDefinitionListInput {
   ];
 }
 
+// MonitorServiceMetricItem is one entry of the metrics array a metric query
+// sends: the metric to read and the aggregation applied to it. The page renders
+// both members inside the metrics item schema rather than at the top of the
+// body.
+message MonitorServiceMetricItem {
+  // The metric to query, for example cpu_usage. Run the metric definition list
+  // for a service type to see what it publishes.
+  string name = 1;
+  // Aggregation applied to the metric: min, max, avg, or sum (optional). Held
+  // as text rather than a closed set because the API owns the vocabulary and
+  // publishes it per service type.
+  optional string aggregate_function = 2;
+}
+
 // MonitorServiceMetricQueryInput is the input contract for
 // linode_monitor_service_metric_query. The route reads rather than changes
-// anything, so it takes no confirm and sends the empty body its only POST-tier
-// sibling sends. It advertises service_type alone (the ground-truth dump
-// confirms).
+// anything, so it takes no confirm. Every query member is optional, including
+// the two the rendered request variant marks required: a caller who names none
+// still sends the empty body the tool has always sent, and the API stays the
+// authority on which combination each service type accepts.
 message MonitorServiceMetricQueryInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_monitor_service_metric_query"
@@ -141,7 +156,7 @@ message MonitorServiceMetricQueryInput {
   option (linode.mcp.v1.tool_scopes) = {none: true};
   option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceMetricQueryResponse";
-  option (linode.mcp.v1.tool_description) = "Gets metrics for one supported monitoring service type by service_type.";
+  option (linode.mcp.v1.tool_description) = "Gets metrics for one supported monitoring service type by service_type. Optional body members narrow the query: metrics, group_by, filters, a time window, and an Object Storage entity_region.";
   option (linode.mcp.v1.success_message) = "Monitor service metrics read for '{service_type}'";
   option (linode.mcp.v1.error_message) = "Failed to retrieve monitor service metrics for '{service_type}': {error}";
   option (linode.mcp.v1.retry_disabled) = true;
@@ -153,11 +168,56 @@ message MonitorServiceMetricQueryInput {
     message: "service_type must be a single non-empty service type slug"
     expression: "this.service_type.matches('^[a-z0-9]([a-z0-9-]*[a-z0-9])?$')"
   };
+  // Absent means the query is not region-scoped; a blank one is a slug the
+  // caller meant to fill and did not.
+  option (buf.validate.message).cel = {
+    id: "monitor_service_metric_query.entity_region.non_blank"
+    message: "entity_region must be a non-empty region slug when given"
+    expression: "!has(this.entity_region) || this.entity_region.matches('[^ \\t\\r\\n]')"
+  };
+  // Word for word the rule the sibling alert-definition create carries.
+  option (buf.validate.message).cel = {
+    id: "monitor_service_metric_query.group_by.items"
+    message: "group_by must be an array of non-empty strings"
+    expression: "this.group_by.all(field, field.matches('[^ \\t\\r\\n]'))"
+  };
+  // An entry with no metric name asks the API for nothing, so it is refused
+  // here rather than sent.
+  option (buf.validate.message).cel = {
+    id: "monitor_service_metric_query.metrics.items"
+    message: "each metrics entry must name a metric"
+    expression: "this.metrics.all(metric, metric.name.matches('[^ \\t\\r\\n]'))"
+  };
+  // filters, time_granularity and relative_time_duration carry no rule: the
+  // page renders no members inside them, and proto3 reads an absent map or
+  // repeated field as the empty one, so a non-empty rule would refuse the
+  // omitted call this route has always accepted.
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug whose metrics should be retrieved.
   string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Region slug the target Object Storage buckets live in (optional). The
+  // documentation marks it required on the Object Storage request variants
+  // only, which is why it is optional here.
+  optional string entity_region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Dimension filters for the query, each a free-form object (optional). The
+  // item shape is free-form because the page documents it only as an object.
+  repeated google.protobuf.Struct filters = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Fields the response data is grouped by: entity_id, one or more dimension
+  // labels, or both (optional). Omitting it aggregates across all series.
+  repeated string group_by = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Metrics to read, each naming a metric and its aggregation (optional here,
+  // required by the API).
+  repeated MonitorServiceMetricItem metrics = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Time granularity applied to the metric data, as a free-form object
+  // (optional).
+  map<string, google.protobuf.Value> time_granularity = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Relative time window the query runs over, as a free-form object. The API
+  // requires it on the relative-time request variants, which is why it is
+  // optional here: the absolute-time variants send absolute_time_duration
+  // instead and the reference page renders neither of them.
+  map<string, google.protobuf.Value> relative_time_duration = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // MonitorAlertDefinitionGetInput is the input contract for

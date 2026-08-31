@@ -66,6 +66,24 @@
         "interfaces_for_new_linodes": "linode_maybe"
       },
       "expect_error": "interfaces_for_new_linodes must be one of: legacy_config_only, legacy_config_default_but_linode_allowed, linode_default_but_legacy_config_allowed, linode_only"
+    },
+    {
+      "name": "rejects longview_subscription, which the route documents as read-only",
+      "args": {
+        "network_helper": true,
+        "longview_subscription": "longview-10",
+        "confirm": true
+      },
+      "expect_error": "Unsupported account settings field(s): longview_subscription"
+    },
+    {
+      "name": "rejects managed, which the route documents as read-only",
+      "args": {
+        "network_helper": true,
+        "managed": true,
+        "confirm": true
+      },
+      "expect_error": "Unsupported account settings field(s): managed"
     }
   ]
 }

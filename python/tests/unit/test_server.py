@@ -14528,7 +14528,6 @@ async def test_account_user_update_handler_updates_user(
                 "new_username": "new-user",
                 "email": "new@example.com",
                 "restricted": False,
-                "ssh_keys": ["ssh-rsa AAA"],
                 "confirm": True,
             },
             sample_config,
@@ -14542,7 +14541,6 @@ async def test_account_user_update_handler_updates_user(
         body={
             "email": "new@example.com",
             "restricted": False,
-            "ssh_keys": ["ssh-rsa AAA"],
             "username": "new-user",
         },
         retry=False,

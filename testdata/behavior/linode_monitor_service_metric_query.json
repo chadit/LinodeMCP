@@ -86,6 +86,46 @@
       "api_status": 403,
       "api_response": { "errors": [{ "reason": "Unauthorized" }] },
       "expect_api_error": "Failed to retrieve monitor service metrics for 'dbaas'"
+    },
+    {
+      "name": "rejects a blank entity_region",
+      "args": { "service_type": "dbaas", "entity_region": "   " },
+      "expect_error": "entity_region must be a non-empty region slug when given"
+    },
+    {
+      "name": "rejects a blank group_by entry",
+      "args": { "service_type": "dbaas", "group_by": ["entity_id", " "] },
+      "expect_error": "group_by must be an array of non-empty strings"
+    },
+    {
+      "name": "rejects a metrics entry that names no metric",
+      "args": { "service_type": "dbaas", "metrics": [{ "aggregate_function": "avg" }] },
+      "expect_error": "each metrics entry must name a metric"
+    },
+    {
+      "name": "carries every documented query member",
+      "args": {
+        "service_type": "dbaas",
+        "entity_region": "us-east",
+        "filters": [{ "dimension_label": "node_type" }],
+        "group_by": ["entity_id", "node_type"],
+        "metrics": [{ "name": "cpu_usage", "aggregate_function": "avg" }],
+        "time_granularity": { "unit": "min", "value": 5 },
+        "relative_time_duration": { "unit": "hr", "value": 1 }
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/metrics",
+        "body": {
+          "entity_region": "us-east",
+          "filters": [{ "dimension_label": "node_type" }],
+          "group_by": ["entity_id", "node_type"],
+          "metrics": [{ "name": "cpu_usage", "aggregate_function": "avg" }],
+          "time_granularity": { "unit": "min", "value": 5 },
+          "relative_time_duration": { "unit": "hr", "value": 1 }
+        }
+      }
     }
   ]
 }

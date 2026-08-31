@@ -47,10 +47,10 @@ import urllib.request
 from collections import defaultdict
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeIs
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Generator, Mapping
 
 TECHDOCS_AUTHORITY = "techdocs-rendered-pages"
 # JSON Schema spells a masked string field "password". It is a documented
@@ -116,6 +116,9 @@ SURFACE_V4BETA_ONLY = "v4beta_only"
 SURFACE_BOTH = "both"
 API_SURFACE_CLASSIFICATIONS = (SURFACE_V4_ONLY, SURFACE_V4BETA_ONLY, SURFACE_BOTH)
 FIELD_LOCATION_OPTION = "[linode.mcp.v1.field_location]"
+# The BODY string argument whose wire member is the array of its
+# comma-separated segments, which is the type the reference page documents.
+BODY_COMMA_LIST_OPTION = "[linode.mcp.v1.body_comma_list]"
 # LinodeMCP names where an input field travels in the request it builds. That
 # makes the repo side of a location comparison machine-readable instead of
 # inferred from a unique parameter name.
@@ -180,6 +183,23 @@ def read_json(path: Path) -> Any:
         raise ProofError(f"required file is missing: {path}") from exc
     except json.JSONDecodeError as exc:
         raise ProofError(f"invalid JSON in {path}: {exc}") from exc
+
+
+def is_json_object(value: Any) -> TypeIs[dict[str, Any]]:
+    """True when a decoded JSON value is an object.
+
+    Descriptor, ledger, and evidence reads all arrive as Any out of
+    json.load, and a bare isinstance guard narrows one to a mapping of
+    unknowns that carries the unknown into every later read. JSON keys are
+    strings by definition, so the narrowed shape is declared once here and
+    every caller keeps the refusal it already had.
+    """
+    return isinstance(value, dict)
+
+
+def is_json_array(value: Any) -> TypeIs[list[Any]]:
+    """True when a decoded JSON value is an array. See is_json_object."""
+    return isinstance(value, list)
 
 
 def write_json(path: Path | None, payload: Any) -> None:
@@ -265,7 +285,7 @@ def strip_segmentation(value: str) -> str:
 
 
 def normalized_json_value(value: Any) -> Any:
-    if isinstance(value, list):
+    if is_json_array(value):
         return sorted(value, key=lambda item: json.dumps(item, sort_keys=True))
     return value
 
@@ -975,7 +995,7 @@ def tool_api_surface(
     fails closed rather than defaulting to v4, because reading a beta tool as v4
     would hide the exact mismatch this comparison exists to find.
     """
-    raw = options.get(TOOL_API_SURFACE_OPTION) if isinstance(options, dict) else None
+    raw = options.get(TOOL_API_SURFACE_OPTION) if is_json_object(options) else None
     if raw is None:
         return API_SURFACE_VALUES[""], None
     declared = str(raw)
@@ -1015,7 +1035,7 @@ def run_buf_descriptor(
                 f"Buf descriptor build failed with {process.returncode}: {error}"
             )
         descriptor = read_json(output)
-        if not isinstance(descriptor, dict):
+        if not is_json_object(descriptor):
             raise ProofError(f"Buf wrote a descriptor that is not an object: {output}")
         return descriptor
 
@@ -1034,8 +1054,8 @@ def run_buf_descriptor(
 
 def source_comments(file_descriptor: dict[str, Any]) -> dict[tuple[int, ...], str]:
     source = file_descriptor.get("sourceCodeInfo")
-    locations = source.get("location") if isinstance(source, dict) else None
-    if not isinstance(locations, list) or not locations:
+    locations = source.get("location") if is_json_object(source) else None
+    if not is_json_array(locations) or not locations:
         raise ProofError(
             "descriptor source comments are missing for "
             f"{file_descriptor.get('name', '<unknown>')}"
@@ -1043,7 +1063,7 @@ def source_comments(file_descriptor: dict[str, Any]) -> dict[tuple[int, ...], st
     comments: dict[tuple[int, ...], str] = {}
     for location in locations:
         path = location.get("path")
-        if not isinstance(path, list):
+        if not is_json_array(path):
             continue
         leading = normalize_comment(location.get("leadingComments"))
         trailing = normalize_comment(location.get("trailingComments"))
@@ -1215,7 +1235,8 @@ def field_reader_values(field: dict[str, Any]) -> list[str]:
     comparison: it is read only when the field carries no enum descriptor and
     no `.known` rule.
     """
-    raw = field.get("options", {}).get(READER_VALUES_OPTION) or []
+    options: dict[str, Any] = field.get("options", {})
+    raw: list[Any] = options.get(READER_VALUES_OPTION) or []
     return [str(value) for value in raw if str(value)]
 
 
@@ -1237,9 +1258,7 @@ def extract_proto_tools(
         for message_index, message in enumerate(file_descriptor.get("messageType", [])):
             message_name = str(message.get("name") or "")
             options = message.get("options")
-            route = (
-                options.get(TOOL_ROUTE_OPTION) if isinstance(options, dict) else None
-            )
+            route = options.get(TOOL_ROUTE_OPTION) if is_json_object(options) else None
             if route is not None and not message_name.endswith("Input"):
                 raise ProofError(
                     f"protobuf {TOOL_ROUTE_OPTION} is attached to non-Input message "
@@ -1247,7 +1266,7 @@ def extract_proto_tools(
                 )
             if not message_name.endswith("Input") or route is None:
                 continue  # Meta/local input message with no Linode API route.
-            if not isinstance(route, dict):
+            if not is_json_object(route):
                 raise ProofError(
                     f"protobuf {TOOL_ROUTE_OPTION} is malformed on "
                     f"{file_name}:{message_name}"
@@ -1296,6 +1315,11 @@ def extract_proto_tools(
                     else TYPE_MAP.get(str(field.get("type")), "unknown")
                 )
                 if repeated and not map_field:
+                    field_type = "array"
+                # body_comma_list splits the argument into the array the API
+                # reads, so the array is the contract fact the page documents;
+                # the string is only how a caller types the value.
+                if field.get("options", {}).get(BODY_COMMA_LIST_OPTION):
                     field_type = "array"
                 required: bool | None
                 # A singular message field tracks presence without `optional`,
@@ -1427,10 +1451,10 @@ def techdocs_indexes(
             options = message.get("options")
             operation = (
                 options.get(TECHDOCS_OPERATION_OPTION)
-                if isinstance(options, dict)
+                if is_json_object(options)
                 else None
             )
-            if not isinstance(operation, dict):
+            if not is_json_object(operation):
                 continue  # OperationContract and ParameterContract carry no route.
             # Buf hands the option back as decoded JSON, so the contract is read
             # through one declared shape rather than off an untyped mapping.
@@ -1489,10 +1513,12 @@ def techdocs_indexes(
 
 def techdocs_parameter(field: dict[str, Any]) -> dict[str, Any]:
     """Read one documented parameter back out of a generated proto field."""
-    contract = field.get("options", {}).get(TECHDOCS_PARAMETER_OPTION) or {}
+    options: dict[str, Any] = field.get("options", {})
+    contract: dict[str, Any] = options.get(TECHDOCS_PARAMETER_OPTION) or {}
     field_name = str(field.get("name") or "")
     name = str(contract.get("documentedName") or "") or field_name
     documented_type = str(contract.get("documentedType") or "")
+    enum_values: list[Any] = contract.get("enumValues") or []
     default_json = contract.get("defaultJson")
     default: Any = None
     if contract.get("hasDefault"):
@@ -1513,7 +1539,7 @@ def techdocs_parameter(field: dict[str, Any]) -> dict[str, Any]:
         "required": bool(contract.get("isRequired")),
         "has_default": bool(contract.get("hasDefault")),
         "default": default,
-        "enum": sorted(str(value) for value in contract.get("enumValues") or []),
+        "enum": sorted(str(value) for value in enum_values),
         "deprecated": bool(contract.get("isDeprecated")),
     }
 
@@ -1568,11 +1594,11 @@ LEDGER_CLASS_ENTRY_FIELDS = ("method", "shape", "location", "parameter")
 def json_list(value: Any, message: str) -> list[Any]:
     """Read a decoded JSON value as a list, refusing anything else.
 
-    The annotation is the point. An isinstance guard narrows Any to a list of
-    unknowns, and every read off that list carries the unknown forward, so the
-    shape is declared once here rather than at each element.
+    is_json_array declares the shape so a read off the list is typed; this
+    pairs that with the caller's own failure text, which is what turns a
+    wrong ledger or index into a named refusal instead of a later crash.
     """
-    if not isinstance(value, list):
+    if not is_json_array(value):
         raise ProofError(message)
     return value
 
@@ -1585,7 +1611,7 @@ def expand_ledger_class(position: int, item: dict[str, Any]) -> list[dict[str, s
         raise ProofError(failure)
     expanded: list[dict[str, str]] = []
     for offset, row in enumerate(rows):
-        if not isinstance(row, dict) or set(row) != set(LEDGER_CLASS_ENTRY_FIELDS):
+        if not is_json_object(row) or set(row) != set(LEDGER_CLASS_ENTRY_FIELDS):
             raise ProofError(
                 f"exclusion ledger class {position} entry {offset} must carry "
                 f"exactly {list(LEDGER_CLASS_ENTRY_FIELDS)}"
@@ -1606,10 +1632,10 @@ def load_known_divergences(path: Path = LEDGER_PATH) -> tuple[dict[str, str], ..
     raw = json_list(read_json(path), f"exclusion ledger must hold a JSON list: {path}")
     entries: list[dict[str, str]] = []
     for position, item in enumerate(raw):
-        if isinstance(item, dict) and set(item) == set(LEDGER_CLASS_FIELDS):
+        if is_json_object(item) and set(item) == set(LEDGER_CLASS_FIELDS):
             entries.extend(expand_ledger_class(position, item))
             continue
-        if not isinstance(item, dict) or set(item) != set(LEDGER_FIELDS):
+        if not is_json_object(item) or set(item) != set(LEDGER_FIELDS):
             raise ProofError(
                 f"exclusion ledger entry {position} must carry exactly "
                 f"{list(LEDGER_FIELDS)} or {list(LEDGER_CLASS_FIELDS)}"
@@ -2273,11 +2299,11 @@ def compare_route_surface(
 def load_page_index(docs_repo: Path) -> dict[str, Path]:
     index_path = docs_repo / "url-index.json"
     raw = read_json(index_path)
-    if not isinstance(raw, list):
+    if not is_json_array(raw):
         raise ProofError(f"expected list in {index_path}")
     result: dict[str, Path] = {}
     for item in raw:
-        if not isinstance(item, dict):
+        if not is_json_object(item):
             continue
         url = str(item.get("url") or "")
         file_name = str(item.get("file") or "")
@@ -2603,7 +2629,7 @@ def find_executable(command: str) -> str:
 @contextlib.contextmanager
 def resolve_linodemcp_source(
     args: argparse.Namespace,
-) -> Iterator[tuple[Path, dict[str, Any]]]:
+) -> Generator[tuple[Path, dict[str, Any]]]:
     if not args.github_source:
         repo = args.linodemcp_repo.expanduser().resolve()
         if not (repo / "buf.yaml").is_file() or not (repo / "proto").is_dir():
@@ -3037,7 +3063,7 @@ def write_artifact_checksums(run_dir: Path) -> Path:
 def read_endpoint_index(path: Path) -> list[Any]:
     """Parsed endpoints from a saved index, refusing an empty or wrong shape."""
     endpoints = read_json(path)
-    if not isinstance(endpoints, list) or not endpoints:
+    if not is_json_array(endpoints) or not endpoints:
         raise ProofError(f"endpoint index is empty: {path}")
     return endpoints
 
@@ -3590,6 +3616,43 @@ def run_self_test() -> None:
     assert mapped["metadata"]["required"] is None, mapped["metadata"]
     assert mapped["tags"]["map"] is False, mapped["tags"]
     assert mapped["tags"]["type"] == "array", mapped["tags"]
+
+    # body_comma_list is the only way a singular string reaches the wire as an
+    # array, so reading the field type alone would report a mismatch the
+    # request body does not have.
+    comma_descriptor = json.loads(json.dumps(descriptor_fixture))
+    comma_message = comma_descriptor["file"][1]["messageType"][0]
+    comma_message["field"].extend(
+        [
+            {
+                "name": "authorized_keys",
+                "jsonName": "authorizedKeys",
+                "number": 5,
+                "label": "LABEL_OPTIONAL",
+                "type": "TYPE_STRING",
+                "proto3Optional": True,
+                "options": {
+                    FIELD_LOCATION_OPTION: "FIELD_LOCATION_BODY",
+                    BODY_COMMA_LIST_OPTION: True,
+                },
+            },
+            {
+                "name": "root_pass",
+                "jsonName": "rootPass",
+                "number": 6,
+                "label": "LABEL_OPTIONAL",
+                "type": "TYPE_STRING",
+                "proto3Optional": True,
+                "options": {FIELD_LOCATION_OPTION: "FIELD_LOCATION_BODY"},
+            },
+        ]
+    )
+    comma_tools, _ = extract_proto_tools(comma_descriptor)
+    comma = {
+        item["name"]: item for item in comma_tools["linode_widget_get"]["parameters"]
+    }
+    assert comma["authorized_keys"]["type"] == "array", comma["authorized_keys"]
+    assert comma["root_pass"]["type"] == "string", comma["root_pass"]
 
     # A singular message field is presence tracked without the optional keyword,
     # which the body builder reads, so only a declared rule makes it required.
@@ -4387,7 +4450,7 @@ def run_route_snapshot_mode(args: argparse.Namespace) -> int:
     if args.techdocs_contract is None:
         raise ProofError("--emit-route-snapshot needs --techdocs-contract")
     contract = read_json(args.techdocs_contract)
-    if not isinstance(contract, dict):
+    if not is_json_object(contract):
         raise ProofError(f"{args.techdocs_contract} is not a TechDocs contract")
     harvested = datetime.now(UTC).date().isoformat()
     count = write_route_snapshot(contract, args.emit_route_snapshot, harvested)

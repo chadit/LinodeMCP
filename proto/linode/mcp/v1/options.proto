@@ -2332,9 +2332,11 @@ enum FieldLocation {
   // wire.
   FIELD_LOCATION_LOCAL = 4;
   // The tool's own domain argument: it reaches no Linode route and is not MCP
-  // plumbing. A meta tool declares one for its domain argument, and a route
-  // tool declares one for an argument the handler consumes locally: the local
-  // path and overwrite flag the object_storage.proto transfer tools read.
+  // plumbing. A meta tool calls no route at all, so every argument it takes
+  // past its system params sits here. A route tool declares it only for an
+  // argument its handler consumes instead of sending: object_storage.proto's
+  // transfer tools mark the download's dest_path and overwrite, and the
+  // upload's source_path.
   //
   // Separate from LOCAL because LOCAL is locked in both directions to the
   // `// system param` marker: reusing it here would either put a marker on a
@@ -2722,10 +2724,11 @@ enum ArgumentReader {
   //                       -> "<name> must be a string"
   //
   // PRESENT_TEXT's sibling over the wider set: a blank string is a value on the
-  // routes that declare this, where an empty longview_subscription cancels the
-  // subscription, so refusing it would refuse the call that turns one off. Only
-  // the argument map can ask the question, because a body field that is not a
-  // string stops the message being built and no rule runs.
+  // routes that declare this, such as object_storage on
+  // AccountSettingsUpdateInput, where no rule holds the field to a value so a
+  // blank one travels to the route, and refusing it would refuse a call the
+  // route takes. Only the argument map can ask the question, because a body
+  // field that is not a string stops the message being built and no rule runs.
   // go tools.PresentStringArgument, python present_string.
   ARGUMENT_READER_PRESENT_STRING = 13;
 

@@ -260,9 +260,7 @@ message AccountUserCreateInput {
 
 // AccountUserUpdateInput is the input contract for linode_account_user_update.
 // username (the path identifier) and confirm are required; new_username is the
-// body rename field. ssh_keys is a plain string array (repeated fields are
-// never required in the generated schema, matching the optional hand-built
-// param).
+// body rename field.
 message AccountUserUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_user_update"
@@ -288,13 +286,11 @@ message AccountUserUpdateInput {
     template: "The account user is updated."
     line: PREVIEW_LINE_SIDE_EFFECT
   };
-  // A PUT naming none of the four mutable fields would change nothing, and
-  // ssh_keys is repeated, so only the argument map can see it was supplied.
-  // The sentence is declared because it names the family, not the fields.
+  // A PUT naming none of the three mutable fields would change nothing. The
+  // sentence is declared because it names the family, not the fields.
   option (linode.mcp.v1.require_any_of) = {
     fields: "email"
     fields: "restricted"
-    fields: "ssh_keys"
     fields: "new_username"
     message: "at least one account user field is required"
   };
@@ -313,8 +309,8 @@ message AccountUserUpdateInput {
     (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
     (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_BOOL
   ];
-  // SSH public keys for the account user (optional).
-  repeated string ssh_keys = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  reserved 5;
+  reserved "ssh_keys";
   // New username for the account user (optional). The wire key is "username":
   // the argument cannot take that name, which the path already uses.
   optional string new_username = 6 [
