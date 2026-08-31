@@ -15,6 +15,22 @@
       "expect_error": "instance_id must be a positive integer"
     },
     {
+      "name": "rejects an environment that is not a name",
+      "args": {
+        "instance_id": 5,
+        "environment": true
+      },
+      "expect_error": "environment not found in configuration: true"
+    },
+    {
+      "name": "rejects an environment the config does not name",
+      "args": {
+        "instance_id": 5,
+        "environment": "staging"
+      },
+      "expect_error": "environment not found in configuration: staging"
+    },
+    {
       "name": "gets the instance",
       "args": {
         "instance_id": 5

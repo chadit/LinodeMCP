@@ -296,15 +296,35 @@ def _retry_config_from(cfg: Config) -> RetryConfig:
     )
 
 
-def _select_environment(cfg: Config, environment: str) -> EnvironmentConfig:
-    """Select an environment from configuration."""
-    if environment:
-        if environment in cfg.environments:
-            return cfg.environments[environment]
-        msg = f"environment not found: {environment}"
+def _select_environment(cfg: Config, environment: object) -> EnvironmentConfig:
+    """Select an environment from configuration.
+
+    A value that is not text names no environment, so it is refused the way an
+    unknown name is rather than read past: the default environment carries a
+    different account's token, and serving it silently ran the call somewhere
+    the caller never asked for. The refused value is spelled as the JSON the
+    caller wrote, sorted keys and no ASCII escaping, which is the same text Go's
+    environmentArgument renders. An absent argument and an explicit null both
+    leave the environment unnamed, which is what selects the default.
+    """
+    if environment is None:
+        return cfg.select_environment("default")
+
+    if not isinstance(environment, str):
+        spelled = json.dumps(
+            environment, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        msg = f"environment not found in configuration: {spelled}"
         raise EnvironmentNotFoundError(msg)
 
-    return cfg.select_environment("default")
+    if not environment:
+        return cfg.select_environment("default")
+
+    if environment in cfg.environments:
+        return cfg.environments[environment]
+
+    msg = f"environment not found in configuration: {environment}"
+    raise EnvironmentNotFoundError(msg)
 
 
 def _linode_config_complete(env: EnvironmentConfig) -> None:

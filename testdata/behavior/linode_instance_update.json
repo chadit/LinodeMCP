@@ -43,6 +43,26 @@
       }
     },
     {
+      "name": "rejects an environment that is not a name",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "label": "updated-label",
+        "environment": { "name": "prod" }
+      },
+      "expect_error": "environment not found in configuration: {\"name\":\"prod\"}"
+    },
+    {
+      "name": "rejects an environment the config does not name",
+      "args": {
+        "instance_id": 5,
+        "confirm": true,
+        "label": "updated-label",
+        "environment": "staging"
+      },
+      "expect_error": "environment not found in configuration: staging"
+    },
+    {
       "name": "requires confirm",
       "args": {
         "instance_id": 5,

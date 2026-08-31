@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -76,7 +77,11 @@ func resolveConfig(snapshot *config.Config) *config.Config {
 // SetLiveConfigSource) takes effect on the very next tool call.
 func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.Client, error) {
 	cfg = resolveConfig(cfg)
-	environment := request.GetString(paramEnvironment, "")
+
+	environment, err := environmentArgument(request)
+	if err != nil {
+		return nil, err
+	}
 
 	selectedEnv, err := selectEnvironment(cfg, environment)
 	if err != nil {
@@ -316,6 +321,43 @@ func IDToInt32(id int) int32 {
 
 // boolTrue is used for boolean string comparison in filter functions.
 const boolTrue = "true"
+
+// environmentArgument names the environment a call selects, or refuses the
+// value the caller sent when that value is not a name at all.
+//
+// Reading it as text and defaulting on anything else ran the call against the
+// default environment's token, which is a different Linode account than the one
+// the caller asked for and no answer said so. A value that is not text names no
+// environment, so it is refused the way an unknown name is, spelled as the JSON
+// the caller wrote. Python's _select_environment answers the same sentence.
+//
+// An absent argument and an explicit null both leave the environment unnamed,
+// which is what selects the default.
+func environmentArgument(request *mcp.CallToolRequest) (string, error) {
+	raw, present := request.GetArguments()[paramEnvironment]
+	if !present || raw == nil {
+		return "", nil
+	}
+
+	if name, isText := raw.(string); isText {
+		return name, nil
+	}
+
+	var spelled bytes.Buffer
+
+	encoder := json.NewEncoder(&spelled)
+	// HTML stands for itself, so a nested "<" reads the way Python renders it,
+	// and the encoder's trailing newline belongs to the stream not the value.
+	encoder.SetEscapeHTML(false)
+
+	if err := encoder.Encode(raw); err != nil {
+		// A tool argument decoded from JSON always re-encodes; this arm guards
+		// the values only a Go caller can build, such as a NaN.
+		return "", fmt.Errorf("%w: %v", ErrEnvironmentNotFound, raw)
+	}
+
+	return "", fmt.Errorf("%w: %s", ErrEnvironmentNotFound, bytes.TrimRight(spelled.Bytes(), "\n"))
+}
 
 func selectEnvironment(cfg *config.Config, environment string) (*config.EnvironmentConfig, error) {
 	if environment != "" {
