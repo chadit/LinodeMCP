@@ -149,22 +149,6 @@ func isTimeoutError(err error) bool {
 	return false
 }
 
-// RetryableError represents an error that can be retried.
-type RetryableError struct {
-	Err        error
-	RetryAfter time.Duration
-}
-
-func (e *RetryableError) Error() string {
-	if e.RetryAfter > 0 {
-		return fmt.Sprintf("retryable error (retry after %v): %v", e.RetryAfter, e.Err)
-	}
-
-	return fmt.Sprintf("retryable error: %v", e.Err)
-}
-
-func (e *RetryableError) Unwrap() error { return e.Err }
-
 // requestError wraps a transport-level failure (timeout, connection reset,
 // DNS, refused) with the HTTP method of the request that produced it. The
 // method gates retry: a transport failure on a POST may have reached and been
@@ -196,10 +180,6 @@ func isIdempotentMethod(method string) bool {
 // transport failure may have been applied server-side, so those are retried
 // only when the underlying request was idempotent.
 func isRetryable(err error) bool {
-	if _, ok := errors.AsType[*RetryableError](err); ok {
-		return true
-	}
-
 	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		if apiErr.IsRateLimitError() {
 			return true

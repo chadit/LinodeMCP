@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
@@ -111,60 +110,5 @@ func TestNetworkErrorErrorAndUnwrap(t *testing.T) {
 
 	if !errors.Is(err, inner) {
 		t.Errorf("err.Unwrap() = %v, want %v", err.Unwrap(), inner)
-	}
-}
-
-// Confirms retryable error formatting and unwrap chain integrity.
-func TestRetryableError(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		unwrapTarget   error
-		err            *linode.RetryableError
-		name           string
-		mustContain    []string
-		mustNotContain []string
-	}{
-		{
-			name:        "with retry delay",
-			err:         &linode.RetryableError{Err: errors.New("server busy"), RetryAfter: 5 * time.Second},
-			mustContain: []string{"retry after", "server busy"},
-		},
-		{
-			name:           "without retry delay",
-			err:            &linode.RetryableError{Err: errors.New("server busy")},
-			mustContain:    []string{"retryable error", "server busy"},
-			mustNotContain: []string{"retry after"},
-		},
-		{
-			name:         "unwrap returns inner",
-			err:          &linode.RetryableError{Err: errors.New("inner")},
-			unwrapTarget: errors.New("inner"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			msg := tt.err.Error()
-			for _, s := range tt.mustContain {
-				if !strings.Contains(msg, s) {
-					t.Errorf("msg does not contain %v", s)
-				}
-			}
-
-			for _, s := range tt.mustNotContain {
-				if strings.Contains(msg, s) {
-					t.Errorf("msg should not contain %v", s)
-				}
-			}
-
-			if tt.unwrapTarget != nil {
-				if err := tt.err; !errors.Is(err, tt.err.Err) {
-					t.Errorf("error = %v, want %v", err, tt.err.Err)
-				}
-			}
-		})
 	}
 }

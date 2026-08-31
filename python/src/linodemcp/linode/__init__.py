@@ -27,8 +27,6 @@ from linodemcp.linode.routes import (
     surface_segment,
 )
 
-_MANAGED_SERVICE_TIMEOUT_MAX = 255
-
 T = TypeVar("T")
 
 LINODE_STATS_MIN_YEAR = 1970
@@ -36,14 +34,9 @@ LINODE_STATS_MAX_YEAR = 9999
 LINODE_STATS_MAX_MONTH = 12
 MANAGED_LINODE_SSH_PORT_MAX = 65535
 MANAGED_LINODE_SSH_USER_MAX_LENGTH = 32
-_UNSET: Any = object()
 
 logger = logging.getLogger(__name__)
 
-
-_PLACEMENT_GROUP_LABEL_PATTERN = re.compile(
-    r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
-)
 
 VALID_SSH_KEY_PREFIXES = (
     "ssh-rsa",
@@ -1237,7 +1230,13 @@ class RetryableClient:
             if error.is_authentication_error() or error.is_forbidden_error():
                 return False
 
-        return isinstance(error, NetworkError | httpx.TimeoutException)
+        # NetworkError alone: make_route_request and
+        # make_route_request_content_type catch httpx.TransportError, the base
+        # class of TimeoutException, so every timeout the transport raises is
+        # already wrapped by the time a retry decision sees it. An unwrapped
+        # transport type reaching here would mean a client method skipped that
+        # wrap, and replaying it blind would hide the gap.
+        return isinstance(error, NetworkError)
 
 
 def is_retryable(error: Exception) -> bool:
@@ -1246,4 +1245,7 @@ def is_retryable(error: Exception) -> bool:
         return True
     if isinstance(error, APIError):
         return error.is_rate_limit_error() or error.is_server_error()
-    return isinstance(error, (NetworkError, httpx.TimeoutException))
+    # Same wrapping argument as RetryableClient._should_retry, and the same
+    # demand Go's isRetryable makes: a timeout is retryable through the
+    # client's own error type, never through the raw transport class.
+    return isinstance(error, NetworkError)

@@ -575,6 +575,28 @@ def test_is_retryable_network_error() -> None:
     assert is_retryable(NetworkError("operation", Exception("error")))
 
 
+@pytest.mark.parametrize(
+    "transport_error",
+    [
+        httpx.ReadTimeout("read timed out"),
+        httpx.ConnectTimeout("connect timed out"),
+        httpx.ConnectError("connection refused"),
+    ],
+)
+def test_is_retryable_rejects_unwrapped_transport_error(
+    transport_error: httpx.TransportError,
+) -> None:
+    """A bare httpx transport error is not retryable on its own.
+
+    The client wraps every httpx.TransportError into NetworkError before a
+    retry decision sees it, so an unwrapped one means the wrap was skipped.
+    Answering True there would replay a call the client never classified.
+    Go's isRetryable refuses the same way, requiring its requestError wrapper.
+    """
+    assert not is_retryable(transport_error)
+    assert is_retryable(NetworkError("GetProfile", transport_error))
+
+
 def test_api_error_methods() -> None:
     """Test APIError helper methods."""
     auth_error = APIError(401, "Unauthorized")
@@ -1192,6 +1214,114 @@ class TestRetryableClientRetryScenarios:
 
             assert profile["username"] == "retryuser"
             assert call_count == 2
+
+        await client.close()
+
+    async def test_retry_on_read_timeout(self) -> None:
+        """A read timeout then success retries once and succeeds.
+
+        The timeout twin of the connection-failure case: httpx.ReadTimeout is
+        a TransportError, so the routed call wraps it into NetworkError and the
+        loop replays it. This is why the retry decision never has to name a
+        timeout type of its own.
+        """
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(max_retries=2, base_delay=0.01),
+        )
+
+        mock_success_response = MagicMock()
+        mock_success_response.status_code = 200
+        mock_success_response.json.return_value = {
+            "username": "timeoutuser",
+            "email": "timeout@test.com",
+            "timezone": "UTC",
+            "email_notifications": False,
+            "restricted": False,
+            "two_factor_auth": False,
+            "uid": 1,
+        }
+
+        call_count = 0
+
+        async def mock_request(*args: Any, **kwargs: Any) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            _ = args, kwargs
+            if call_count == 1:
+                raise httpx.ReadTimeout("read timed out")
+            return mock_success_response
+
+        with patch.object(
+            client.client.client, "request", new_callable=AsyncMock
+        ) as mock_req:
+            mock_req.side_effect = mock_request
+
+            profile = await client.route_raw(PROFILE_GET_TOOL)
+
+            assert profile["username"] == "timeoutuser"
+            assert call_count == 2
+
+        await client.close()
+
+    async def test_no_retry_on_unwrapped_transport_error(self) -> None:
+        """An unwrapped transport error escaping a client method is not replayed.
+
+        Every routed client method wraps httpx.TransportError into
+        NetworkError, so a bare one arriving at the retry loop means that wrap
+        was skipped. The loop surfaces it on the first attempt instead of
+        replaying a call nothing classified.
+        """
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(max_retries=3, base_delay=0.01),
+        )
+
+        with patch.object(
+            client.client, "route_raw", new_callable=AsyncMock
+        ) as mock_route:
+            mock_route.side_effect = httpx.ReadTimeout("read timed out")
+
+            with pytest.raises(httpx.ReadTimeout):
+                await client.route_raw(PROFILE_GET_TOOL)
+
+            assert mock_route.call_count == 1
+
+        await client.close()
+
+    async def test_unwrapped_transport_error_does_not_trip_breaker(self) -> None:
+        """The breaker counts NetworkError, not a bare transport exception.
+
+        The single-attempt path feeds the same retry decision to the breaker,
+        so an error the client never classified must not spend a failure slot
+        that a real network failure has earned.
+        """
+        client = RetryableClient(
+            "https://api.linode.com/v4",
+            "test-token",
+            RetryConfig(circuit_breaker_threshold=1, circuit_breaker_timeout=60.0),
+        )
+
+        with patch.object(
+            client.client, "route_raw", new_callable=AsyncMock
+        ) as mock_route:
+            mock_route.side_effect = httpx.ReadTimeout("read timed out")
+
+            with pytest.raises(httpx.ReadTimeout):
+                await client.route_raw(PROFILE_GET_TOOL, retry=False)
+
+            # A tripped breaker would answer CircuitOpenError here instead.
+            mock_route.side_effect = NetworkError(
+                PROFILE_GET_TOOL, httpx.ReadTimeout("read timed out")
+            )
+            with pytest.raises(NetworkError):
+                await client.route_raw(PROFILE_GET_TOOL, retry=False)
+
+            # The NetworkError above is the failure the breaker does count.
+            with pytest.raises(CircuitOpenError):
+                await client.route_raw(PROFILE_GET_TOOL, retry=False)
 
         await client.close()
 
