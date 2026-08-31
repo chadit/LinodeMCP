@@ -33,7 +33,7 @@ dependencies = [
     "protobuf>=7.36.0",
     # Evaluates the buf.validate CEL constraints the proto contract carries, so
     # a rule is written once in the proto instead of once per language.
-    "protovalidate==1.2.0",
+    "protovalidate==2.0.0",
     # Security floors for transitive deps pulled in by mcp. mcp's own
     # constraints are open (starlette>=0.27, python-multipart>=0.0.9), so
     # without these a resolve can land on versions trivy flags HIGH.
