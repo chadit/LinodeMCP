@@ -85,6 +85,7 @@ may use a free-text reason instead). Most gates carry no file at all; see
 | [generated-tools-counts.txt](./contracts/generated-tools-counts.txt) | Tools per registered language still served by a hand-written factory rather than by the tree the emitter writes for it from the proto (fall-only; what is left of the codegen migration) | `scripts/verify_generated_tools.py` |
 | [hand-validator-counts.txt](./contracts/hand-validator-counts.txt) | Argument checks per registered language still written out by hand rather than declared on the tool's `*Input` message (fall-only; the population `hand-code` cannot see, since a check is named after what it checks rather than after a tool) | `scripts/verify_hand_validators.py` |
 | [system-params.txt](./contracts/system-params.txt) | The proto input fields the server consumes itself rather than passing to the Linode API, by field name and proto type; each one carries a trailing `// system param` marker that stays out of the generated schema | `scripts/verify_system_params.py` |
+| [api-surfaces.txt](./contracts/api-surfaces.txt) | Every tool that answers on an API surface other than `/v4`, one `<tool> <surface>` line each. Hand-maintained, and it grows and shrinks with what Linode ships on beta rather than ratcheting | `scripts/verify_api_surfaces.py` |
 
 ### Ratchet baselines
 

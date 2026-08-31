@@ -163,8 +163,11 @@ for speed and is recorded as `mode: yolo` in the audit log.
 
 Every call records the safety path it took in the audit event's `mode` field:
 `normal`, `dry_run`, `bypass_dry_run`, or `yolo` from this page, plus `plan`
-and `apply` from the [two-stage flow](./two-stage-writes.md). The full enum and
-the query tools that filter on it live in the [audit event schema](./audit.md).
+and `apply` from the [two-stage flow](./two-stage-writes.md). The field sits in
+the [audit event schema](./audit.md#event-schema). No query tool takes a `mode`
+argument and the report grammar does not expose one, so selecting by mode means
+post-filtering the events; [what reports cannot do
+today](./audit.md#what-reports-cannot-do-today) spells the workaround.
 
 ## See also
 

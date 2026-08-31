@@ -12,7 +12,7 @@ LinodeMCP exposes Linode API operations as MCP tools, so an AI assistant can que
 
 LinodeMCP aims for near-complete coverage of the [Linode API v4](https://techdocs.akamai.com/linode-api/reference/api): instances, volumes, object storage, networking, NodeBalancers, DNS, LKE, VPCs, databases, images, and account/profile. Each endpoint is exposed as an MCP tool named after it (e.g. `linode_instance_create`, `linode_volume_delete`, `linode_lke_cluster_create`).
 
-To see exactly which tools your build registers, call the `version` tool (it reports the feature list) or the `linode_profile_list_tools` meta tool. Which of those an AI client can actually invoke is governed by the active [profile](docs/profiles.md).
+To see exactly which tools your build registers, call the `linode_profile_list_tools` meta tool. Which of those an AI client can actually invoke is governed by the active [profile](docs/profiles.md).
 
 Write, destroy, and admin tools require `confirm: true` and support `dry_run: true` previews; destructive calls are additionally gated (see [Dry-run & safety](#dry-run--safety)).
 
@@ -207,11 +207,11 @@ Profiles control which tools the AI client can see. The server filters the tool 
 - `compute-admin`, `network-admin`, `kubernetes-admin`, `storage-admin`, `iam-admin`: read everywhere plus write + destroy on the named category.
 - `full-access` and `emergency`: ship disabled. Enable them when you genuinely need them, then disable again.
 
-Switch profiles via the CLI (`linodemcp profile list` / `show` / `use`); mutators write the config file atomically and the server hot-reloads without a restart. User-defined profiles live under `profiles:` in your config, and the AI can help compose them via the `linode_profile_*` builder tools; the user activates the saved profile separately.
+Switch profiles with `linodemcp profile list` / `show` / `use`; the running server hot-reloads without a restart. User-defined profiles live under `profiles:` in your config.
 
-A profile is not Linode IAM. The profile is local: it picks which tools this server offers the AI, and it can only take reach away. [Linode IAM](https://techdocs.akamai.com/cloud-computing/docs/identity-and-access-cm) is role-based access control the API runs on Akamai's side, per calling user, and it is what actually decides whether a call succeeds. A request has to clear the active profile, the token's OAuth scopes, and the user's IAM roles, so effective access is the intersection of all three.
+A profile is local and can only take reach away, so it is not Linode IAM. A request has to clear the active profile, the token's OAuth scopes, and the user's IAM roles: [profiles versus Linode IAM](docs/profiles.md#profiles-are-not-linode-iam) sets up both sides.
 
-Full reference (schema, capability tags, [profiles versus Linode IAM](docs/profiles.md#profiles-are-not-linode-iam) with setup for both, builder workflow, token-scope validation, security model) and copy-paste recipes: [docs/profiles.md](docs/profiles.md). Host-specific wiring: [docs/host-integrations/](docs/host-integrations/README.md).
+Full reference (schema, capability tags, builder workflow, token-scope validation, security model) and copy-paste recipes: [docs/profiles.md](docs/profiles.md). Host-specific wiring: [docs/host-integrations/](docs/host-integrations/README.md).
 
 ## Dry-run & safety
 
@@ -226,13 +226,13 @@ Each call's safety path is recorded in the audit log's `mode` field. Full refere
 
 ## Two-stage writes
 
-A dry-run shows what a destructive call would do, but nothing ties that preview to the call you run next, so the resource can change in between. Two-stage writes close that gap: pass `mode: "plan"` to a delete tool to get back a `plan_id` plus the current state; pass `mode: "apply"` with that `plan_id` to run it. Before applying, the server re-reads the resource and refuses if it drifted, expired, or was already used.
+A dry-run does not tie its preview to the call you run next, so the resource can change in between. Two-stage writes close that gap: `mode: "plan"` hands back a `plan_id`, `mode: "apply"` runs it, and the server re-reads the resource first, refusing a plan that drifted, expired, or already ran.
 
-Full reference, including drift refusals and recovery: [docs/two-stage-writes.md](docs/two-stage-writes.md).
+Full reference, including how to read each refusal and recover from it: [docs/two-stage-writes.md](docs/two-stage-writes.md).
 
 ## Auditing
 
-Every tool call is recorded as a structured audit event, with sensitive values redacted before write. The default JSONL sink is always on; an opt-in SQLite sink dual-writes for fast indexed queries. The log lives at `/var/log/linodemcp/audit.log` for a system-service install and `$XDG_STATE_HOME/linodemcp/audit.log` (default `~/.local/state/linodemcp/audit.log`) otherwise. Five `CapMeta` MCP tools and the matching `linodemcp audit` CLI verbs query it from any profile.
+Every tool call is recorded as a structured audit event, with sensitive values redacted before write. The log lives at `/var/log/linodemcp/audit.log` for a system-service install and `$XDG_STATE_HOME/linodemcp/audit.log` (default `~/.local/state/linodemcp/audit.log`) otherwise.
 
 Full reference (event schema, redaction model, query tools, sinks, retention, report grammar): [docs/audit.md](docs/audit.md). Host wiring: [docs/host-integrations/audit.md](docs/host-integrations/audit.md).
 

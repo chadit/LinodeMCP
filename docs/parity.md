@@ -163,11 +163,11 @@ Two things a rule cannot say, both worth knowing before reaching for one:
 
 Anything still written out by hand is counted by **hand-validators**, and the
 count only falls; it reads zero in both languages today. **hand-code** covers
-the other half: it scans every non-generated tree for a function named after a
-tool and fails by name on one, whatever that function does. Hand-coded tool code
-cannot sit beside the generated tree. Rejection behavior is pinned by the
-behavior fixtures either way, so update the fixture case and both languages must
-match it.
+the other half: no hand-coded tool code may sit beside the generated tree. What
+each of the two scans, and the three things `hand-code` cannot see, are in
+[the check gates](./gates.md). Rejection behavior is pinned by the behavior
+fixtures either way, so update the fixture case and both languages must match
+it.
 
 ### Adding pagination to a list tool
 
