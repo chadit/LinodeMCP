@@ -157,7 +157,9 @@ def _check_file(path: Path, base_rev: str) -> list[str]:
         # docs/<name>; anchor the diff there so the move itself does not read
         # as unannotated growth.
         base_text = _git_show(base_rev, f"docs/{path.name}")
-    base_entries = _entries_from_text(base_text) if base_text is not None else set()
+    base_entries: set[str] = (
+        _entries_from_text(base_text) if base_text is not None else set()
+    )
 
     current = _baselines.read_baseline(path)
     added = sorted(set(current) - base_entries)

@@ -1,7 +1,12 @@
 {
-  "include": ["python/src/linodemcp", "python/tests"],
+  "include": [
+    "python/src/linodemcp",
+    "python/tests",
+    "scripts",
+    "tools/techdocs-proof/src"
+  ],
   "exclude": ["**/node_modules", "**/__pycache__", "**/.*", "**/genpb"],
-  "extraPaths": ["python/src"],
+  "extraPaths": ["python/src", "tools/techdocs-proof/src"],
   "venvPath": "python",
   "venv": ".venv",
   "typeCheckingMode": "strict",

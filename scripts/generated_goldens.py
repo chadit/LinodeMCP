@@ -186,7 +186,10 @@ def compare(repo_root: Path, manifest: Path, cohorts: tuple[str, ...] = COHORTS)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    # python -OO strips module docstrings, so bind the summary line only when
+    # one survives; argparse treats a missing description the same as None.
+    summary = __doc__.splitlines()[0] if __doc__ else None
+    parser = argparse.ArgumentParser(description=summary)
     parser.add_argument("action", choices=("freeze", "compare"))
     parser.add_argument("manifest", type=Path)
     parser.add_argument(

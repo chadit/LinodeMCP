@@ -113,7 +113,7 @@ def python_audit_surface() -> tuple[set[str], set[str]]:
     """(subverbs, flags) from the _AUDIT_TOOLS keys and argparse flags."""
     text = _PY_AUDIT.read_text(encoding="utf-8")
     match = _PY_AUDIT_TOOLS.search(text)
-    subverbs = set(_PY_DICT_KEY.findall(match.group(1))) if match else set()
+    subverbs: set[str] = set(_PY_DICT_KEY.findall(match.group(1))) if match else set()
     return subverbs, set(_PY_ADD_ARGUMENT.findall(text))
 
 

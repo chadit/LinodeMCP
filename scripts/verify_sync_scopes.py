@@ -62,7 +62,7 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import _baselines
 import _toolroutes
@@ -183,11 +183,21 @@ def spec_operations(spec: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
     for path, item in spec.get("paths", {}).items():
         template = norm_template(path.removeprefix("/{apiVersion}"))
         for method in _METHODS:
-            operation = item.get(method)
-            if not isinstance(operation, dict):
+            raw_operation = item.get(method)
+            if not isinstance(raw_operation, dict):
                 continue
+            # json.load answers with Any and an isinstance proves only that
+            # some dict arrived, so these two casts state the shape OpenAPI
+            # gives a security block: a list of requirement objects, each
+            # mapping a scheme name to its scope list. Nothing checked that
+            # shape before either, so a document shipping something else
+            # still fails here rather than reading as an unscoped route.
+            operation = cast("dict[str, object]", raw_operation)
             scopes: list[str] = []
-            for entry in operation.get("security") or []:
+            security = cast(
+                "list[dict[str, list[object]]]", operation.get("security") or []
+            )
+            for entry in security:
                 oauth = entry.get("oauth")
                 if oauth:
                     scopes = sorted(str(scope) for scope in oauth)
@@ -237,7 +247,9 @@ def compare(
                 )
                 continue
 
-        mapped = sorted(str(scope) for scope in record.get("scopes") or [])
+        mapped = sorted(
+            str(scope) for scope in cast("list[object]", record.get("scopes") or [])
+        )
         if mapped != documented:
             problems.append(f"{name}: scopes doc={documented} mapped={mapped}")
 

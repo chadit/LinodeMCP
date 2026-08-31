@@ -227,7 +227,9 @@ def hash_ignore_keys(languages: list[tuple[str, Path]]) -> set[str]:
             raise SystemExit(msg)
         per_language[name] = set(_TABLE_ENTRY.findall(source.read_text("utf-8")))
 
-    shared = set.union(*per_language.values())
+    shared: set[str] = set()
+    for keys in per_language.values():
+        shared |= keys
     if not shared:
         msg = (
             "the hash-ignore tables define no resource types;"

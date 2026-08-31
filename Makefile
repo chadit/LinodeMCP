@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint tools-fmt-check tools-lint tools-typecheck techdocs-proof go-analyzers dockerfiles proto-lint overlay-roundtrip overlay-merge wire-breaking techdocs-routes clean install-hooks check-hooks tool-parity profile-resolution scope-spellings tool-count dryrun pagination response-shapes list-envelope tool-routes api-surfaces field-location tool-response route-evidence route-source generated-tools hand-validators hand-code hand-arms system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage generated-form behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint tools-fmt-check tools-lint tools-typecheck strict-typecheck techdocs-proof go-analyzers dockerfiles proto-lint overlay-roundtrip overlay-merge wire-breaking techdocs-routes clean install-hooks check-hooks tool-parity profile-resolution scope-spellings tool-count dryrun pagination response-shapes list-envelope tool-routes api-surfaces field-location tool-response route-evidence route-source generated-tools hand-validators hand-code hand-arms system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage generated-form behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -104,7 +104,7 @@ build: proto go-build python-build
 # THE gate order, cheap fails first, venv install before everything that needs
 # it. CI's one job and the pre-push hook run exactly this list (docs/gates.md).
 CHECK_GATES := proto proto-lint overlay-roundtrip overlay-merge wire-breaking techdocs-routes python-install-dev fmt-check scripts-lint tools-lint \
-	techdocs-proof actionlint dockerfiles tools-typecheck \
+	techdocs-proof actionlint dockerfiles tools-typecheck strict-typecheck \
 	baseline-guard tool-float go-check go-analyzers python-check coverage-floor \
 	diff-coverage tool-parity profile-resolution scope-spellings tool-count dryrun \
 	pagination response-shapes list-envelope tool-routes api-surfaces \
@@ -197,8 +197,8 @@ wire-breaking:
 		echo "  buf build --exclude-source-info -o $(WIRE_BASELINE)"; \
 		exit 1; }
 
-## lint: Run all linters (fmt-check, go-lint, go-analyzers, python-lint, scripts-lint, tools-lint, tools-typecheck, dockerfiles, proto-lint, betterleaks, trivy, actionlint)
-lint: proto proto-lint fmt-check go-lint go-analyzers python-lint scripts-lint tools-lint tools-typecheck dockerfiles betterleaks trivy actionlint
+## lint: Run all linters (fmt-check, go-lint, go-analyzers, python-lint, scripts-lint, tools-lint, tools-typecheck, strict-typecheck, dockerfiles, proto-lint, betterleaks, trivy, actionlint)
+lint: proto proto-lint fmt-check go-lint go-analyzers python-lint scripts-lint tools-lint tools-typecheck strict-typecheck dockerfiles betterleaks trivy actionlint
 
 ## test: Run all tests (go-test + python-test)
 test: proto go-test python-test coverage-report
@@ -207,9 +207,11 @@ test: proto go-test python-test coverage-report
 
 # A gate named x-y runs scripts/verify_x_y.py. This list runs on the project
 # venv because the scripts import the Python registry, or run a tool the venv
-# owns: tools-typecheck invokes mypy as `sys.executable -m mypy`, so the
-# interpreter it runs on is the one that supplies the checker.
-VENV_GATES := tool-parity generated-form behavior messages tools-typecheck
+# owns: tools-typecheck invokes mypy and strict-typecheck basedpyright, both as
+# `sys.executable -m <tool>`, so the interpreter each runs on is the one that
+# supplies the checker.
+VENV_GATES := tool-parity generated-form behavior messages tools-typecheck \
+	strict-typecheck
 
 $(VENV_GATES):
 	@$(VENV_PYRUN) scripts/verify_$(subst -,_,$@).py

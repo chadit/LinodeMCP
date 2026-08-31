@@ -33,7 +33,7 @@ import json
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE = REPO_ROOT / "docs" / "contracts" / "api-response-shapes-baseline.txt"
@@ -45,10 +45,23 @@ _ENVELOPE_KEYS = {"data", "page", "pages", "results"}
 _METHODS = ("get", "post", "put", "delete")
 
 
+def _as_dict(node: Any) -> dict[str, Any] | None:
+    """View a decoded JSON value as an object, or None when it is not one.
+
+    json.loads hands back Any, and a bare isinstance check only narrows to
+    dict[Unknown, Unknown]. The cast records what JSON already guarantees: an
+    object's keys are strings.
+    """
+    if isinstance(node, dict):
+        return cast("dict[str, Any]", node)
+    return None
+
+
 def _resolve(doc: dict[str, Any], node: Any) -> Any:
-    if isinstance(node, dict) and "$ref" in node:
+    obj = _as_dict(node)
+    if obj is not None and "$ref" in obj:
         cur: Any = doc
-        for part in str(node["$ref"]).lstrip("#/").split("/"):
+        for part in str(obj["$ref"]).lstrip("#/").split("/"):
             cur = cur[part]
         return cur
     return node
@@ -56,19 +69,21 @@ def _resolve(doc: dict[str, Any], node: Any) -> Any:
 
 def _schema_properties(doc: dict[str, Any], schema: Any, depth: int) -> set[str]:
     """Property names of a schema, merged across allOf composition."""
-    schema = _resolve(doc, schema)
-    if depth > 6 or not isinstance(schema, dict):
+    node = _as_dict(_resolve(doc, schema))
+    if depth > 6 or node is None:
         return set()
     names: set[str] = set()
-    properties = schema.get("properties")
-    if isinstance(properties, dict):
+    properties = _as_dict(node.get("properties"))
+    if properties is not None:
         names.update(str(key) for key in properties)
-    for member in schema.get("allOf", []):
+    for member in node.get("allOf", []):
         names.update(_schema_properties(doc, member, depth + 1))
     return names
 
 
-def _success_schema(doc: dict[str, Any], operation: dict[str, Any]) -> Any:
+def _success_schema(
+    doc: dict[str, Any], operation: dict[str, Any]
+) -> dict[str, Any] | None:
     """The JSON schema of the operation's first 2xx response, or None."""
     responses = operation.get("responses", {})
     for status in sorted(str(code) for code in responses):
@@ -76,8 +91,8 @@ def _success_schema(doc: dict[str, Any], operation: dict[str, Any]) -> Any:
             continue
         response = _resolve(doc, responses[status])
         content = response.get("content", {}).get("application/json", {})
-        schema = _resolve(doc, content.get("schema", {}))
-        if isinstance(schema, dict) and schema:
+        schema = _as_dict(_resolve(doc, content.get("schema", {})))
+        if schema:
             return schema
     return None
 
@@ -106,8 +121,8 @@ def spec_response_shapes(doc: dict[str, Any]) -> set[str]:
     lines: set[str] = set()
     for path, ops in doc.get("paths", {}).items():
         for method in _METHODS:
-            operation = ops.get(method)
-            if not isinstance(operation, dict):
+            operation = _as_dict(ops.get(method))
+            if operation is None:
                 continue
             short = str(path).replace("/{apiVersion}", "", 1)
             lines.add(f"{method.upper()} {short} {_classify(doc, operation)}")

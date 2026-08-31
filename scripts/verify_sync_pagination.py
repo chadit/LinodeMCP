@@ -23,7 +23,7 @@ import json
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE = REPO_ROOT / "docs" / "contracts" / "api-pagination-baseline.txt"
@@ -34,10 +34,23 @@ SPEC_URL = (
 _ENVELOPE_KEYS = {"data", "page", "pages", "results"}
 
 
+def _as_dict(node: Any) -> dict[str, Any] | None:
+    """View a decoded JSON value as an object, or None when it is not one.
+
+    json.loads hands back Any, and a bare isinstance check only narrows to
+    dict[Unknown, Unknown]. The cast records what JSON already guarantees: an
+    object's keys are strings.
+    """
+    if isinstance(node, dict):
+        return cast("dict[str, Any]", node)
+    return None
+
+
 def _resolve(doc: dict[str, Any], node: Any) -> Any:
-    if isinstance(node, dict) and "$ref" in node:
+    obj = _as_dict(node)
+    if obj is not None and "$ref" in obj:
         cur: Any = doc
-        for part in str(node["$ref"]).lstrip("#/").split("/"):
+        for part in str(obj["$ref"]).lstrip("#/").split("/"):
             cur = cur[part]
         return cur
     return node
@@ -52,8 +65,8 @@ def spec_pagination(doc: dict[str, Any]) -> set[str]:
     """One line per paginated GET route: method, path, and page_size bounds."""
     lines: set[str] = set()
     for path, ops in doc.get("paths", {}).items():
-        get = ops.get("get")
-        if not isinstance(get, dict):
+        get = _as_dict(ops.get("get"))
+        if get is None:
             continue
         params: dict[str, dict[str, Any]] = {}
         for raw in get.get("parameters", []):
@@ -84,14 +97,14 @@ def _returns_envelope(doc: dict[str, Any], get: dict[str, Any]) -> bool:
 
 def _schema_properties(doc: dict[str, Any], schema: Any, depth: int) -> set[str]:
     """Property names of a schema, merged across allOf composition."""
-    schema = _resolve(doc, schema)
-    if depth > 6 or not isinstance(schema, dict):
+    node = _as_dict(_resolve(doc, schema))
+    if depth > 6 or node is None:
         return set()
     names: set[str] = set()
-    properties = schema.get("properties")
-    if isinstance(properties, dict):
+    properties = _as_dict(node.get("properties"))
+    if properties is not None:
         names.update(str(key) for key in properties)
-    for member in schema.get("allOf", []):
+    for member in node.get("allOf", []):
         names.update(_schema_properties(doc, member, depth + 1))
     return names
 

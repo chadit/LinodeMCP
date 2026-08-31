@@ -49,7 +49,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
 import _hardgate
 import _toolroutes
@@ -143,17 +143,26 @@ def match_template(
     return best if best_score >= 0 else None
 
 
+def _json_object(value: object) -> dict[str, Any] | None:
+    """The value as a JSON object, or None when it holds any other shape.
+
+    Fixture documents arrive from json.load untyped, so every nested lookup
+    starts as Any. Narrowing here once keeps the rest of the walk typed, and
+    JSON guarantees the keys are strings.
+    """
+    return cast("dict[str, Any]", value) if isinstance(value, dict) else None
+
+
 def classify_body(body: Any) -> str | None:
     """Shape keyword for a fixture body, or None when it asserts nothing."""
     if isinstance(body, list):
         return "array" if body else None
-    if isinstance(body, dict):
-        if not body:
-            return None
-        if _ENVELOPE_KEYS.issubset(body.keys()):
-            return "envelope"
-        return "object"
-    return None
+    obj = _json_object(body)
+    if not obj:
+        return None
+    if _ENVELOPE_KEYS.issubset(obj.keys()):
+        return "envelope"
+    return "object"
 
 
 def _case_bodies(
@@ -166,8 +175,8 @@ def _case_bodies(
         return []
 
     entries: list[tuple[str, str, Any]] = []
-    responses = case.get("api_responses")
-    if isinstance(responses, dict):
+    responses = _json_object(case.get("api_responses"))
+    if responses is not None:
         for key, body in responses.items():
             method, _, path = str(key).partition(" ")
             if method and path:
@@ -178,8 +187,8 @@ def _case_bodies(
         return []
     body = case["api_response"]
 
-    request = case.get("expect_request")
-    if isinstance(request, dict) and request.get("method") and request.get("path"):
+    request = _json_object(case.get("expect_request"))
+    if request is not None and request.get("method") and request.get("path"):
         path = str(request["path"]).split("?")[0]
         entries.append((str(request["method"]), path, body))
         return entries

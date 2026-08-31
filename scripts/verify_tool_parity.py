@@ -30,7 +30,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import _baselines
 
@@ -115,9 +115,11 @@ def _canon_type(typ: str) -> str:
 
 def _normalize(rec: dict[str, Any]) -> dict[str, Any]:
     """Sort the list fields and canonicalize param types for comparison."""
-    params = {
-        name: _canon_type(str(typ)) for name, typ in (rec.get("params") or {}).items()
-    }
+    raw_params = rec.get("params")
+    # The dumpers emit a JSON object of param name to declared type; a tool with
+    # no params emits null or omits the key.
+    declared = cast("dict[str, object]", raw_params) if raw_params else {}
+    params = {name: _canon_type(str(typ)) for name, typ in declared.items()}
     return {
         "capability": rec["capability"],
         "params": params,

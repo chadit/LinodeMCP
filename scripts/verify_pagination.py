@@ -25,7 +25,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple, cast
 
 import _hardgate
 import _surface
@@ -58,8 +58,13 @@ def fixture_get_paths() -> dict[str, set[str]]:
         if not isinstance(tool, str):
             continue
         for case in doc.get("cases", []):
-            request = case.get("expect_request")
-            if isinstance(request, dict) and request.get("method") == "GET":
+            raw_request = case.get("expect_request")
+            if not isinstance(raw_request, dict):
+                continue
+            # json.load hands back Any; the isinstance above is what proves the
+            # object, and JSON guarantees its keys are strings.
+            request = cast("dict[str, Any]", raw_request)
+            if request.get("method") == "GET":
                 path = str(request.get("path", "")).split("?")[0]
                 if path:
                     out.setdefault(tool, set()).add(path)

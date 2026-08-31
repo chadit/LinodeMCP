@@ -20,13 +20,25 @@ import json
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE = REPO_ROOT / "docs" / "contracts" / "api-defaults-baseline.txt"
 SPEC_URL = (
     "https://raw.githubusercontent.com/linode/linode-api-openapi/main/openapi.json"
 )
+
+
+def _as_dict(node: Any) -> dict[str, Any] | None:
+    """View a decoded JSON value as an object, or None when it is not one.
+
+    json.loads hands back Any, and a bare isinstance check only narrows to
+    dict[Unknown, Unknown]. The cast records what JSON already guarantees: an
+    object's keys are strings.
+    """
+    if isinstance(node, dict):
+        return cast("dict[str, Any]", node)
+    return None
 
 
 def _resolve(doc: dict[str, Any], ref: str) -> Any:
@@ -39,23 +51,24 @@ def _resolve(doc: dict[str, Any], ref: str) -> Any:
 def _walk(
     doc: dict[str, Any], schema: Any, out: set[str], depth: int, prop: str | None
 ) -> None:
-    if depth > 12 or not isinstance(schema, dict):
+    node = _as_dict(schema)
+    if depth > 12 or node is None:
         return
-    ref = schema.get("$ref")
+    ref = node.get("$ref")
     if isinstance(ref, str):
         _walk(doc, _resolve(doc, ref), out, depth + 1, prop)
         return
-    if prop is not None and "default" in schema and "properties" not in schema:
-        out.add(f"{prop} = {json.dumps(schema['default'], sort_keys=True)}")
+    if prop is not None and "default" in node and "properties" not in node:
+        out.add(f"{prop} = {json.dumps(node['default'], sort_keys=True)}")
     for comb in ("oneOf", "anyOf", "allOf"):
-        for sub in schema.get(comb, []):
+        for sub in node.get(comb, []):
             _walk(doc, sub, out, depth + 1, prop)
-    props = schema.get("properties")
-    if isinstance(props, dict):
+    props = _as_dict(node.get("properties"))
+    if props is not None:
         for name, sub in props.items():
             _walk(doc, sub, out, depth + 1, name)
-    item = schema.get("items")
-    if isinstance(item, dict):
+    item = _as_dict(node.get("items"))
+    if item is not None:
         _walk(doc, item, out, depth + 1, prop)
 
 
@@ -64,10 +77,11 @@ def spec_defaults(doc: dict[str, Any]) -> set[str]:
     out: set[str] = set()
     for ops in doc.get("paths", {}).values():
         for method, op in ops.items():
-            if method not in ("post", "put", "patch") or not isinstance(op, dict):
+            operation = _as_dict(op)
+            if method not in ("post", "put", "patch") or operation is None:
                 continue
-            body = op.get("requestBody")
-            if isinstance(body, dict):
+            body = _as_dict(operation.get("requestBody"))
+            if body is not None:
                 for media in body.get("content", {}).values():
                     if media.get("schema"):
                         _walk(doc, media["schema"], out, 0, None)

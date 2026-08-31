@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 SENTINEL = "unspecified"
 
@@ -38,15 +38,18 @@ def _strip(node: object) -> bool:
     """
     changed = False
     if isinstance(node, dict):
-        node_dict = cast("dict[str, Any]", node)
+        # buf emits JSON objects, so the keys are strings and the values are
+        # whatever the schema holds; casting once keeps the walk typed.
+        node_dict = cast("dict[str, object]", node)
         enum = node_dict.get("enum")
-        if isinstance(enum, list) and SENTINEL in enum:
-            node_dict["enum"] = [v for v in enum if v != SENTINEL]
+        members = cast("list[object]", enum) if isinstance(enum, list) else []
+        if SENTINEL in members:
+            node_dict["enum"] = [v for v in members if v != SENTINEL]
             changed = True
         for value in node_dict.values():
             changed = _strip(value) or changed
     elif isinstance(node, list):
-        for value in node:
+        for value in cast("list[object]", node):
             changed = _strip(value) or changed
     return changed
 
