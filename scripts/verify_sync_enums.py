@@ -32,7 +32,6 @@ Usage: verify_sync_enums.py [--spec PATH] [--update-baseline]
 
 from __future__ import annotations
 
-import ast
 import json
 import re
 import sys
@@ -40,7 +39,7 @@ import urllib.request
 from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -146,7 +145,33 @@ _CEL_RULE = re.compile(
 _CEL_ID = re.compile(r'id:\s*"([^"]+)"')
 _CEL_EXPRESSION = re.compile(r'expression:\s*"(.*)"')
 _CEL_ALTERNATION = re.compile(r"in \[([^\]]*)\]")
-_CEL_MEMBER = re.compile(r"'([^']*)'")
+_CEL_QUOTED_MEMBER = re.compile(r"^'([^']*)'$")
+_CEL_INTEGER_MEMBER = re.compile(r"^-?\d+$")
+
+
+def _alternation_members(rule_id: str, list_body: str) -> set[str]:
+    """The members of one CEL list literal, each as the string the spec uses.
+
+    An integer set (severity, cluster_size, prefix_length) is a documented
+    value set the same as a string one, and the spec side arrives as strings
+    either way, so a digit member keeps its digits and compares as text. A
+    member that is neither a quoted string nor an integer is a shape this
+    reader does not understand: raising leaves the whole set unread rather than
+    diffing half of it against the API.
+    """
+    members: set[str] = set()
+    for item in list_body.split(","):
+        token = item.strip()
+        quoted = _CEL_QUOTED_MEMBER.match(token)
+        if quoted is not None:
+            members.add(quoted.group(1))
+        elif _CEL_INTEGER_MEMBER.match(token):
+            members.add(token)
+        else:
+            raise ValueError(
+                f"{rule_id}: alternation member {token!r} is not a literal"
+            )
+    return members
 
 
 def proto_cel_values(rule_id: str) -> set[str]:
@@ -168,7 +193,7 @@ def proto_cel_values(rule_id: str) -> set[str]:
             )
             if alternation is None:
                 raise ValueError(f"{rule_id}: rule declares no value alternation")
-            return set(_CEL_MEMBER.findall(alternation.group(1)))
+            return _alternation_members(rule_id, alternation.group(1))
     raise ValueError(f"{rule_id}: no rule declares this id")
 
 
@@ -196,39 +221,60 @@ def proto_reader_values(field_name: str) -> set[str]:
     raise ValueError(f"{field_name}: no contract field declares reader_values")
 
 
-def _resolve(doc: dict[str, Any], ref: str) -> Any:
+def _resolve(doc: dict[str, Any], ref: str) -> object:
     node: Any = doc
     for part in ref.lstrip("#/").split("/"):
         node = node[part]
     return node
 
 
+def _json_map(value: object) -> dict[str, object]:
+    """A JSON object as a string-keyed mapping, empty for anything else.
+
+    json.load answers with Any, and an isinstance proves only that some dict
+    arrived, so every nested lookup here would otherwise walk a shape nothing
+    states. Empty-for-anything-else keeps the callers that already skipped a
+    wrong shape skipping it; the two walks that assume a mapping without
+    checking keep a cast instead, so a document shipping something else still
+    fails there rather than reading as an empty value set.
+    """
+    if not isinstance(value, dict):
+        return {}
+    # A JSON object only ever keys on strings, which the isinstance cannot say.
+    return cast("dict[str, object]", value)
+
+
+def _json_list(value: object) -> list[object]:
+    """A JSON array as a list, empty for anything else."""
+    if not isinstance(value, list):
+        return []
+    return cast("list[object]", value)
+
+
 def _walk(
     doc: dict[str, Any],
-    schema: Any,
+    schema: object,
     field: str,
     out: set[str],
     depth: int,
     prop: str | None,
 ) -> None:
-    if depth > 12 or not isinstance(schema, dict):
+    if depth > 12:
         return
-    ref = schema.get("$ref")
+    node = _json_map(schema)
+    ref = node.get("$ref")
     if isinstance(ref, str):
         _walk(doc, _resolve(doc, ref), field, out, depth + 1, prop)
         return
-    if prop == field and isinstance(schema.get("enum"), list):
-        out.update(str(v) for v in schema["enum"])
+    if prop == field:
+        out.update(str(value) for value in _json_list(node.get("enum")))
     for comb in ("oneOf", "anyOf", "allOf"):
-        for sub in schema.get(comb, []):
+        for sub in _json_list(node.get(comb)):
             _walk(doc, sub, field, out, depth + 1, prop)
-    props = schema.get("properties")
-    if isinstance(props, dict):
-        for name, sub in props.items():
-            _walk(doc, sub, field, out, depth + 1, name)
-    item = schema.get("items")
-    if isinstance(item, dict):
-        _walk(doc, item, field, out, depth + 1, prop)
+    for name, sub in _json_map(node.get("properties")).items():
+        _walk(doc, sub, field, out, depth + 1, name)
+    # A missing or non-object `items` walks nothing, per the early return above.
+    _walk(doc, node.get("items"), field, out, depth + 1, prop)
 
 
 def spec_enum(doc: dict[str, Any], field: str, path_substr: str) -> set[str]:
@@ -239,13 +285,17 @@ def spec_enum(doc: dict[str, Any], field: str, path_substr: str) -> set[str]:
         if path_substr not in path:
             continue
         for method, op in ops.items():
-            if method not in ("post", "put", "patch") or not isinstance(op, dict):
+            if method not in ("post", "put", "patch"):
                 continue
-            body = op.get("requestBody")
-            if isinstance(body, dict):
-                for media in body.get("content", {}).values():
-                    if media.get("schema"):
-                        _walk(doc, media["schema"], field, out, 0, None)
+            body = _json_map(_json_map(op).get("requestBody"))
+            # The media objects under content are assumed rather than checked,
+            # as they always were: a document that ships something else fails
+            # here instead of reading as an endpoint with no enum.
+            content = cast("dict[str, dict[str, object]]", body.get("content", {}))
+            for media in content.values():
+                schema = media.get("schema")
+                if schema:
+                    _walk(doc, schema, field, out, 0, None)
     return out
 
 
@@ -388,8 +438,7 @@ def _latest_openapi_commit_date(payload: str) -> date:
 
 def staleness_note(doc: dict[str, Any], *, today: date | None = None) -> str:
     """Compare the latest changelog release with the OpenAPI source commit."""
-    info = doc.get("info")
-    version = info.get("version") if isinstance(info, dict) else None
+    version = _json_map(doc.get("info")).get("version")
     if not isinstance(version, str) or not version.strip():
         raise StalenessVerificationError("OpenAPI info.version verification failed")
     version = version.strip()
@@ -424,18 +473,23 @@ def read_baseline() -> set[str]:
 
 
 # Validation value-sets that CANNOT become proto enums: their values are not
-# valid proto identifiers (hyphens, colons) or they are map keys rather than a
-# scalar field. Each is declared on the contract, in one of the three forms a
-# non-enum vocabulary can take, and diffed against the same live spec the enum
-# gate uses. The diffs fold into the same baseline.
+# valid proto identifiers (hyphens, colons, digits), they are map keys rather
+# than a scalar field, or the field ships as a string or int32 an enum would
+# retype, which `make wire-breaking` refuses on a live number. Each is declared
+# on the contract, in one of the three forms a non-enum vocabulary can take, and
+# diffed against the same live spec the enum gate uses. The diffs fold into the
+# same baseline.
 #
 # Each entry:
 #   "spec": (mode, field, path_substr)
 #       "field-enum"   -> the request-body enum of <field> (same as proto enums)
 #       "object-props" -> the property NAMES of the object-typed <field>
 #   "spec_exclude": values the API lists but the contract intentionally omits
-#   one of "cel" (a rule id), "reader_values" (a field name), or "object_walk"
-#   (a walked argument name), naming where the contract carries the vocabulary
+#   one of "cel" (rule ids), "reader_values" (a field name), or "object_walk"
+#   (a walked argument name), naming where the contract carries the vocabulary.
+#   "cel" is a list because one documented set can be stated by a rule per tool
+#   that takes the argument; a field carries one reader vocabulary and a walk
+#   one key list, so those two name a single place each.
 HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
     "bucket_acl": {
         "spec": ("field-enum", "acl", "/object-storage/buckets"),
@@ -451,7 +505,7 @@ HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
         # bucket-access tools migrated: it is now a CEL alternation every
         # language reads through the shared rule evaluator, so there is one
         # place to diff rather than one per language.
-        "cel": "object_storage_bucket_access_allow.acl.known",
+        "cel": ["object_storage_bucket_access_allow.acl.known"],
     },
     "placement_group_type": {
         "spec": ("field-enum", "placement_group_type", "/placement/groups"),
@@ -471,22 +525,65 @@ HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
         # to diff rather than one per language.
         "object_walk": "devices",
     },
+    "alert_definition_severity": {
+        "spec": ("field-enum", "severity", "/alert-definitions"),
+        # Three tools hold severity to the one documented set, so all three
+        # rules are diffed against it: a value the API adds has to reach every
+        # tool that takes the argument, not whichever one this entry named
+        # first. The spec documents no clone route, so the union over the
+        # create and update bodies is the only side the clone rule has.
+        "cel": [
+            "monitor_service_alert_definition_create.severity.known",
+            "monitor_service_alert_definition_clone.severity.known",
+            "monitor_service_alert_definition_update.severity.known",
+        ],
+    },
+    "mysql_cluster_size": {
+        "spec": ("field-enum", "cluster_size", "/databases/mysql/instances"),
+        # Per engine rather than one "/databases" entry: the two engines are
+        # free to offer different sizes, and a union over both would hide the
+        # day one of them moves.
+        "cel": ["database_mysql_instance_create.cluster_size.known"],
+    },
+    "postgresql_cluster_size": {
+        "spec": ("field-enum", "cluster_size", "/databases/postgresql/instances"),
+        "cel": ["database_postgresql_instance_create.cluster_size.known"],
+    },
+    "ipv6_prefix_length": {
+        "spec": ("field-enum", "prefix_length", "/networking/ipv6/ranges"),
+        "cel": ["ipv6_range_create.prefix_length.known"],
+    },
+    "support_ticket_severity": {
+        "spec": ("field-enum", "severity", "/support/tickets"),
+        "cel": ["support_ticket_create.severity.known"],
+    },
+    "domain_status": {
+        "spec": ("field-enum", "status", "/domains"),
+        # POST /domains states the same pair through the DomainCreateStatus
+        # enum, so the union over both methods is the set this rule declares.
+        "cel": ["domain_update.status.known"],
+    },
+    "longview_plan": {
+        "spec": ("field-enum", "longview_subscription", "/longview/plan"),
+        "cel": ["longview_plan_update.longview_subscription.known"],
+    },
 }
 
 
-def _properties(doc: dict[str, Any], schema: Any, depth: int = 0) -> dict[str, Any]:
+def _properties(
+    doc: dict[str, Any], schema: object, depth: int = 0
+) -> dict[str, object]:
     """Merge a schema's property map, resolving $ref and allOf/oneOf/anyOf."""
-    if depth > 12 or not isinstance(schema, dict):
+    if depth > 12:
         return {}
-    ref = schema.get("$ref")
+    node = _json_map(schema)
+    ref = node.get("$ref")
     if isinstance(ref, str):
         return _properties(doc, _resolve(doc, ref), depth + 1)
-    props: dict[str, Any] = {}
-    own = schema.get("properties")
-    if isinstance(own, dict):
-        props.update(own)
+    props: dict[str, object] = {}
+    props.update(_json_map(node.get("properties")))
     for comb in ("allOf", "oneOf", "anyOf"):
-        for sub in schema.get(comb, []):
+        for sub in _json_list(node.get(comb)):
             props.update(_properties(doc, sub, depth + 1))
     return props
 
@@ -495,16 +592,18 @@ def spec_object_props(doc: dict[str, Any], field: str, path_substr: str) -> set[
     """Union the property names of an object-typed request field across endpoints."""
     out: set[str] = set()
     for path, ops in doc.get("paths", {}).items():
-        if path_substr not in path or not isinstance(ops, dict):
+        if path_substr not in path:
             continue
-        for method, op in ops.items():
-            if method not in ("post", "put", "patch") or not isinstance(op, dict):
+        for method, op in _json_map(ops).items():
+            if method not in ("post", "put", "patch"):
                 continue
-            body = op.get("requestBody")
-            if not isinstance(body, dict):
-                continue
-            for media in body.get("content", {}).values():
-                schema = media.get("schema") if isinstance(media, dict) else None
+            body = _json_map(_json_map(op).get("requestBody"))
+            # The content map is assumed rather than checked, as it was
+            # before, so a document that ships something else fails here.
+            # Each media object under it is still checked, one line down.
+            content = cast("dict[str, object]", body.get("content", {}))
+            for media in content.values():
+                schema = _json_map(media).get("schema")
                 if not schema:
                     continue
                 field_schema = _properties(doc, schema).get(field)
@@ -513,41 +612,25 @@ def spec_object_props(doc: dict[str, Any], field: str, path_substr: str) -> set[
     return out
 
 
-def _string_members(value: ast.expr) -> set[str]:
-    """Collect string constants of a set/list/tuple literal or set()/frozenset()
-    call."""
-    elts: list[ast.expr] = []
-    if isinstance(value, (ast.Set, ast.List, ast.Tuple)):
-        elts = list(value.elts)
-    elif (
-        isinstance(value, ast.Call)
-        and isinstance(value.func, ast.Name)
-        and value.func.id in ("set", "frozenset")
-        and value.args
-        and isinstance(value.args[0], (ast.Set, ast.List, ast.Tuple))
-    ):
-        elts = list(value.args[0].elts)
-    return {
-        e.value
-        for e in elts
-        if isinstance(e, ast.Constant) and isinstance(e.value, str)
-    }
+def _cel_diffs(key: str, rule_ids: list[str], spec_vals: set[str]) -> list[str]:
+    """Diff every rule that declares this value set against the live spec.
 
-
-def _cel_diffs(key: str, rule_id: str, spec_vals: set[str]) -> list[str]:
-    """Diff one contract-declared value set against the live spec value-set."""
-    try:
-        declared = proto_cel_values(rule_id)
-    except (OSError, ValueError) as exc:
-        return [f"{key}: contract extraction failed: {exc}"]
-
-    diffs = []
-    missing = sorted(spec_vals - declared)
-    extra = sorted(declared - spec_vals)
-    if missing:
-        diffs.append(f"{key}: contract rule missing API value(s): {missing}")
-    if extra:
-        diffs.append(f"{key}: contract rule has value(s) not in API: {extra}")
+    Each line names its rule, because one set can be stated by a rule per tool
+    that takes the argument and the reconciler has to know which to move.
+    """
+    diffs: list[str] = []
+    for rule_id in rule_ids:
+        try:
+            declared = proto_cel_values(rule_id)
+        except (OSError, ValueError) as exc:
+            diffs.append(f"{key}: contract extraction failed: {exc}")
+            continue
+        missing = sorted(spec_vals - declared)
+        extra = sorted(declared - spec_vals)
+        if missing:
+            diffs.append(f"{key}: rule {rule_id} missing API value(s): {missing}")
+        if extra:
+            diffs.append(f"{key}: rule {rule_id} has value(s) not in API: {extra}")
     return diffs
 
 
@@ -581,7 +664,7 @@ def _object_walk_diffs(key: str, argument: str, spec_vals: set[str]) -> list[str
     except (OSError, ValueError) as exc:
         return [f"{key}: contract extraction failed: {exc}"]
 
-    diffs = []
+    diffs: list[str] = []
     missing = sorted(spec_vals - declared)
     extra = sorted(declared - spec_vals)
     if missing:
@@ -598,7 +681,7 @@ def _reader_values_diffs(key: str, field_name: str, spec_vals: set[str]) -> list
     except (OSError, ValueError) as exc:
         return [f"{key}: contract extraction failed: {exc}"]
 
-    diffs = []
+    diffs: list[str] = []
     missing = sorted(spec_vals - declared)
     extra = sorted(declared - spec_vals)
     if missing:
@@ -625,9 +708,9 @@ def hand_list_diffs(doc: dict[str, Any]) -> list[str]:
             diffs.append(f"{key}: spec field {field!r} not found under {path_substr!r}")
             continue
 
-        rule_id = spec.get("cel")
-        if rule_id is not None:
-            diffs.extend(_cel_diffs(key, rule_id, spec_vals))
+        rule_ids = spec.get("cel")
+        if rule_ids is not None:
+            diffs.extend(_cel_diffs(key, rule_ids, spec_vals))
             continue
 
         values_field = spec.get("reader_values")
