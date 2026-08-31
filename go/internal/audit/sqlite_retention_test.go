@@ -1,6 +1,7 @@
 package audit_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -82,5 +83,50 @@ func TestSQLiteSweepRetentionDisabledWhenZero(t *testing.T) {
 
 	if countRows(t, sink) != 1 {
 		t.Errorf("countRows(t, sink) = %v, want %v", countRows(t, sink), 1)
+	}
+}
+
+// TestSQLiteSweepRetentionHugeWindowKeepsEverything pins the saturating
+// cutoff. A window whose start predates the earliest representable
+// nanosecond keeps every row, because nothing in the table is older than a
+// cutoff no row can carry. Before saturation the cutoff wrapped, and a
+// wrapped cutoff landed in the future where it matched the whole table.
+func TestSQLiteSweepRetentionHugeWindowKeepsEverything(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name          string
+		retentionDays int
+	}{
+		// Wider than the ~585 years a nanosecond count covers, so UnixNano
+		// is the half that wraps.
+		{name: "window wider than the nanosecond range", retentionDays: 200_000_000},
+		// Wide enough that AddDate's own day subtraction overflows first.
+		{name: "window wider than the day count", retentionDays: math.MaxInt},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			sink := openTestSQLiteSink(t)
+
+			now := time.Date(2026, time.May, 20, 12, 0, 0, 0, time.UTC)
+			writeEventAt(t, sink, "evt_old", now.AddDate(0, 0, -30))
+			writeEventAt(t, sink, "evt_recent", now.AddDate(0, 0, -1))
+
+			removed, err := sink.SweepRetention(t.Context(), now, testCase.retentionDays)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if removed != int64(0) {
+				t.Errorf("removed = %v, want %v", removed, int64(0))
+			}
+
+			if countRows(t, sink) != 2 {
+				t.Errorf("countRows(t, sink) = %v, want %v", countRows(t, sink), 2)
+			}
+		})
 	}
 }

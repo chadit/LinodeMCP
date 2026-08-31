@@ -17,8 +17,10 @@ import json
 import logging
 import sqlite3
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+
+from linodemcp.audit.reader import unix_ns_bound
 
 if TYPE_CHECKING:
     from linodemcp.audit.event import Event
@@ -70,6 +72,15 @@ INSERT OR IGNORE INTO events (
 # Milliseconds-per-second divisor for the connect timeout, which
 # sqlite3 takes in seconds while the config carries milliseconds.
 _MS_PER_SECOND = 1000.0
+
+# A day in nanoseconds, the unit a retention window counts in once the
+# subtraction leaves the calendar.
+_NS_PER_DAY = 86_400 * 1_000_000_000
+
+# The int64 floor a saturated nanosecond count stops at, the same floor the
+# reader's query bounds clamp to. Written as a shift because it is a power of
+# two: 2^63 is the magnitude of the smallest int64.
+_INT64_MIN = -(1 << 63)
 
 
 class SQLiteSink:
@@ -141,13 +152,14 @@ class SQLiteSink:
     def sweep_retention(self, now: datetime, retention_days: int) -> int:
         """Delete events older than ``now - retention_days`` and return the
         row count removed. A ``retention_days`` of 0 or less disables
-        deletion (keep forever) and returns 0 without touching the table.
+        deletion (keep forever) and returns 0 without touching the table. A
+        window so wide its cutoff predates the representable nanosecond range
+        keeps every row.
         """
         if retention_days <= 0:
             return 0
 
-        cutoff = now.astimezone(UTC) - timedelta(days=retention_days)
-        cutoff_ns = int(cutoff.timestamp() * 1_000_000_000)
+        cutoff_ns = _retention_cutoff_ns(now, retention_days)
 
         with self._lock:
             cursor = self._conn.execute(
@@ -192,3 +204,16 @@ class SQLiteSink:
     def connection(self) -> sqlite3.Connection:
         """Expose the connection for the Phase 3d/3e query tools."""
         return self._conn
+
+
+def _retention_cutoff_ns(now: datetime, retention_days: int) -> int:
+    """The retention cutoff as the nanosecond count a row carries, saturated
+    at the int64 floor.
+
+    The subtraction runs in nanoseconds rather than on the datetime because a
+    window wide enough to walk off the calendar raises OverflowError there,
+    and a count past the int64 floor is one SQLite refuses to bind. Both ways
+    the sweep failed on a window that should keep every row instead: nothing
+    is older than a cutoff predating the first instant a row can carry.
+    """
+    return max(_INT64_MIN, unix_ns_bound(now) - retention_days * _NS_PER_DAY)

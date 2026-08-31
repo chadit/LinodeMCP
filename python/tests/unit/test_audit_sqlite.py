@@ -12,6 +12,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import pytest
+
 from linodemcp.audit import (
     Capability,
     Event,
@@ -173,6 +175,39 @@ def test_sqlite_sweep_retention_disabled_when_zero(tmp_path: Path) -> None:
 
         assert removed == 0
         assert _count_rows(sink) == 1
+    finally:
+        sink.close()
+
+
+@pytest.mark.parametrize(
+    "retention_days",
+    [200_000, 200_000_000],
+    ids=[
+        "window wider than the nanosecond range",
+        "window wider than the calendar",
+    ],
+)
+def test_sqlite_sweep_retention_huge_window_keeps_everything(
+    tmp_path: Path, retention_days: int
+) -> None:
+    """A window whose cutoff predates the earliest representable nanosecond
+    keeps every row, because nothing in the table is older than a cutoff no
+    row can carry.
+
+    The two widths break the unsaturated cutoff in different places: the
+    narrower one lands past the int64 floor SQLite refuses to bind, the wider
+    one walks off the calendar before that. Mirrors the Go table.
+    """
+    now = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
+    sink = _open_sink(tmp_path)
+    try:
+        sink.write(_event(event_id="old", tool="t", ts=now - timedelta(days=30)))
+        sink.write(_event(event_id="recent", tool="t", ts=now - timedelta(days=1)))
+
+        removed = sink.sweep_retention(now, retention_days)
+
+        assert removed == 0
+        assert _count_rows(sink) == 2
     finally:
         sink.close()
 

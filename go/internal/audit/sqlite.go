@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	// Pure-Go SQLite driver. Registers itself under the name "sqlite"
@@ -146,14 +147,16 @@ func (s *SQLiteSink) Close() error {
 // SweepRetention deletes events older than retentionDays before now
 // and returns the number of rows removed. A retentionDays of 0 or
 // less disables deletion (keep forever) and returns (0, nil) without
-// touching the table. The cutoff is exact (now minus N days), unlike
-// the JSONL sweeper's whole-day file boundaries.
+// touching the table. A window so wide its cutoff predates the
+// representable nanosecond range keeps every row. The cutoff is exact
+// (now minus N days), unlike the JSONL sweeper's whole-day file
+// boundaries.
 func (s *SQLiteSink) SweepRetention(ctx context.Context, now time.Time, retentionDays int) (int64, error) {
 	if retentionDays <= 0 {
 		return 0, nil
 	}
 
-	cutoff := now.UTC().AddDate(0, 0, -retentionDays).UnixNano()
+	cutoff := retentionCutoffNanos(now.UTC(), retentionDays)
 
 	result, err := s.db.ExecContext(ctx, `DELETE FROM events WHERE ts_unix_ns < ?`, cutoff)
 	if err != nil {
@@ -207,6 +210,26 @@ func (s *SQLiteSink) runRetentionOnce(ctx context.Context, retentionDays int, lo
 	if removed > 0 {
 		log.Info("audit sqlite retention removed expired rows", "rows", removed)
 	}
+}
+
+// retentionCutoffNanos returns the instant retentionDays before now as the
+// nanosecond count rows carry, saturating at the int64 floor rather than
+// wrapping. Saturating keeps the window's meaning: a retention window wider
+// than the ~585 years a nanosecond count can express reaches past the floor,
+// so every row is inside it and the sweep removes nothing. Wrapping turned
+// that into the opposite answer, because both UnixNano and AddDate's day
+// arithmetic overflow silently and a wrapped cutoff sat in the future, where
+// it matched the whole table.
+func retentionCutoffNanos(now time.Time, retentionDays int) int64 {
+	cutoff := now.AddDate(0, 0, -retentionDays)
+
+	// A positive window has to move the cutoff backwards. When it does not,
+	// the day count overflowed inside AddDate and the calendar math is junk.
+	if !cutoff.Before(now) {
+		return math.MinInt64
+	}
+
+	return unixNanoBound(cutoff)
 }
 
 // nullableString maps a nil *string to a SQL NULL and a non-nil
