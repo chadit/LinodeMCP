@@ -12,7 +12,7 @@ build-backend = "hatchling.build"
 name = "techdocs-proof"
 version = "0.1.0"
 description = "Compare rendered Linode TechDocs against the LinodeMCP proto contract"
-requires-python = ">=3.14.6"
+requires-python = ">=3.14.7"
 license = { text = "MIT" }
 authors = [{ name = "LinodeMCP Contributors" }]
 dependencies = []
