@@ -30,7 +30,7 @@ dependencies = [
     # emit gencode 7.35.1, and ValidateProtobufRuntimeVersion raises on every
     # _pb2 import when the runtime is older than the gencode. Move the plugin
     # tags and this floor together, never one without the other.
-    "protobuf>=7.36.0",
+    "protobuf>=7.36.1",
     # Evaluates the buf.validate CEL constraints the proto contract carries, so
     # a rule is written once in the proto instead of once per language.
     "protovalidate==1.2.0",
