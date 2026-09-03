@@ -7,7 +7,7 @@ import "fmt"
 // answer, with none of the machinery a mutation carries around it.
 //
 // No gate and no preview, because nothing is changed by the call: the
-// presigned-URL create signs what its body describes and stores nothing, so
+// download-URL create signs what its body describes and stores nothing, so
 // asking a caller to confirm a read would be a gate over an answer they can ask
 // for again.
 func emitBodyRead(out *source, tool *contract) error {

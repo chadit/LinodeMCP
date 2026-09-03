@@ -49,6 +49,15 @@ _BODY_OR_QUERY = (
 _MESSAGE_RULES: Any = validate_pb2.message
 _FIELD_LOCATION: Any = options_pb2.field_location
 
+# The names a call carries for the server rather than for the route, so no input
+# message declares them and the refusal below has to let them through by name.
+# twostage_destroy.py reads confirmed_dry_run and confirm_bypass_dry_run;
+# server/__init__.py reads yolo. Declaring them as system param fields, which
+# would retire this set, is booked as a follow-up.
+_ENGINE_CONTROL_ARGUMENTS = frozenset(
+    {"confirm_bypass_dry_run", "confirmed_dry_run", "yolo"}
+)
+
 # The JSON number grammar a string offered for an integer field has to spell end
 # to end, because each language's reader is lenient in its own direction
 # otherwise: Go's takes the 123 out of "123/456" and Python's accepts spellings
@@ -117,17 +126,46 @@ def load_contract() -> None:
             importlib.import_module(f"{genpb.__name__}.{module.name}")
 
 
+def unknown_arguments(
+    arguments: dict[str, Any], tool_name: str, input_message: str
+) -> str:
+    """Answer for any argument the tool's input message does not declare.
+
+    Mirrors Go's refusedAsUndeclared, sentence included: each language holds one
+    copy and the behavior fixtures are what keep the two equal. A message the
+    pool does not carry answers "", since without a descriptor there is no
+    allowlist to hold the call to.
+    """
+    descriptor = _input_descriptor(input_message)
+    if descriptor is None:
+        return ""
+
+    declared = set(descriptor.fields_by_name) | _ENGINE_CONTROL_ARGUMENTS
+    unknown = sorted(name for name in arguments if name not in declared)
+    if not unknown:
+        return ""
+
+    return f"Unsupported argument(s) for {tool_name}: {', '.join(unknown)}"
+
+
+def _input_descriptor(input_message: str) -> Descriptor | None:
+    """Resolve a tool's input message, or None when the pool does not carry it."""
+    load_contract()
+
+    try:
+        return descriptor_pool.Default().FindMessageTypeByName(input_message)
+    except KeyError:
+        return None
+
+
 def _constrained(input_message: str) -> Descriptor | None:
     """Resolve a message that declares rules, or None when it declares none.
 
     A message with none is the common case and costs one pool lookup, which is
     what keeps the seam on every generated handler affordable.
     """
-    load_contract()
-
-    try:
-        descriptor = descriptor_pool.Default().FindMessageTypeByName(input_message)
-    except KeyError:
+    descriptor = _input_descriptor(input_message)
+    if descriptor is None:
         return None
 
     if not descriptor.GetOptions().HasExtension(_MESSAGE_RULES):

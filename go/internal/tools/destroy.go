@@ -312,6 +312,14 @@ func RunDestructiveActionWithID(
 		return mcp.NewToolResultError(message), nil
 	}
 
+	// The refusal sits beside the rules here rather than in the emitted
+	// handler, for the same reason the list drivers hold theirs. This wrapper
+	// already holds both strings the check derives its allowlist and its
+	// sentence from, so the emitter has nothing left to write.
+	if message := CheckArgumentRefusals(params.InputMessage, params.ToolName, request.GetArguments()); message != "" {
+		return mcp.NewToolResultError(message), nil
+	}
+
 	id, message := DestroyID(request, params.IDParam)
 	if message != "" {
 		return mcp.NewToolResultError(message), nil

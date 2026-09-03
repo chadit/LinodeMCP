@@ -167,22 +167,58 @@ func RunPresignTransfer(
 		return TransferResult{}, err
 	}
 
-	FillPresignBody(spec.Body, settings)
-
-	minted := &structpb.Struct{}
-	if presignErr := client.CallProtoRouteBody(
-		ctx, spec.Tool, spec.PathValues, spec.Body, spec.Subject, minted,
-	); presignErr != nil {
-		return TransferResult{}, fmt.Errorf("%w", presignErr)
+	url, err := mintPresignedURL(ctx, client, spec, settings)
+	if err != nil {
+		return TransferResult{}, err
 	}
-
-	url := minted.GetFields()[spec.URLField].GetStringValue()
 
 	if spec.Up {
 		return uploadThrough(ctx, spec, settings, url, source)
 	}
 
 	return downloadThrough(ctx, settings, url, destination)
+}
+
+// RunPresignRemove asks the API for a URL signed for DELETE and then sends that
+// DELETE.
+//
+// Nothing local is resolved and nothing is measured, because a removal moves no
+// bytes: the presign is the only Linode operation, the same as it is for a
+// transfer, and the DELETE that follows addresses the URL it answered with.
+func RunPresignRemove(ctx context.Context, client *linode.Client, spec *PresignSpec) error {
+	settings := ObjectTransferSettings(client.ObjectStorage())
+
+	url, err := mintPresignedURL(ctx, client, spec, settings)
+	if err != nil {
+		return err
+	}
+
+	if removeErr := objectdata.Remove(ctx, objectdata.RemoveRequest{
+		URL:     url,
+		Timeout: settings.TransferTimeout,
+	}); removeErr != nil {
+		return fmt.Errorf("%w", removeErr)
+	}
+
+	return nil
+}
+
+// mintPresignedURL makes the presign call both arms share and answers with the
+// URL it minted. The body is filled first, so a caller that omitted the signed
+// content type or the lifetime still sends the request the endpoint accepts.
+func mintPresignedURL(
+	ctx context.Context, client *linode.Client, spec *PresignSpec, settings config.ObjectStorageConfig,
+) (string, error) {
+	FillPresignBody(spec.Body, settings)
+
+	minted := &structpb.Struct{}
+	if err := client.CallProtoRouteBody(
+		ctx, spec.Tool, spec.PathValues, spec.Body, spec.Subject, minted,
+	); err != nil {
+		return "", fmt.Errorf("%w", err)
+	}
+
+	return minted.GetFields()[spec.URLField].GetStringValue(), nil
 }
 
 // resolveTransferEnds runs the guard the direction implies, answering the

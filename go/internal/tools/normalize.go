@@ -83,19 +83,6 @@ func TrimList(request *mcp.CallToolRequest, names ...string) {
 	}
 }
 
-// UppercaseArguments folds the named text arguments to upper case in place, so
-// a value the API reads as an upper-case vocabulary reaches the rules that way
-// however the caller spelled it. Mirrors the Python uppercase_arguments helper.
-func UppercaseArguments(request *mcp.CallToolRequest, names ...string) {
-	arguments := request.GetArguments()
-
-	for _, name := range names {
-		if value, isText := arguments[name].(string); isText {
-			arguments[name] = strings.ToUpper(value)
-		}
-	}
-}
-
 // FoldIntList folds a convenience integer-list argument into a member of an
 // object argument, in place. A caller-supplied non-empty target wins and the
 // source is dropped, so the wire never carries both spellings of one fact. A

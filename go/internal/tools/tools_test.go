@@ -166,33 +166,48 @@ func TestHelloTool(t *testing.T) {
 	})
 }
 
-// hello has no error channel: the generated shell runs the contract's rules
-// first and HelloInput declares none, so nothing reaches the error result the
-// other generated tools return. Pinned because the tier now carries an error
-// path the hand-written tool did not have.
-func TestHelloToolAnswersRatherThanErroring(t *testing.T) {
+// HelloInput declares one field and no rules, so a call naming nothing else
+// answers and a call naming anything else is refused. Pinned because the meta
+// tier used to take an undeclared argument and greet the caller anyway.
+func TestHelloToolAnswersItsOwnFieldAndRefusesAnother(t *testing.T) {
 	t.Parallel()
 
 	_, _, handler := gentools.NewHelloTool(nil)
 
-	req := createRequestWithArgs(t, map[string]any{"unexpected": "argument"})
-
-	result, err := handler(t.Context(), req)
+	answered, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.IsError {
-		t.Fatal("result.IsError = true, want false")
+	if answered.IsError {
+		t.Fatal("answered.IsError = true, want false")
 	}
 
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
+	textContent, isText := answered.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
 	}
 
 	if !strings.Contains(textContent.Text, "Hello, World!") {
 		t.Errorf("textContent.Text does not contain %v", "Hello, World!")
+	}
+
+	refused, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"unexpected": "argument"}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !refused.IsError {
+		t.Fatal("refused.IsError = false, want true")
+	}
+
+	refusal, isRefusalText := refused.Content[0].(mcp.TextContent)
+	if !isRefusalText {
+		t.Fatal("isRefusalText = false, want true")
+	}
+
+	if want := "Unsupported argument(s) for hello: unexpected"; refusal.Text != want {
+		t.Errorf("refusal.Text = %v, want %v", refusal.Text, want)
 	}
 }
 

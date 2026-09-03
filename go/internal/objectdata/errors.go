@@ -35,3 +35,8 @@ var (
 	// or write, which is a local problem rather than a bucket one.
 	ErrDestinationUnwritable = errors.New("dest_path cannot be written")
 )
+
+// ErrRemove reports a failed DELETE against the presigned URL. Separate from
+// ErrTransfer so the sentence names what the call was doing: a removal reported
+// as an upload failure sends the caller looking for bytes that never moved.
+var ErrRemove = errors.New("presigned removal failed")

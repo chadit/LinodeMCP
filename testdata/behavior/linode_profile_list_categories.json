@@ -13,14 +13,14 @@
           { "name": "compute", "tool_count": 113 },
           { "name": "compute_deep", "tool_count": 23 },
           { "name": "core", "tool_count": 4 },
-          { "name": "databases", "tool_count": 34 },
+          { "name": "databases", "tool_count": 46 },
           { "name": "dns", "tool_count": 13 },
           { "name": "iam", "tool_count": 25 },
           { "name": "lke", "tool_count": 29 },
           { "name": "longview", "tool_count": 10 },
           { "name": "monitor", "tool_count": 34 },
           { "name": "networking", "tool_count": 61 },
-          { "name": "object_storage", "tool_count": 32 },
+          { "name": "object_storage", "tool_count": 34 },
           { "name": "security", "tool_count": 5 },
           { "name": "vpcs", "tool_count": 12 }
         ]

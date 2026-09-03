@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_update",
-  "description": "Firewall update takes firewall_id in the path and PUTs label/status/tags. The default policies travel inside `rules`, and that member stays off the wire when neither is named: this route reads it as a replacement, so an empty object would clear the ruleset. Both languages now gate on confirm before validating.",
+  "description": "Firewall update takes firewall_id in the path and PUTs label/status/tags. The route reads no rules and no default policies, so those arguments are retired and refused by name; linode_firewall_rules_update sets them. Both languages now gate on confirm before validating.",
   "cases": [
     {
       "name": "requires firewall_id",
@@ -29,44 +29,6 @@
       }
     },
     {
-      "name": "folds a single policy into rules",
-      "args": {
-        "confirm": true,
-        "firewall_id": 123,
-        "inbound_policy": "DROP"
-      },
-      "api_response": {},
-      "expect_request": {
-        "method": "PUT",
-        "path": "/networking/firewalls/123",
-        "body": {
-          "rules": {
-            "inbound_policy": "DROP"
-          }
-        }
-      }
-    },
-    {
-      "name": "folds both policies into rules",
-      "args": {
-        "confirm": true,
-        "firewall_id": 123,
-        "inbound_policy": "DROP",
-        "outbound_policy": "ACCEPT"
-      },
-      "api_response": {},
-      "expect_request": {
-        "method": "PUT",
-        "path": "/networking/firewalls/123",
-        "body": {
-          "rules": {
-            "inbound_policy": "DROP",
-            "outbound_policy": "ACCEPT"
-          }
-        }
-      }
-    },
-    {
       "name": "requires confirm",
       "args": {
         "firewall_id": 123,
@@ -74,24 +36,6 @@
         "status": "enabled"
       },
       "expect_error": "This updates a Cloud Firewall. Set confirm=true to proceed."
-    },
-    {
-      "name": "rejects an invalid inbound_policy (proto FirewallPolicy enum)",
-      "args": {
-        "confirm": true,
-        "firewall_id": 123,
-        "inbound_policy": "MAYBE"
-      },
-      "expect_error": "inbound_policy must be one of: ACCEPT, DROP"
-    },
-    {
-      "name": "rejects an invalid outbound_policy (proto FirewallPolicy enum)",
-      "args": {
-        "confirm": true,
-        "firewall_id": 123,
-        "outbound_policy": "MAYBE"
-      },
-      "expect_error": "outbound_policy must be one of: ACCEPT, DROP"
     },
     {
       "name": "sends the tags array in the body",
@@ -268,6 +212,49 @@
         ],
         "warnings": []
       }
+    },
+    {
+      "name": "rejects inbound_policy, which this route does not read",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "label": "renamed-fw",
+        "inbound_policy": "DROP"
+      },
+      "expect_error": "Unsupported argument(s) for linode_firewall_update: inbound_policy"
+    },
+    {
+      "name": "rejects outbound_policy, which this route does not read",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "label": "renamed-fw",
+        "outbound_policy": "ACCEPT"
+      },
+      "expect_error": "Unsupported argument(s) for linode_firewall_update: outbound_policy"
+    },
+    {
+      "name": "names both policies in one refusal",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "label": "renamed-fw",
+        "inbound_policy": "DROP",
+        "outbound_policy": "ACCEPT"
+      },
+      "expect_error": "Unsupported argument(s) for linode_firewall_update: inbound_policy, outbound_policy"
+    },
+    {
+      "name": "rejects rules, which this route does not read",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "label": "renamed-fw",
+        "rules": {
+          "inbound_policy": "DROP"
+        }
+      },
+      "expect_error": "Unsupported argument(s) for linode_firewall_update: rules"
     }
   ]
 }

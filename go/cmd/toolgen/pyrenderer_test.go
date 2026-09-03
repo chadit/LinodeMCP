@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -69,6 +70,47 @@ func TestPythonRendererMatchesTheEmittedTree(t *testing.T) {
 		if readGenerated(t, dir, name) != readGenerated(t, pythonPackageDir, name) {
 			t.Errorf("%s differs from the emitted tree", name)
 		}
+	}
+}
+
+// pyStateReadQuery finds a rendered fetch that carries its read's query
+// parameters, paired with the route it reads: the tool keyword sits directly
+// above the query keyword in both readers the arm writes.
+var pyStateReadQuery = regexp.MustCompile(`tool="([^"]+)",\n\s*query=state_read_query\(`)
+
+// The Python half of TestEveryQueryFillingFetchEmitsTheQueryCall. Both arms
+// dropped this keyword once, and neither the byte-identity case above nor a
+// behavior fixture can see it: a regression moves the renderer and the shipped
+// tree together, and the fixture runner matches its responses on the path
+// alone, so a fetch that reads the wrong resource still answers.
+func TestEveryQueryFillingPythonFetchEmitsTheQueryCall(t *testing.T) {
+	t.Parallel()
+
+	dir := runPythonGen(t)
+
+	var reads []string
+
+	for _, name := range pythonFiles(t, dir) {
+		for _, match := range pyStateReadQuery.FindAllStringSubmatch(readGenerated(t, dir, name), -1) {
+			reads = append(reads, match[1])
+		}
+	}
+
+	sort.Strings(reads)
+
+	// The object ACL twice, because the ACL update previews the value it is
+	// about to replace and the object delete previews the object it is about to
+	// remove, and the two page-forwarding envelopes. Each names its resource in
+	// a query its path cannot carry.
+	want := []string{
+		"linode_instance_firewall_list",
+		"linode_nodebalancer_firewall_list",
+		objectACLRead,
+		objectACLRead,
+	}
+
+	if !slices.Equal(reads, want) {
+		t.Errorf("query-carrying fetches read %v, want %v", reads, want)
 	}
 }
 

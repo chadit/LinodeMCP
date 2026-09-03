@@ -3,15 +3,6 @@
   "description": "Shared field-type rejections, the unsupported-field rejection (Go now mirrors Python's allowlist), and the settings PUT body. Empty-field and confirm-gate text diverge (see report).",
   "cases": [
     {
-      "name": "rejects an unsupported field",
-      "args": {
-        "network_helper": true,
-        "bogus_field": "x",
-        "confirm": true
-      },
-      "expect_error": "Unsupported account settings field(s): bogus_field"
-    },
-    {
       "name": "rejects a non-boolean backups_enabled",
       "args": {
         "backups_enabled": "yes",
@@ -68,13 +59,22 @@
       "expect_error": "interfaces_for_new_linodes must be one of: legacy_config_only, legacy_config_default_but_linode_allowed, linode_default_but_legacy_config_allowed, linode_only"
     },
     {
+      "name": "rejects an unsupported field",
+      "args": {
+        "network_helper": true,
+        "bogus_field": "x",
+        "confirm": true
+      },
+      "expect_error": "Unsupported argument(s) for linode_account_settings_update: bogus_field"
+    },
+    {
       "name": "rejects longview_subscription, which the route documents as read-only",
       "args": {
         "network_helper": true,
         "longview_subscription": "longview-10",
         "confirm": true
       },
-      "expect_error": "Unsupported account settings field(s): longview_subscription"
+      "expect_error": "Unsupported argument(s) for linode_account_settings_update: longview_subscription"
     },
     {
       "name": "rejects managed, which the route documents as read-only",
@@ -83,7 +83,7 @@
         "managed": true,
         "confirm": true
       },
-      "expect_error": "Unsupported account settings field(s): managed"
+      "expect_error": "Unsupported argument(s) for linode_account_settings_update: managed"
     }
   ]
 }

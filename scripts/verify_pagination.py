@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Offline gate: list tools must paginate when their route paginates in the spec.
 
-The Linode API is the reference. docs/contracts/api-pagination-baseline.txt is
-the reviewed snapshot of every GET route the spec paginates (written by the
-scheduled scripts/verify_sync_pagination.py, so this gate stays hermetic). For
-each tool whose behavior fixture issues a GET to one of those routes, the
-tool's proto input message must expose page and page_size; a client otherwise
-has no way to reach past the API's default first page.
+The Linode API is the reference, read through the OpenAPI mirror.
+docs/contracts/api-pagination-baseline.txt is the reviewed snapshot of every GET
+route the mirror paginates (written by the scheduled
+scripts/verify_sync_pagination.py, so this gate stays hermetic). For each tool
+whose behavior fixture issues a GET to one of those routes, the tool's proto
+input message must expose page and page_size; a client otherwise has no way to
+reach past the API's default first page.
 
 This is a HARD gate: any tool missing pagination for a spec-paginated route
 fails by name. There is no baseline file and no acceptance path, because a
@@ -15,6 +16,13 @@ first page and no way to tell. The fix is the proto input, and every language
 picks it up from there.
 
 Stdlib only, so no venv is needed. Run via `make pagination` (in `make check`).
+
+Authority note: the snapshot this gate judges by comes from the OpenAPI
+mirror, which is the secondary source. TechDocs is the API contract's
+authority, so a failure a TechDocs page contradicts means the mirror is stale.
+This gate has no acceptance path, so the exit is a snapshot refresh through the
+scheduled gate's --update-baseline, never a proto edit. docs/gates.md, "Network
+sync gates", carries the rule.
 
 Usage: verify_pagination.py
 """

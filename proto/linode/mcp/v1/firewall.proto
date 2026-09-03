@@ -312,7 +312,7 @@ message FirewallUpdateInput {
   option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_FIREWALL_READ_WRITE};
   option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_NETWORKING};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallWriteResponse";
-  option (linode.mcp.v1.tool_description) = "Updates an existing Cloud Firewall. Can modify label, status, and default policies.";
+  option (linode.mcp.v1.tool_description) = "Updates an existing Cloud Firewall's label, status, and tags. Rules and default policies are set by linode_firewall_rules_update.";
   option (linode.mcp.v1.error_message) = "Failed to modify firewall {firewall_id}: {error}";
   option (linode.mcp.v1.confirm_message) = "This updates a Cloud Firewall. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Firewall {firewall_id} modified successfully";
@@ -348,20 +348,8 @@ message FirewallUpdateInput {
     }
   };
 
-  // The derived path check answers an absent id in the sentence both hand
-  // clients used. The policy pair is a rule instead: an
-  // argument naming no member reaches the message as the enum's zero, which is
-  // what these tell from an absent one.
-  option (buf.validate.message).cel = {
-    id: "firewall_update.inbound_policy.known"
-    message: "inbound_policy must be one of: ACCEPT, DROP"
-    expression: "!has(this.inbound_policy) || this.inbound_policy != 0"
-  };
-  option (buf.validate.message).cel = {
-    id: "firewall_update.outbound_policy.known"
-    message: "outbound_policy must be one of: ACCEPT, DROP"
-    expression: "!has(this.outbound_policy) || this.outbound_policy != 0"
-  };
+  // The update is partial, so the rule judges the status vocabulary only when
+  // the caller named one; an absent status changes nothing and is not a value.
   option (buf.validate.message).cel = {
     id: "firewall_update.status.known"
     message: "status must be one of: enabled, disabled"
@@ -376,10 +364,10 @@ message FirewallUpdateInput {
   optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New status: 'enabled' or 'disabled' (optional).
   optional string status = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional).
-  optional FirewallPolicy.Value inbound_policy = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional).
-  optional FirewallPolicy.Value outbound_policy = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  reserved 5;
+  reserved "inbound_policy";
+  reserved 6;
+  reserved "outbound_policy";
   // Must be set to true to confirm firewall update. Ignored when dry_run=true.
   bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -388,27 +376,8 @@ message FirewallUpdateInput {
   // Complete replacement set of tags (optional). Omitting it leaves the
   // firewall's tags unchanged; an empty list removes all of them.
   repeated string tags = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // The API reads both default policies inside `rules`, so the two flat
-  // arguments travel one level down or it never sees them. omit_when_empty is
-  // what keeps a label-only update from sending `rules` at all: this route
-  // reads that member as a replacement, unlike the create's, which needs the
-  // defaults on every call.
-  map<string, google.protobuf.Value> rules = 10 [
-    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
-    (linode.mcp.v1.body_fold) = {
-      source: [
-        {
-          argument: "inbound_policy"
-          key: "inbound_policy"
-        },
-        {
-          argument: "outbound_policy"
-          key: "outbound_policy"
-        }
-      ]
-      omit_when_empty: true
-    }
-  ];
+  reserved 10;
+  reserved "rules";
 }
 
 // FirewallDeleteInput is the input contract for linode_firewall_delete.

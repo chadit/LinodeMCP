@@ -7,6 +7,12 @@ are read by the `make check` gates by exact path and tabled below so nobody
 mistakes them for reading material. The repo root carries an `llms.txt` with
 this same map, one line per page.
 
+The standing goal every page here serves: per language the hand-written code
+is the bootstrap that starts the MCP server and the CLI plus the engine below
+it, and everything per tool is emitted from the proto contract by one
+generator. [Adding a language](./adding-a-language.md#the-one-rule) owns that
+rule; the pages below describe what it costs and what holds it in place.
+
 New here? Read the [root README](../README.md) for install and first run, then
 [profiles](./profiles.md), [dry-run](./dry-run.md), and
 [two-stage writes](./two-stage-writes.md) for the safety model.

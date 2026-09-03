@@ -625,85 +625,6 @@
     ]
   },
   {
-    "category": "owner_deferred_to_product_scope",
-    "kind": "route_missing_from_proto",
-    "reason": "The owner ruled on 2026-08-29 not to add a valkey tool family. The twelve documented /databases/valkey routes have no proto surface, so they are missing coverage rather than drift: absent in Go and Python equally, nothing can drift between the two languages. Authoring twelve tool contracts is a product decision about supporting valkey, not a comparator backlog item.",
-    "entries": [
-      {
-        "method": "DELETE",
-        "shape": "/databases/valkey/instances/{}",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "GET",
-        "shape": "/databases/valkey/config",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "GET",
-        "shape": "/databases/valkey/instances",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "GET",
-        "shape": "/databases/valkey/instances/{}",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "GET",
-        "shape": "/databases/valkey/instances/{}/credentials",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "GET",
-        "shape": "/databases/valkey/instances/{}/ssl",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "POST",
-        "shape": "/databases/valkey/instances",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "POST",
-        "shape": "/databases/valkey/instances/{}/credentials/reset",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "POST",
-        "shape": "/databases/valkey/instances/{}/patch",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "POST",
-        "shape": "/databases/valkey/instances/{}/resume",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "POST",
-        "shape": "/databases/valkey/instances/{}/suspend",
-        "location": "",
-        "parameter": ""
-      },
-      {
-        "method": "PUT",
-        "shape": "/databases/valkey/instances/{}",
-        "location": "",
-        "parameter": ""
-      }
-    ]
-  },
-  {
     "category": "docs_required_with_documented_default",
     "kind": "parameter_requiredness_mismatch",
     "method": "POST",
@@ -729,33 +650,6 @@
     "location": "body",
     "parameter": "username",
     "reason": "The reference page marks username required while typing it `string | null` and publishing `Defaults to null`, with the prose adding that `The default of null reuses the inbound user`. A member the API defaults to null is one the API accepts without, so the required marker does not describe a refusal. The proto keeps username optional with body_nullable so an omitted argument leaves the key off the body and an explicit null travels as null, both of which the create fixture pins. A required rule could refuse neither case separately: an omitted field and an explicit null reach a CEL rule as the same unset field."
-  },
-  {
-    "category": "docs_required_with_documented_default",
-    "kind": "parameter_requiredness_mismatch",
-    "method": "PUT",
-    "shape": "/databases/postgresql/instances/{}/connection-pools/{}",
-    "location": "body",
-    "parameter": "mode",
-    "reason": "The reference page marks mode required and publishes a default for it in the same block, rendering `mode string / enum / required / Defaults to transaction`, the same block the create page carries. A member the API defaults is one the API accepts without. The same run reads that default off the page and reports it as parameter_default_unrepresented_in_proto on this key. The proto keeps mode optional so an omitted argument leaves the key off the body, which the update fixture pins in its 'sends an explicit null username' and 'previews the connection pool update request' cases."
-  },
-  {
-    "category": "docs_required_with_documented_default",
-    "kind": "parameter_requiredness_mismatch",
-    "method": "PUT",
-    "shape": "/databases/postgresql/instances/{}/connection-pools/{}",
-    "location": "body",
-    "parameter": "size",
-    "reason": "The reference page marks size required and publishes a default for it in the same block, rendering `size integer / required / Defaults to 10`. The API supplies 10 when the member is absent, so the required marker does not describe a call the API refuses. The same run reads that default off the page and reports it as parameter_default_unrepresented_in_proto on this key. The proto keeps size optional so an omitted argument leaves the key off the body, which the update fixture pins in its 'sends an explicit null username' case."
-  },
-  {
-    "category": "docs_required_with_documented_default",
-    "kind": "parameter_requiredness_mismatch",
-    "method": "PUT",
-    "shape": "/databases/postgresql/instances/{}/connection-pools/{}",
-    "location": "body",
-    "parameter": "username",
-    "reason": "The reference page marks username required while typing it `string | null` and publishing `Defaults to null`, with the prose adding that `The default of null reuses the inbound user`. A member the API defaults to null is one the API accepts without. The proto keeps username optional with body_nullable so an omitted argument leaves the key off the body and an explicit null travels as null, both of which the update fixture pins. A required rule could refuse neither case separately: an omitted field and an explicit null reach a CEL rule as the same unset field."
   },
   {
     "category": "repo_reader_declares_requiredness",
@@ -1205,7 +1099,7 @@
     "shape": "/object-storage/buckets/{}/{}/object-url",
     "location": "body",
     "parameter": "method",
-    "reason": "The documentation marks method required with a default of GET (page lines 643-646). Both transfer tools on this route send it through the body_constant option instead of a field, because neither lets the caller choose the verb: object_storage.proto:1159-1162 pins GET for the download and 1264-1267 pins PUT for the upload. The comparator builds its proto side from input-message fields, so a pinned body member reads as absent. The presigned-URL create on the same route declares method as a field instead, which is what a caller-chosen verb looks like; its own enum disagreement with the page is a separate open row."
+    "reason": "The documentation marks method required with a default of GET (page lines 643-646). No tool on this route declares method as a field: all five send it through the body_constant option, because none lets the caller choose the verb. object_storage.proto:1061-1063 pins GET for the download-URL create, 1132-1134 pins GET for the download transfer, 1234-1236 pins PUT for the upload-URL create, 1311-1313 pins PUT for the upload transfer, and 1449-1451 pins DELETE for the object delete. The comparator builds its proto side from input-message fields, so a pinned body member reads as absent on every one of them. Splitting the retired presigned-URL create into a GET half and a PUT half is what removed the last caller-chosen verb here: a URL signed for GET is a read credential and a URL signed for PUT is a write one, and one tool taking method as an argument could not sit in two capability tiers at once."
   },
   {
     "category": "body_member_scoped_to_other_verbs",
@@ -1214,6 +1108,33 @@
     "shape": "/object-storage/buckets/{}/{}/object-url",
     "location": "body",
     "parameter": "content_type",
-    "reason": "Page lines 633-638 scope content_type to the verbs that are not GET or DELETE: 'Required for all methods except GET or DELETE.' The download pins method to GET (object_storage.proto:1159-1162), so the documentation asks nothing of it there. The presign body still carries a content type, filled by the transport at go/internal/tools/transport.go:70 so the signed request and the transfer agree. A caller argument would sign a URL whose signature covers a Content-Type header the download's own GET never sends (transport.go:243-254 and objectdata.Download set no such header), so the endpoint would refuse a URL the tool just minted. The upload declares the field at object_storage.proto:1350 and the presigned-URL create at 1052, where the verb makes it meaningful."
+    "reason": "Page lines 633-638 scope content_type to the verbs that are not GET or DELETE: 'Required for all methods except GET or DELETE.' Three of the five tools on this route pin a verb the page asks nothing of: the download transfer at object_storage.proto:1132-1134, the download-URL create at 1061-1063, and the object delete at 1449-1451. The two that hand a URL to the caller declare the field where the verb makes it meaningful, the upload-URL create at object_storage.proto:1271 and the upload transfer at 1398. The three tools that use the URL themselves still sign a content type: the transport fills one at go/internal/tools/transport.go:64 so the signed request and the request that follows agree on every arm. A caller argument on the download would sign a URL whose signature covers a Content-Type header the download's own GET never sends (objectdata.Download sets no such header), so the endpoint would refuse a URL the tool just minted. The object delete signs one for the same reason and sends no header either: its DELETE at go/internal/objectdata/objectdata.go:354 carries no body and no Content-Type, the shape the download's GET already ships with."
+  },
+  {
+    "category": "body_member_only_in_unrendered_variant",
+    "kind": "techdocs_body_variant_unrendered",
+    "method": "POST",
+    "shape": "/monitor/services/{}/metrics",
+    "location": "body",
+    "parameter": "entity_ids",
+    "reason": "post-read-metric renders one of four body variants, marked at page line 629 as '[variants: Relative Time - Object Storage, Absolute Time - Object Storage, Relative Time - All other services, Absolute Time - All other services; rendered: Relative Time - Object Storage]', so a member the rendered variant does not carry has no rendered row to match. openapi.json 4.229.1 carries the same four members as a oneOf on POST /{apiVersion}/monitor/services/{serviceType}/metrics. The two 'All other services' members require entity_ids where the two Object Storage members require entity_region, and they carry no entity_region property at all, so without this field no query outside Object Storage can name the entities it is asking about. monitor.proto:235 declares it repeated int32 on the body, copying the shape the sibling token create already uses at monitor.proto:366. The rule at monitor.proto:195-199 refuses an id below 1 and stops there: a non-empty half would refuse the omitted call the route has always accepted, which testdata/behavior/linode_monitor_service_metric_query.json pins in its 'posts the empty body to the metrics route' case. The route's own requestBody example sends entity_ids alongside absolute_time_duration, so this is the documented happy path rather than an invented member. The run raises this row as techdocs_body_variant_unrendered rather than proto_parameter_not_in_techdocs: unrendered_body_variants (proof.py:1820) is checked first and answers for the whole member, so the entry keys on the kind the comparator actually reports."
+  },
+  {
+    "category": "body_member_only_in_unrendered_variant",
+    "kind": "techdocs_body_variant_unrendered",
+    "method": "POST",
+    "shape": "/monitor/services/{}/metrics",
+    "location": "body",
+    "parameter": "absolute_time_duration",
+    "reason": "post-read-metric renders one of four body variants, marked at page line 629 as '[variants: Relative Time - Object Storage, Absolute Time - Object Storage, Relative Time - All other services, Absolute Time - All other services; rendered: Relative Time - Object Storage]', so a member the rendered variant does not carry has no rendered row to match. openapi.json 4.229.1 carries the same four members as a oneOf on POST /{apiVersion}/monitor/services/{serviceType}/metrics. Only the two absolute-time members carry absolute_time_duration and only the two relative-time members carry relative_time_duration; neither window is marked required, and a relative-time member is the one rendered, so the page shows one of the two windows. openapi.json types it an object of start and end, both ISO 8601 date-time strings, and its own description says a query carries one window or the other and not both. monitor.proto:240 declares it the same free-form map its relative sibling uses at monitor.proto:229, and for the same stated reason: the rendered page renders no members inside either window, so a declared member shape would be the repo's invention. Without the field the tool cannot ask for a fixed time range at all. The run raises this row as techdocs_body_variant_unrendered rather than proto_parameter_not_in_techdocs: unrendered_body_variants (proof.py:1820) is checked first and answers for the whole member, so the entry keys on the kind the comparator actually reports."
+  },
+  {
+    "category": "techdocs_page_omits_documented_member",
+    "kind": "proto_parameter_not_in_techdocs",
+    "method": "PUT",
+    "shape": "/databases/postgresql/instances/{}/connection-pools/{}",
+    "location": "body",
+    "parameter": "label",
+    "reason": "put-databases-postgre-sql-conn-pool renders a Body Params block at page line 642 carrying database (644), mode (647), size (658) and username (661), with no label row and no required line on any of the four; the three required lines above it at 626, 634 and 638 belong to the path params apiVersion, postgresqlInstanceId and poolName. The page is wrong on both counts. openapi.json 4.229.1 declares the PUT request body additionalProperties: false over database, label, mode, size and username, and lists label, mode, size and username in required; the label property carries its own text, 'A `label` needs to be unique in a database instance', with a 63-character maximum. The same page's CLI example at line 619 passes --label Connection-Pool-01, so the page's own source still knows the member. The create sibling post-databases-postgre-sql-conn-pools, harvested in the same run, renders label string / required at lines 645-646 and marks mode, size and username required at 654, 665 and 669, which scopes the loss to the update page. The 2026-08-16 harvest of the update page recorded body label required=true alongside mode, size and username required=true, so the rendering changed between that harvest and the 2026-09-02 run rather than the contract changing. The repo keeps the member: database_connection_pool.proto:267 declares label a non-optional body string, the CEL rule at 238-242 answers 'label must be a non-empty string', and testdata/behavior/linode_database_postgresql_connection_pool_update.json pins both halves, the refusal in its 'rejects a missing label' case and the sent member in 'puts the update body'. Retiring it would stop the tool sending a member the published schema requires. The same rendering change also took the three PUT requiredness entries on this route (mode, size, username) out of the run, since the page now marks them optional and the proto already does; those entries were removed rather than re-keyed, because the same reasoning survives on the three POST siblings, cited there to the create fixture rather than the update one, and the only rows the run still raises for mode and size are limitation-tier parameter_default_unrepresented_in_proto, which this ledger does not carry for any route. Their text is kept verbatim in .claude/specs/make-check-improvements/analysis/t-d-database-drift-2026-09-01.md, since openapi.json 4.229.1 still lists all three in this body's required array: restore them from there if the page starts rendering the block again."
   }
 ]

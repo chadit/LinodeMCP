@@ -101,13 +101,6 @@ func (c *contract) foldSpec(
 		return nil, err
 	}
 
-	// A list fold synthesizes its one element rather than merging, so there is
-	// no empty form for the flag to leave off and it would be read and dropped.
-	if fold.GetOmitWhenEmpty() && target.ItemMessage != nil {
-		return nil, fmt.Errorf("%w: %s omits %s when empty, which an array member has no empty form of",
-			errFoldNotPlaced, c.Name, target.ProtoName)
-	}
-
 	members := make([]foldMember, 0, len(fold.GetSource())+len(fold.GetConstant()))
 	keys := make([]string, 0, cap(members))
 
@@ -402,12 +395,8 @@ func bodyConstants(options protoreflect.ProtoMessage) []bodyConstant {
 // for.
 func emitFold(out *source, tool *contract, entry *field) {
 	call := "Fold"
-
-	switch {
-	case entry.ItemMessage != nil:
+	if entry.ItemMessage != nil {
 		call = "FoldList"
-	case tool.FoldDecls[entry.ProtoName].GetOmitWhenEmpty():
-		call = "FoldOptional"
 	}
 
 	out.writef("\tbody.%s(%s, []tools.FoldMember{", call, goStringLiteral(entry.ProtoName))

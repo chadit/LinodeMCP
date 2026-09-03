@@ -59,7 +59,7 @@ The offline arm is the one `make check` runs:
 make techdocs-proof
 ```
 
-A normal completed comparison exits `0`, even if differences were found. Differences are data, not a process crash. Use `--fail-on-findings` when a caller intentionally wants exit `3` for a completed run containing findings. Input, network, parsing, or compilation failures exit `1`.
+A normal completed comparison exits `0`, even if differences were found. Differences are data, not a process crash. Use `--fail-on-findings` when a caller wants exit `3` for a completed run carrying a finding at medium or high; the known, limitation, and info tiers never reach the exit code, because each of them records a disagreement someone already accepted. Input, network, parsing, or compilation failures exit `1`.
 
 ## What this stage does
 

@@ -57,6 +57,30 @@
       },
       "api_response_raw": "",
       "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects an object environment on a dry run",
+      "args": {
+        "confirm": true,
+        "dry_run": true,
+        "label": "deploy",
+        "script": "#!/bin/bash\necho hi",
+        "images": ["linode/ubuntu22.04"],
+        "environment": { "name": "prod" }
+      },
+      "expect_error": "environment not found in configuration: {\"name\":\"prod\"}"
+    },
+    {
+      "name": "rejects an unconfigured environment name on a dry run",
+      "args": {
+        "confirm": true,
+        "dry_run": true,
+        "label": "deploy",
+        "script": "#!/bin/bash\necho hi",
+        "images": ["linode/ubuntu22.04"],
+        "environment": "staging"
+      },
+      "expect_error": "environment not found in configuration: staging"
     }
   ]
 }

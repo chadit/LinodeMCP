@@ -69,7 +69,18 @@ class PresignTransfer:
     constants: Mapping[str, str] = field(default_factory=dict[str, str])
 
 
-TransportSpec = MultipartUpload | RawBody | PresignTransfer
+@dataclass(frozen=True)
+class PresignRemove:
+    """A minted-URL removal: the declared POST signs a DELETE, the DELETE follows.
+
+    No local end and no measured members, because nothing moves: the object is
+    either gone afterwards or the bucket said why it is not.
+    """
+
+    url_field: str
+
+
+TransportSpec = MultipartUpload | RawBody | PresignTransfer | PresignRemove
 
 
 @dataclass(frozen=True)
@@ -141,6 +152,9 @@ async def run_transport(
     if isinstance(spec, RawBody):
         return await _run_raw_body(spec, client, tool, arguments, values, retry=retry)
 
+    if isinstance(spec, PresignRemove):
+        return await _run_presign_remove(spec, client, tool, values, body, retry=retry)
+
     return await _run_presign(spec, client, tool, arguments, values, body, retry=retry)
 
 
@@ -211,7 +225,9 @@ async def _run_presign(
         source = objectdata.inspect(local_path, settings.filesystem_root)
         objectdata.check_single_part(source.size_bytes, settings.max_single_part_bytes)
         moved = await objectdata.upload(
-            await _minted_url(spec, client, tool, values, body, settings, retry=retry),
+            await _minted_url(
+                spec.url_field, client, tool, values, body, settings, retry=retry
+            ),
             source,
             str(
                 arguments.get(spec.content_type_argument)
@@ -227,12 +243,40 @@ async def _run_presign(
         overwrite=bool(arguments.get(spec.overwrite_argument, False)),
     )
     fetched = await objectdata.download(
-        await _minted_url(spec, client, tool, values, body, settings, retry=retry),
+        await _minted_url(
+            spec.url_field, client, tool, values, body, settings, retry=retry
+        ),
         destination,
         settings.transfer_timeout,
     )
 
     return _measured(spec, fetched.size_bytes, fetched.etag)
+
+
+async def _run_presign_remove(
+    spec: PresignRemove,
+    client: RetryableClient,
+    tool: str,
+    values: tuple[object, ...],
+    body: dict[str, Any] | None,
+    *,
+    retry: bool,
+) -> Mapping[str, Any]:
+    """Ask the API for a URL signed for DELETE, then send that DELETE.
+
+    Nothing local is resolved and nothing is measured: the presign is the only
+    Linode operation, the same as it is for a transfer, and the removal has
+    nothing to report but the sentence the destroy tier already writes.
+    """
+    settings = object_transfer_settings(client.object_storage)
+    await objectdata.remove(
+        await _minted_url(
+            spec.url_field, client, tool, values, body, settings, retry=retry
+        ),
+        settings.transfer_timeout,
+    )
+
+    return {}
 
 
 def _measured(spec: PresignTransfer, size_bytes: int, etag: str) -> Mapping[str, Any]:
@@ -241,7 +285,7 @@ def _measured(spec: PresignTransfer, size_bytes: int, etag: str) -> Mapping[str,
 
 
 async def _minted_url(
-    spec: PresignTransfer,
+    url_field: str,
     client: RetryableClient,
     tool: str,
     values: tuple[object, ...],
@@ -267,7 +311,7 @@ async def _minted_url(
         )
         raise TypeError(msg)
 
-    return str(cast("dict[str, Any]", presigned).get(spec.url_field, ""))
+    return str(cast("dict[str, Any]", presigned).get(url_field, ""))
 
 
 def object_transfer_settings(settings: ObjectStorageConfig) -> ObjectStorageConfig:

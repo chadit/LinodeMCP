@@ -40,11 +40,24 @@ Drift classes reported, each one line, each baselineable:
   non-grantable names); the entry must be dropped or updated so the
   fixup can never mask a real upstream change.
 
+Two classes of documented scope qualify for _UPSTREAM_SCOPE_FIXUPS and no
+others: a malformed scope string (a permission level or category name
+that does not exist), and a name absent from every grantable-scope
+registry (the spec's own OAuth catalog and the techdocs scope list).
+Requiring either would leave a profile unsatisfiable for a real token,
+which is why the language mappings cannot encode it and the fixup
+carries an effective value instead.
+
 Deliberately NOT part of `make check`: it fetches the live OpenAPI spec,
 so it is non-deterministic and offline-hostile. Run on a cron / by the
 sync agent (`make sync-scopes`). Stdlib-only, but the tool dump comes
 from `python -m linodemcp.parity_dump`, so the venv must exist unless
 --dump supplies a saved dump file.
+
+Authority note: this gate reads the OpenAPI mirror, which is the secondary
+source. TechDocs is the API contract's authority, so a finding a TechDocs page
+contradicts means the mirror is stale: refresh this baseline rather than the
+proto. docs/gates.md, "Network sync gates", carries the rule.
 
 Usage: verify_sync_scopes.py [--spec PATH] [--dump PATH] [--update-baseline]
 
@@ -76,17 +89,11 @@ SPEC_URL = (
 
 _METHODS = ("get", "post", "put", "delete")
 
-# Documented scope values that cannot be encoded in the language
-# mappings, pinned with the exact upstream value so a fixup goes stale
-# loudly the moment the spec changes. Two classes only: malformed scope
-# strings (a permission level or category name that does not exist),
-# and names absent from every grantable-scope registry (the spec's own
-# OAuth catalog and the techdocs scope list); requiring one of those
-# would make profiles unsatisfiable for real tokens. Each entry maps
-# (METHOD, template) to (documented value, effective value): the
-# comparison substitutes the effective value only while the spec still
-# documents exactly the pinned value, and reports a stale-fixup drift
-# line otherwise.
+# Documented scope values the language mappings cannot encode, pinned with the
+# exact upstream value so a fixup goes stale loudly. Each entry maps (METHOD,
+# template) to (documented value, effective value), and the comparison
+# substitutes the effective one only while the spec still documents exactly the
+# pinned value. The module docstring names the two classes that qualify.
 _UPSTREAM_SCOPE_FIXUPS: dict[tuple[str, str], tuple[list[str], list[str]]] = {
     # "ips:read" is not a permission level; the family uses read_only.
     ("GET", "/networking/ipv6/ranges/{p}"): (["ips:read"], ["ips:read_only"]),
@@ -186,12 +193,11 @@ def spec_operations(spec: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
             raw_operation = item.get(method)
             if not isinstance(raw_operation, dict):
                 continue
-            # json.load answers with Any and an isinstance proves only that
-            # some dict arrived, so these two casts state the shape OpenAPI
-            # gives a security block: a list of requirement objects, each
-            # mapping a scheme name to its scope list. Nothing checked that
-            # shape before either, so a document shipping something else
-            # still fails here rather than reading as an unscoped route.
+            # json.load answers with Any and isinstance proves only that some
+            # dict arrived, so these casts state the shape OpenAPI gives a
+            # security block: a list of requirement objects, each mapping a
+            # scheme name to its scope list. A document shipping something else
+            # fails here rather than reading as an unscoped route.
             operation = cast("dict[str, object]", raw_operation)
             scopes: list[str] = []
             security = cast(

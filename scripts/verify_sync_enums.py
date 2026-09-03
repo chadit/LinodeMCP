@@ -18,11 +18,33 @@ Two properties the user required:
     newest entry and fails closed when the source predates a release, so a green
     run is never mistaken for fully current.
 
-It also checks the validation value-sets that cannot be proto enums (hyphen or
-colon values, or map keys) the same way, reading each from the contract and
-diffing it against the same live spec, folding the result into the same
-baseline. None of them is hand-written in a language any more, which is why
-there is no longer a per-language extractor here.
+It also checks the validation value-sets that cannot be proto enums the same
+way, reading each from the contract and diffing it against the same live spec,
+folding the result into the same baseline. None of them is hand-written in a
+language any more, which is why there is no longer a per-language extractor
+here. A set is disqualified from being an enum when its values are not valid
+proto identifiers (hyphens, colons, digits), when they are map keys rather than
+a scalar field, or when the field ships as a string or int32 an enum would
+retype, which `make wire-breaking` refuses on a live number.
+
+HAND_LIST_SPEC_MAP holds those sets, one entry per vocabulary:
+  "spec": (mode, field, path_substr). Mode "field-enum" takes the request-body
+    enum of <field>, the same way a proto enum is read; "object-props" takes
+    the property NAMES of the object-typed <field>. TOOL_DEFINED in place of
+    the tuple marks a vocabulary the mirror publishes no route for, so only the
+    baseline can assert it stable, and each such entry says why beside itself
+    the way ENUM_SPEC_MAP does.
+  "spec_exclude": values the API lists that the contract intentionally omits.
+  One of "cel" (rule ids), "reader_values" (a field name) or "object_walk" (a
+    walked argument name), naming where the contract carries the vocabulary.
+    "cel" is a list because one documented set can be stated by a rule per tool
+    that takes the argument; a field carries one reader vocabulary and a walk
+    one key list, so those two name a single place each.
+
+Authority note: this gate reads the OpenAPI mirror, which is the secondary
+source. TechDocs is the API contract's authority, so a finding a TechDocs page
+contradicts means the mirror is stale: refresh this baseline rather than the
+proto. docs/gates.md, "Network sync gates", carries the rule.
 
 Usage: verify_sync_enums.py [--spec PATH] [--update-baseline]
   --spec PATH        read the spec from a local file instead of fetching
@@ -81,12 +103,15 @@ _MONTH_NUMBERS = {
     for alias in (name, name[:3])
 }
 
+# The marker both maps use for a vocabulary the mirror publishes no value set
+# for, so only the baseline can assert it stable.
+TOOL_DEFINED = "TOOL_DEFINED"
+
 # proto enum message name -> how to find its value set in the OpenAPI spec.
 # ("<field>", "<path substring>") extracts that field's enum from request bodies
 # on matching endpoints (unioned across oneOf variants and endpoints).
-# "TOOL_DEFINED" marks an enum whose values are the MCP tool's own contract, not
-# an API request field (audit export format, S3 presign method); the API side
-# cannot be checked, so it is asserted stable against the baseline only.
+# TOOL_DEFINED marks an enum the spec publishes no value set for, so only the
+# baseline can assert it stable. Each such entry says why below.
 ENUM_SPEC_MAP: dict[str, tuple[str, str] | str] = {
     "NodeBalancerProtocol": ("protocol", "/nodebalancers"),
     "NodeBalancerAlgorithm": ("algorithm", "/nodebalancers"),
@@ -106,14 +131,12 @@ ENUM_SPEC_MAP: dict[str, tuple[str, str] | str] = {
     "LKETier": ("tier", "/lke/clusters"),
     # FirewallTemplateSlug: the API declares slug as a free-form path parameter
     # with no OpenAPI enum, so the closed set is the MCP tool's own contract.
-    "FirewallTemplateSlug": "TOOL_DEFINED",
+    "FirewallTemplateSlug": TOOL_DEFINED,
     "InstanceIPType": ("type", "/networking/ips"),
     "GrantPermission": ("permissions", "/account/users"),
-    # AuditExportFormat (json/csv/ndjson) and PresignedURLMethod (GET/PUT) are the
-    # MCP tools' own contracts (local export format, S3 presign verb), not API
-    # request fields, so there is no spec enum to check them against.
-    "AuditExportFormat": "TOOL_DEFINED",
-    "PresignedURLMethod": "TOOL_DEFINED",
+    # AuditExportFormat (json/csv/ndjson) names a local export format that
+    # reaches no API route, so there is no spec enum to check it against.
+    "AuditExportFormat": TOOL_DEFINED,
 }
 
 ENUM_SENTINEL = "unspecified"
@@ -472,34 +495,18 @@ def read_baseline() -> set[str]:
     }
 
 
-# Validation value-sets that CANNOT become proto enums: their values are not
-# valid proto identifiers (hyphens, colons, digits), they are map keys rather
-# than a scalar field, or the field ships as a string or int32 an enum would
-# retype, which `make wire-breaking` refuses on a live number. Each is declared
-# on the contract, in one of the three forms a non-enum vocabulary can take, and
-# diffed against the same live spec the enum gate uses. The diffs fold into the
-# same baseline.
-#
-# Each entry:
-#   "spec": (mode, field, path_substr)
-#       "field-enum"   -> the request-body enum of <field> (same as proto enums)
-#       "object-props" -> the property NAMES of the object-typed <field>
-#   "spec_exclude": values the API lists but the contract intentionally omits
-#   one of "cel" (rule ids), "reader_values" (a field name), or "object_walk"
-#   (a walked argument name), naming where the contract carries the vocabulary.
-#   "cel" is a list because one documented set can be stated by a rule per tool
-#   that takes the argument; a field carries one reader vocabulary and a walk
-#   one key list, so those two name a single place each.
+# Validation value-sets that CANNOT become proto enums, each declared on the
+# contract in one of three forms and diffed against the same live spec the enum
+# gate uses, with the diffs folded into the same baseline. The module docstring
+# says what disqualifies a set and what each entry key means.
 HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
     "bucket_acl": {
         "spec": ("field-enum", "acl", "/object-storage/buckets"),
-        # The access and object-acl endpoints list a 5th value, "custom", in
-        # their request enum, but it is a read-back/display state, never a
-        # settable input: linodego has no ACLCustom constant, and the Akamai
-        # docs say Cloud Manager only DISPLAYS "custom" when a bucket carries
-        # non-canned S3 grants. Both languages accept only the 4 canned ACLs on
-        # input, so the gate drops "custom" from the spec side. A genuinely new
-        # canned value would still trip the diff.
+        # The access and object-acl endpoints list a 5th value, "custom", but
+        # it is a read-back state, never a settable input: linodego has no
+        # ACLCustom constant, and the Akamai docs say Cloud Manager only
+        # DISPLAYS it when a bucket carries non-canned S3 grants. Dropping it
+        # from the spec side still leaves a new canned value tripping the diff.
         "spec_exclude": {"custom"},
         # The set moved off both hand-lists and onto the contract when the
         # bucket-access tools migrated: it is now a CEL alternation every
@@ -529,9 +536,8 @@ HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
         "spec": ("field-enum", "severity", "/alert-definitions"),
         # Three tools hold severity to the one documented set, so all three
         # rules are diffed against it: a value the API adds has to reach every
-        # tool that takes the argument, not whichever one this entry named
-        # first. The spec documents no clone route, so the union over the
-        # create and update bodies is the only side the clone rule has.
+        # tool taking the argument. The spec documents no clone route, so the
+        # union over the create and update bodies is the clone rule's only side.
         "cel": [
             "monitor_service_alert_definition_create.severity.known",
             "monitor_service_alert_definition_clone.severity.known",
@@ -540,14 +546,34 @@ HAND_LIST_SPEC_MAP: dict[str, dict[str, Any]] = {
     },
     "mysql_cluster_size": {
         "spec": ("field-enum", "cluster_size", "/databases/mysql/instances"),
-        # Per engine rather than one "/databases" entry: the two engines are
-        # free to offer different sizes, and a union over both would hide the
-        # day one of them moves.
-        "cel": ["database_mysql_instance_create.cluster_size.known"],
+        # Per engine rather than one "/databases" entry: the three engines are
+        # free to offer different sizes, and a union over them would hide the
+        # day one moves. Both the create and the update rule are diffed against
+        # the one spec set, so a size the API adds reaches every tool taking it.
+        "cel": [
+            "database_mysql_instance_create.cluster_size.known",
+            "database_mysql_instance_update.cluster_size.known",
+        ],
     },
     "postgresql_cluster_size": {
         "spec": ("field-enum", "cluster_size", "/databases/postgresql/instances"),
-        "cel": ["database_postgresql_instance_create.cluster_size.known"],
+        "cel": [
+            "database_postgresql_instance_create.cluster_size.known",
+            "database_postgresql_instance_update.cluster_size.known",
+        ],
+    },
+    "valkey_cluster_size": {
+        # openapi.json declares no /databases/valkey route at all, so there is
+        # no mirror field to diff these two rules against and the baseline is
+        # the only side that can hold them stable. TechDocs is the source the
+        # sizes came from; the reading is recorded in
+        # .claude/specs/make-check-improvements/analysis/t-d4-rulings.md 20.7.
+        # Registered anyway so CLUSTER_SIZE_RULES below finds them watched.
+        "spec": TOOL_DEFINED,
+        "cel": [
+            "database_valkey_instance_create.cluster_size.known",
+            "database_valkey_instance_update.cluster_size.known",
+        ],
     },
     "ipv6_prefix_length": {
         "spec": ("field-enum", "prefix_length", "/networking/ipv6/ranges"),
@@ -691,10 +717,51 @@ def _reader_values_diffs(key: str, field_name: str, spec_vals: set[str]) -> list
     return diffs
 
 
+# Every engine states its own cluster_size rule, and each one needs an entry
+# above. Matched as a pattern rather than trusted to the entries because the gap
+# this closes was a third engine landing with both its rules unregistered: the
+# gate has to find the rule an entry forgot, not read the entries back.
+CLUSTER_SIZE_RULES = re.compile(
+    r"^database_\w+_instance_(?:create|update)\.cluster_size\.known$"
+)
+
+
+def watched_rule_ids() -> set[str]:
+    """Return every CEL rule id some HAND_LIST_SPEC_MAP entry names."""
+    watched: set[str] = set()
+    for spec in HAND_LIST_SPEC_MAP.values():
+        watched.update(spec.get("cel", ()))
+    return watched
+
+
+def unwatched_cluster_size_diffs() -> list[str]:
+    """Report a cluster_size rule the contract declares and no entry watches."""
+    watched = watched_rule_ids()
+    return [
+        f"{rule_id}: cluster_size rule has no HAND_LIST_SPEC_MAP entry "
+        "(add the engine to the map)"
+        for rule_id in sorted(proto_cel_rule_ids())
+        if CLUSTER_SIZE_RULES.match(rule_id) and rule_id not in watched
+    ]
+
+
+def proto_cel_rule_ids() -> set[str]:
+    """Return every CEL rule id the proto contract declares."""
+    ids: set[str] = set()
+    for path in sorted(PROTO_DIR.glob("*.proto")):
+        for block in _CEL_RULE.findall(path.read_text(encoding="utf-8")):
+            found = _CEL_ID.search(block)
+            if found is not None:
+                ids.add(found.group(1))
+    return ids
+
+
 def hand_list_diffs(doc: dict[str, Any]) -> list[str]:
     """Diff every non-enum vocabulary against the live spec value-set."""
-    diffs: list[str] = []
+    diffs: list[str] = unwatched_cluster_size_diffs()
     for key, spec in HAND_LIST_SPEC_MAP.items():
+        if spec["spec"] == TOOL_DEFINED:
+            continue
         mode, field, path_substr = spec["spec"]
         exclude: set[str] = spec.get("spec_exclude", set())
         if mode == "field-enum":
@@ -812,9 +879,13 @@ def main(argv: list[str]) -> int:
             print(f"  FIXED {d}", file=sys.stderr)
     if new or fixed:
         return 1
+    baseline_only = sum(
+        1 for mapping in ENUM_SPEC_MAP.values() if mapping == TOOL_DEFINED
+    ) + sum(1 for spec in HAND_LIST_SPEC_MAP.values() if spec["spec"] == TOOL_DEFINED)
     print(
         f"sync-enums OK: {len(enums)} proto enum(s) + "
-        f"{len(HAND_LIST_SPEC_MAP)} hand-list(s) match the live API",
+        f"{len(HAND_LIST_SPEC_MAP)} hand-list(s) checked, "
+        f"{baseline_only} of them baseline-only (the mirror publishes no route)",
         file=sys.stderr,
     )
     return 0

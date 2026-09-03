@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_key_update",
-  "description": "Pins the key_id rule (behind confirm), the typed bucket_access array, the regions replacement list, and the key update PUT body. Every case carries confirm:true because the gate is asked ahead of validation. A success body that is not a JSON object must fail rather than turn into a zeroed key record; the two languages word that failure differently, so only the key subject is shared.",
+  "description": "Pins the key_id rule (behind confirm), the regions replacement list, and the key update PUT body. bucket_access is documented only on the create route, so the input no longer declares it and a call that sends it puts nothing in the body. The confirm gate is asked ahead of validation, so the two confirm cases send no confirm at all and every other case carries confirm:true. A success body that is not a JSON object must fail rather than turn into a zeroed key record; the two languages word that failure differently, so only the key subject is shared.",
   "cases": [
     {
       "name": "requires positive key_id",
@@ -18,21 +18,6 @@
         "confirm": true
       },
       "expect_error": "access key label must not exceed 50 characters"
-    },
-    {
-      "name": "rejects an invalid bucket_access permission",
-      "args": {
-        "key_id": 123,
-        "confirm": true,
-        "bucket_access": [
-          {
-            "bucket_name": "my-bucket",
-            "region": "us-east",
-            "permissions": "bogus"
-          }
-        ]
-      },
-      "expect_error": "bucket_access entries must carry a bucket_name and a region, with permissions of read_only or read_write"
     },
     {
       "name": "updates a key label",
@@ -54,43 +39,22 @@
       }
     },
     {
-      "name": "replaces the bucket access scopes",
-      "args": {
-        "key_id": 123,
-        "confirm": true,
-        "bucket_access": [
-          {
-            "bucket_name": "my-bucket",
-            "region": "us-east",
-            "permissions": "read_write"
-          }
-        ]
-      },
-      "api_response": {
-        "id": 123,
-        "label": "key"
-      },
-      "expect_request": {
-        "method": "PUT",
-        "path": "/object-storage/keys/123",
-        "body": {
-          "bucket_access": [
-            {
-              "bucket_name": "my-bucket",
-              "region": "us-east",
-              "permissions": "read_write"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "requires confirm",
+      "name": "requires confirm before a label change",
       "args": {
         "key_id": 123,
         "label": "renamed-key"
       },
-      "expect_error": "This modifies access key permissions. Set confirm=true to proceed."
+      "expect_error": "This modifies an Object Storage access key: a label you send replaces the current one, and a regions list you send replaces the whole set. Leaving a region out drops it, or fails the call outright on a limited key. Set confirm=true to proceed."
+    },
+    {
+      "name": "requires confirm before a regions replacement",
+      "args": {
+        "key_id": 7,
+        "regions": [
+          "us-east"
+        ]
+      },
+      "expect_error": "This modifies an Object Storage access key: a label you send replaces the current one, and a regions list you send replaces the whole set. Leaving a region out drops it, or fails the call outright on a limited key. Set confirm=true to proceed."
     },
     {
       "name": "dry_run_preview",
@@ -204,6 +168,22 @@
         ]
       },
       "expect_error": "regions must be an array of strings"
+    },
+    {
+      "name": "refuses a bucket_access argument, which the route documents only on create",
+      "args": {
+        "key_id": 123,
+        "label": "renamed-key",
+        "confirm": true,
+        "bucket_access": [
+          {
+            "bucket_name": "my-bucket",
+            "region": "us-east",
+            "permissions": "read_write"
+          }
+        ]
+      },
+      "expect_error": "Unsupported argument(s) for linode_object_storage_key_update: bucket_access"
     }
   ]
 }

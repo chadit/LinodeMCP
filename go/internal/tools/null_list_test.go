@@ -155,7 +155,7 @@ func TestGeneratedNullListToolReportsItsDeclaredFailure(t *testing.T) {
 	}
 }
 
-// TestGeneratedNullListToolRefusesBeforeItCalls covers the four checks the
+// TestGeneratedNullListToolRefusesBeforeItCalls covers the checks the
 // null-restoring driver makes ahead of the fetch. The declared check and the
 // path readers are handed in here rather than reached through a tool, because
 // the one collection that restores nulls today is top-level and declares
@@ -196,6 +196,11 @@ func TestGeneratedNullListToolRefusesBeforeItCalls(t *testing.T) {
 			name: "an environment the config does not name",
 			args: map[string]any{certificateConfigArg: certificateConfigID, "environment": absentEnvironment},
 			want: absentEnvironment,
+		},
+		{
+			name: "an argument the message does not declare",
+			args: map[string]any{certificateConfigArg: certificateConfigID, "bogus_field": "x"},
+			want: "Unsupported argument(s) for linode_iam_idp_config_certificate_list: bogus_field",
 		},
 	}
 

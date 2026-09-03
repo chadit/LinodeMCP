@@ -143,11 +143,10 @@ _QUOTED = re.compile(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|`[^`\n]*`')
 _WORD = re.compile(r"[A-Za-z_]\w*")
 
 # The trees whose job is to name tools, read by the definition arm and left out
-# of the literal arm only. Each is here because naming a tool is what its code
-# does rather than what it implements: the CLI subcommands and the TUI screens
-# invoke tools by name through the same dispatcher a client uses, and are the
-# only hand-written callers there are. A path is repo-relative so a language
-# cannot widen its own scope by moving a tree.
+# of the literal arm. The CLI subcommands and the TUI screens invoke tools by
+# name through the dispatcher a client uses, and are the only hand-written
+# callers there are. Paths are repo-relative so a language cannot widen its own
+# scope by moving a tree.
 _TOOL_CALLERS: tuple[str, ...] = (
     "go/internal/cli",
     "python/src/linodemcp/cli",

@@ -26,15 +26,18 @@ func (goRenderer) language() string {
 	return languageGo
 }
 
-// goRoutePolicyFile is where a Go run acts the one option this arm emits
-// nothing for: the retry policy is read off the descriptor when the call is
-// made, so a factory carrying it would say the same thing twice.
-const goRoutePolicyFile = "go/internal/linoderoute/policy.go"
+// Where a Go run acts the two options it emits nothing for. Both are read off
+// the descriptor when the call is made: a factory carrying the retry policy
+// would say the same thing twice, and the refusals have to reach the list
+// drivers, which no emitted literal reaches.
+const (
+	goRoutePolicyFile = "go/internal/linoderoute/policy.go"
+	goRefusalFile     = "go/internal/tools/argument_refusals.go"
+)
 
-// acts is this arm's answer for every option the contract declares. Everything
-// the Go factory renders is emitted here, which is nearly all of it, since this
-// arm writes the prose and the checks into the tool rather than looking them up
-// at call time the way the Python driver does.
+// acts is this arm's answer for every option the contract declares. Nearly all
+// of it is emitted, since this arm writes the prose and the checks into the
+// tool rather than looking them up at call time the way the Python driver does.
 func (goRenderer) acts() []optionClaim {
 	emitted := []protoreflect.Name{
 		"argument_reader", "body_comma_list", "body_constant", "body_fold",
@@ -43,21 +46,28 @@ func (goRenderer) acts() []optionClaim {
 		"field_location", "list_envelope", "list_filter", "local_answer", "local_operation", "local_record", "normalize_fields", "normalize_fold", "state_composite", "dependency_walk", "billing_delta",
 		"object_walk", "preview_omits_body", "preview_redact",
 		"preview_sentence", "preview_stand_in", "preview_unchanged", "reader_message", "reader_values",
-		"refuse_arguments", "refuse_unknown_arguments", "require_any_of",
+		"require_any_of",
 		"resource_type", "response_body_fields", "execute_transport", "state_route",
 		"success_message", "tool_api_surface", "tool_capability",
 		"tool_categories", "tool_description", "tool_meta",
 		"tool_response", "tool_route", "tool_scopes", "warning_message",
 	}
 
-	claims := make([]optionClaim, 0, len(emitted)+1)
+	served := map[protoreflect.Name]string{
+		"refuse_arguments": goRefusalFile,
+		"retry_disabled":   goRoutePolicyFile,
+	}
+
+	claims := make([]optionClaim, 0, len(emitted)+len(served))
 	for _, option := range emitted {
 		claims = append(claims, optionClaim{option: option, emitted: true, home: ""})
 	}
 
-	return append(claims, optionClaim{
-		option: "retry_disabled", emitted: false, home: goRoutePolicyFile,
-	})
+	for option, home := range served {
+		claims = append(claims, optionClaim{option: option, emitted: false, home: home})
+	}
+
+	return claims
 }
 
 // renderAnswers writes the value type each declared answer shape fills, the

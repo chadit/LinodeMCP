@@ -328,3 +328,61 @@ async def test_download_refuses_a_transport_failure_without_the_url(
 
     assert "secret" not in str(caught.value)
     assert not destination.exists()
+
+
+@pytest.mark.asyncio
+async def test_remove_sends_the_delete_the_minted_url_authorizes() -> None:
+    """The removal proof: the request that goes out is a DELETE carrying no body,
+    no Content-Type, and no Linode token.
+
+    Go's twin is TestRemoveSendsTheDeleteTheMintedURLAuthorizes.
+    """
+    seen: dict[str, Any] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["auth"] = request.headers.get("authorization")
+        seen["type"] = request.headers.get("content-type")
+        seen["body"] = request.content
+        return httpx.Response(204)
+
+    with _mock_transport(httpx.MockTransport(handler)):
+        await objectdata.remove("http://linode.test/artifacts/key?sig=fixture", 30.0)
+
+    assert seen["method"] == "DELETE"
+    assert seen["auth"] is None
+    assert seen["type"] is None
+    assert seen["body"] == b""
+
+
+@pytest.mark.asyncio
+async def test_remove_reports_a_refusal_without_the_url() -> None:
+    """The minted URL is a bearer credential and must not reach error text."""
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403)
+
+    with (
+        _mock_transport(httpx.MockTransport(handler)),
+        pytest.raises(objectdata.TransferError) as caught,
+    ):
+        await objectdata.remove("http://linode.test/artifacts/key?sig=secret", 30.0)
+
+    assert "403" in str(caught.value)
+    assert "secret" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_remove_refuses_a_transport_failure_without_the_url() -> None:
+    """httpx puts the full URL in its own exception text; the helper must not."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    with (
+        _mock_transport(httpx.MockTransport(handler)),
+        pytest.raises(objectdata.TransferError) as caught,
+    ):
+        await objectdata.remove("http://linode.test/artifacts/key?sig=secret", 30.0)
+
+    assert "secret" not in str(caught.value)

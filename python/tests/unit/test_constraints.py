@@ -21,7 +21,7 @@ from google.protobuf.descriptor import Descriptor
 
 from linodemcp.genpb.buf.validate import validate_pb2
 from linodemcp.genpb.linode.mcp import v1 as genpb
-from linodemcp.tools.constraints import check
+from linodemcp.tools.constraints import check, unknown_arguments
 
 DOMAIN_CREATE = "linode.mcp.v1.DomainCreateInput"
 DOMAIN_UPDATE = "linode.mcp.v1.DomainUpdateInput"
@@ -316,6 +316,70 @@ def test_check_ignores_undeclared_arguments() -> None:
     arguments = {"domain": EXAMPLE_DOMAIN, "type": "master", "nonsense": [1, 2]}
 
     assert check(DOMAIN_CREATE, arguments) == ERR_SOA_MASTER
+
+
+SETTINGS_UPDATE = "linode.mcp.v1.AccountSettingsUpdateInput"
+SETTINGS_UPDATE_TOOL = "linode_account_settings_update"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "want"),
+    [
+        pytest.param(
+            {"backups_enabled": True, "confirm": True}, "", id="every argument declared"
+        ),
+        pytest.param(
+            {"dry_run": True, "environment": "default"},
+            "",
+            id="system params are declared too",
+        ),
+        pytest.param(
+            {
+                "confirm_bypass_dry_run": True,
+                "confirmed_dry_run": True,
+                "yolo": True,
+            },
+            "",
+            id="the engine control names pass",
+        ),
+        pytest.param(
+            {"backups_enabled": True, "bogus": "x"},
+            f"Unsupported argument(s) for {SETTINGS_UPDATE_TOOL}: bogus",
+            id="one unknown",
+        ),
+        pytest.param(
+            {"zebra": 1, "alpha": 2},
+            f"Unsupported argument(s) for {SETTINGS_UPDATE_TOOL}: alpha, zebra",
+            id="several unknown, sorted",
+        ),
+    ],
+)
+def test_unknown_arguments_answers_for_an_undeclared_name(
+    arguments: dict[str, Any], want: str
+) -> None:
+    """Every tool refuses a name its input message does not declare, and the
+    sentence is this engine's own. Go's refusedAsUndeclared holds the other
+    copy, and the behavior fixtures are what keep the two equal. No fixture
+    sends yolo, so the control-name case here is the only guard on that entry.
+    """
+    assert unknown_arguments(arguments, SETTINGS_UPDATE_TOOL, SETTINGS_UPDATE) == want
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        pytest.param(
+            "linode.mcp.v1.NoSuchInput", id="name the contract does not define"
+        ),
+        pytest.param("linode.mcp.v1.FieldLocation", id="name that is not a message"),
+        pytest.param("", id="empty name"),
+    ],
+)
+def test_unknown_arguments_refuses_nothing_without_a_descriptor(message: str) -> None:
+    """A name the pool does not carry as a message leaves no allowlist to hold
+    the call to, and refusing every argument there would be worse than refusing
+    none."""
+    assert unknown_arguments({"zebra": 1}, SETTINGS_UPDATE_TOOL, message) == ""
 
 
 def _constrained_messages() -> list[Descriptor]:

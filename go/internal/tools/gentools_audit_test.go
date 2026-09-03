@@ -155,29 +155,48 @@ func TestGeneratedAuditToolsAnswerTheContractsRules(t *testing.T) {
 	}
 }
 
-// TestGeneratedVersionToolAnswersRatherThanErroring pins version's one
-// behavior: VersionInput declares no rules and its hook reads no argument, so
-// nothing a caller sends can reach the error result the tier now carries.
-func TestGeneratedVersionToolAnswersRatherThanErroring(t *testing.T) {
+// VersionInput declares no field at all, so the only call it can answer is the
+// empty one and every argument is undeclared. Pinned because the meta tier
+// used to take anything and answer anyway, which left a caller who misspelled
+// a flag reading a version string as though it had worked.
+func TestGeneratedVersionToolAnswersAnEmptyCallAndRefusesEveryArgument(t *testing.T) {
 	t.Parallel()
 
 	_, _, handler := gentools.NewVersionTool(&config.Config{})
 
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"unexpected": "argument"}))
+	answered, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.IsError {
-		t.Fatal("result.IsError = true, want false")
+	if answered.IsError {
+		t.Fatal("answered.IsError = true, want false")
 	}
 
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
+	textContent, isText := answered.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatal("isText = false, want true")
 	}
 
 	if !strings.Contains(textContent.Text, appinfo.Version) {
 		t.Errorf("textContent.Text does not carry %v", appinfo.Version)
+	}
+
+	refused, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{"unexpected": "argument"}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !refused.IsError {
+		t.Fatal("refused.IsError = false, want true")
+	}
+
+	refusal, isRefusalText := refused.Content[0].(mcp.TextContent)
+	if !isRefusalText {
+		t.Fatal("isRefusalText = false, want true")
+	}
+
+	if want := "Unsupported argument(s) for version: unexpected"; refusal.Text != want {
+		t.Errorf("refusal.Text = %v, want %v", refusal.Text, want)
 	}
 }

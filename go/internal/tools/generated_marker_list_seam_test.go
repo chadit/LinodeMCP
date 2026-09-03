@@ -234,6 +234,49 @@ func TestGeneratedMarkerListReportsAFailedFetchWithTheDeclaredSentence(t *testin
 	}
 }
 
+// The marker driver refuses an argument the message does not declare, the same
+// way the emitted handlers do. The check lives in the driver because emitList
+// writes a driver call and no handler body, so nothing emitted could carry it.
+func TestGeneratedMarkerListRefusesAnArgumentTheMessageDoesNotDeclare(t *testing.T) {
+	t.Parallel()
+
+	const refusal = "Unsupported argument(s) for linode_object_storage_bucket_object_list: bogus_field"
+
+	_, handler := tools.NewGeneratedMarkerListTool(
+		newTestConfig("http://127.0.0.1:1"),
+		markerSeamTool,
+		"Lists objects in an Object Storage bucket.",
+		markerSeamSchema,
+		nil,
+		nil,
+		nil,
+		func(context.Context, *linode.Client, *mcp.CallToolRequest, []any,
+		) ([]*linodev1.ObjectStorageObject, linode.ListMarkerPage, error) {
+			t.Error("fetch ran, want the refusal to answer first")
+
+			return nil, linode.ListMarkerPage{}, nil
+		},
+		nil,
+		func(items []*linodev1.ObjectStorageObject, count int32, _ *string,
+			_ linode.ListMarkerPage,
+		) *linodev1.ObjectStorageObjectListResponse {
+			return &linodev1.ObjectStorageObjectListResponse{Count: count, Objects: items}
+		},
+	)
+
+	args := markerSeamArgs()
+	args["bogus_field"] = "x"
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := resultText(t, result); got != refusal {
+		t.Errorf("result = %v, want %v", got, refusal)
+	}
+}
+
 // The declared check owns the whole argument read, so it answers before any
 // path value is looked at and before the route is called.
 func TestGeneratedMarkerListRunsTheDeclaredCheckBeforeAnyPathValue(t *testing.T) {

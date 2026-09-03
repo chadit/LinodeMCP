@@ -36,6 +36,23 @@ from linodemcp.profiles import (
 from linodemcp.server import Server, get_tool_registry
 from linodemcp.tools.proto_response import serialize_api_response
 
+# The undeclared-argument refusals the database rows pin. Named here because the
+# sentence carries the tool name and runs past the line budget inside a
+# parametrize row, and a pinned sentence has to stay one literal so a prose
+# sweep can find it.
+UNKNOWN_ARG_MYSQL_CREATE = (
+    "Unsupported argument(s) for linode_database_mysql_instance_create: unknown"
+)
+UNKNOWN_ARG_MYSQL_UPDATE = (
+    "Unsupported argument(s) for linode_database_mysql_instance_update: unknown"
+)
+UNKNOWN_ARG_PG_CREATE = (
+    "Unsupported argument(s) for linode_database_postgresql_instance_create: unknown"
+)
+UNKNOWN_ARG_PG_UPDATE = (
+    "Unsupported argument(s) for linode_database_postgresql_instance_update: unknown"
+)
+
 
 def _database_instance_write_envelope(
     message: str, instance: dict[str, Any]
@@ -198,20 +215,25 @@ async def test_hello_handler_default_name(sample_config: Config) -> None:
     assert "Hello, World!" in result[0].text
 
 
-async def test_hello_handler_answers_rather_than_erroring(
+async def test_hello_handler_answers_its_own_field_and_refuses_another(
     sample_config: Config,
 ) -> None:
-    """hello has no error channel: it answers its sentence for any call.
+    """hello answers a call naming nothing but its own field, and refuses one
+    naming anything else.
 
-    The generated shell runs the contract's rules first, and HelloInput
-    declares none, so nothing here can reach the error result the other
-    generated tools return. Pinned because the tier now carries an error path
-    the hand-written tool did not have.
+    HelloInput declares no rule, so the refusal is the whole-map check every
+    tool now carries. Pinned because the meta tier used to take an undeclared
+    argument and greet the caller anyway, which read as though the call worked.
+    Go's TestHelloToolAnswersItsOwnFieldAndRefusesAnother holds the other copy.
     """
-    result = await handle_hello({"unexpected": "argument"}, sample_config)
-    assert len(result) == 1
-    assert not result[0].text.startswith("Error:")
-    assert "Hello, World!" in result[0].text
+    answered = await handle_hello({}, sample_config)
+    assert len(answered) == 1
+    assert not answered[0].text.startswith("Error:")
+    assert "Hello, World!" in answered[0].text
+
+    refused = await handle_hello({"unexpected": "argument"}, sample_config)
+    assert len(refused) == 1
+    assert refused[0].text == "Error: Unsupported argument(s) for hello: unexpected"
 
 
 async def test_version_handler_returns_version_info(sample_config: Config) -> None:
@@ -2236,7 +2258,8 @@ async def test_account_oauth_client_update_requires_update_field(
         )
 
     assert (
-        "at least one of label, redirect_uri, or public is required" in result[0].text
+        "Unsupported argument(s) for linode_account_oauth_client_update: id"
+        in result[0].text
     )
     mock_client_class.assert_not_called()
 
@@ -5584,7 +5607,7 @@ async def test_account_user_grants_update_rejects_invalid_username(
         ),
         (
             {"username": "alice-dev", "unknown": "read_only", "confirm": True},
-            "unknown grant update fields: unknown",
+            "Unsupported argument(s) for linode_account_user_grants_update: unknown",
         ),
     ],
 )
@@ -6033,7 +6056,7 @@ async def test_database_cluster_create_rejects_non_true_confirm(
                 "unknown": "value",
                 "confirm": True,
             },
-            "unsupported argument: unknown",
+            UNKNOWN_ARG_MYSQL_CREATE,
         ),
         (
             {
@@ -6358,7 +6381,7 @@ async def test_database_postgresql_instance_create_rejects_non_true_confirm(
                 "unknown": "value",
                 "confirm": True,
             },
-            "unsupported argument: unknown",
+            UNKNOWN_ARG_PG_CREATE,
         ),
         (
             {
@@ -7625,7 +7648,7 @@ async def test_database_mysql_instance_update_rejects_non_true_confirm(
         ),
         (
             {"instance_id": 123, "unknown": "value", "confirm": True},
-            "unsupported argument: unknown",
+            UNKNOWN_ARG_MYSQL_UPDATE,
         ),
         (
             {"instance_id": 123, "engine_config": [], "confirm": True},
@@ -7927,7 +7950,7 @@ async def test_database_postgresql_instance_update_rejects_non_true_confirm(
         ),
         (
             {"instance_id": 321, "unknown": "value", "confirm": True},
-            "unsupported argument: unknown",
+            UNKNOWN_ARG_PG_UPDATE,
         ),
         (
             {"instance_id": 321, "engine_config": [], "confirm": True},
@@ -11685,17 +11708,19 @@ async def test_linode_images_sharegroup_image_delete_dispatches_from_registry(
             "linode_image_sharegroup_image_delete",
             {
                 "sharegroup_id": 123,
-                "image_id": 456,
+                "image_id": "shared/456",
                 "confirm": True,
                 "confirm_bypass_dry_run": True,
             },
         )
 
     assert json.loads(result[0].text) == {
-        "message": "Shared image 456 removed from image share group 123 successfully"
+        "message": (
+            "Shared image shared/456 removed from image share group 123 successfully"
+        )
     }
     mock_client.route_call.assert_awaited_once_with(
-        "linode_image_sharegroup_image_delete", 123, 456, retry=False
+        "linode_image_sharegroup_image_delete", 123, "shared/456", retry=False
     )
 
 
@@ -11753,11 +11778,11 @@ async def test_linode_images_sharegroup_image_delete_rejects_non_true_confirm(
         ),
         (
             {"sharegroup_id": 123, "image_id": False, "confirm": True},
-            "image_id must be a positive integer",
+            "image_id is required",
         ),
         (
             {"sharegroup_id": 123, "image_id": -5, "confirm": True},
-            "image_id must be a positive integer",
+            "image_id is required",
         ),
     ],
 )
@@ -14925,24 +14950,12 @@ def test_linode_instance_interface_add_tool_is_exported_and_registered(
 @pytest.mark.parametrize(
     ("arguments", "expected"),
     [
-        ({"interface": {"public": {}}, "confirm": True}, "linode_id"),
-        ({"linode_id": 0, "interface": {"public": {}}, "confirm": True}, "linode_id"),
-        (
-            {"linode_id": True, "interface": {"public": {}}, "confirm": True},
-            "linode_id",
-        ),
-        (
-            {"linode_id": "42/43", "interface": {"public": {}}, "confirm": True},
-            "linode_id",
-        ),
-        (
-            {"linode_id": "42?x", "interface": {"public": {}}, "confirm": True},
-            "linode_id",
-        ),
-        (
-            {"linode_id": "..", "interface": {"public": {}}, "confirm": True},
-            "linode_id",
-        ),
+        ({"confirm": True}, "linode_id"),
+        ({"linode_id": 0, "confirm": True}, "linode_id"),
+        ({"linode_id": True, "confirm": True}, "linode_id"),
+        ({"linode_id": "42/43", "confirm": True}, "linode_id"),
+        ({"linode_id": "42?x", "confirm": True}, "linode_id"),
+        ({"linode_id": "..", "confirm": True}, "linode_id"),
         ({"linode_id": 42, "confirm": True}, "exactly one of public, vpc, or vlan"),
         ({"linode_id": 42, "public": [], "confirm": True}, "public"),
     ],

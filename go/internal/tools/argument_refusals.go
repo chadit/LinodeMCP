@@ -1,33 +1,93 @@
 package tools
 
 import (
-	"slices"
 	"sort"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-// The two argument-map refusals a tool declares rather than derives. Both read
-// the raw arguments because the values they answer for never reach the input
-// message: a name the message does not declare is dropped before any rule runs,
-// so a caller's typo is only visible here.
+// The whole-map refusals every call answers before its rules run. Both read the
+// raw argument map because the values they answer for never reach the input
+// message: a name the message does not declare is dropped when the message is
+// built, so a caller's typo is only visible here.
 
-// refusedFieldsPlaceholder and refusedFieldPlaceholder are what a declared
-// sentence names its refused arguments with.
-const (
-	refusedFieldsPlaceholder = "{fields}"
-	refusedFieldPlaceholder  = "{field}"
-)
+// refusedFieldsPlaceholder is what a declared refuse_arguments sentence names
+// the arguments it refused with.
+const refusedFieldsPlaceholder = "{fields}"
 
-// RefusedArguments answers for any of the named arguments the caller set,
-// filling the declared sentence with the ones they actually sent.
-func RefusedArguments(request *mcp.CallToolRequest, sentence string, names ...string) string {
-	arguments := request.GetArguments()
+// engineControlArgument reports whether a name is one a call carries for the
+// server rather than for the route. No input message declares these, so the
+// refusal below has to let them through by name: destroy.go reads
+// confirmed_dry_run and confirm_bypass_dry_run, and server/server.go reads yolo
+// and confirm_bypass_dry_run. Declaring them as system param fields, which
+// would retire this function, is booked as a follow-up.
+func engineControlArgument(name string) bool {
+	switch name {
+	case "confirm_bypass_dry_run", "confirmed_dry_run", "yolo":
+		return true
+	}
+
+	return false
+}
+
+// CheckArgumentRefusals answers the whole-map refusals for one call: the
+// arguments the input message declares it refuses, then any argument it does
+// not declare. Refused runs first so a declaration's own wording wins.
+//
+// Both read the descriptor because the list tiers reach their checks through a
+// shared driver holding only the message name, so one derivation serves both
+// tiers.
+func CheckArgumentRefusals(inputMessage, toolName string, arguments map[string]any) string {
+	descriptor := inputMessageDescriptor(inputMessage)
+	if descriptor == nil {
+		return ""
+	}
+
+	if message := refusedByDeclaration(descriptor, arguments); message != "" {
+		return message
+	}
+
+	return refusedAsUndeclared(descriptor, toolName, arguments)
+}
+
+// inputMessageDescriptor resolves a tool's input message, or nil when the
+// registry does not carry it under that name. A nil descriptor refuses
+// nothing: there is no allowlist to hold the call to, and refusing every
+// argument would be worse than refusing none.
+func inputMessageDescriptor(inputMessage string) protoreflect.MessageDescriptor {
+	found, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(inputMessage))
+	if err != nil {
+		return nil
+	}
+
+	descriptor, isMessage := found.(protoreflect.MessageDescriptor)
+	if !isMessage {
+		return nil
+	}
+
+	return descriptor
+}
+
+// refusedByDeclaration answers the tool's own sentence for any argument its
+// refuse_arguments declaration names. Sorted, so a payload carrying several
+// reads the same way every time.
+func refusedByDeclaration(descriptor protoreflect.MessageDescriptor, arguments map[string]any) string {
+	declared, _ := proto.GetExtension(
+		descriptor.Options(), linodev1.E_RefuseArguments,
+	).(*linodev1.RefuseArguments)
+	if declared == nil {
+		return ""
+	}
 
 	var supplied []string
 
-	for _, name := range names {
+	for _, name := range declared.GetFields() {
 		if _, set := arguments[name]; set {
 			supplied = append(supplied, name)
 		}
@@ -39,16 +99,27 @@ func RefusedArguments(request *mcp.CallToolRequest, sentence string, names ...st
 
 	sort.Strings(supplied)
 
-	return fillRefusedNames(sentence, supplied)
+	return strings.ReplaceAll(
+		declared.GetMessage(), refusedFieldsPlaceholder, strings.Join(supplied, ", "),
+	)
 }
 
-// UnknownArguments answers for any argument the tool's input message does not
-// declare, filling the declared sentence with what the caller sent.
-func UnknownArguments(request *mcp.CallToolRequest, sentence string, declared ...string) string {
+// refusedAsUndeclared answers for any argument outside the message's own fields
+// and the engine's control names.
+//
+// The sentence is the engine's rather than a declaration's because every tool
+// answers it and the list drivers cannot take an emitted literal. The behavior
+// fixtures are what hold the Go and Python copies to the same words.
+func refusedAsUndeclared(
+	descriptor protoreflect.MessageDescriptor, toolName string, arguments map[string]any,
+) string {
+	fields := descriptor.Fields()
+
 	var unknown []string
 
-	for name := range request.GetArguments() {
-		if !slices.Contains(declared, name) {
+	for name := range arguments {
+		declared := fields.ByName(protoreflect.Name(name)) != nil || engineControlArgument(name)
+		if !declared {
 			unknown = append(unknown, name)
 		}
 	}
@@ -59,15 +130,7 @@ func UnknownArguments(request *mcp.CallToolRequest, sentence string, declared ..
 
 	sort.Strings(unknown)
 
-	return fillRefusedNames(sentence, unknown)
-}
-
-// fillRefusedNames writes the refused names into a declared sentence. Sorted
-// input, so a payload carrying several reads the same way every time.
-func fillRefusedNames(sentence string, names []string) string {
-	filled := strings.ReplaceAll(sentence, refusedFieldsPlaceholder, strings.Join(names, ", "))
-
-	return strings.ReplaceAll(filled, refusedFieldPlaceholder, names[0])
+	return "Unsupported argument(s) for " + toolName + ": " + strings.Join(unknown, ", ")
 }
 
 // PresentStringArgument holds one argument to having been sent as a string,

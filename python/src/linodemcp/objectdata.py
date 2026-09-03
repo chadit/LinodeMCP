@@ -245,6 +245,7 @@ __all__ = [
     "check_single_part",
     "download",
     "inspect",
+    "remove",
     "resolve_destination",
     "resolved_timeout",
     "upload",
@@ -336,3 +337,29 @@ async def download(
     temporary.replace(destination)
 
     return DownloadResult(etag=etag, size_bytes=written)
+
+
+async def remove(url: str, timeout: float) -> None:
+    """Send the DELETE the minted URL authorizes.
+
+    Nothing is measured because nothing moves: the object is either gone
+    afterwards or the bucket said why it is not. The request carries no body and
+    no Content-Type, the same shape the download's GET sends.
+
+    A fresh client rather than the API client's, for the reason upload gives:
+    the presigned URL carries its authorization in the query string. No error
+    below reports the URL, since httpx puts the full URL in its own exception
+    text and that URL is a bearer credential.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.delete(url)
+    except httpx.HTTPError as err:
+        msg = "presigned removal failed: the request could not be completed"
+        raise TransferError(msg) from err
+
+    if not _accepted(response.status_code):
+        msg = (
+            f"presigned removal failed: the bucket answered HTTP {response.status_code}"
+        )
+        raise TransferError(msg)

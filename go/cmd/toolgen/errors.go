@@ -432,12 +432,13 @@ var (
 	// errNotRepeated counts a field that carries nothing to count.
 	errNotRepeated = errors.New("message template counts a field that is not repeated")
 
-	// errUngatedExecute names a declared transport on a tier with no call to
-	// hand over. The acknowledge tier and the read tier both assemble their
-	// answer from the call rather than decoding it, so a transport there owes
-	// back nothing or a few members. Any other tier would need it to answer with
-	// the decoded message, which no arm can do.
-	errUngatedExecute = errors.New("tool declares an execute_transport on a tier that decodes its answer, which no transport can supply")
+	// errUngatedExecute names a declared transport its tier has no answer for.
+	// The acknowledge, get and body-read tiers assemble their answer from the
+	// call, so a transport there owes back nothing or a few members. The destroy
+	// tier assembles the same way and takes the removal arm alone, that being
+	// the one arm with nothing to report. Any other pairing needs the decoded
+	// message, which no arm supplies.
+	errUngatedExecute = errors.New("tool declares an execute_transport its tier has no answer for")
 
 	// errNotAnAssembledRead names a read whose call a transport makes but whose
 	// response no arm can fill: LOCAL scalar members carry what the transfer

@@ -22,13 +22,15 @@ The finished manifest is printed as JSON.
 
 ## Strict exit mode
 
-To return exit `3` when findings exist:
+To return exit `3` when the run carries a finding at medium or high:
 
 ```bash
 PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof --fail-on-findings
 ```
 
-Use this only when the caller understands that exit `3` means a completed comparison, not collector failure.
+Use this only when the caller understands that exit `3` means a completed comparison, not collector failure. The known, limitation, and info tiers do not reach the exit code, because each of them records a disagreement someone already accepted. Neither does a ledger entry that stopped matching: it is reported under `known_divergences_unmatched` and raises no finding, so a stale exclusion is caught by reading the summary rather than by the exit code.
+
+Every line in that list is a key that matched when the entry was triaged and matches nothing now, and it carries more than one reading. An entry keyed to a kind the comparison cannot raise never reaches the list: `known_divergence_index()` refuses that entry, so `make techdocs-proof` fails offline before any scrape, and the self-test proves the refusal fires. Read what is left against the run's `route-snapshot.txt` first, then its `comparison.json`. No route line for the entry's method and shape means the page moved, was renamed, or was dropped. A route line reading `status=deprecated` means the comparator stopped producing that class of finding, not that the disagreement closed: parameter comparison runs over active routes only, so one route flipping deprecated upstream unmatches every parameter-keyed entry on it at once, and the reverse holds for a `deprecated_route_still_in_proto` entry whose line now reads `status=active`. Those entries stay. A route line reading `status=active` sends you to `comparison.json`: search the same method, shape, location and parameter under every kind, because upstream retyping a parameter turns a `parameter_type_mismatch` into a `parameter_requiredness_mismatch`, and the old key stops matching while the disagreement is still there. Re-key that entry rather than deleting it. Only when the route line reads `status=active` and no finding carries those coordinates under any kind has the disagreement itself closed, and only then does the entry come out of `data/known-divergences.json` in a reviewed change.
 
 ## Development page limit
 

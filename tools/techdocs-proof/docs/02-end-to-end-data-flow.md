@@ -266,6 +266,6 @@ On failure, both files become `status: error` and contain the exception text. A 
 |---:|---|
 | `0` | The comparison completed. Findings may exist. |
 | `1` | Collection, input validation, parsing, descriptor compilation, or comparison infrastructure failed. |
-| `3` | The comparison completed with findings and `--fail-on-findings` was requested. |
+| `3` | The comparison completed carrying a medium or high finding and `--fail-on-findings` was requested. |
 
 This separation lets an issue-creation stage consume findings from a successful proof without treating expected differences as a crashed collector.

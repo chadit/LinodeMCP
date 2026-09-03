@@ -44,7 +44,12 @@ from linodemcp.tools.drivers import (
     run_write_tool,
 )
 from linodemcp.tools.preview import preview_sentence
-from linodemcp.tools.transport import MultipartUpload, PresignTransfer, RawBody
+from linodemcp.tools.transport import (
+    MultipartUpload,
+    PresignRemove,
+    PresignTransfer,
+    RawBody,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -472,6 +477,58 @@ async def test_destroy_driver_uses_the_supplied_prose_when_none_is_declared(
         )
 
     assert '"message": "record 7 is gone"' in result[0].text
+
+
+async def test_destroy_driver_runs_the_transport_in_place_of_the_routed_removal(
+    sample_config: Config,
+) -> None:
+    """A declared transport is the live call, so the routed delete never fires.
+
+    The object delete signs a URL over its own POST and sends the DELETE to that
+    URL, which no route builds. Go's twin is the destroyCall branch in
+    go/cmd/toolgen/destroy.go rendering tools.RunPresignRemove.
+    """
+
+    async def fetch(_client: RetryableClient) -> Any:
+        return {}
+
+    client = _client()
+    body = {"name": "releases/app.tar.gz", "method": "DELETE"}
+
+    with (
+        patch("linodemcp.tools.helpers.RetryableClient", return_value=client),
+        patch(
+            "linodemcp.tools.drivers.run_transport", new=AsyncMock(return_value={})
+        ) as transport,
+    ):
+        result = await run_destructive_tool(
+            sample_config,
+            {
+                "region": "us-east",
+                "label": "artifacts",
+                "name": "releases/app.tar.gz",
+                "confirm": True,
+                "confirm_bypass_dry_run": True,
+            },
+            tool="linode_object_storage_object_delete",
+            error_action="",
+            id_args={"region": "us-east", "label": "artifacts"},
+            fetch_state=fetch,
+            body=body,
+            transport=PresignRemove(url_field="url"),
+        )
+
+    client.route_delete.assert_not_awaited()
+    client.route_call.assert_not_awaited()
+    assert transport.await_count == 1
+    awaited = transport.await_args
+    assert awaited is not None
+    assert awaited.args[0] == PresignRemove(url_field="url")
+    assert awaited.args[2] == "linode_object_storage_object_delete"
+    assert (
+        "\"message\": \"Object 'releases/app.tar.gz' deleted from bucket 'artifacts'\""
+        in result[0].text
+    )
 
 
 async def test_destroy_driver_refuses_an_echo_it_cannot_fill(
@@ -1051,23 +1108,24 @@ async def test_body_read_driver_sends_its_body_and_decodes_the_answer(
 ) -> None:
     """A read on a body route posts what it built and answers with the resource.
 
-    The presigned-URL create is the shape: the POST signs what the body
-    describes and stores nothing, so the answer is decoded the way a read's is
-    rather than assembled into a mutation envelope.
+    The download-URL create is the shape: the POST signs what the body describes
+    and stores nothing, so the answer is decoded the way a read's is rather than
+    assembled into a mutation envelope. The verb is not in the arguments because
+    the tool pins it through body_constant.
     """
     client = _client(route_raw={"url": "https://example.test/signed"})
     body = {"name": "photo.jpg", "method": "GET"}
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await run_body_read_tool(
             sample_config,
-            {"name": "photo.jpg", "method": "GET"},
-            tool="linode_object_storage_presigned_url_create",
+            {"name": "photo.jpg"},
+            tool="linode_object_storage_object_download_url_create",
             body=body,
             path_values={"region": "us-east-1", "label": "pics"},
         )
 
     client.route_raw.assert_awaited_once_with(
-        "linode_object_storage_presigned_url_create",
+        "linode_object_storage_object_download_url_create",
         "us-east-1",
         "pics",
         body=body,
@@ -1085,13 +1143,13 @@ async def test_body_read_driver_refuses_a_response_that_is_not_an_object(
         result = await run_body_read_tool(
             sample_config,
             {"name": "photo.jpg", "label": "pics"},
-            tool="linode_object_storage_presigned_url_create",
+            tool="linode_object_storage_object_download_url_create",
             body={"name": "photo.jpg"},
             path_values={"region": "us-east-1", "label": "pics"},
         )
 
     assert (
-        "object storage presigned url create response must be a JSON object"
+        "object storage object download url create response must be a JSON object"
         in result[0].text
     )
 
@@ -1237,13 +1295,13 @@ async def test_body_read_driver_reports_the_declared_failure_prose(
         result = await run_body_read_tool(
             sample_config,
             {"name": "photo.jpg"},
-            tool="linode_object_storage_presigned_url_create",
+            tool="linode_object_storage_object_download_url_create",
             body={"name": "photo.jpg"},
             path_values={"region": "us-east-1", "label": "pics"},
         )
 
     assert result[0].text == (
-        "Failed to generate presigned URL for 'photo.jpg' in bucket 'pics':"
+        "Failed to generate download URL for 'photo.jpg' in bucket 'pics':"
         " Linode API error (status 500): boom"
     )
 

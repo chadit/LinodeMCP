@@ -14,6 +14,15 @@ from the proto contract and its generated artifacts. You do not hand-write any o
 you find yourself typing a JSON schema, a field list, or an enum by hand in the new
 language, stop: that is the drift this project exists to prevent.
 
+The goal that rule serves, repo-wide: the only code written by hand for a language is the
+bootstrap that starts the MCP server and the CLI, plus the engine below it that step 5
+lists, written once and never per tool. Tool bodies, argument checks, hooks, a transport's
+per-tool behavior, and every refusal sentence come out of proto declarations through one
+emitter into every language `docs/contracts/languages.txt` registers. The proto tree is
+still edited by hand and that is fine. A monitoring agent will later emit the upstream
+surface and keep proto in step with it; building that emitter is separate work, not part
+of onboarding a language.
+
 Run `make proto` first. The generated trees are gitignored and nothing builds without
 them:
 
@@ -154,9 +163,10 @@ Each item names the gate that enforces it, so you know what "done" is checked by
      presigned upload's preview reads what its transport measured off the local file
      through `{transport:size_bytes}` (`PreviewPresignSource`, `preview_presign_source`).
    - `execute_transport` covers a route whose request or answer is not JSON: a multipart
-     form framed from a local file, a raw image body, a presigned transfer. Implement the
-     three arms once as an engine the emitter renders a call or a spec literal into
-     (`go/internal/tools/transport.go`, `python/src/linodemcp/tools/transport.py`).
+     form framed from a local file, a raw image body, a presigned transfer, a presigned
+     removal. Implement the four arms once as an engine the emitter renders a call or a
+     spec literal into (`go/internal/tools/transport.go`,
+     `python/src/linodemcp/tools/transport.py`).
    - `local_answer` is a meta tool's whole result, read from local state rather than any
      route. It names an operation and the guards around it; the operation takes typed
      parameters and never the tool's argument bag, so it cannot tell which tool called it
@@ -335,18 +345,48 @@ declares `tool_meta` instead of the route and carries no scopes.
 
 The North Star was nothing handwritten, and for argument checks it is reached:
 `docs/contracts/hand-validator-counts.txt` reads zero in both languages. Every check a tool
-makes is declared on its `*Input` message, in one of four forms, and a new language
-implements the four readers rather than any tool's check:
+makes is declared on its `*Input` message, in one of three forms, and a new language
+implements the three readers rather than any tool's check:
 
 - a `buf.validate` message rule, read by `go/internal/toolvalidate` and
   `linodemcp.tools.constraints`;
 - an `argument_reader` on a field, with `reader_message` wording its refusals;
-- `refuse_arguments`, `refuse_unknown_arguments`, and `require_any_of` over the whole
-  argument map;
+- `refuse_arguments` and `require_any_of` over the whole argument map;
 - an `object_walk` over a map or repeated-Struct argument, read by `go/internal/toolwalk`
   and `linodemcp.tools.objectwalk`.
 
-A check none of the four can carry has nowhere left to go but a hand-written body, and
+One check is not declared at all. Every tool refuses an argument its input message does
+not declare, in one sentence the engine formats: `Unsupported argument(s) for <tool>:
+<names sorted, joined with ", ">`. A language holds one copy of that sentence and one copy
+of the allowlist, which is the message's own field names plus `confirm_bypass_dry_run`,
+`confirmed_dry_run` and `yolo`; those three are read off the argument map by the server and
+the destroy gate and no input message declares them. The behavior fixtures are what hold
+the copies to the same words, so a new language earns its wording by passing them.
+
+The check has to reach every tool, not every emitted handler. Where a language runs a tier
+through a shared driver rather than an emitted body, the driver is where the check goes:
+Go's list tiers call `tools.CheckArgumentRefusals` inside
+`go/internal/tools/gentools_seam.go` because `emitList` writes a driver call and no handler,
+so an emitter-only check would leave every Go list tool dropping arguments while Python
+refused them, and no gate would notice.
+Go's 25 single-id destroys reach it the same way, from `RunDestructiveActionWithID` in
+`go/internal/tools/destroy.go`, because their emitted handler is one struct literal and the
+wrapper is what holds the message name.
+`refuse_arguments` rides in the same functions for the same reason, read off the descriptor
+rather than written into each tool.
+Counting emitted calls does not prove this: a tier that emits neither the rules check nor
+the refusal moves both counts by zero. `TestEveryGeneratedFactoryReachesTheRefusal`
+(`go/cmd/toolgen/argument_refusal_emit_test.go`) walks every factory the emitted registry
+lists into the engine instead, so a new tier that skips the check fails by tool name.
+
+A caller who sends a flag the tool does not declare now reads that refusal instead of
+having it dropped. Both CLIs fold `--environment`, `--dry-run`, `--mode` and `--plan-id`
+into the argument map whenever the flag is set, and 17 meta tools declare no `environment`,
+269 tools no `dry_run`, and 493 no `mode`, so those combinations are refused rather than
+ignored. That matches what the published input schemas already said: every one of them sets
+`additionalProperties: false`.
+
+A check none of the three can carry has nowhere left to go but a hand-written body, and
 `make hand-validators` fails in both directions on one, naming the site it found.
 `hand-code` covers the rest of that boundary: a function named after a tool in a
 non-generated tree fails by name, whatever it does.

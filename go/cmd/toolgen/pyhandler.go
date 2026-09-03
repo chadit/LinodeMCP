@@ -376,11 +376,10 @@ func pyMetaReaderImports(tools []*pyTool) (string, error) {
 	return strings.Join(wanted, ", "), nil
 }
 
-// pyConstraintCall is the contract's own answers over the whole argument map,
-// in order: the rules first, then the arguments the tool refuses outright, then
-// whether it takes a name its message does not declare. All three are written
-// for every tool rather than only the ones declaring them, so declaring one is
-// a proto edit and nothing else.
+// pyConstraintCall is the contract's own answers over the argument map, in
+// order: the rules, the arguments the tool declares it refuses, then any name
+// its message does not declare. The first and last are written for every tool,
+// so declaring a rule is a proto edit and nothing else.
 func pyConstraintCall(tool *pyTool) string {
 	call := "check_constraints(" + pyQuote(tool.c.InputMessage) + ", arguments)"
 
@@ -389,12 +388,10 @@ func pyConstraintCall(tool *pyTool) string {
 			pySentenceArgument(tool.c.Refused.GetMessage()) + ", (" + pyNameTuple(refused) + "))"
 	}
 
-	if tool.c.RefuseUnknown != nil {
-		message := tool.c.RefuseUnknown.GetMessage()
-
-		call += " or unknown_arguments(arguments, " +
-			pySentenceArgument(message) + ", (" + pyNameTuple(tool.c.AllArguments) + "))"
-	}
+	// The engine derives the allowlist and the sentence from the message name,
+	// the same derivation Go's list drivers make, so no tool carries either.
+	call += " or unknown_arguments(arguments, " + pyQuote(tool.c.Name) +
+		", " + pyQuote(tool.c.InputMessage) + ")"
 
 	return call
 }

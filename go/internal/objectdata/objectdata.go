@@ -171,22 +171,23 @@ func send(ctx context.Context, request UploadRequest, body io.Reader) (*http.Res
 	// give. The context still carries the caller's cancellation.
 	response, err := (&http.Client{Timeout: request.Timeout}).Do(httpRequest)
 	if err != nil {
-		return nil, transferError(err)
+		return nil, transferError(ErrTransfer, err)
 	}
 
 	return response, nil
 }
 
-// transferError strips the URL out of a transport failure. net/http wraps every
-// one in a *url.Error that prints the full URL, and that URL is a bearer
-// credential: reporting it would put an upload token in the tool's error text
-// and from there into the audit record.
-func transferError(err error) error {
+// transferError strips the URL out of a transport failure and reports it under
+// the sentinel the caller's own verb owns. net/http wraps every failure in a
+// *url.Error that prints the full URL, and that URL is a bearer credential:
+// reporting it would put a transfer token in the tool's error text and from
+// there into the audit record.
+func transferError(kind, err error) error {
 	if urlErr, isURLErr := errors.AsType[*url.Error](err); isURLErr {
 		err = urlErr.Err
 	}
 
-	return fmt.Errorf("%w: %w", ErrTransfer, err)
+	return fmt.Errorf("%w: %w", kind, err)
 }
 
 // countingWriter counts the bytes the transport actually read off the file,
@@ -301,7 +302,7 @@ func fetch(ctx context.Context, request DownloadRequest) (*http.Response, error)
 
 	response, err := (&http.Client{Timeout: request.Timeout}).Do(httpRequest)
 	if err != nil {
-		return nil, transferError(err)
+		return nil, transferError(ErrTransfer, err)
 	}
 
 	return response, nil
@@ -334,4 +335,42 @@ func writeThroughTemp(destination string, body io.Reader) (int64, error) {
 	}
 
 	return written, nil
+}
+
+// RemoveRequest is one DELETE against an already-minted presigned URL.
+type RemoveRequest struct {
+	// URL is what the API answered with, and a bearer credential for its
+	// lifetime, so no error below reports it.
+	URL string
+	// Timeout bounds the whole exchange.
+	Timeout time.Duration
+}
+
+// Remove sends the DELETE the minted URL authorizes.
+//
+// Nothing is measured because nothing moves: the object is either gone
+// afterwards or the bucket said why it is not. The request carries no body and
+// no Content-Type, the same shape the download's GET sends.
+func Remove(ctx context.Context, request RemoveRequest) error {
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodDelete, request.URL, http.NoBody)
+	if err != nil {
+		return fmt.Errorf("%w: the presigned URL could not be used", ErrRemove)
+	}
+
+	// Its own client rather than the API client's, for the reason the upload's
+	// PUT gives: the presigned URL carries its authorization in the query
+	// string, so attaching the Linode token would put an account credential on
+	// a host that never needed one.
+	response, err := (&http.Client{Timeout: request.Timeout}).Do(httpRequest)
+	if err != nil {
+		return transferError(ErrRemove, err)
+	}
+
+	defer func() { _ = response.Body.Close() }()
+
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("%w: the bucket answered HTTP %d", ErrRemove, response.StatusCode)
+	}
+
+	return nil
 }

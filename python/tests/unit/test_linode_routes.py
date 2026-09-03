@@ -430,12 +430,11 @@ def test_input_descriptor_rejects_a_message_that_is_not_generated() -> None:
         input_descriptor("linode_domain_get")
 
 
-# The response members the shipped surface fills from a differently spelled
+# Response members the shipped surface fills from a differently spelled
 # argument, as {response message: {member: argument}}. Each reports what the
-# resource becomes rather than what the tool was given: the resize answer names
-# the plan the instance moves to (`type`), the disk resize answer carries the
-# unit in its own name (`size`), and the SSL delete keys the bucket label under
-# `bucket` to match the shape that tool has always answered with.
+# resource becomes, not what the tool was given: the resize answers name the
+# plan moved to and the new size's unit, and the SSL delete keys the label
+# argument under `bucket`, the shape it has always answered with.
 _ECHO_ALIASES = {
     "InstanceResizeWriteResponse": {"new_type": "type"},
     "InstanceDiskResizeWriteResponse": {"new_size_mb": "size"},

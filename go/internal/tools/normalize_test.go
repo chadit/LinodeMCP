@@ -169,45 +169,6 @@ func TestTrimListTrimsEntriesAndKeepsBlanks(t *testing.T) {
 	}
 }
 
-func TestUppercaseArgumentsFoldsOnlyText(t *testing.T) {
-	t.Parallel()
-
-	cases := map[string]struct {
-		arguments map[string]any
-		want      map[string]any
-	}{
-		"lower case folds up": {
-			arguments: map[string]any{keyNormalizeSummary: "get"},
-			want:      map[string]any{keyNormalizeSummary: "GET"},
-		},
-		"mixed case folds up": {
-			arguments: map[string]any{keyNormalizeSummary: "Put"},
-			want:      map[string]any{keyNormalizeSummary: "PUT"},
-		},
-		"a value that is not text is left for the type refusal": {
-			arguments: map[string]any{keyNormalizeSummary: 7},
-			want:      map[string]any{keyNormalizeSummary: 7},
-		},
-		caseAbsentArgument: {
-			arguments: map[string]any{keyNormalizeLabel: "x"},
-			want:      map[string]any{keyNormalizeLabel: "x"},
-		},
-	}
-
-	for name, test := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			request := requestFor(test.arguments)
-			tools.UppercaseArguments(&request, keyNormalizeSummary)
-
-			if got := request.GetArguments(); !reflect.DeepEqual(got, test.want) {
-				t.Errorf("arguments = %v, want %v", got, test.want)
-			}
-		})
-	}
-}
-
 func TestFoldIntListFoldsDropsAndRefusesLikeTheHookItReplaced(t *testing.T) {
 	t.Parallel()
 

@@ -197,12 +197,8 @@ func checkTierDeclarations(tool *contract) error {
 		return fmt.Errorf("%w: %s", errNoNormalizePoint, tool.Name)
 	}
 
-	// The three tiers that assemble their answer rather than decoding one. A
-	// transport on any other tier would have to hand back the decoded body,
-	// which is a second shape for one declaration.
-	if tool.transported() && tool.Tier != tierAcknowledge &&
-		tool.Tier != tierGet && tool.Tier != tierBodyRead {
-		return fmt.Errorf("%w: %s", errUngatedExecute, tool.Name)
+	if err := checkTransportTier(tool); err != nil {
+		return err
 	}
 
 	// The stand-in reaches the reported body through the tier's own driver, and
@@ -218,6 +214,35 @@ func checkTierDeclarations(tool *contract) error {
 	// applied.
 	if len(tool.Readers) > 0 && tool.Tier == tierDestroy {
 		return fmt.Errorf("%w: %s", errReaderOnDestroy, tool.Name)
+	}
+
+	return nil
+}
+
+// checkTransportTier holds a declared transport to a tier with somewhere to put
+// its answer. The acknowledge, get and body-read tiers assemble theirs rather
+// than decoding one. The destroy tier assembles the same way and takes the
+// removal arm alone: every other arm hands back measurements a destroy response
+// has no member for.
+func checkTransportTier(tool *contract) error {
+	if !tool.transported() {
+		return nil
+	}
+
+	if tool.Tier == tierDestroy {
+		if tool.Transport.Kind == transportPresignRemove {
+			return nil
+		}
+
+		return fmt.Errorf("%w: %s", errUngatedExecute, tool.Name)
+	}
+
+	if tool.Transport.Kind == transportPresignRemove {
+		return fmt.Errorf("%w: %s", errUngatedExecute, tool.Name)
+	}
+
+	if tool.Tier != tierAcknowledge && tool.Tier != tierGet && tool.Tier != tierBodyRead {
+		return fmt.Errorf("%w: %s", errUngatedExecute, tool.Name)
 	}
 
 	return nil
@@ -657,31 +682,19 @@ func emitConstraintCheck(out *source, tool *contract) {
 	emitArgumentRefusals(out, tool)
 }
 
-// emitArgumentRefusals writes the two checks a tool declares over its whole
-// argument map: the names it refuses outright, and whether it takes any name
-// its input message does not declare.
+// emitArgumentRefusals writes the whole-map refusals every tool answers, the
+// allowlist and sentences left to the engine so the list drivers answer alike.
 //
-// They sit beside the rules because both answer for a value no rule can see. An
-// argument the message does not declare is dropped before the rules run, so
-// without these the call reports success over a value the API never saw.
+// They sit beside the rules because both answer for a value no rule sees: an
+// undeclared argument is dropped before the rules run, so without this the
+// call succeeds over a value the API never saw.
 func emitArgumentRefusals(out *source, tool *contract) {
-	if tool.Refused != nil {
-		out.need(importTools, importMCP)
-		out.writef("\tif message := tools.RefusedArguments(request, %s, %s); message != \"\" {",
-			goStringLiteral(tool.Refused.GetMessage()), goNameList(tool.Refused.GetFields()))
-		out.writef("\t\treturn mcp.NewToolResultError(message), nil")
-		out.writef("\t}")
-		out.writef("")
-	}
-
-	if tool.RefuseUnknown != nil {
-		out.need(importTools, importMCP)
-		out.writef("\tif message := tools.UnknownArguments(request, %s, %s); message != \"\" {",
-			goStringLiteral(tool.RefuseUnknown.GetMessage()), goNameList(tool.AllArguments))
-		out.writef("\t\treturn mcp.NewToolResultError(message), nil")
-		out.writef("\t}")
-		out.writef("")
-	}
+	out.need(importTools, importMCP)
+	out.writef("\tif message := tools.CheckArgumentRefusals(%s, %s, request.GetArguments()); message != \"\" {",
+		goStringLiteral(tool.InputMessage), goStringLiteral(tool.Name))
+	out.writef("\t\treturn mcp.NewToolResultError(message), nil")
+	out.writef("\t}")
+	out.writef("")
 }
 
 // goNameList is a run of argument names as Go string literals.

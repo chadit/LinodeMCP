@@ -27,6 +27,15 @@
       "args": { "region": "us-east", "label": "my-bucket" },
       "api_response": { "data": [], "is_truncated": false },
       "expect_request": { "method": "GET", "path": "/object-storage/buckets/us-east/my-bucket/object-list" }
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "bogus_field": "x"
+      },
+      "expect_error": "Unsupported argument(s) for linode_object_storage_bucket_object_list: bogus_field"
     }
   ]
 }

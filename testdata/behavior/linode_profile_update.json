@@ -189,6 +189,26 @@
         "side_effects": [],
         "warnings": []
       }
+    },
+    {
+      "name": "rejects a number environment on a dry run",
+      "args": {
+        "timezone": "US/Pacific",
+        "confirm": true,
+        "dry_run": true,
+        "environment": 5
+      },
+      "expect_error": "environment not found in configuration: 5"
+    },
+    {
+      "name": "rejects an unconfigured environment name on a dry run",
+      "args": {
+        "timezone": "US/Pacific",
+        "confirm": true,
+        "dry_run": true,
+        "environment": "staging"
+      },
+      "expect_error": "environment not found in configuration: staging"
     }
   ]
 }

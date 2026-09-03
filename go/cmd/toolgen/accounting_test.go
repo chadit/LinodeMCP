@@ -58,7 +58,6 @@ func unreachedRefusals() map[string]string {
 
 		"errUnsupportedDestroyShape": "needs a removal whose path shape no emitted driver addresses",
 		"errReaderOnDestroy":         "needs an argument_reader on a removal",
-		"errUngatedExecute":          "needs an execute_transport on a tier that decodes its answer",
 		"errMetaDryRun":              "needs a meta tool advertising dry_run",
 		"errUnmatchedFilter":         "needs a list_filter matching no element field",
 		"errUnsupportedItemKind":     "needs a typed list item member with no request representation",

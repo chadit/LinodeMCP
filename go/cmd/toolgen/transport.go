@@ -23,6 +23,7 @@ const (
 	transportMultipart
 	transportRawBody
 	transportPresign
+	transportPresignRemove
 )
 
 // transportSpec is one declared transport, flattened out of the oneof: the
@@ -80,6 +81,8 @@ func (c *contract) transportArm(declared *linodev1.ExecuteTransport) (transportS
 		return c.rawBodyArm(declared.GetRawBody())
 	case declared.GetPresign() != nil:
 		return c.presignArm(declared.GetPresign())
+	case declared.GetPresignRemove() != nil:
+		return c.presignRemoveArm(declared.GetPresignRemove())
 	}
 
 	return transportSpec{}, fmt.Errorf("%w: %s", errNoTransportArm, c.Name)
@@ -161,6 +164,20 @@ func (c *contract) presignArm(declared *linodev1.PresignTransfer) (transportSpec
 	}, nil
 }
 
+// presignRemoveArm reads a minted-URL removal. The URL is the whole
+// declaration: no bytes move, so there is no local end to guard, no direction
+// to pick, and nothing measured for a response member to carry.
+func (c *contract) presignRemoveArm(declared *linodev1.PresignRemove) (transportSpec, error) {
+	if declared.GetUrlField() == "" {
+		return transportSpec{}, fmt.Errorf("%w: %s presign_remove", errTransportIncomplete, c.Name)
+	}
+
+	return transportSpec{
+		Kind:     transportPresignRemove,
+		URLField: declared.GetUrlField(),
+	}, nil
+}
+
 // transportDirection refuses the unset direction, which would otherwise read as
 // a download on every arm that has one.
 func (c *contract) transportDirection(direction linodev1.TransferDirection) (bool, error) {
@@ -182,11 +199,13 @@ func (c *contract) transported() bool {
 }
 
 // transportDropsBody is whether the live call leaves the derived JSON body
-// behind. Only the presign arm sends it: the other two frame their own request
-// out of a local file or a decoded argument, so the built body is advertised by
-// the schema and never travels.
+// behind. Both presign arms send it, since the body is what the presign request
+// asks with; the other two frame their own request out of a local file or a
+// decoded argument, so the built body is advertised by the schema and never
+// travels.
 func (c *contract) transportDropsBody() bool {
-	return c.transported() && c.Transport.Kind != transportPresign
+	return c.transported() &&
+		c.Transport.Kind != transportPresign && c.Transport.Kind != transportPresignRemove
 }
 
 // checkTransportNames holds the declared transport to the message it annotates:

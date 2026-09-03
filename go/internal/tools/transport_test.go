@@ -465,7 +465,7 @@ func TestBase64TextEncodesWhatTheTransferRead(t *testing.T) {
 func TestFillPresignBodyLeavesWhatItCannotDefaultInto(t *testing.T) {
 	t.Parallel()
 
-	settings := config.ObjectStorageConfig{PresignTTLSeconds: 60}
+	settings := config.ObjectStorageConfig{PresignTTLSeconds: 900}
 
 	// Neither reaches the defaults below, so the case is that both return
 	// without touching anything.
@@ -487,11 +487,168 @@ func TestFillPresignBodyLeavesWhatItCannotDefaultInto(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if filled["expires_in"] != float64(60) {
+	if filled["expires_in"] != float64(900) {
 		t.Errorf("expires_in = %v, want the configured lifetime", filled["expires_in"])
 	}
 
 	if filled["content_type"] != objectdata.DefaultContentType {
 		t.Errorf("content_type = %v, want the default filled in", filled["content_type"])
+	}
+}
+
+// The removal arm's own constants and body: the generated builder declares no
+// content_type field, since the delete tool advertises none.
+const (
+	deleteTool    = "linode_object_storage_object_delete"
+	deleteSubject = "object storage object delete"
+)
+
+// removeBody builds the presign body the generated destroy handler hands the
+// engine, so the cases below exercise the same shape production does.
+func removeBody(request *mcp.CallToolRequest) *tools.WriteBody {
+	body := tools.NewWriteBody(request, 2)
+
+	body.PutString(keyName)
+	body.SetInt("expires_in")
+	body.Constant("method", http.MethodDelete)
+
+	return body
+}
+
+func removeSpec(body any) *tools.PresignSpec {
+	return &tools.PresignSpec{
+		Tool:       deleteTool,
+		Subject:    deleteSubject,
+		URLField:   presignURLField,
+		PathValues: []any{transferRegion, transferBucket},
+		Body:       body,
+	}
+}
+
+// TestRunPresignRemovePresignsThenDeletes pins the two legs and their order:
+// exactly one Linode call, then the DELETE to the URL that call answered with.
+func TestRunPresignRemovePresignsThenDeletes(t *testing.T) {
+	t.Parallel()
+
+	var (
+		presignBody map[string]any
+		order       []string
+		deletePath  string
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		order = append(order, r.Method+" "+r.URL.Path)
+
+		if r.Method == http.MethodPost {
+			_ = json.Unmarshal(body, &presignBody)
+
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"url":"` + "http://" + r.Host + `/artifacts/key?sig=fixture"}`))
+
+			return
+		}
+
+		deletePath = r.URL.Path
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	request := transferRequest(nil)
+
+	if err := tools.RunPresignRemove(
+		t.Context(), transferClient(server.URL, 0), removeSpec(removeBody(&request)),
+	); err != nil {
+		t.Fatalf("RunPresignRemove: %v", err)
+	}
+
+	if len(order) != 2 || !strings.HasPrefix(order[0], "POST") || !strings.HasPrefix(order[1], "DELETE") {
+		t.Fatalf("calls = %v, want the presign POST then the DELETE", order)
+	}
+
+	if deletePath != "/artifacts/key" {
+		t.Errorf("delete path = %q, want the minted URL's own path", deletePath)
+	}
+
+	// The verb is the tool's, and the two members the caller may omit are filled
+	// by the engine so the signed request is the one the endpoint accepts.
+	if presignBody["method"] != http.MethodDelete {
+		t.Errorf("presign method = %v, want DELETE", presignBody["method"])
+	}
+
+	if presignBody["expires_in"] != float64(config.DefaultPresignTTLSeconds) {
+		t.Errorf("presign expires_in = %v, want the configured default", presignBody["expires_in"])
+	}
+
+	if presignBody["content_type"] != objectdata.DefaultContentType {
+		t.Errorf("presign content_type = %v, want the shared default", presignBody["content_type"])
+	}
+}
+
+// TestRunPresignRemoveReportsEitherLeg pins that neither half fails quietly: a
+// refused presign never reaches the DELETE, and a refused DELETE is reported
+// rather than read as a removal that happened.
+func TestRunPresignRemoveReportsEitherLeg(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		presignStatus int
+		deleteStatus  int
+		wantDeletes   int
+	}{
+		casePresignFails: {presignStatus: http.StatusInternalServerError, wantDeletes: 0},
+		"the delete fails": {
+			presignStatus: http.StatusOK,
+			deleteStatus:  http.StatusForbidden,
+			wantDeletes:   1,
+		},
+	}
+
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var deletes int
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					if test.presignStatus != http.StatusOK {
+						w.WriteHeader(test.presignStatus)
+
+						return
+					}
+
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"url":"` + "http://" + r.Host + `/artifacts/key?sig=secret-token"}`))
+
+					return
+				}
+
+				deletes++
+
+				w.WriteHeader(test.deleteStatus)
+			}))
+			t.Cleanup(server.Close)
+
+			request := transferRequest(nil)
+
+			err := tools.RunPresignRemove(
+				t.Context(), transferClient(server.URL, 0), removeSpec(removeBody(&request)),
+			)
+			if err == nil {
+				t.Fatal("RunPresignRemove = nil, want the leg's own failure")
+			}
+
+			if deletes != test.wantDeletes {
+				t.Errorf("delete calls = %d, want %d", deletes, test.wantDeletes)
+			}
+
+			// The text is read into a local first: this asserts on what the
+			// caller sees, not on which error it is.
+			if reported := err.Error(); strings.Contains(reported, "secret-token") {
+				t.Errorf("error text leaks the minted URL: %s", reported)
+			}
+		})
 	}
 }

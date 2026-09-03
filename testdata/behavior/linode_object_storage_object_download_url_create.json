@@ -1,0 +1,96 @@
+{
+  "tool": "linode_object_storage_object_download_url_create",
+  "description": "Read-capability but POSTs an object-url request. The verb is pinned to GET by body_constant, so no method argument exists and none of these cases can send one. Pins the region/label/name-required rejections, both edges of the published expires_in window (360 to 3600) with the value the caller sent named back, and the success POST body. expires_in is deferred to the API's documented default (3600): omitted from the body unless the caller provides it. No content_type: the page scopes that member to the verbs other than GET and DELETE.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires label",
+      "args": {
+        "region": "us-east"
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires name",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket"
+      },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "rejects an expires_in below the signing floor",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "expires_in": 359
+      },
+      "expect_error": "expires_in must be between 360 and 3600 seconds, got 359"
+    },
+    {
+      "name": "rejects an expires_in above the signing ceiling",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "expires_in": 3601
+      },
+      "expect_error": "expires_in must be between 360 and 3600 seconds, got 3601"
+    },
+    {
+      "name": "mints a download URL with the API default expiry",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt"
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": {
+          "method": "GET",
+          "name": "my-object.txt"
+        }
+      }
+    },
+    {
+      "name": "sends an explicit in-window expires_in",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "expires_in": 900
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": {
+          "method": "GET",
+          "name": "my-object.txt",
+          "expires_in": 900
+        }
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt"
+      },
+      "api_response": [],
+      "expect_api_error": "object storage object download url create response must be a JSON object"
+    }
+  ]
+}

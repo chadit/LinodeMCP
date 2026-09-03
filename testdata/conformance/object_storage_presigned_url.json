@@ -1,6 +1,6 @@
 {
   "message": "linode.mcp.v1.PresignedURLResponse",
-  "description": "linode_object_storage_presigned_url_create: the generated URL.",
+  "description": "linode_object_storage_object_download_url_create and linode_object_storage_object_upload_url_create share this response: the minted URL.",
   "input": {
     "url": "https://us-east-1.linodeobjects.com/b/key?X-Amz-Signature=abc123"
   },

@@ -280,6 +280,31 @@ func toProtoValue(value any) (*structpb.Value, error) {
 	return protoValue, nil
 }
 
+// previewEnvironment names the environment a preview reports, or refuses a
+// value no environment answers to.
+//
+// A preview with no state fetch builds no client, so prepareClient never runs
+// and both halves of that judgement have to happen here: the type check, and
+// the lookup that tells a configured name from one nothing carries. Naming
+// none is left alone, since that selects the default and asserts nothing the
+// preview could echo back wrong.
+func previewEnvironment(request *mcp.CallToolRequest, cfg *config.Config) (string, *mcp.CallToolResult) {
+	name, err := environmentArgument(request)
+	if err != nil {
+		return "", mcp.NewToolResultError(err.Error())
+	}
+
+	if name == "" {
+		return name, nil
+	}
+
+	if _, err := selectEnvironment(resolveConfig(cfg), name); err != nil {
+		return "", mcp.NewToolResultError(err.Error())
+	}
+
+	return name, nil
+}
+
 // RunDryRunPreview is the shared dry-run branch for non-destroy mutating
 // tools (CapWrite / CapAdmin). The caller validates required args first,
 // then delegates here. When fetchState is non-nil it prepares the client
@@ -317,6 +342,11 @@ func RunDryRunPreviewDetailed(
 		client *linode.Client
 	)
 
+	env, envRefusal := previewEnvironment(request, cfg)
+	if envRefusal != nil {
+		return envRefusal, nil
+	}
+
 	if fetchState != nil {
 		preparedClient, err := prepareClient(request, cfg)
 		if err != nil {
@@ -330,8 +360,6 @@ func RunDryRunPreviewDetailed(
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", err)), nil
 		}
 	}
-
-	env := request.GetString(paramEnvironment, "")
 
 	if detailsFn == nil {
 		return BuildDryRunResponse(toolName, env, method, path, state)
@@ -357,6 +385,11 @@ func RunDryRunPreviewWithBody(
 ) (*mcp.CallToolResult, error) {
 	var state any
 
+	env, envRefusal := previewEnvironment(request, cfg)
+	if envRefusal != nil {
+		return envRefusal, nil
+	}
+
 	if fetchState != nil {
 		client, err := prepareClient(request, cfg)
 		if err != nil {
@@ -369,7 +402,7 @@ func RunDryRunPreviewWithBody(
 		}
 	}
 
-	return BuildDryRunResponse(toolName, request.GetString(paramEnvironment, ""), method, path, state, body)
+	return BuildDryRunResponse(toolName, env, method, path, state, body)
 }
 
 // RunDryRunPreviewWithBodyDetailed is the Phase 2 variant of
@@ -391,6 +424,11 @@ func RunDryRunPreviewWithBodyDetailed(
 		client *linode.Client
 	)
 
+	env, envRefusal := previewEnvironment(request, cfg)
+	if envRefusal != nil {
+		return envRefusal, nil
+	}
+
 	if fetchState != nil {
 		preparedClient, err := prepareClient(request, cfg)
 		if err != nil {
@@ -404,8 +442,6 @@ func RunDryRunPreviewWithBodyDetailed(
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch state for dry-run: %v", err)), nil
 		}
 	}
-
-	env := request.GetString(paramEnvironment, "")
 
 	if detailsFn == nil {
 		return BuildDryRunResponse(toolName, env, method, path, state, body)

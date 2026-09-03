@@ -3,18 +3,6 @@
   "description": "Confirm-gated create POST body and the unsupported-argument rejection now enforced in both languages (Go gained Python's allowlist). The unsupported case sets confirm:true so both reach the check. The bare-array case proves neither language reports a zero-valued instance as a successful create; its expected substring stops at 'Failed to create' because the engine label differs in the outer framing (Go says 'Managed Database instance', Python says 'MySQL Managed Database').",
   "cases": [
     {
-      "name": "rejects an unsupported argument",
-      "args": {
-        "label": "prod-db",
-        "type": "g6-nanode-1",
-        "engine": "mysql/8",
-        "region": "us-east",
-        "bogus_field": "x",
-        "confirm": true
-      },
-      "expect_error": "unsupported argument: bogus_field"
-    },
-    {
       "name": "creates a mysql instance",
       "args": {
         "label": "prod-db",
@@ -71,6 +59,18 @@
         "cluster_size": 4
       },
       "expect_error": "cluster_size must be one of: 1, 2, 3"
+    },
+    {
+      "name": "rejects an unsupported argument",
+      "args": {
+        "label": "prod-db",
+        "type": "g6-nanode-1",
+        "engine": "mysql/8",
+        "region": "us-east",
+        "bogus_field": "x",
+        "confirm": true
+      },
+      "expect_error": "Unsupported argument(s) for linode_database_mysql_instance_create: bogus_field"
     }
   ]
 }

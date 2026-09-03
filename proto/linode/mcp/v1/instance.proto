@@ -2499,7 +2499,7 @@ message InstanceConfigInterfaceListInput {
 // linode_instance_config_interface_add. linode_id, config_id, purpose, and
 // confirm are required. purpose is a generated ConfigInterfacePurpose enum
 // (public/vlan/vpc) in the schema and the handler validates the same set.
-// ipv4/ipv6 are open objects (map<string, Value>), ip_ranges is a string array.
+// ip_ranges is a string array and ipv4 is an open object (map<string, Value>).
 message InstanceConfigInterfaceAddInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_config_interface_add"
@@ -2578,8 +2578,8 @@ message InstanceConfigInterfaceAddInput {
   repeated string ip_ranges = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // VPC IPv4 configuration for this interface (optional).
   map<string, google.protobuf.Value> ipv4 = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // VPC IPv6 configuration for this interface (optional).
-  map<string, google.protobuf.Value> ipv6 = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  reserved 11;
+  reserved "ipv6";
   // Must be true to confirm configuration profile interface creation. Ignored
   // when dry_run=true.
   bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

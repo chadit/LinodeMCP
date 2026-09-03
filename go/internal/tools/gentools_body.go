@@ -271,7 +271,7 @@ func (b *WriteBody) Fold(name string, members []FoldMember) {
 		return
 	}
 
-	supplied, message := b.foldBase(name, name+" must be an object")
+	supplied, message := b.foldBase(name)
 	if message != "" {
 		b.message = message
 
@@ -282,35 +282,6 @@ func (b *WriteBody) Fold(name string, members []FoldMember) {
 	if message != "" {
 		b.message = message
 
-		return
-	}
-
-	b.put(name, folded)
-}
-
-// FoldOptional is Fold for a member the API reads as a replacement rather than
-// a setting. A firewall update that mentions no policy leaves `rules` off the
-// wire, because the empty object would replace the ruleset it never named.
-func (b *WriteBody) FoldOptional(name string, members []FoldMember) {
-	if b.message != "" {
-		return
-	}
-
-	supplied, message := b.foldBase(name, name+" must be an object")
-	if message != "" {
-		b.message = message
-
-		return
-	}
-
-	folded, message := b.foldMembers(name, supplied, members)
-	if message != "" {
-		b.message = message
-
-		return
-	}
-
-	if len(folded) == 0 {
 		return
 	}
 
@@ -633,7 +604,7 @@ func MarshalOrderedJSON(keys []string, values []any) ([]byte, error) {
 // foldBase is the object a fold starts from: the one the caller supplied, or an
 // empty one. It is copied rather than written through, so the arguments the
 // rest of the call reads are the ones the caller sent.
-func (b *WriteBody) foldBase(name, failure string) (map[string]any, string) {
+func (b *WriteBody) foldBase(name string) (map[string]any, string) {
 	raw, present := b.arguments[name]
 	if !present {
 		return map[string]any{}, ""
@@ -641,7 +612,7 @@ func (b *WriteBody) foldBase(name, failure string) (map[string]any, string) {
 
 	object, ok := raw.(map[string]any)
 	if !ok {
-		return nil, failure
+		return nil, name + " must be an object"
 	}
 
 	return maps.Clone(object), ""

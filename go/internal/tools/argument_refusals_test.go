@@ -12,32 +12,51 @@ const (
 	keyObjectStorageSetting = "object_storage"
 	unknownZebra            = "zebra"
 	keyEngineIDArgument     = "engine_id"
-	unsupportedSettings     = "Unsupported account settings field(s): {fields}"
 	settingNotString        = "object_storage must be a string"
 	linodesShape            = "linodes must be a non-empty array of distinct positive integer Linode IDs"
 	linodesArray            = "linodes must be a JSON array of positive integer Linode IDs"
 )
 
-// The two whole-map refusals and the string reader that took over from the
-// managed, database, and account-settings hooks. The cases are the ones those
-// hooks were held to, so the sentences a caller reads have not moved.
-func TestRefusedArgumentsNamesEverySuppliedMemberSorted(t *testing.T) {
-	t.Parallel()
+// The contract messages and tool names the refusal cases run against, named
+// once because each case spells a message and the tool declared on it.
+const (
+	credentialUpdateInput = "linode.mcp.v1.ManagedCredentialUpdateInput"
+	credentialUpdateTool  = "linode_managed_credential_update"
+	contactCreateInput    = "linode.mcp.v1.ManagedContactCreateInput"
+	contactCreateTool     = "linode_managed_contact_create"
+	settingsUpdateInput   = "linode.mcp.v1.AccountSettingsUpdateInput"
+	settingsUpdateTool    = "linode_account_settings_update"
+)
 
-	const readOnly = "Read-only fields are not accepted: {fields}"
+// The whole-map refusals that took over from the managed, database, and
+// account-settings hooks. Both come off the descriptor now, so the cases name
+// real contract messages rather than a list written here.
+func TestCheckArgumentRefusalsAnswersTheDeclaredRefusalFirst(t *testing.T) {
+	t.Parallel()
 
 	tests := map[string]struct {
 		arguments map[string]any
+		message   string
+		tool      string
 		want      string
 	}{
-		"none supplied": {arguments: map[string]any{managedServiceLabelParam: tagWeb}, want: ""},
-		"one supplied": {
-			arguments: map[string]any{keySupportTicketID: 3},
-			want:      "Read-only fields are not accepted: id",
-		},
-		"both supplied, sorted": {
+		"a declared refusal names every supplied member, sorted": {
+			message:   credentialUpdateInput,
+			tool:      credentialUpdateTool,
 			arguments: map[string]any{"last_decrypted": "x", keySupportTicketID: 3},
 			want:      "Read-only fields are not accepted: id, last_decrypted",
+		},
+		"a prose sentence stands as written": {
+			message:   contactCreateInput,
+			tool:      contactCreateTool,
+			arguments: map[string]any{"updated": "now"},
+			want:      "id and updated are read-only and cannot be set when creating a managed contact",
+		},
+		"a declared refusal beats an undeclared name": {
+			message:   credentialUpdateInput,
+			tool:      credentialUpdateTool,
+			arguments: map[string]any{keySupportTicketID: 3, unknownZebra: 1},
+			want:      "Read-only fields are not accepted: id",
 		},
 	}
 
@@ -45,9 +64,7 @@ func TestRefusedArgumentsNamesEverySuppliedMemberSorted(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			request := requestFor(test.arguments)
-			got := tools.RefusedArguments(&request, readOnly, keySupportTicketID, "last_decrypted")
-
+			got := tools.CheckArgumentRefusals(test.message, test.tool, test.arguments)
 			if got != test.want {
 				t.Errorf("message = %q, want %q", got, test.want)
 			}
@@ -55,56 +72,54 @@ func TestRefusedArgumentsNamesEverySuppliedMemberSorted(t *testing.T) {
 	}
 }
 
-// A sentence naming the members in prose takes neither placeholder, which is
-// how the contact create keeps the one wording it has always answered.
-func TestRefusedArgumentsLeavesAProseSentenceAlone(t *testing.T) {
+// Every tool refuses a name its input message does not declare, in the engine's
+// own words. The three control names pass because the server and the destroy
+// gate read them off the argument map and no message declares them, and no
+// behavior fixture sends yolo, so this is the only thing holding that entry.
+func TestCheckArgumentRefusalsAnswersForAnUndeclaredName(t *testing.T) {
 	t.Parallel()
-
-	const sentence = "id and updated are read-only and cannot be set when creating a managed contact"
-
-	request := requestFor(map[string]any{"updated": "now"})
-	if got := tools.RefusedArguments(&request, sentence, "id", "updated"); got != sentence {
-		t.Errorf("message = %q, want %q", got, sentence)
-	}
-}
-
-// The database routes name the first undeclared argument and the account
-// settings name them all, which is the whole difference between the two
-// placeholders.
-func TestUnknownArgumentsFillsTheDeclaredPlaceholder(t *testing.T) {
-	t.Parallel()
-
-	declared := []string{keyEnvironment, keyConfirm, keyDryRun, tcBackupsEnabled, keyObjectStorageSetting}
 
 	tests := map[string]struct {
 		arguments map[string]any
-		sentence  string
+		message   string
 		want      string
 	}{
 		"every argument declared": {
+			message:   settingsUpdateInput,
 			arguments: map[string]any{tcBackupsEnabled: true, keyConfirm: true},
-			sentence:  unsupportedSettings,
 			want:      "",
 		},
 		"system params are declared too": {
+			message:   settingsUpdateInput,
 			arguments: map[string]any{keyDryRun: true, keyEnvironment: "default"},
-			sentence:  unsupportedSettings,
 			want:      "",
 		},
+		"the engine control names pass": {
+			message: settingsUpdateInput,
+			arguments: map[string]any{
+				"confirm_bypass_dry_run": true, "confirmed_dry_run": true, "yolo": true,
+			},
+			want: "",
+		},
 		"one unknown": {
-			arguments: map[string]any{tcBackupsEnabled: true, "bogus": "x"},
-			sentence:  unsupportedSettings,
-			want:      "Unsupported account settings field(s): bogus",
+			message:   settingsUpdateInput,
+			arguments: map[string]any{tcBackupsEnabled: true, keyBogus: "x"},
+			want:      "Unsupported argument(s) for linode_account_settings_update: bogus",
 		},
 		"several unknown, sorted": {
+			message:   settingsUpdateInput,
 			arguments: map[string]any{unknownZebra: 1, stageAlpha: 2},
-			sentence:  unsupportedSettings,
-			want:      "Unsupported account settings field(s): alpha, zebra",
+			want:      "Unsupported argument(s) for linode_account_settings_update: alpha, zebra",
 		},
-		"the first unknown alone": {
-			arguments: map[string]any{unknownZebra: 1, stageAlpha: 2},
-			sentence:  "unsupported argument: {field}",
-			want:      "unsupported argument: alpha",
+		"a message the registry does not carry refuses nothing": {
+			message:   "linode.mcp.v1.NoSuchInput",
+			arguments: map[string]any{unknownZebra: 1},
+			want:      "",
+		},
+		"a name the registry carries as something other than a message": {
+			message:   "linode.mcp.v1.FieldLocation",
+			arguments: map[string]any{unknownZebra: 1},
+			want:      "",
 		},
 	}
 
@@ -112,9 +127,7 @@ func TestUnknownArgumentsFillsTheDeclaredPlaceholder(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			request := requestFor(test.arguments)
-			got := tools.UnknownArguments(&request, test.sentence, declared...)
-
+			got := tools.CheckArgumentRefusals(test.message, settingsUpdateTool, test.arguments)
 			if got != test.want {
 				t.Errorf("message = %q, want %q", got, test.want)
 			}

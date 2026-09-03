@@ -171,6 +171,18 @@
         "cluster_size": 4
       },
       "expect_error": "cluster_size must be one of: 1, 2, 3"
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "confirm": true,
+        "bogus_field": "x"
+      },
+      "expect_error": "Unsupported argument(s) for linode_database_postgresql_instance_create: bogus_field"
     }
   ]
 }

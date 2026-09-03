@@ -24,6 +24,8 @@ func pyTransportLine(tool *pyTool) string {
 		return "        transport=RawBody(" + pyRawBodyKeywords(spec) + "),"
 	case transportPresign:
 		return "        transport=PresignTransfer(" + pyPresignKeywords(spec) + "),"
+	case transportPresignRemove:
+		return "        transport=PresignRemove(" + pyKeywords("url_field", pyQuote(spec.URLField)) + "),"
 	case transportNone:
 	}
 
@@ -111,6 +113,8 @@ func pyTransportImports(tools []*pyTool) string {
 			named["RawBody"] = true
 		case transportPresign:
 			named["PresignTransfer"] = true
+		case transportPresignRemove:
+			named["PresignRemove"] = true
 		case transportNone:
 		}
 	}

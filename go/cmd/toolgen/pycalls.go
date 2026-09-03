@@ -510,10 +510,14 @@ func pyStateFetch(tool *pyTool, ids string) string {
 			", tool=" + pyQuote(tool.c.StateRead.Tool) + ")"
 	}
 
+	// The query rides along for the reason the Go arm gives: the object ACL
+	// names the bucket in its path and the object in its query, so a fetch that
+	// dropped it would preview the bucket while the removal took one object out
+	// of it.
 	if !tool.c.StateRead.collection() {
 		return "await read_route_state(client, " + pyStateReadIDs(tool, ids) +
 			", tool=" + pyQuote(tool.c.StateRead.Tool) + pyStateMember(tool) +
-			pyStatePayload(tool) + ")"
+			pyStatePayload(tool) + pyStateQuery(tool) + ")"
 	}
 
 	parents := make([]string, 0, len(tool.c.Slots))
@@ -602,7 +606,9 @@ func pyLiteralBool(value bool) string {
 
 // pyDestroyCall is the destroy driver call, named with what the contract cannot
 // answer. No execute: the driver removes the resource through the routed
-// primitive, since a delete sends no body and reads nothing back.
+// primitive, since a delete sends no body and reads nothing back. A declared
+// transport replaces that primitive, which is how the removal arm sends its
+// DELETE to a URL the declared route just minted.
 func pyDestroyCall(tool *pyTool) ([]string, error) {
 	values := make([]string, 0, len(tool.c.Slots))
 	for _, slot := range tool.c.Slots {
@@ -634,6 +640,10 @@ func pyDestroyCall(tool *pyTool) ([]string, error) {
 
 	if tool.walksDependencies() {
 		lines = append(lines, "        dependency_walk=dependency_walk,")
+	}
+
+	if tool.c.transported() {
+		lines = append(lines, pyTransportLine(tool))
 	}
 
 	return append(lines, "        error=error,", "    )"), nil

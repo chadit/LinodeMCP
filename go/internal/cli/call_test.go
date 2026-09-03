@@ -163,22 +163,25 @@ func TestCallBadOutputExitsUsage(t *testing.T) {
 	wantContains(t, "stderr", stderr.String(), "json or table")
 }
 
-// TestCallDryRunFlagAccepted checks the safety-flag wiring: --dry-run
-// parses and folds into the request without breaking the call. version
-// ignores the field, so the call still succeeds; the point is that the
-// flag is accepted and the request stays valid.
-func TestCallDryRunFlagAccepted(t *testing.T) {
+// TestCallDryRunFlagFoldsIntoTheRequest checks the safety-flag wiring:
+// --dry-run parses and reaches the argument map. VersionInput declares no
+// dry_run, so the refusal naming it is the proof that the flag traveled;
+// before every tool refused an undeclared argument, a flag the parser dropped
+// on the floor and one it folded in read the same to a caller.
+func TestCallDryRunFlagFoldsIntoTheRequest(t *testing.T) {
 	t.Setenv("LINODEMCP_CONFIG_PATH", writeTestConfigFile(t))
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 
 	var stdout, stderr bytes.Buffer
 
 	code := cli.RunCallCommand([]string{toolVersion, "--dry-run"}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("exit code = %d (stderr: %s), want 0", code, stderr.String())
+	if code == 0 {
+		t.Fatalf("exit code = 0 (stdout: %s), want a tool error", stdout.String())
 	}
 
-	wantContains(t, "stdout", stdout.String(), `"version"`)
+	wantContains(t, "stdout", stdout.String(),
+		"Unsupported argument(s) for version: dry_run")
+	wantContains(t, "stderr", stderr.String(), "tool returned an error result")
 }
 
 // TestCallTypesArgsFromRawSchema checks that --arg values are typed from a

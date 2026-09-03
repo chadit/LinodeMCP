@@ -9,8 +9,8 @@ import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
 // DatabaseInstance is one Managed Database instance summary element. The
-// cross-engine /databases/instances list and the per-engine MySQL and
-// PostgreSQL lists all return this same flat summary shape, so the three list
+// cross-engine /databases/instances list and the per-engine MySQL, PostgreSQL
+// and Valkey lists all return this same flat summary shape, so the four list
 // tools share one element. Fields mirror the Linode API summary element and the
 // Go DatabaseInstance struct one-for-one.
 message DatabaseInstance {
@@ -58,9 +58,19 @@ message DatabasePostgreSQLInstanceListResponse {
   repeated DatabaseInstance postgresql_instances = 3;
 }
 
+// DatabaseValkeyInstanceListResponse is the
+// linode_database_valkey_instance_list envelope
+// (/databases/valkey/instances): count and the full proto DatabaseInstance
+// elements. Pagination does not echo a filter.
+message DatabaseValkeyInstanceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DatabaseInstance valkey_instances = 3;
+}
+
 // DatabaseInstanceWriteResponse is the {message, database_instance} envelope the
-// MySQL and PostgreSQL create and update tools return: a confirmation message
-// plus the full DatabaseInstance element decoded from the API body.
+// MySQL, PostgreSQL and Valkey create and update tools return: a confirmation
+// message plus the full DatabaseInstance element decoded from the API body.
 message DatabaseInstanceWriteResponse {
   string message = 1;
   DatabaseInstance database_instance = 2;
@@ -75,19 +85,20 @@ message DatabaseInstanceActionWriteResponse {
   int32 instance_id = 2;
 }
 
-// DatabaseInstanceDeleteResponse is the id-echo envelope the MySQL and
-// PostgreSQL instance delete tools return: a confirmation message plus the
+// DatabaseInstanceDeleteResponse is the id-echo envelope the MySQL, PostgreSQL
+// and Valkey instance delete tools return: a confirmation message plus the
 // deleted instance's ID. The delete endpoint returns an empty body, so the id
-// echo confirms the target. Both engines share this shape.
+// echo confirms the target. All three engines share this shape.
 message DatabaseInstanceDeleteResponse {
   string message = 1;
   int32 instance_id = 2;
 }
 
-// DatabaseCredentials is the {username, password} body the MySQL and PostgreSQL
-// credentials-get tools return. The password is secret by design: these tools
-// exist to expose the connection credentials, so the field is emitted in the
-// clear rather than redacted. Both engines share this element.
+// DatabaseCredentials is the {username, password} body the MySQL, PostgreSQL
+// and Valkey credentials-get tools return. The password is secret by design:
+// these tools exist to expose the connection credentials, so the field is
+// emitted in the clear rather than redacted. All three engines share this
+// element.
 message DatabaseCredentials {
   string username = 1;
   string password = 2;
@@ -159,6 +170,28 @@ message DatabasePostgreSQLInstanceListInput {
   optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
+// DatabaseValkeyInstanceListInput is the input contract for
+// linode_database_valkey_instance_list.
+message DatabaseValkeyInstanceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_list"
+    method: "GET"
+    path: "/databases/valkey/instances"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseValkeyInstanceListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Valkey Managed Database instances with optional pagination.";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+}
+
 // DatabaseMySQLInstanceGetInput is the input contract for
 // linode_database_mysql_instance_get.
 message DatabaseMySQLInstanceGetInput {
@@ -201,6 +234,30 @@ message DatabasePostgreSQLInstanceGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to retrieve.
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
+}
+
+// DatabaseValkeyInstanceGetInput is the input contract for
+// linode_database_valkey_instance_get.
+message DatabaseValkeyInstanceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_get"
+    method: "GET"
+    path: "/databases/valkey/instances/{instance_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstance";
+  option (linode.mcp.v1.tool_description) = "Retrieves a single Valkey Managed Database instance by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Valkey Managed Database instance: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID to retrieve.
   int32 instance_id = 2 [
     (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
     (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
@@ -294,6 +351,54 @@ message DatabasePostgreSQLInstanceCredentialsGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID whose credentials to retrieve.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm retrieving the database credentials. Ignored when
+  // dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// DatabaseValkeyInstanceCredentialsGetInput is the input contract for
+// linode_database_valkey_instance_credentials_get.
+message DatabaseValkeyInstanceCredentialsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_credentials_get"
+    method: "GET"
+    path: "/databases/valkey/instances/{instance_id}/credentials"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseCredentials";
+  option (linode.mcp.v1.tool_description) = "Retrieves credentials for a Valkey Managed Database instance by ID. Pass dry_run=true to preview the request without retrieving the secret.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Valkey Managed Database credentials: {error}";
+  option (linode.mcp.v1.confirm_message) = "This retrieves Managed Database credentials. Set confirm=true to proceed.";
+  // The read is the instance the disclosure lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_valkey_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Valkey Managed Database credentials will be retrieved and exposed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "The response contains sensitive password material."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_credentials_get.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID whose credentials to retrieve.
   int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm retrieving the database credentials. Ignored when
   // dry_run=true.
@@ -407,6 +512,58 @@ message DatabasePostgreSQLInstanceCredentialsResetInput {
   optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
+// DatabaseValkeyInstanceCredentialsResetInput is the input contract for
+// linode_database_valkey_instance_credentials_reset.
+message DatabaseValkeyInstanceCredentialsResetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_credentials_reset"
+    method: "POST"
+    path: "/databases/valkey/instances/{instance_id}/credentials/reset"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resets credentials for a Valkey Managed Database instance by ID. Pass dry_run=true to preview without resetting.";
+  option (linode.mcp.v1.error_message) = "Failed to reset Valkey Managed Database credentials: {error}";
+  option (linode.mcp.v1.confirm_message) = "This resets Valkey Managed Database credentials. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Valkey Managed Database credentials reset";
+  // A replay rotates the password a second time, so the credentials the first
+  // reset handed out stop working.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the rotation lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_valkey_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Valkey Managed Database instance {instance_id} credentials will be reset."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Resetting credentials can disrupt clients using the old credentials."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_credentials_reset.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID whose credentials to reset.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm resetting Valkey database credentials. Ignored
+  // when dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
 // DatabaseMySQLInstanceDeleteInput is the input contract for
 // linode_database_mysql_instance_delete.
 message DatabaseMySQLInstanceDeleteInput {
@@ -486,6 +643,56 @@ message DatabasePostgreSQLInstanceDeleteInput {
   // The PostgreSQL Managed Database instance ID to delete.
   int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm PostgreSQL database deletion. This action is
+  // irreversible. Ignored when dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// DatabaseValkeyInstanceDeleteInput is the input contract for
+// linode_database_valkey_instance_delete.
+message DatabaseValkeyInstanceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_delete"
+    method: "DELETE"
+    path: "/databases/valkey/instances/{instance_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes a Valkey Managed Database instance. WARNING: This is irreversible. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
+  option (linode.mcp.v1.confirm_message) = "This deletes a Valkey Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "DatabaseInstance";
+  // The MySQL and PostgreSQL deletes answer with the removal tier's shared
+  // sentence, listed in scripts/verify_tool_response.py. That list only
+  // shrinks, so a removal added now says which resource it could not delete.
+  option (linode.mcp.v1.error_message) = "Failed to delete Valkey Managed Database instance {instance_id}: {error}";
+  option (linode.mcp.v1.success_message) = "Valkey Managed Database instance {instance_id} deleted";
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance a delete removes.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_valkey_instance_get"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_delete.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id >= 1"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID to delete.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm Valkey database deletion. This action is
   // irreversible. Ignored when dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -588,6 +795,54 @@ message DatabasePostgreSQLInstancePatchInput {
   // The PostgreSQL Managed Database instance ID to patch.
   int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm PostgreSQL database patching. This may cause
+  // maintenance downtime for single-node clusters. Ignored when dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// DatabaseValkeyInstancePatchInput is the input contract for
+// linode_database_valkey_instance_patch.
+message DatabaseValkeyInstancePatchInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_patch"
+    method: "POST"
+    path: "/databases/valkey/instances/{instance_id}/patch"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Applies security patches and updates to a Valkey Managed Database instance. Pass dry_run=true to preview without patching.";
+  option (linode.mcp.v1.error_message) = "Failed to patch Valkey Managed Database instance {instance_id}: {error}";
+  option (linode.mcp.v1.confirm_message) = "This patches a Valkey Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Valkey Managed Database instance {instance_id} patch started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the patch lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_valkey_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Pending patches will be applied to Valkey Managed Database instance {instance_id}."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_patch.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID to patch.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm Valkey database patching. This may cause
   // maintenance downtime for single-node clusters. Ignored when dry_run=true.
   bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -699,6 +954,58 @@ message DatabasePostgreSQLInstanceSuspendInput {
   optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
+// DatabaseValkeyInstanceSuspendInput is the input contract for
+// linode_database_valkey_instance_suspend.
+message DatabaseValkeyInstanceSuspendInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_suspend"
+    method: "POST"
+    path: "/databases/valkey/instances/{instance_id}/suspend"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Suspends an active Valkey Managed Database instance. Pass dry_run=true to preview without suspending.";
+  option (linode.mcp.v1.error_message) = "Failed to suspend Valkey Managed Database instance {instance_id}: {error}";
+  option (linode.mcp.v1.confirm_message) = "This suspends a Valkey Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Valkey Managed Database instance {instance_id} suspend started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the suspend lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_valkey_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Valkey Managed Database instance {instance_id} will be suspended."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Suspending a Managed Database can interrupt service."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_suspend.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID to suspend.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm suspending the Valkey database instance.
+  // Ignored when dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
 // DatabaseMySQLInstanceResumeInput is the input contract for
 // linode_database_mysql_instance_resume.
 message DatabaseMySQLInstanceResumeInput {
@@ -803,6 +1110,58 @@ message DatabasePostgreSQLInstanceResumeInput {
   optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
+// DatabaseValkeyInstanceResumeInput is the input contract for
+// linode_database_valkey_instance_resume.
+message DatabaseValkeyInstanceResumeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_resume"
+    method: "POST"
+    path: "/databases/valkey/instances/{instance_id}/resume"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Resumes a suspended Valkey Managed Database instance. Pass dry_run=true to preview without resuming.";
+  option (linode.mcp.v1.error_message) = "Failed to resume Valkey Managed Database instance {instance_id}: {error}";
+  option (linode.mcp.v1.confirm_message) = "This resumes a Valkey Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Valkey Managed Database instance {instance_id} resume started";
+  // A replay starts a second action on an instance the first one is already
+  // changing.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The read is the instance the resume lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_valkey_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Valkey Managed Database instance {instance_id} will be resumed."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Resuming a Managed Database changes service state."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_resume.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID to resume.
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // Must be true to confirm resuming the Valkey database instance. Ignored
+  // when dry_run=true.
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
 // DatabaseMySQLInstanceCreateInput is the input contract for
 // linode_database_mysql_instance_create. The engine_config, fork, and
 // private_network params are free-form objects, so each is a
@@ -832,9 +1191,6 @@ message DatabaseMySQLInstanceCreateInput {
   option (linode.mcp.v1.success_message) = "Managed Database instance '{label}' (ID: {id}) created";
   // A replay would create a second billable instance.
   option (linode.mcp.v1.retry_disabled) = true;
-  // A name the message does not declare is dropped before the rules run, so
-  // the argument map is the only place a caller's typo is still visible.
-  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
   // The database a create would make, and what making one costs.
   option (linode.mcp.v1.preview_sentence) = {
     template: "A MySQL Managed Database '{label}' will be created or restored."
@@ -933,9 +1289,6 @@ message DatabasePostgreSQLInstanceCreateInput {
   option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance '{label}' (ID: {id}) created";
   // A replay would create a second billable instance.
   option (linode.mcp.v1.retry_disabled) = true;
-  // A name the message does not declare is dropped before the rules run, so
-  // the argument map is the only place a caller's typo is still visible.
-  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
   // The route only makes PostgreSQL instances, so an engine naming another
   // family is refused here rather than by the API. It holds its peace on a
   // blank engine, which the argument's own reader answers.
@@ -1013,6 +1366,110 @@ message DatabasePostgreSQLInstanceCreateInput {
   optional bool dry_run = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
+// DatabaseValkeyInstanceCreateInput is the input contract for
+// linode_database_valkey_instance_create. The engine_config, fork, and
+// private_network params are free-form objects, so each is a
+// map<string, google.protobuf.Value> that renders top-level {"type":"object"};
+// the runtime handler validates their inner shape.
+message DatabaseValkeyInstanceCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_create"
+    method: "POST"
+    path: "/databases/valkey/instances"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_create.cluster_size.known"
+    message: "cluster_size must be one of: 1, 2, 3"
+    expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Creates or restores a Valkey Managed Database instance. This creates a billable resource. Pass dry_run=true to preview without creating.";
+  option (linode.mcp.v1.confirm_message) = "This creates a billable Valkey Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.error_message) = "Failed to create Valkey Managed Database instance: {error}";
+  // {label} and {id} read the response, so the sentence names what the API
+  // settled on rather than what was asked for.
+  option (linode.mcp.v1.success_message) = "Valkey Managed Database instance '{label}' (ID: {id}) created";
+  // A replay would create a second billable instance.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // No engine-family rule here, unlike the MySQL and PostgreSQL creates. Those
+  // two pin a prefix TechDocs spells out on their own pages; the Valkey pages
+  // and the engines listing carry no Valkey engine ID at all, so a prefix
+  // written here would be the repo's invention and would refuse a call the API
+  // accepts.
+
+  // The database a create would make, and what making one costs.
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "A Valkey Managed Database '{label}' will be created or restored."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Creating a Managed Database can incur billing."
+    line: PREVIEW_LINE_WARNING
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Label for the database instance.
+  string label = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "label must be a non-empty string"
+      unusable: "label must be a non-empty string"
+    }
+  ];
+  // Linode type for the database instance.
+  string type = 3 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "type must be a non-empty string"
+      unusable: "type must be a non-empty string"
+    }
+  ];
+  // Valkey database engine ID.
+  string engine = 4 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "engine must be a non-empty string"
+      unusable: "engine must be a non-empty string"
+    }
+  ];
+  // Region for the database instance.
+  string region = 5 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_PRESENT_TEXT,
+    (linode.mcp.v1.reader_message) = {
+      absent: "region must be a non-empty string"
+      unusable: "region must be a non-empty string"
+    }
+  ];
+  // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
+  repeated string allow_list = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Number of nodes in the cluster (optional).
+  optional int32 cluster_size = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // JSON object of Valkey engine configuration values (optional).
+  map<string, google.protobuf.Value> engine_config = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Object describing source database fork/restore settings (optional).
+  map<string, google.protobuf.Value> fork = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
+  // Omit for no private networking (optional).
+  map<string, google.protobuf.Value> private_network = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether to require SSL connections (optional).
+  optional bool ssl_connection = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm database creation. This creates a billable
+  // resource. Ignored when dry_run=true.
+  bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
 // DatabaseMySQLInstanceUpdateInput is the input contract for
 // linode_database_mysql_instance_update. The engine_config, updates, and
 // private_network params are free-form objects, so each is a
@@ -1024,6 +1481,14 @@ message DatabaseMySQLInstanceUpdateInput {
     tool: "linode_database_mysql_instance_update"
     method: "PUT"
     path: "/databases/mysql/instances/{instance_id}"
+  };
+
+  // A scalar cannot carry an enum descriptor without changing the wire
+  // type, so the documented 1/2/3 set is a rule the handler runs.
+  option (buf.validate.message).cel = {
+    id: "database_mysql_instance_update.cluster_size.known"
+    message: "cluster_size must be one of: 1, 2, 3"
+    expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
   };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
@@ -1037,11 +1502,9 @@ message DatabaseMySQLInstanceUpdateInput {
   option (linode.mcp.v1.success_message) = "Managed Database instance '{label}' (ID: {id}) updated";
   // A replay re-sends a body the first call already applied.
   option (linode.mcp.v1.retry_disabled) = true;
-  // A name the message does not declare is dropped before the rules run, so
-  // the argument map is the only place a caller's typo is still visible.
-  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
   option (linode.mcp.v1.require_any_of) = {
     fields: "allow_list"
+    fields: "cluster_size"
     fields: "engine_config"
     fields: "label"
     fields: "private_network"
@@ -1107,6 +1570,10 @@ message DatabaseMySQLInstanceUpdateInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Number of nodes in the cluster (optional). The update route documents
+  // it, so resizing a cluster is a change this tool can send rather than
+  // something only a create can set.
+  optional int32 cluster_size = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // DatabasePostgreSQLInstanceUpdateInput is the input contract for
@@ -1121,6 +1588,14 @@ message DatabasePostgreSQLInstanceUpdateInput {
     method: "PUT"
     path: "/databases/postgresql/instances/{instance_id}"
   };
+
+  // A scalar cannot carry an enum descriptor without changing the wire
+  // type, so the documented 1/2/3 set is a rule the handler runs.
+  option (buf.validate.message).cel = {
+    id: "database_postgresql_instance_update.cluster_size.known"
+    message: "cluster_size must be one of: 1, 2, 3"
+    expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
+  };
   option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
   option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
   option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
@@ -1133,11 +1608,9 @@ message DatabasePostgreSQLInstanceUpdateInput {
   option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database instance '{label}' (ID: {id}) updated";
   // A replay re-sends a body the first call already applied.
   option (linode.mcp.v1.retry_disabled) = true;
-  // A name the message does not declare is dropped before the rules run, so
-  // the argument map is the only place a caller's typo is still visible.
-  option (linode.mcp.v1.refuse_unknown_arguments) = {message: "unsupported argument: {field}"};
   option (linode.mcp.v1.require_any_of) = {
     fields: "allow_list"
+    fields: "cluster_size"
     fields: "engine_config"
     fields: "label"
     fields: "private_network"
@@ -1203,4 +1676,120 @@ message DatabasePostgreSQLInstanceUpdateInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Number of nodes in the cluster (optional). The update route documents
+  // it, so resizing a cluster is a change this tool can send rather than
+  // something only a create can set.
+  optional int32 cluster_size = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+}
+
+// DatabaseValkeyInstanceUpdateInput is the input contract for
+// linode_database_valkey_instance_update. The engine_config, updates, and
+// private_network params are free-form objects, so each is a
+// map<string, google.protobuf.Value> that renders top-level {"type":"object"};
+// the runtime handler validates their inner shape. private_network also accepts
+// an explicit JSON null at runtime to detach the VPC.
+message DatabaseValkeyInstanceUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_update"
+    method: "PUT"
+    path: "/databases/valkey/instances/{instance_id}"
+  };
+
+  // A scalar cannot carry an enum descriptor without changing the wire
+  // type, so the documented 1/2/3 set is a rule the handler runs.
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_update.cluster_size.known"
+    message: "cluster_size must be one of: 1, 2, 3"
+    expression: "!has(this.cluster_size) || this.cluster_size in [1,2,3]"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.tool_description) = "Updates a Valkey Managed Database instance. Pass dry_run=true to preview without modifying.";
+  option (linode.mcp.v1.error_message) = "Failed to update Valkey Managed Database instance: {error}";
+  option (linode.mcp.v1.confirm_message) = "This updates a Valkey Managed Database instance. Set confirm=true to proceed.";
+  // {label} and {id} read the response, so the sentence names the label the
+  // instance ended up with even when the caller sent none.
+  option (linode.mcp.v1.success_message) = "Valkey Managed Database instance '{label}' (ID: {id}) updated";
+  // A replay re-sends a body the first call already applied.
+  option (linode.mcp.v1.retry_disabled) = true;
+  option (linode.mcp.v1.require_any_of) = {
+    fields: "allow_list"
+    fields: "cluster_size"
+    fields: "engine_config"
+    fields: "label"
+    fields: "private_network"
+    fields: "region"
+    fields: "type"
+    fields: "updates"
+    fields: "version"
+    message: "at least one update field must be provided"
+  };
+  // The read is the instance the update lands on.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_database_valkey_instance_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Valkey Managed Database {instance_id} will be updated."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Updating a Managed Database can change service behavior."
+    line: PREVIEW_LINE_WARNING
+  };
+  // The id addresses the instance in the path, and a caller who sends a
+  // non-positive one is told so rather than being sent to a route that cannot
+  // exist.
+  option (buf.validate.message).cel = {
+    id: "database_valkey_instance_update.instance_id.positive"
+    message: "instance_id must be a positive integer"
+    expression: "this.instance_id > 0"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID to update. The reader answers a
+  // caller who sent something no id can be, which the rule above cannot: a
+  // message that will not build evaluates none.
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID,
+    (linode.mcp.v1.reader_message) = {
+      absent: "instance_id must be a positive integer"
+      refused: "instance_id must be a positive integer"
+    }
+  ];
+  // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
+  repeated string allow_list = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // JSON object of Valkey engine configuration values (optional).
+  map<string, google.protobuf.Value> engine_config = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // New label for the database instance (optional).
+  optional string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
+  // Pass null to detach (optional).
+  map<string, google.protobuf.Value> private_network = 6 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_BODY,
+    (linode.mcp.v1.body_nullable) = true
+  ];
+  // New Linode type for the database instance (optional).
+  optional string type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Object of maintenance update settings (optional).
+  map<string, google.protobuf.Value> updates = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // New Valkey version for the database instance (optional).
+  optional string version = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to confirm database update. Ignored when dry_run=true.
+  bool confirm = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Number of nodes in the cluster (optional). The update route documents
+  // it, so resizing a cluster is a change this tool can send rather than
+  // something only a create can set.
+  optional int32 cluster_size = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // New region for the database instance (optional). The Valkey update route
+  // documents region on its body; the MySQL and PostgreSQL update routes do
+  // not, so this field is the one place the three engines' update contracts
+  // differ.
+  optional string region = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }

@@ -17,6 +17,11 @@
       "args": {},
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": { "method": "GET", "path": "/account/availability" }
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": { "bogus_field": "x" },
+      "expect_error": "Unsupported argument(s) for linode_account_availability_list: bogus_field"
     }
   ]
 }

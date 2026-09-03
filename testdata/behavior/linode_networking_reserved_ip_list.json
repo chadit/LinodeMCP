@@ -188,6 +188,14 @@
       "args": {},
       "api_response_raw": "\"reserved\"",
       "expect_api_error": "response"
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": {
+        "page": 2,
+        "bogus_field": "x"
+      },
+      "expect_error": "Unsupported argument(s) for linode_networking_reserved_ip_list: bogus_field"
     }
   ]
 }

@@ -22,6 +22,11 @@
       "expect_result": {
         "message": "Hello, World! LinodeMCP server is running and ready."
       }
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": { "bogus_field": "x" },
+      "expect_error": "Unsupported argument(s) for hello: bogus_field"
     }
   ]
 }

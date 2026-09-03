@@ -81,18 +81,6 @@
       "expect_error": "at least one grant section is required"
     },
     {
-      "name": "rejects an argument the tool does not declare",
-      "args": {
-        "username": "alice",
-        "global": {
-          "account_access": "read_only"
-        },
-        "sharegroup": [],
-        "confirm": true
-      },
-      "expect_error": "unknown grant update fields: sharegroup"
-    },
-    {
       "name": "rejects a global grants object that is not an object",
       "args": {
         "username": "alice",
@@ -233,6 +221,18 @@
         ],
         "warnings": []
       }
+    },
+    {
+      "name": "rejects an argument the tool does not declare",
+      "args": {
+        "username": "alice",
+        "global": {
+          "account_access": "read_only"
+        },
+        "sharegroup": [],
+        "confirm": true
+      },
+      "expect_error": "Unsupported argument(s) for linode_account_user_grants_update: sharegroup"
     }
   ]
 }

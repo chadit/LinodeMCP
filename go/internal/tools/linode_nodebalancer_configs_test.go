@@ -329,7 +329,7 @@ func TestLinodeNodeBalancerConfigListToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := gentools.NewLinodeNodebalancerConfigListTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80)})
+	req := createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -382,7 +382,8 @@ func TestLinodeNodeBalancerConfigListToolClientError(t *testing.T) {
 	}
 	_, _, srvHandler := gentools.NewLinodeNodebalancerConfigListTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80)}))
+	result, err := srvHandler(t.Context(),
+		createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123)}))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

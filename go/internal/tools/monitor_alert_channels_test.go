@@ -17,7 +17,7 @@ import (
 const (
 	monitorAlertChannelsToolPath     = "/monitor/alert-channels"
 	monitorAlertChannelsToolName     = "linode_monitor_alert_channel_list"
-	monitorAlertChannelsToolQuery    = "page=2&page_size=25"
+	monitorAlertChannelsToolQuery    = ""
 	monitorAlertChannelToolID        = 10000
 	monitorAlertChannelToolLabel     = "Read-Write Channel"
 	monitorAlertChannelToolEmail     = "Users-with-read-write-access-to-resources"
@@ -94,7 +94,7 @@ func TestLinodeMonitorAlertChannelsToolSuccess(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := gentools.NewLinodeMonitorAlertChannelListTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyPage: 2, keyPageSize: 25})
+	req := createRequestWithArgs(t, map[string]any{})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -176,19 +176,26 @@ func TestLinodeMonitorAlertChannelsToolApiError(t *testing.T) {
 	}
 }
 
-func TestLinodeMonitorAlertChannelsToolInvalidPaginationRejectsBeforeClient(t *testing.T) {
+// The route publishes no page controls and MonitorAlertChannelListInput
+// declares none, so the list driver refuses both rather than forwarding them
+// to a route that ignores them. Nineteen other list tools cover the page
+// controls themselves, on the messages that do declare them.
+func TestLinodeMonitorAlertChannelsToolRefusesPageControlsItDoesNotDeclare(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name        string
 		args        map[string]any
+		name        string
 		wantMessage string
 	}{
-		{name: paginationCasePageZero, args: map[string]any{keyPage: 0}, wantMessage: paginationMessagePageMustBe},
-		{name: paginationCasePageString, args: map[string]any{keyPage: "2"}, wantMessage: errPageInteger},
-		{name: paginationCasePageSizeTooSmall, args: map[string]any{keyPageSize: 24}, wantMessage: errPageSizeRange},
-		{name: paginationCasePageSizeTooLarge, args: map[string]any{keyPageSize: 501}, wantMessage: errPageSizeRange},
-		{name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"}, wantMessage: errPageSizeInteger},
+		{
+			name: paginationCasePageZero, args: map[string]any{keyPage: 0},
+			wantMessage: "Unsupported argument(s) for linode_monitor_alert_channel_list: page",
+		},
+		{
+			name: paginationCasePageSizeString, args: map[string]any{keyPageSize: "25"},
+			wantMessage: "Unsupported argument(s) for linode_monitor_alert_channel_list: page_size",
+		},
 	}
 
 	for _, testCase := range cases {
@@ -198,9 +205,7 @@ func TestLinodeMonitorAlertChannelsToolInvalidPaginationRejectsBeforeClient(t *t
 			cfg := &config.Config{}
 			_, _, handler := gentools.NewLinodeMonitorAlertChannelListTool(cfg)
 
-			req := createRequestWithArgs(t, testCase.args)
-
-			result, err := handler(t.Context(), req)
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -218,8 +223,8 @@ func TestLinodeMonitorAlertChannelsToolInvalidPaginationRejectsBeforeClient(t *t
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, testCase.wantMessage) {
-				t.Errorf("textContent.Text does not contain %v", testCase.wantMessage)
+			if textContent.Text != testCase.wantMessage {
+				t.Errorf("textContent.Text = %v, want %v", textContent.Text, testCase.wantMessage)
 			}
 		})
 	}

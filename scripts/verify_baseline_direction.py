@@ -60,11 +60,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CONTRACTS = _REPO_ROOT / "docs" / "contracts"
 
 # Reviewed upstream snapshots, not hand-shrinkable ratchets: each is rewritten
-# wholesale by the command that owns it and the added lines carry no annotation,
-# so the growth-must-be-annotated rule does not apply. The route snapshot's
-# producer lives in tools/techdocs-proof, so the lockstep names its consumer's
-# constant. test_verify_baseline_direction.py pins the list to those producers,
-# so a rename cannot silently re-guard a snapshot or leave a new one unguarded.
+# wholesale by the command that owns it, so there is no annotation for the
+# growth rule to ask for. The route snapshot's producer lives in
+# tools/techdocs-proof, so the lockstep names its consumer's constant.
 _SNAPSHOT_BASELINES = frozenset(
     {
         "api-defaults-baseline.txt",
@@ -76,12 +74,10 @@ _SNAPSHOT_BASELINES = frozenset(
 )
 
 # Outside the *-baseline.txt glob but under the same growth rule: an entry in
-# behavior-exempt.txt removes a tool from behavior-fixture coverage for good,
-# and scope-sync-exempt.txt removes a scope deviation from the ratchet for as
-# long as upstream keeps the route unpublished. Both are bigger commitments
-# than any ratchet line. New exemptions must carry the same dated annotation;
-# each gate reads only the tab-split key, so the annotation is invisible to the
-# gates themselves and only this guard enforces it.
+# behavior-exempt.txt drops a tool from behavior-fixture coverage for good, and
+# scope-sync-exempt.txt drops a scope deviation for as long as upstream leaves
+# the route unpublished. Each gate reads only the tab-split key, so only this
+# guard can see the dated annotation a new exemption owes.
 _ANNOTATED_EXTRAS = ("behavior-exempt.txt", "scope-sync-exempt.txt")
 
 

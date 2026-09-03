@@ -2,24 +2,30 @@
 
 Two tools move object bytes: `linode_object_storage_object_upload` sends a local
 file into a bucket, and `linode_object_storage_object_download` fetches an
-object back out to a local file. Copies and multipart are not built yet.
+object back out to a local file. A third, `linode_object_storage_object_delete`,
+removes one object through the same signing route. Copies and multipart are not
+built yet.
 
 ## How it works, and why no keys are involved
 
 Each tool makes exactly one Linode API call:
-`POST /object-storage/buckets/{region}/{label}/object-url`, the same presigned
-URL endpoint `linode_object_storage_presigned_url_create` exposes. The API
-answers with a signed URL, and the tool then sends the file's bytes to that URL
-(upload) or reads them back from it (download).
+`POST /object-storage/buckets/{region}/{label}/object-url`, the same signing
+endpoint that `linode_object_storage_object_download_url_create` and
+`linode_object_storage_object_upload_url_create` hand back to the caller. The
+API answers with a signed URL, and the tool then sends the file's bytes to that
+URL (upload), reads them back from it (download), or sends the DELETE it
+authorizes (delete).
 
 Following a URL is not the same as calling an S3 endpoint. The server builds no
 S3 path, resolves no S3 hostname, and never creates or holds an Object Storage
 access key. If you are auditing what this tool can reach, the answer is one
 documented v4 route plus whatever host Linode put in the URL it minted.
 
-The URL is a bearer credential for its lifetime. Anyone holding it can write
-that one object until it expires, which is why the tool never prints it, not in
-a result, not in an error, and not in the audit record.
+The URL is a bearer credential for its lifetime. Anyone holding it can reach
+that one object until it expires, which is why a tool that uses the URL itself
+never prints it, not in a result, not in an error, and not in the audit record.
+The two URL tools below are the exception, and the whole point: they hand the
+URL to the caller, which is why the PUT half takes a confirm gate.
 
 ## What you need on the machine running the server
 
@@ -47,6 +53,27 @@ false is what guards the one thing it does change, which is a file on your disk.
 The bytes land in a temporary file beside the destination and are renamed into
 place only after the whole object has been written. A transfer that fails
 partway leaves no truncated file at the path you named.
+
+## Deleting
+
+`linode_object_storage_object_delete` signs a DELETE over the same route and
+sends it. It is Destroy capability, so it takes the whole destroy flow: the
+bypass-dry-run gate, `confirm: true`, and the two-stage `mode: "plan"` /
+`mode: "apply"` pair. The preview reads the object's ACL, which is also what
+reports an object that is not there before anything is signed.
+
+Nothing is retried and nothing is measured. A replay after a timeout would
+report an object the first attempt already removed as one the bucket never held.
+
+## Handing a signed URL to someone else
+
+The two URL tools mint a URL and answer with it instead of using it.
+`linode_object_storage_object_download_url_create` signs a GET and is Read
+capability, so it ships in the read-only profiles. Its sibling
+`linode_object_storage_object_upload_url_create` signs a PUT, which is a write
+credential that travels outside every gate this server owns, so it is Write
+capability with a confirm sentence and a dry run. Neither tool chooses a verb:
+each pins its own, which is what lets the two halves sit in different profiles.
 
 ## Verifying an upload
 
@@ -96,6 +123,19 @@ objectStorage:
   # Lifetime requested for the minted URL. Default 3600.
   presignTtlSeconds: 3600
 ```
+
+The object-url endpoint publishes its own window for `expires_in`, minimum 360
+seconds and maximum 3600, and all five signing tools refuse a caller-supplied
+value outside it. `presignTtlSeconds` travels as that same body member, so
+config load holds it to the same window: a value below 360 or above 3600 fails
+the load in both languages with `objectStorage.presignTtlSeconds must be between
+360 and 3600 seconds`. An omitted key and an explicit `0` both resolve to the
+3600 default. Write it as a bare number: a quoted `"3600"`, a boolean or a list
+fails the load in both languages too, Go in its YAML decode and Python with
+`objectStorage.presignTtlSeconds must be a whole number of seconds`. The 3600
+ceiling also caps how long any minted URL can outlast a transfer, so a
+`transferTimeout` above one hour cannot be covered by any lifetime the endpoint
+accepts. The shipped pair leaves room: 30m of budget against a 3600-second URL.
 
 `filesystemRoot` has no default because there is no safe directory to guess for
 a server reading an operator's own files. When you do set one, a path is

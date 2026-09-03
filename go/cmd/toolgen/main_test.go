@@ -494,9 +494,9 @@ func TestEveryEmittedReadPreviewIsGated(t *testing.T) {
 		}
 	}
 
-	// The two database credentials reads and linode_managed_credential_get, so
-	// a scan that stopped finding reads cannot pass by measuring nothing.
-	const gatedReads = 3
+	// The three database credentials reads and linode_managed_credential_get,
+	// so a scan that stopped finding reads cannot pass by measuring nothing.
+	const gatedReads = 4
 
 	if gated != gatedReads {
 		t.Errorf("found %d gated read(s), want %d", gated, gatedReads)
@@ -1869,25 +1869,25 @@ func TestEmitsTheNullableStringSetterTheManagedUpdatesDeclare(t *testing.T) {
 
 // A read on a route that is not a GET is neither tier the route method alone
 // would pick: the write tier's gate would make a read start demanding confirm,
-// and the read tier sends no body at all. The presigned-URL create is the shape
+// and the read tier sends no body at all. The download-URL create is the shape
 // whose whole answer is the decode, so the cohort is the real list less that
 // name.
 func TestEmitsAReadThatSendsARequestBody(t *testing.T) {
 	t.Parallel()
 
-	const tool = "linode_object_storage_presigned_url_create"
+	const tool = "linode_object_storage_object_download_url_create"
 
 	source := readGenerated(t,
 		runGenFrom(t, writeHandwritten(t, readNames(t, handwrittenFile))),
 		"object_storage.gen.go")
 
-	handler := handlerBody(t, source, "handleLinodeObjectStoragePresignedURLCreate")
+	handler := handlerBody(t, source, "handleLinodeObjectStorageObjectDownloadURLCreate")
 
 	for _, want := range []string{
-		`body, message := linodeObjectStoragePresignedURLCreateBody(request)`,
+		`body, message := linodeObjectStorageObjectDownloadURLCreateBody(request)`,
 		`response := &linodev1.PresignedURLResponse{}`,
 		`client.CallProtoRouteBody(ctx, "` + tool + `", []any{region, label}, body, ` +
-			`"object storage presigned url create", response)`,
+			`"object storage object download url create", response)`,
 		`return tools.MarshalProtoToolResponse(response)`,
 	} {
 		if !strings.Contains(handler, want) {
@@ -1904,20 +1904,20 @@ func TestEmitsAReadThatSendsARequestBody(t *testing.T) {
 		}
 	}
 
-	if strings.Contains(source, "func previewLinodeObjectStoragePresignedURLCreate(") {
+	if strings.Contains(source, "func previewLinodeObjectStorageObjectDownloadURLCreate(") {
 		t.Errorf("emitted source declares a preview for a read that changes nothing:\n%s", source)
 	}
 
-	// The body is the whole request, so every declared field has to reach it.
+	// The body is the whole request, so every declared field reaches it, and the
+	// pinned verb goes through the constant rather than a field setter.
 	for _, want := range []string{
 		`body.PutString("name")`,
-		`body.PutString("method")`,
 		`body.SetInt("expires_in")`,
-		`body.SetString("content_type")`,
+		`body.Constant("method", "GET")`,
 	} {
 		if !strings.Contains(source, want) {
 			t.Errorf("emitted body is missing %q:\n%s", want,
-				handlerBody(t, source, "linodeObjectStoragePresignedURLCreateBody"))
+				handlerBody(t, source, "linodeObjectStorageObjectDownloadURLCreateBody"))
 		}
 	}
 }
@@ -2268,7 +2268,7 @@ func TestEveryDeclaredFetchDecodesWhatItsReadDecodes(t *testing.T) {
 
 	// Every state route in the contract, so a scan that stopped matching cannot
 	// pass by measuring nothing.
-	const declaredFetches = 174
+	const declaredFetches = 182
 
 	if fetches != declaredFetches {
 		t.Errorf("found %d declared fetch(es), want %d", fetches, declaredFetches)
@@ -2319,6 +2319,10 @@ func TestEveryEnvelopeFetchCarriesThePageControlsItPublishes(t *testing.T) {
 // query names.
 var stateReadQuery = regexp.MustCompile(`client\.CallProtoRouteStateQuery\(ctx, "([^"]+)"`)
 
+// objectACLRead is the one route both arms address with a query: it names the
+// bucket in its path and the object in its query.
+const objectACLRead = "linode_object_storage_object_acl_get"
+
 // TestEveryQueryFillingFetchEmitsTheQueryCall: the contract-build refusal
 // checks the declaration, not the emission, so an emitter that dropped back to
 // the plain state call would ship a fetch silently reading the wrong resource,
@@ -2335,7 +2339,7 @@ func TestEveryQueryFillingFetchEmitsTheQueryCall(t *testing.T) {
 		t.Fatalf("read emitted tree: %v", err)
 	}
 
-	reads := make([]string, 0, 1)
+	reads := make([]string, 0, 2)
 
 	for _, entry := range entries {
 		source := readGenerated(t, dir, entry.Name())
@@ -2344,13 +2348,19 @@ func TestEveryQueryFillingFetchEmitsTheQueryCall(t *testing.T) {
 		}
 	}
 
-	const queryFillingFetches = 1
+	// Both rows read the object ACL: the ACL update previews the value it is
+	// about to replace, and the object delete previews the object it is about
+	// to remove. That route names the bucket in its path and the object in its
+	// query, which is what makes the query form load-bearing on each.
+	const queryFillingFetches = 2
 
 	if len(reads) != queryFillingFetches {
 		t.Fatalf("found %d query-carrying fetch(es) %v, want %d", len(reads), reads, queryFillingFetches)
 	}
 
-	if reads[0] != "linode_object_storage_object_acl_get" {
-		t.Errorf("query-carrying fetch reads %s, want linode_object_storage_object_acl_get", reads[0])
+	for _, read := range reads {
+		if read != objectACLRead {
+			t.Errorf("query-carrying fetch reads %s, want %s", read, objectACLRead)
+		}
 	}
 }

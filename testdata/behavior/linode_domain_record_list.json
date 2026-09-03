@@ -12,6 +12,14 @@
       "args": { "domain_id": 5 },
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": { "method": "GET", "path": "/domains/5/records" }
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": {
+        "domain_id": 5,
+        "bogus_field": "x"
+      },
+      "expect_error": "Unsupported argument(s) for linode_domain_record_list: bogus_field"
     }
   ]
 }

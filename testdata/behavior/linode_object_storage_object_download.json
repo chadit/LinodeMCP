@@ -58,15 +58,26 @@
       "expect_error": "dest_path must be a local, absolute path"
     },
     {
-      "name": "rejects an expires_in outside the signing window",
+      "name": "rejects an expires_in below the signing floor",
       "args": {
         "region": "us-east",
         "label": "artifacts",
         "name": "releases/app.tar.gz",
         "dest_path": "/tmp/app.tar.gz",
-        "expires_in": 604801
+        "expires_in": 359
       },
-      "expect_error": "expires_in must be between 1 and 604800 seconds (7 days)"
+      "expect_error": "expires_in must be between 360 and 3600 seconds"
+    },
+    {
+      "name": "rejects an expires_in above the signing ceiling",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "/tmp/app.tar.gz",
+        "expires_in": 3601
+      },
+      "expect_error": "expires_in must be between 360 and 3600 seconds"
     },
     {
       "name": "downloads an object and reports what landed",
@@ -103,6 +114,50 @@
             "method": "GET",
             "content_type": "application/octet-stream",
             "expires_in": 3600
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/artifacts/releases/app.tar.gz?sig=fixture"
+        }
+      ]
+    },
+    {
+      "name": "downloads with an explicit in-window expires_in",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dest_path": "{{file_dir}}/in-window.bin",
+        "expires_in": 900
+      },
+      "api_responses": {
+        "POST /object-storage/buckets/us-east/artifacts/object-url": {
+          "url": "{{api_base}}/artifacts/releases/app.tar.gz?sig=fixture"
+        },
+        "GET /artifacts/releases/app.tar.gz": "hello object storage"
+      },
+      "api_response_headers": {
+        "GET /artifacts/releases/app.tar.gz": {
+          "ETag": "\"5eb63bbbe01eeed093cb22bb8f5acdc3\""
+        }
+      },
+      "expect_result": {
+        "message": "Object 'releases/app.tar.gz' downloaded from bucket 'artifacts'",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "size_bytes": 22,
+        "etag": "5eb63bbbe01eeed093cb22bb8f5acdc3"
+      },
+      "expect_requests": [
+        {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "method": "GET",
+            "content_type": "application/octet-stream",
+            "expires_in": 900
           }
         },
         {

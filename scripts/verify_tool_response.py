@@ -77,6 +77,7 @@ META = "TOOL_CAPABILITY_META"
 STRUCT_RESPONSE = {
     "linode_database_mysql_config_get",
     "linode_database_postgresql_config_get",
+    "linode_database_valkey_config_get",
     "linode_managed_stats_get",
     "linode_profile_preferences_get",
 }
@@ -99,12 +100,11 @@ WHOLE_STATE_TYPES = {
     "VLAN",
 }
 
-# The suffix every collection response is named with. A tool answering with one
-# is on the list tier, where both clients answer a failed fetch with one shared
-# sentence rather than a per-tool one: naming the tool a page came from adds
-# nothing a caller does not already know. The emitter cross-checks this name
-# against the message's shape, so the two spellings of "collection" cannot
-# drift apart without `make proto` failing.
+# The suffix naming every collection response. A tool answering with one is on
+# the list tier, where both clients answer a failed fetch with one shared
+# sentence: naming the tool a page came from tells a caller nothing new. The
+# emitter cross-checks this name against the message's shape, so the two
+# spellings cannot drift without `make proto` failing.
 COLLECTION_SUFFIX = "ListResponse"
 
 # Why a tool that answers one resource still declares no failure sentence. Each

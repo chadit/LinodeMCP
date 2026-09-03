@@ -134,6 +134,9 @@ enum ToolCapability {
   TOOL_CAPABILITY_DESTROY = 3;
   // Calls an endpoint the Linode API gates on the account or child_account
   // superscope: account administration, profile self-service, and Managed.
+  // A resource-scope op (databases, object storage, images, firewall, longview,
+  // events, support) is never Admin however sensitive it is; secrets there are
+  // handled by audit redaction rather than by the tier.
   TOOL_CAPABILITY_ADMIN = 4;
   // Reaches no Linode route at all, working on local config or session state.
   // Exactly the tools that carry tool_meta rather than tool_route.
@@ -465,9 +468,13 @@ extend google.protobuf.MessageOptions {
   // RefuseArguments.
   RefuseArguments refuse_arguments = 50029;
 
-  // Declares that the annotated tool refuses any argument its input message
-  // does not name. See RefuseUnknownArguments.
-  RefuseUnknownArguments refuse_unknown_arguments = 50030;
+  // 50030 is retired. It carried `refuse_unknown_arguments`, which let a
+  // handful of messages opt in to refusing an argument they never declared.
+  // Every tool refuses one now, emitted handlers and list drivers alike, so
+  // there is nothing left to opt into and each language holds the one sentence
+  // its engine answers with. The number must never be reused: proto forbids
+  // `reserved` inside an extend block, so this comment is the only place that
+  // can say so.
 
   // Declares the check each of the tool's open-object arguments gets. See
   // ObjectWalk.
@@ -1328,18 +1335,21 @@ enum TransferDirection {
 //
 // The declared route stays the route: each arm still addresses the method and
 // path the tool's tool_route names, and the generated body is still built so
-// the schema advertises what the caller may send. What the arm changes is the
-// bytes on the wire, which is the one part no field descriptor carries.
+// the schema advertises what the caller may send. Each arm changes the request
+// that follows the declared one, either the bytes it carries or a second
+// request the declared call authorizes, and that is the part no field
+// descriptor carries.
 //
 // Only the transport is declarable. The framing of a multipart form, the
-// streaming of a presigned transfer and the sentences a refused transfer
-// answers with live in each language's client and object-data layers, where a
-// message option cannot reach.
+// streaming of a presigned transfer, the DELETE a minted URL authorizes and the
+// sentences a refused transfer answers with live in each language's client and
+// object-data layers, where a message option cannot reach.
 message ExecuteTransport {
   oneof kind {
     MultipartUpload multipart = 1;
     RawBody raw_body = 2;
     PresignTransfer presign = 3;
+    PresignRemove presign_remove = 4;
   }
 }
 
@@ -1421,6 +1431,20 @@ message PresignTransfer {
 message TransferConstant {
   string field = 1;
   string text = 2;
+}
+
+// PresignRemove asks the API for a URL signed for DELETE over the declared
+// route and then sends that DELETE. The presign is the one Linode operation,
+// which is why it stays the route the tool declares; the removal addresses the
+// URL the API just minted.
+//
+// No bytes move in either direction, so this arm declares no direction, no
+// local path and no measured members. A direction for a request that carries
+// nothing would falsify TransferDirection's own doc, and a removal has nothing
+// to report back but the sentence the destroy tier already writes.
+message PresignRemove {
+  // The member of the presign response carrying the minted URL.
+  string url_field = 1;
 }
 
 // PreviewSentence is one line a dry run reports about what the call does, and
@@ -1828,9 +1852,12 @@ enum NormalizeTransform {
   // silently dropped. A list holding anything but text is left whole.
   NORMALIZE_TRANSFORM_TRIM_LIST = 3;
 
-  // A text argument is folded to upper case, for the values the API reads as
-  // an upper-case vocabulary while callers spell them freely.
-  NORMALIZE_TRANSFORM_UPPERCASE = 4;
+  // 4 was NORMALIZE_TRANSFORM_UPPERCASE, folding a text argument to upper case.
+  // Its only declaration was the presigned-URL create's method argument, and
+  // splitting that tool by verb pinned the verb through body_constant instead,
+  // so nothing was left to fold.
+  reserved 4;
+  reserved "NORMALIZE_TRANSFORM_UPPERCASE";
 }
 
 // NormalizeFold is one convenience argument folded into a member of an object
@@ -2292,24 +2319,10 @@ message RefuseArguments {
   // every time.
   repeated string fields = 1;
   // The refusal sentence. "{fields}" stands for the refused arguments the
-  // caller sent, sorted and joined with ", "; a sentence naming neither
-  // placeholder stands as written, which is what the create routes answer when
-  // they name the members in prose instead.
+  // caller sent, sorted and joined with ", "; a sentence naming no placeholder
+  // stands as written, which is what the create routes answer when they name
+  // the members in prose instead.
   string message = 2;
-}
-
-// RefuseUnknownArguments holds a tool to the arguments its input message
-// declares, so a caller who misspells one is told rather than having it
-// dropped.
-//
-// The allowlist is the descriptor's own field names, every location included,
-// which is what keeps it from drifting away from the schema the client reads. A
-// second list written here would be that drift.
-message RefuseUnknownArguments {
-  // The refusal sentence. "{field}" stands for the first undeclared argument in
-  // sorted order, "{fields}" for all of them joined with ", ". A sentence
-  // naming neither placeholder stands as written.
-  string message = 1;
 }
 
 // FieldLocation is where an input field travels in the HTTP request its tool
@@ -2807,10 +2820,6 @@ message BodyFold {
   repeated BodyFoldSource source = 1;
   // The members the contract fixes, which no argument fills.
   repeated BodyConstant constant = 2;
-  // Leaves the member off the wire when nothing filled it. A firewall create
-  // always sends `rules` because the API needs the default policies on a
-  // create, but the update reads `rules` as a replacement, so sending the
-  // empty object on a label-only change would clear the ruleset the caller
-  // never mentioned.
-  bool omit_when_empty = 3;
+  reserved 3;
+  reserved "omit_when_empty";
 }

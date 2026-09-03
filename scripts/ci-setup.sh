@@ -164,13 +164,12 @@ install_droast() {
 	droast --version
 }
 
-# install_betterleaks fetches the latest release archive for this
-# architecture, verified against the checksums file the release publishes. A
-# release binary because betterleaks carries a `replace` directive in its
-# go.mod, which `go install pkg@latest` refuses. GH_TOKEN, when set, raises the
-# GitHub API rate limit (shared CI runner IPs exhaust the unauthenticated
-# quota), which is why this one resolves its tag through the API rather than
-# through the redirect the others read.
+# install_betterleaks fetches the latest release archive for this architecture,
+# verified against the checksums file the release publishes. A release binary
+# because betterleaks carries a `replace` directive in its go.mod, which
+# `go install pkg@latest` refuses. It reads its tag from the GitHub API, not
+# the redirect the others read, so GH_TOKEN can raise the rate limit shared CI
+# runner IPs exhaust.
 install_betterleaks() {
 	if command -v betterleaks >/dev/null 2>&1; then
 		info "betterleaks already present: $(betterleaks version)"

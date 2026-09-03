@@ -40,7 +40,7 @@ In `CHECK_GATES` order.
 | `fmt-check` | Go, Python, `scripts/`, and `tools/` formatting, read-only on purpose: auto-fixing here would hide drift CI still fails on | `GO_FMT_SRC` and the ruff configs; generated genpb is excluded | Unformatted source |
 | `scripts-lint` | ruff over the gate scripts | `scripts/ruff.toml`, discovered only from the repo root | A lint finding in a gate script |
 | `tools-lint` | ruff over the tool projects that ship with neither language package | each `tools/` project's own pyproject | A lint finding in a tool project |
-| `techdocs-proof` | The offline arm of the TechDocs comparator: a replay over frozen descriptor fixtures, the exclusion ledger's own rules, and the refusal of a run root inside the repository | `tools/techdocs-proof/data/known-divergences.json`; stdlib only, so no venv | A replay mismatch, a duplicate or incomplete ledger entry, or a comparison that would dirty the tree it measures |
+| `techdocs-proof` | The offline arm of the TechDocs comparator: a replay over frozen descriptor fixtures, the exclusion ledger's own rules, and the refusal of a run root inside the repository | `tools/techdocs-proof/data/known-divergences.json`; stdlib only, so no venv | A replay mismatch, a duplicate or incomplete ledger entry, a ledger kind the comparison cannot raise, or a comparison that would dirty the tree it measures |
 | `actionlint` | The workflow files, via an unconditional `go run ...@latest` so the local run matches what CI fetches | `.github/workflows/*.yml`, passed explicitly | A workflow finding |
 | `dockerfiles` | droast at error severity over every Dockerfile the repo tracks, found by name so a new image is in scope the moment its file exists | git's tracked and untracked-not-ignored file list | A droast error, folded onto its own file and line |
 | `tools-typecheck` | mypy over each project under `tools/`, at that project's own `requires-python` | each `tools/` project's pyproject | A type error, a `tools/` holding no project, or a run that reports no checked-file count |
@@ -57,8 +57,8 @@ In `CHECK_GATES` order.
 | `scope-spellings` | Every language's token-side Scope catalog spells what the toolgen emitter spells, and the catalogs carry one value set | `docs/contracts/languages.txt`; no baseline | A catalog value that is no emitter wire spelling or family sibling, which the grants converter would otherwise report as a missing scope |
 | `tool-count` | The README's tool count matches the manifest | `docs/contracts/tools-manifest.txt` and `README.md`; runs `scripts/verify_docs_tool_count.py` | README prose drifted from the manifest, which is the source of truth |
 | `dryrun` | Every Write, Admin, and Destroy input carries `dry_run` and no Read or Meta one does | the compiled descriptors; hard, no baseline | A missing or misplaced `dry_run` (the preview-fixture half ratchets in `behavior`) |
-| `pagination` | A tool whose spec route paginates carries `page` and `page_size` on its proto input | `docs/contracts/api-pagination-baseline.txt`, owned by `sync-pagination` | A paginated route whose tool cannot page |
-| `response-shapes` | Behavior fixtures serve each route's spec response shape | `docs/contracts/api-response-shapes-baseline.txt`, owned by `sync-response-shapes` | A fixture shaped unlike what the API answers with |
+| `pagination` | A tool whose route paginates in the mirror carries `page` and `page_size` on its proto input | `docs/contracts/api-pagination-baseline.txt`, owned by `sync-pagination` | A paginated route whose tool cannot page |
+| `response-shapes` | Behavior fixtures serve each route's response shape as the mirror records it | `docs/contracts/api-response-shapes-baseline.txt`, owned by `sync-response-shapes` | A fixture shaped unlike what the API answers with |
 | `list-envelope` | No Python list handler collapses a falsey member with `or []` | `docs/contracts/languages.txt`; hard | An `or []` fold that ships a malformed response as a successful empty result while Go rejects it, or a scan that found no source files |
 | `tool-routes` | Every non-meta tool declares its Linode route as a `tool_route` option, and every Meta tool carries none | `docs/contracts/tools-manifest.txt`, pinned in both directions | A tool with no route, a Meta tool with one, or a proto and manifest that disagree |
 | `api-surfaces` | The surface census, the proto's `tool_api_surface`, and the `[<surface>]` marker leading each language's advertised description agree | `docs/contracts/api-surfaces.txt`, checked both directions | A censused tool with no marker, or a marker the census does not list |
@@ -133,7 +133,11 @@ inside those trees still fails the definition arm.
   leaves no half-merged tree. `-retire Message.field` drops the declaration and
   its prose and leaves `reserved <number>;` and `reserved "<name>";` behind;
   message-level `buf.validate` CEL rules naming the retired field are left alone
-  on purpose, and `proto-lint` names each one by line.
+  on purpose, and `proto-lint` names each one by line. A `preview_sentence` that
+  guards on or reports the retired argument survives the same way, but
+  `proto-lint` cannot see it: `toolgen` is what refuses, with "tool declares a
+  preview_sentence reading an argument the message does not declare", so a
+  retirement takes those out by hand too and only `make proto` says so.
 - **`wire-breaking`**: the baseline is a pinned image rather than a branch
   reference, because a checkout compared against its own last commit measures
   nothing. `use: FILE` treats every field deletion as breaking whether or not the
@@ -141,6 +145,29 @@ inside those trees still fails the definition arm.
   moment it is introduced, and the `reserved` statement carries the retirement
   forever. Refresh it inside the reviewed change that earns it:
   `buf build --exclude-source-info -o docs/contracts/wire-baseline.binpb.gz`.
+  Retyping a field on the same number is a third shape the failure text does not
+  name, and it is answerable only for an Input message: those never travel as
+  protobuf binary between peers, because MCP hands arguments over as JSON keyed
+  by field name and the generated types back descriptor reads and schema
+  generation. Retiring the field instead would leave `reserved "<name>";` behind
+  and lock out the argument name the published docs pin, which is the one thing a
+  correction to a wrong type has to keep. Deleting a whole message is a fourth
+  shape: retiring a tool takes its input message with it, and proto3 has no way
+  to reserve a deleted top-level message name, so nothing stops a later change
+  reusing that name for something unrelated. The baseline catches the reuse only
+  if the shape differs, which is why the deletion belongs in the record beside
+  the replacement. Deleting an enum value is a fifth, and `reserved <number>;`
+  inside the enum documents the retirement without keeping the gate quiet: the
+  finding still fires and the refresh is still owed. Say which of the five
+  shapes a change took, since the baseline refresh looks the same whichever it
+  is. Refresh on an addition too: adding a field keeps the gate green against a
+  baseline that has never seen the number, so until the next refresh nothing here
+  would catch a later change deleting or retyping it. Retiring an extension field spends two
+  FILE-category findings at `options.proto:1:1` rather than one, because the
+  message that carried the extension's value goes with it. `reserved` is a parse
+  error inside an `extend` block, so a retired extension number is held by a
+  comment where the field stood; `50012` and `50030` are the two the contract has
+  spent so far.
 - **`betterleaks` flags**: `--redact` keeps secret values out of terminals and
   logs, `--regex-engine=stdlib` matches what CI forces (the WASM engine trips
   betterleaks#74 there), the file list comes from git because betterleaks has no
@@ -168,21 +195,39 @@ Outside `CHECK_GATES`, offline, and never a source of red on their own.
 `make sync` runs all of them and `sync-drift.yml` runs it weekly. They need the
 network, which is why they stay out of `check`: the offline gates prove both
 languages agree with each other, these prove that agreement still matches the
-live Linode API spec.
+Linode OpenAPI mirror at `linode/linode-api-openapi`.
+
+TechDocs is the API contract's authority and that mirror is secondary: it
+updates less often and may be deprecated. So a sync finding a TechDocs page
+contradicts is a stale mirror, not a repo defect. Leave `proto/` alone, record
+what the two sources say, and refresh that gate's snapshot with
+`--update-baseline` in a reviewed change so the next run is quiet. A sync
+finding TechDocs agrees with is real drift and `proto/` is what moves. The two
+offline gates fed by these snapshots, `pagination` and `response-shapes`, sit
+under the same rule: neither takes a baseline acceptance, so a snapshot refresh
+is the only exit when the mirror is the side that is wrong. The comparator
+states the same boundary from its own side in
+[chapter 01](../tools/techdocs-proof/docs/01-boundaries-and-authority.md).
 
 | Gate | What it compares | Baseline |
 |---|---|---|
-| `sync-enums` | Proto enums against the live spec and changelog | `docs/contracts/enum-sync-baseline.txt`, written with `--update-baseline` |
-| `sync-defaults` | Wire-body defaults against the live spec | `docs/contracts/api-defaults-baseline.txt` |
-| `sync-pagination` | The spec's paginated-route set and page-size bounds against the snapshot the offline `pagination` gate judges by | `docs/contracts/api-pagination-baseline.txt` |
-| `sync-response-shapes` | The spec's route response shapes against the snapshot `response-shapes` judges by | `docs/contracts/api-response-shapes-baseline.txt` |
-| `sync-scopes` | The contract's declared per-tool OAuth scopes, as Python renders them, against the spec's per-operation security blocks. Needs the venv, unlike the others. A route the spec documents no operation for is skipped rather than failed, since the spec lags techdocs and `route-evidence` already proves the route is real | `docs/contracts/scope-sync-baseline.txt`, structural deviations in `scope-sync-exempt.txt` |
+| `sync-enums` | Proto enums against the live mirror and its changelog | `docs/contracts/enum-sync-baseline.txt`, written with `--update-baseline` |
+| `sync-defaults` | Wire-body defaults against the live mirror | `docs/contracts/api-defaults-baseline.txt` |
+| `sync-pagination` | The mirror's paginated-route set and page-size bounds against the snapshot the offline `pagination` gate judges by | `docs/contracts/api-pagination-baseline.txt` |
+| `sync-response-shapes` | The mirror's route response shapes against the snapshot `response-shapes` judges by | `docs/contracts/api-response-shapes-baseline.txt` |
+| `sync-scopes` | The contract's declared per-tool OAuth scopes, as Python renders them, against the mirror's per-operation security blocks. Needs the venv, unlike the others. A route the mirror documents no operation for is skipped rather than failed, since the mirror lags TechDocs and `route-evidence` already proves the route is real | `docs/contracts/scope-sync-baseline.txt`, structural deviations in `scope-sync-exempt.txt` |
 | `sync-issues` | Every baseline acceptance still cites an open tracking issue, resolved through `gh`. `baseline-guard` only checks that an annotation looks like an issue URL, which a closed issue satisfies forever | none; skips loudly when `gh` is absent |
 
 `techdocs-drift.yml` is the same shape for the other upstream: it scrapes
 rendered TechDocs, compares them against the checked-out proto tree, and uploads
-the run directory as an artifact. It reads only and never commits. It also
-carries the weekly refresh for `techdocs-routes`: the run writes a candidate
+the run directory as an artifact. It reads only and never commits. It passes
+`--fail-on-findings`, so a finding at medium or high fails the weekly job while
+known, limitation and info never do. One thing that gate cannot reach: a ledger
+entry that stopped matching raises no finding, so it lands in
+`known_divergences_unmatched` and the job summary tables it instead, with the
+readings such a line can carry written out in
+[operations](../tools/techdocs-proof/docs/08-operations-and-debugging.md). It
+also carries the weekly refresh for `techdocs-routes`: the run writes a candidate
 `route-snapshot.txt` into its evidence, the job prints the diff against
 `docs/contracts/api-techdocs-routes-baseline.txt` in its summary, and a human
 copies the candidate over the reviewed file, because REQ-D5 puts every repository

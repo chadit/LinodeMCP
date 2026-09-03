@@ -1711,11 +1711,6 @@ message AccountSettingsUpdateInput {
     template: "Linode account settings are updated."
     line: PREVIEW_LINE_SIDE_EFFECT
   };
-  // A setting the message does not declare is dropped before the rules run, so
-  // the argument map is the only place a caller's typo is still visible.
-  option (linode.mcp.v1.refuse_unknown_arguments) = {
-    message: "Unsupported account settings field(s): {fields}"
-  };
   option (linode.mcp.v1.require_any_of) = {
     fields: "backups_enabled"
     fields: "network_helper"

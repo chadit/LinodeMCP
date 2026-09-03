@@ -24,11 +24,17 @@ func emitDeclaredWalks(out *source, tool *contract, parsed string, ordered []fie
 	}
 
 	out.writef("\t\tDependencyWalk: func(%s) (tools.DryRunDetails, error) {", signature)
-	out.writef("\t\t\tdeclared, err := tools.DeclaredStateOf(state)")
-	out.writef("\t\t\tif err != nil {")
-	out.writef("\t\t\t\treturn tools.DryRunDetails{}, err")
-	out.writef("\t\t\t}")
-	out.writef("")
+
+	// The projection is read by the walks, by a wording naming a state member,
+	// and by the billing estimate. A closure with none of the three has nothing
+	// to read it, and binding it there would not compile.
+	if walkReadsState(tool) {
+		out.writef("\t\t\tdeclared, err := tools.DeclaredStateOf(state)")
+		out.writef("\t\t\tif err != nil {")
+		out.writef("\t\t\t\treturn tools.DryRunDetails{}, err")
+		out.writef("\t\t\t}")
+		out.writef("")
+	}
 
 	emitWalkProseValues(out, tool)
 
@@ -74,6 +80,14 @@ func emitDeclaredWalks(out *source, tool *contract, parsed string, ordered []fie
 	}
 
 	out.writef("\t\t},")
+}
+
+// walkReadsState reports whether the rendered closure has a consumer for the
+// projected state: a walk to run it against, a billing estimate, or a wording
+// naming a member of it. A closure with none of the three would bind a local
+// nothing reads, which does not compile.
+func walkReadsState(tool *contract) bool {
+	return len(tool.DepWalks) > 0 || tool.BillingDecl != nil || tool.previewReadsStateProse()
 }
 
 // emitSeededHalf writes one half of the seeded prose. A closure that ran walks

@@ -1,17 +1,7 @@
 {
   "tool": "linode_database_mysql_instance_update",
-  "description": "Confirm-gated update PUT body, the documented 200 write envelope, the documented error responses both languages must surface identically, and the unsupported-argument rejection now enforced in both languages (Go gained Python's allowlist). The unsupported case sets confirm:true so both reach the check. Error cases pin the shared 'Linode API error (status N)' text, not each language's outer 'Failed to ...' framing. The bare-array case proves neither language reports a zero-valued instance as a successful update; its expected substring stops at 'Failed to update' because the engine label differs in the outer framing (Go says 'Managed Database instance', Python says 'MySQL Managed Database 123'). The dry-run case pins the full Tier B preview from docs/dry-run.md: the PUT body, the fetched current_state (the instance exists, so the preview reads it), and the side effect plus warning the update implies.",
+  "description": "Confirm-gated update PUT body, the documented 200 write envelope, the documented error responses both languages must surface identically, and the unsupported-argument rejection now enforced in both languages (Go gained Python's allowlist). The unsupported case sets confirm:true so both reach the check. Error cases pin the shared 'Linode API error (status N)' text, not each language's outer 'Failed to ...' framing. The bare-array case proves neither language reports a zero-valued instance as a successful update; its expected substring stops at 'Failed to update' because the engine label differs in the outer framing (Go says 'Managed Database instance', Python says 'MySQL Managed Database 123'). The dry-run case pins the full Tier B preview from docs/dry-run.md: the PUT body, the fetched current_state (the instance exists, so the preview reads it), and the side effect plus warning the update implies. Two cluster_size cases close the 2026-09-01 techdocs drift: the resize case sends cluster_size as the only body argument, so it fails if the field is missing from require_any_of, and the out-of-set case pins the documented 1/2/3 rule.",
   "cases": [
-    {
-      "name": "rejects an unsupported argument",
-      "args": {
-        "instance_id": 123,
-        "label": "renamed-db",
-        "bogus_field": "x",
-        "confirm": true
-      },
-      "expect_error": "unsupported argument: bogus_field"
-    },
     {
       "name": "updates a mysql instance label",
       "args": {
@@ -257,6 +247,45 @@
           "Updating a Managed Database can change service behavior."
         ]
       }
+    },
+    {
+      "name": "resizes the cluster to three nodes",
+      "args": {
+        "instance_id": 123,
+        "cluster_size": 3,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "prod-mysql",
+        "cluster_size": 3
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/databases/mysql/instances/123",
+        "body": {
+          "cluster_size": 3
+        }
+      }
+    },
+    {
+      "name": "rejects a cluster size outside the documented set",
+      "args": {
+        "instance_id": 123,
+        "cluster_size": 4,
+        "confirm": true
+      },
+      "expect_error": "cluster_size must be one of: 1, 2, 3"
+    },
+    {
+      "name": "rejects an unsupported argument",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "bogus_field": "x",
+        "confirm": true
+      },
+      "expect_error": "Unsupported argument(s) for linode_database_mysql_instance_update: bogus_field"
     }
   ]
 }

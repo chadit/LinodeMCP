@@ -115,6 +115,17 @@ class ResilienceConfig:
     pool_keepalive_expiry: float = 30.0
 
 
+# The presign lifetime the object-url route accepts, mirroring Go's
+# MinPresignTTLSeconds and MaxPresignTTLSeconds. The CEL rules in
+# proto/linode/mcp/v1/object_storage.proto refuse a caller-supplied value
+# outside this window, so config was the one path that could still reach the
+# API with one. The ceiling equals the default today; they stay separate names
+# because a default and a limit are different facts.
+MIN_PRESIGN_TTL_SECONDS = 360
+MAX_PRESIGN_TTL_SECONDS = 3600
+DEFAULT_PRESIGN_TTL_SECONDS = 3600
+
+
 @dataclass
 class ObjectStorageConfig:
     """Object Storage data-plane settings.
@@ -136,7 +147,7 @@ class ObjectStorageConfig:
     filesystem_root: str = ""
     max_single_part_bytes: int = 5 * 1024 * 1024 * 1024
     transfer_timeout: float = 1800.0
-    presign_ttl_seconds: int = 3600
+    presign_ttl_seconds: int = DEFAULT_PRESIGN_TTL_SECONDS
 
 
 @dataclass
@@ -610,6 +621,11 @@ def validate_config(cfg: Config) -> None:
         msg = "audit.retention_days cannot be negative"
         raise ConfigInvalidError(msg)
 
+    presign_ttl = cfg.object_storage.presign_ttl_seconds
+    if not MIN_PRESIGN_TTL_SECONDS <= presign_ttl <= MAX_PRESIGN_TTL_SECONDS:
+        msg = "objectStorage.presignTtlSeconds must be between 360 and 3600 seconds"
+        raise ConfigInvalidError(msg)
+
     _validate_reports(cfg.audit.reports)
 
 
@@ -789,6 +805,18 @@ def _data_to_config(data: dict[str, Any]) -> Config:
     )
 
     object_storage_data = data.get("objectStorage", {})
+    presign_ttl_raw = object_storage_data.get("presignTtlSeconds")
+    # Go's yaml decode refuses a quoted, boolean or sequence value for this int
+    # field before validation ever runs. Python has no schema, so the window
+    # check in validate_config would leave load_from_file through a bare
+    # TypeError instead: one config file, a crash on one side and a config
+    # error on the other. Booleans are excluded because bool subclasses int.
+    if presign_ttl_raw is not None and (
+        isinstance(presign_ttl_raw, bool) or not isinstance(presign_ttl_raw, int)
+    ):
+        msg = "objectStorage.presignTtlSeconds must be a whole number of seconds"
+        raise ConfigInvalidError(msg)
+
     object_storage = ObjectStorageConfig(
         filesystem_root=object_storage_data.get("filesystemRoot", ""),
         max_single_part_bytes=object_storage_data.get(
@@ -798,7 +826,10 @@ def _data_to_config(data: dict[str, Any]) -> Config:
             object_storage_data.get("transferTimeout", 1800),
             "objectStorage.transferTimeout",
         ),
-        presign_ttl_seconds=object_storage_data.get("presignTtlSeconds", 3600),
+        # An explicit 0 means unset here the way it does in Go's
+        # setObjectStorageDefaults, so one config file reads the same in both
+        # binaries instead of Go filling the default and Python refusing it.
+        presign_ttl_seconds=presign_ttl_raw or DEFAULT_PRESIGN_TTL_SECONDS,
     )
 
     environments: dict[str, EnvironmentConfig] = {}

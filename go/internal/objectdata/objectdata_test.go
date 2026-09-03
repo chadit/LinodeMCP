@@ -16,6 +16,11 @@ import (
 
 const transferBudget = 30 * time.Second
 
+// unbuildableURL is a URL net/http refuses to turn into a request at all: the
+// port is a name rather than a number. It is what proves each half reports the
+// refusal instead of panicking on a nil request.
+const unbuildableURL = "http://[::1]:namedport/key"
+
 // writeSource puts one file on disk and answers its path.
 func writeSource(t *testing.T, name, content string) string {
 	t.Helper()
@@ -343,7 +348,7 @@ func TestUploadRefusesAnUnusableURL(t *testing.T) {
 	}
 
 	_, err = objectdata.Upload(t.Context(), objectdata.UploadRequest{
-		URL:     "http://[::1]:namedport/key",
+		URL:     unbuildableURL,
 		Source:  source,
 		Timeout: transferBudget,
 	})
@@ -539,7 +544,7 @@ func TestDownloadRefusalsThroughTheWholeCall(t *testing.T) {
 
 				return filepath.Join(t.TempDir(), "landed.bin")
 			},
-			url:  "http://[::1]:namedport/key",
+			url:  unbuildableURL,
 			want: objectdata.ErrTransfer,
 		},
 		{
@@ -578,5 +583,110 @@ func TestDownloadRefusalsThroughTheWholeCall(t *testing.T) {
 				t.Errorf("error = %v, want %v", err, tt.want)
 			}
 		})
+	}
+}
+
+// TestRemoveSendsTheDeleteTheMintedURLAuthorizes is the removal proof: the
+// server asserts on the method and on the headers, so a DELETE that arrived as
+// something else, carried a body, or carried an account credential fails here
+// rather than reporting success.
+func TestRemoveSendsTheDeleteTheMintedURLAuthorizes(t *testing.T) {
+	t.Parallel()
+
+	var (
+		gotMethod string
+		gotAuth   string
+		gotType   string
+		gotLength int64
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotAuth = r.Method, r.Header.Get("Authorization")
+		gotType, gotLength = r.Header.Get("Content-Type"), r.ContentLength
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	if err := objectdata.Remove(t.Context(), objectdata.RemoveRequest{
+		URL:     srv.URL + "/artifacts/small.bin?sig=fixture",
+		Timeout: transferBudget,
+	}); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method = %q, want DELETE", gotMethod)
+	}
+
+	// The URL carries its own authorization in the query, so the Linode token
+	// must never ride along to a host that never needed it.
+	if gotAuth != "" {
+		t.Errorf("Authorization = %q, want no header", gotAuth)
+	}
+
+	if gotType != "" {
+		t.Errorf("Content-Type = %q, want no header", gotType)
+	}
+
+	if gotLength > 0 {
+		t.Errorf("ContentLength = %d, want no body", gotLength)
+	}
+}
+
+// TestRemoveRefusesAnUnusableURL pins that a minted URL the client cannot even
+// build is reported as a removal failure rather than a panic, the same way the
+// upload half reports one.
+func TestRemoveRefusesAnUnusableURL(t *testing.T) {
+	t.Parallel()
+
+	err := objectdata.Remove(t.Context(), objectdata.RemoveRequest{
+		URL:     unbuildableURL,
+		Timeout: transferBudget,
+	})
+	if !errors.Is(err, objectdata.ErrRemove) {
+		t.Errorf("error = %v, want ErrRemove", err)
+	}
+}
+
+// TestRemoveReportsARefusalWithoutTheURL pins the same leak rule the transfers
+// carry: the minted URL is a bearer credential for its lifetime.
+func TestRemoveReportsARefusalWithoutTheURL(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	err := objectdata.Remove(t.Context(), objectdata.RemoveRequest{
+		URL:     srv.URL + "/artifacts/small.bin?sig=secret-token",
+		Timeout: transferBudget,
+	})
+	if !errors.Is(err, objectdata.ErrRemove) {
+		t.Fatalf("error = %v, want ErrRemove", err)
+	}
+
+	if reported := err.Error(); strings.Contains(reported, "secret-token") {
+		t.Errorf("error text leaks the presigned URL: %s", reported)
+	}
+}
+
+// TestRemoveRefusesAnUnreachableHostWithoutTheURL covers the other leak path: a
+// transport failure arrives wrapped in a *url.Error carrying the full URL.
+func TestRemoveRefusesAnUnreachableHostWithoutTheURL(t *testing.T) {
+	t.Parallel()
+
+	// Port 0 never accepts, so the client fails before any exchange.
+	err := objectdata.Remove(t.Context(), objectdata.RemoveRequest{
+		URL:     "http://127.0.0.1:0/artifacts/small.bin?sig=secret-token",
+		Timeout: transferBudget,
+	})
+	if !errors.Is(err, objectdata.ErrRemove) {
+		t.Fatalf("error = %v, want ErrRemove", err)
+	}
+
+	if reported := err.Error(); strings.Contains(reported, "secret-token") {
+		t.Errorf("error text leaks the presigned URL: %s", reported)
 	}
 }

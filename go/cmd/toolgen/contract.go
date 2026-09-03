@@ -36,7 +36,7 @@ const (
 	// cursor beside its elements.
 	tierMarkerList
 	// tierBodyRead fetches one resource through a route that takes a request
-	// body rather than a query, which the presigned-URL create is: the call
+	// body rather than a query, which the download-URL create is: the call
 	// signs what the body describes and stores nothing.
 	tierBodyRead
 	// tierWrite sends a body to create or change one resource.
@@ -249,12 +249,10 @@ type contract struct {
 	// than the call, which is what makes the declared envelope the message the
 	// body decodes into.
 	ResponseBody []string
-	// Refused names the arguments the tool answers for rather than sends, and
-	// RefuseUnknown holds it to the arguments its message declares. Both read
-	// the whole argument map, which is the only place a name the message does
-	// not declare is still visible.
-	Refused       *linodev1.RefuseArguments
-	RefuseUnknown *linodev1.RefuseUnknownArguments
+	// Refused names the arguments the tool answers for rather than sends. It
+	// reads the whole argument map, which is the only place a name the message
+	// does not declare is still visible.
+	Refused *linodev1.RefuseArguments
 	// CompositeDecl holds the declared multi-call state read until the other
 	// tools are in scope to resolve each call against.
 	CompositeDecl *linodev1.StateComposite
@@ -273,9 +271,9 @@ type contract struct {
 	// the walks.
 	BillingRead goMessage
 	// AllArguments is every argument the input message names, in field order,
-	// system params included. It is the allowlist RefuseUnknown is measured
-	// against, so a caller may still send dry_run beside the settings they are
-	// changing.
+	// system params included. Declarations that name an argument are checked
+	// against it, so a rewrite or a preview cannot name a field the message
+	// never had.
 	AllArguments []string
 	Path         []field
 	Query        []field
@@ -1341,27 +1339,20 @@ func (c *contract) readAnyOf(options protoreflect.ProtoMessage) error {
 	return nil
 }
 
-// readRefusals resolves the two whole-map refusals a tool declares: the
-// argument names it answers for rather than sends, and whether it takes any
-// name its input message does not declare.
+// readRefusals resolves the whole-map refusal a tool declares: the argument
+// names it answers for rather than sends. Refusing a name the message does not
+// declare needs no declaration, so nothing is read for it here.
 func (c *contract) readRefusals(options protoreflect.ProtoMessage) error {
 	refused, _ := proto.GetExtension(options, linodev1.E_RefuseArguments).(*linodev1.RefuseArguments)
-	if refused != nil && (len(refused.GetFields()) > 0 || refused.GetMessage() != "") {
-		if err := c.acceptRefusal(refused.GetFields(), refused.GetMessage(), errRefuseArguments); err != nil {
-			return err
-		}
-
-		c.Refused = refused
-	}
-
-	unknown, _ := proto.GetExtension(
-		options, linodev1.E_RefuseUnknownArguments,
-	).(*linodev1.RefuseUnknownArguments)
-	if unknown == nil || unknown.GetMessage() == "" {
+	if refused == nil || (len(refused.GetFields()) == 0 && refused.GetMessage() == "") {
 		return nil
 	}
 
-	c.RefuseUnknown = unknown
+	if err := c.acceptRefusal(refused.GetFields(), refused.GetMessage(), errRefuseArguments); err != nil {
+		return err
+	}
+
+	c.Refused = refused
 
 	return nil
 }
@@ -2668,7 +2659,7 @@ func (c *contract) readsResource() bool {
 }
 
 // signsBody reports a read the route method alone reads as a mutation: a tool
-// registered at the read tier whose route is not a GET. The presigned-URL create
+// registered at the read tier whose route is not a GET. The download-URL create
 // signs what its body describes and the metric query asks for a window of
 // samples; neither stores anything, so the write tier's confirm gate would sit
 // over an answer the caller can ask for again.

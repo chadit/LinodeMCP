@@ -23,8 +23,9 @@ import (
 // consults the contract and answers its sentence, and a rule whose sentence the
 // driver could also have produced on its own would show nothing.
 const (
-	ruledMessage  = "linode.mcp.v1.DomainCreateInput"
-	ruledSentence = "domain is required"
+	ruledMessage    = "linode.mcp.v1.DomainCreateInput"
+	ruledSentence   = "domain is required"
+	seamProbeDelete = "linode_seam_probe_delete"
 )
 
 // A destroy answers a broken rule before it reads the id it is addressed by, so
@@ -38,7 +39,7 @@ func TestDestructiveActionAnswersTheContractBeforeReadingItsID(t *testing.T) {
 	result, err := tools.RunDestructiveActionWithID(
 		t.Context(), &request, newTestConfig("http://127.0.0.1:1"),
 		&tools.DestructiveActionByID{
-			ToolName:       "linode_seam_probe_delete",
+			ToolName:       seamProbeDelete,
 			InputMessage:   ruledMessage,
 			IDParam:        keyDomainID,
 			Method:         "DELETE",
@@ -68,6 +69,54 @@ func TestDestructiveActionAnswersTheContractBeforeReadingItsID(t *testing.T) {
 
 	if got := resultText(t, result); got != ruledSentence {
 		t.Errorf("result = %v, want %v", got, ruledSentence)
+	}
+}
+
+// The 25 single-id destroys emit one struct literal and no body, so the refusal
+// they answer is the wrapper's. Without it Go dropped a misspelled argument on
+// every one of them while Python refused it. The refusal comes before the id
+// read for the same reason the rules do: a caller who mistyped an argument
+// hears about the typo rather than about the id the typo displaced.
+func TestDestructiveActionRefusesAnUndeclaredArgumentBeforeReadingItsID(t *testing.T) {
+	t.Parallel()
+
+	request := createRequestWithArgs(t, map[string]any{keyBogus: 1})
+
+	result, err := tools.RunDestructiveActionWithID(
+		t.Context(), &request, newTestConfig("http://127.0.0.1:1"),
+		&tools.DestructiveActionByID{
+			ToolName:       seamProbeDelete,
+			InputMessage:   "linode.mcp.v1.DomainDeleteInput",
+			IDParam:        keyDomainID,
+			Method:         "DELETE",
+			PathPattern:    "/domains/%d",
+			ConfirmMessage: "This removes the probe. Set confirm=true to proceed.",
+			SuccessProto: func(int) proto.Message {
+				t.Error("the success body was built, want the refusal to answer first")
+
+				return &linodev1.DomainDeleteResponse{}
+			},
+			FetchState: func(context.Context, *linode.Client, int) (any, error) {
+				t.Error("state was fetched, want the refusal to answer first")
+
+				return &linodev1.Domain{}, nil
+			},
+			Execute: func(context.Context, *linode.Client, int) error {
+				t.Error("the delete ran, want the refusal to answer first")
+
+				return nil
+			},
+			HashIgnore: twostage.HashIgnoreFields("domain"),
+		},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	const want = "Unsupported argument(s) for linode_seam_probe_delete: bogus"
+
+	if got := resultText(t, result); got != want {
+		t.Errorf("result = %v, want %v", got, want)
 	}
 }
 

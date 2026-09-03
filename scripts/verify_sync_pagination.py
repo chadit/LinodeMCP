@@ -14,6 +14,11 @@ Routes whose GET carries page params but returns a bare object (a handful of
 single-resource spec quirks) are excluded on purpose: without the envelope
 there is nothing to page through.
 
+Authority note: this gate reads the OpenAPI mirror, which is the secondary
+source. TechDocs is the API contract's authority, so a finding a TechDocs page
+contradicts means the mirror is stale: refresh this baseline rather than the
+proto. docs/gates.md, "Network sync gates", carries the rule.
+
 Usage: verify_sync_pagination.py [--spec PATH] [--update-baseline]
 """
 

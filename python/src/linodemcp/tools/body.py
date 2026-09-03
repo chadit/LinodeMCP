@@ -309,32 +309,6 @@ class WriteBody:
 
         self._fields[self._renames.get(name, name)] = _sorted_members(folded)
 
-    def fold_optional(self, name: str, members: Sequence[FoldMember]) -> None:
-        """Write an assembled member only when something filled it.
-
-        A firewall update that mentions no policy leaves ``rules`` off the wire,
-        because the API reads that member as a replacement and the empty object
-        would clear the ruleset the caller never named. Go's
-        WriteBody.FoldOptional answers the same way.
-        """
-        if self._message is not None:
-            return
-
-        base, message = self._fold_base(name)
-        if message is not None:
-            self._message = message
-            return
-
-        folded, message = self._fold_members(name, base, members)
-        if message is not None:
-            self._message = message
-            return
-
-        if not folded:
-            return
-
-        self._fields[self._renames.get(name, name)] = _sorted_members(folded)
-
     def fold_list(self, name: str, members: Sequence[FoldMember]) -> None:
         """Write an assembled member the API reads as an array.
 

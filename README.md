@@ -250,7 +250,7 @@ Each implementation carries its own Makefile; `make help` in `go/` or `python/` 
 
 ## Status
 
-This project is in active development (v0.2.0). Both implementations are pinned by [docs/contracts/tools-manifest.txt](docs/contracts/tools-manifest.txt), which lists 520 tools, and the surface is enforced by parity tests in each language; both languages serve the full set. Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages.
+This project is in active development (v0.2.0). Both implementations are pinned by [docs/contracts/tools-manifest.txt](docs/contracts/tools-manifest.txt), which lists 534 tools, and the surface is enforced by parity tests in each language; both languages serve the full set. Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages.
 
 ## License
 

@@ -1,8 +1,11 @@
 # Weekly comparison of proto/ against the LIVE rendered TechDocs site, which
 # `make check` cannot do because it is offline. It reads only: evidence goes to
 # a runner-local directory and uploads as an artifact, and the route snapshot
-# refresh reports a candidate a human lands. Findings do not fail the job while
-# the medium tier is above zero; a scrape, parse, or compile failure still does.
+# refresh reports a candidate a human lands. A finding at medium or high fails the
+# job; known, limitation, and info are tiers a human already read and accepted, so
+# they never do. Neither does a ledger entry that stopped matching, because an
+# unmatched exclusion raises no finding at all; the job summary prints those
+# separately. A scrape, parse, or compile failure still fails.
 name: techdocs-drift
 
 on:
@@ -46,7 +49,7 @@ jobs:
           LINODEMCP_TECHDOCS_PROOF_ROOT: ${{ runner.temp }}/techdocs-proof
         run: |
           PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof \
-            --retention-days 30 | tee "${RUNNER_TEMP}/manifest.json"
+            --retention-days 30 --fail-on-findings
 
       - name: Summarize findings
         if: always()
@@ -71,12 +74,34 @@ jobs:
               raise SystemExit(0)
           print(f"- routes compared: {summary['active_routes_compared']}")
           print(f"- proto tools compared: {summary['proto_tools_compared']}")
-          print(f"- actionable (medium) findings: {summary['actionable_findings']}\n")
-          print("| finding kind | medium |")
-          print("| --- | --- |")
-          medium = summary.get("finding_kinds_by_severity", {}).get("medium", {})
-          for kind, count in sorted(medium.items()):
-              print(f"| {kind} | {count} |")
+          print(f"- actionable (medium or high) findings: {summary['actionable_findings']}\n")
+          by_severity = summary.get("finding_kinds_by_severity", {})
+          print("| severity | finding kind | count |")
+          print("| --- | --- | --- |")
+          for severity in ("high", "medium"):
+              for kind, count in sorted(by_severity.get(severity, {}).items()):
+                  print(f"| {severity} | {kind} | {count} |")
+          unmatched = summary.get("known_divergences_unmatched") or []
+          if unmatched:
+              print(f"\n{len(unmatched)} ledger entries matched nothing this run.")
+              print("They raise no finding, so the exit code does not cover them.")
+              print("A kind the comparison cannot raise never lands here; the offline")
+              print("self-test refuses that entry. So every row below matched when it")
+              print("was triaged and matches nothing now. Read each against")
+              print("route-snapshot.txt: no line for its method and shape means the page")
+              print("moved or was renamed; a line reading status=deprecated means the")
+              print("comparator stopped raising that class and the entry stays; a")
+              print("status=active line means the disagreement closed, unless")
+              print("comparison.json carries the same coordinates under another kind, in")
+              print("which case re-key the entry rather than delete it.\n")
+              print("| kind | method | shape | location | parameter | category |")
+              print("| --- | --- | --- | --- | --- | --- |")
+              # A pipe in any cell would break the row; no ledger value carries
+              # one today, and escaping costs less than the broken table would.
+              fields = ("kind", "method", "shape", "location", "parameter", "category")
+              for entry in unmatched:
+                  cells = [str(entry.get(name) or "").replace("|", "\\|") for name in fields]
+                  print("| " + " | ".join(cells) + " |")
           PY
 
       # Refreshes docs/contracts/api-techdocs-routes-baseline.txt. It reports and

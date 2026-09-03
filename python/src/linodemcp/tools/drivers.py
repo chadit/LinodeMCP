@@ -34,6 +34,7 @@ from urllib.parse import urlencode
 from google.protobuf import json_format
 from google.protobuf.descriptor import FieldDescriptor
 
+from linodemcp.config import EnvironmentNotFoundError
 from linodemcp.linode.routes import (
     ElementLift,
     ListEnvelope,
@@ -59,6 +60,7 @@ from linodemcp.tools.helpers import (
     is_dry_run,
     pagination_int_argument,
     pagination_query,
+    preview_environment,
 )
 from linodemcp.tools.preview import preview_reported_lines
 from linodemcp.tools.proto_response import (
@@ -600,7 +602,7 @@ async def run_body_read_tool(
 ) -> list[TextContent]:
     """Read through a route that takes a request body.
 
-    The presigned-URL create signs what its body describes and the metric query
+    The download-URL create signs what its body describes and the metric query
     asks for a window of samples; neither stores anything, so both are reads
     with a request rather than mutations. There is no gate and no preview around
     either, since a caller can ask for the same answer again, and the handler
@@ -1436,6 +1438,14 @@ async def _derived_preview(
     that word it; a source the guard refused is reported ahead of them.
     """
     if state_fetch is None:
+        # Nothing on this arm builds a client, so this is the only place the
+        # environment gets judged before the envelope tries to serialize it as
+        # a string. execute_dry_run's own client build covers the other arm.
+        try:
+            environment = preview_environment(cfg, arguments)
+        except EnvironmentNotFoundError as exc:
+            return error_response(str(exc))
+
         effects = preview_reported_lines(side_effects, transfer)
         cautions = _transfer_cautions(transfer) + preview_reported_lines(
             warnings, transfer
@@ -1443,7 +1453,7 @@ async def _derived_preview(
 
         return build_dry_run_response(
             tool,
-            arguments.get("environment", ""),
+            environment,
             method,
             endpoint,
             None,
@@ -2431,6 +2441,7 @@ async def run_destructive_tool(
     body: dict[str, Any] | None = None,
     redact_preview: Sequence[str] = (),
     capability: Capability = Capability.Destroy,
+    transport: TransportSpec | None = None,
 ) -> list[TextContent]:
     """Run a delete: plan or apply it, preview it, gate it, execute it, report it.
 
@@ -2455,6 +2466,10 @@ async def run_destructive_tool(
     error follows run_write_tool's rule and this tier's own history: the delete
     handlers report a missing id before the plan and preview branches and after
     the confirm gate, and the behavior fixtures pin that asymmetry.
+
+    transport makes the live call in place of the routed removal, for a route
+    whose delete is not the request the contract builds: the object delete signs
+    a URL over its declared POST and sends the DELETE to that URL.
     """
     route = route_for(tool)
     contract = contract_for(tool)
@@ -2469,11 +2484,10 @@ async def run_destructive_tool(
         return _success_text(tool, filled, {}, None, success_message)
 
     # A DELETE answers with an empty body, so the sentence reads only the call
-    # and is rendered before that call rather than after it: a placeholder
-    # naming nothing fillable is a contract defect, and finding it afterwards
-    # would report the failure over a resource that is already gone. A call the
-    # checks above already refused is not rendered, since the argument a
-    # placeholder names may be the very one it was refused for.
+    # and is rendered before it: a placeholder naming nothing fillable is a
+    # contract defect, and finding that afterwards would report it over a
+    # resource already gone. A refused call is not rendered, since a
+    # placeholder may name the argument it was refused for.
     if error is None:
         message()
 
@@ -2481,6 +2495,11 @@ async def run_destructive_tool(
         return _destroy_answer(tool, message(), echo, payload_field, decoded)
 
     async def execute_and_report(client: RetryableClient) -> dict[str, Any]:
+        if transport is not None:
+            await run_transport(transport, client, tool, arguments, values, body)
+
+            return answer(None)
+
         return answer(await _routed_removal(client, tool, values, body))
 
     staging = _staged(arguments)

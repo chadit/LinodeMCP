@@ -12,11 +12,12 @@ fixture served a page envelope for a bare-array route and did exactly that
 https://github.com/chadit/LinodeMCP-Issue/issues/1058 for the firewall
 routes).
 
-The Linode API is the reference. docs/contracts/api-response-shapes-baseline.txt
-is the reviewed snapshot of every route's success response shape for every
-method (written by the scheduled scripts/verify_sync_response_shapes.py, so
-this gate stays hermetic). For each fixture case body whose route and method
-can be resolved, the body's shape must match the snapshot:
+The Linode API is the reference, read through the OpenAPI mirror.
+docs/contracts/api-response-shapes-baseline.txt is the reviewed snapshot of
+every route's success response shape for every method (written by the
+scheduled scripts/verify_sync_response_shapes.py, so this gate stays hermetic).
+For each fixture case body whose route and method can be resolved, the body's
+shape must match the snapshot:
 
     envelope  {data, page, pages, results} page object
     array     bare top-level JSON array
@@ -40,6 +41,13 @@ Stdlib plus scripts/_toolroutes.py, which reads the declared routes from the
 generated descriptors (through python/.venv/bin/python when the running
 interpreter cannot import them). Run via `make response-shapes` (in
 `make check`, and so the pre-push hook and the CI gate on every branch).
+
+Authority note: the snapshot this gate judges by comes from the OpenAPI
+mirror, which is the secondary source. TechDocs is the API contract's
+authority, so a failure a TechDocs page contradicts means the mirror is stale.
+This gate has no acceptance path, so the exit is a snapshot refresh through the
+scheduled gate's --update-baseline, never a proto edit. docs/gates.md, "Network
+sync gates", carries the rule.
 
 Usage: verify_response_shapes.py
 """

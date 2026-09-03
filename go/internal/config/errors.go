@@ -19,6 +19,13 @@ var (
 	// ErrNegativeRetentionDays is returned when audit.retention_days is
 	// set below zero. Zero means "never delete"; negative is nonsense.
 	ErrNegativeRetentionDays = errors.New("audit.retention_days cannot be negative")
+	// ErrPresignTTLOutOfRange is returned when objectStorage.presignTtlSeconds
+	// sits outside the window the object-url route accepts, which config was
+	// the last path able to reach the API through. Python raises the same
+	// sentence so one config file reads the same in both binaries.
+	ErrPresignTTLOutOfRange = errors.New(
+		"objectStorage.presignTtlSeconds must be between 360 and 3600 seconds",
+	)
 	// ErrNilConfig is returned by WriteAtomic when the caller passes
 	// nil instead of a Config pointer. Callers can match with
 	// errors.Is to distinguish the programmer-error path from on-disk

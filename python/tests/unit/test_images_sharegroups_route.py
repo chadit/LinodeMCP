@@ -862,7 +862,7 @@ def test_create_linode_images_sharegroup_image_delete_tool_schema() -> None:
     schema = tool.input_schema
     assert schema["required"] == ["sharegroup_id", "image_id", "confirm"]
     assert schema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert schema["properties"]["image_id"]["type"] == "integer"
+    assert schema["properties"]["image_id"]["type"] == "string"
     assert schema["properties"]["confirm"]["type"] == "boolean"
     assert schema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -873,15 +873,17 @@ async def test_handle_linode_images_sharegroup_image_delete_success(
 ) -> None:
     """Handler revokes one shared image and returns a success message."""
     result = await handle_linode_image_sharegroup_image_delete(
-        {"sharegroup_id": 123, "image_id": 456, "confirm": True},
+        {"sharegroup_id": 123, "image_id": "shared/456", "confirm": True},
         sample_config,
     )
 
     assert json.loads(result[0].text) == {
-        "message": "Shared image 456 removed from image share group 123 successfully"
+        "message": (
+            "Shared image shared/456 removed from image share group 123 successfully"
+        )
     }
     mock_linode_client.route_call.assert_awaited_once_with(
-        "linode_image_sharegroup_image_delete", 123, 456, retry=False
+        "linode_image_sharegroup_image_delete", 123, "shared/456", retry=False
     )
 
 
@@ -915,11 +917,11 @@ async def test_handle_linode_images_sharegroup_image_delete_success(
         ),
         (
             {"sharegroup_id": 123, "image_id": False, "confirm": True},
-            "image_id must be a positive integer",
+            "image_id is required",
         ),
         (
             {"sharegroup_id": 123, "image_id": -5, "confirm": True},
-            "image_id must be a positive integer",
+            "image_id is required",
         ),
     ],
 )

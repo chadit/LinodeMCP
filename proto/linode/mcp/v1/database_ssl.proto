@@ -58,3 +58,27 @@ message DatabasePostgreSQLInstanceSSLGetInput {
     (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
   ];
 }
+
+// DatabaseValkeyInstanceSSLGetInput is the input contract for
+// linode_database_valkey_instance_ssl_get.
+message DatabaseValkeyInstanceSSLGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_instance_ssl_get"
+    method: "GET"
+    path: "/databases/valkey/instances/{instance_id}/ssl"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseSSL";
+  option (linode.mcp.v1.tool_description) = "Retrieves the SSL CA certificate for a Valkey Managed Database instance by ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Valkey Managed Database SSL certificate: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Valkey Managed Database instance ID (required).
+  int32 instance_id = 2 [
+    (linode.mcp.v1.field_location) = FIELD_LOCATION_PATH,
+    (linode.mcp.v1.argument_reader) = ARGUMENT_READER_POSITIVE_ID
+  ];
+}

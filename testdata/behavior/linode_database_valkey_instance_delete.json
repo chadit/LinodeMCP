@@ -1,0 +1,102 @@
+{
+  "tool": "linode_database_valkey_instance_delete",
+  "description": "Pre-validated instance-id rejection (both languages agree) and the DELETE the handler issues once bypass-confirmed. The delete declares no preview sentence, so the preview's side effects and warnings stay empty. The dry-run state body leaves engine version and replication type blank: TechDocs documents neither for Valkey. The refusal case is the single-id destroy tier's, answered inside the wrapper both languages route through rather than by an emitted call.",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": {
+        "instance_id": 123,
+        "confirm": true
+      },
+      "expect_error": "linode_database_valkey_instance_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "rejects a non-positive instance_id",
+      "args": {
+        "instance_id": 0,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "refuses an argument the input message does not declare",
+      "args": {
+        "instance_id": 123,
+        "confirm": true,
+        "confirm_bypass_dry_run": true,
+        "bogus": 1
+      },
+      "expect_error": "Unsupported argument(s) for linode_database_valkey_instance_delete: bogus"
+    },
+    {
+      "name": "deletes a valkey instance",
+      "args": {
+        "instance_id": 123,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/databases/valkey/instances/123"
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "instance_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /databases/valkey/instances/123": {
+          "id": 123,
+          "status": "active",
+          "label": "prod-valkey",
+          "region": "us-east",
+          "type": "g6-dedicated-2",
+          "engine": "valkey",
+          "version": "",
+          "cluster_size": 3,
+          "replication_type": "",
+          "ssl_connection": true,
+          "encrypted": false,
+          "allow_list": [
+            "203.0.113.1/32"
+          ],
+          "created": "2026-01-02T03:04:05",
+          "updated": "2026-01-03T04:05:06"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_valkey_instance_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/databases/valkey/instances/123"
+        },
+        "current_state": {
+          "id": 123,
+          "status": "active",
+          "label": "prod-valkey",
+          "region": "us-east",
+          "type": "g6-dedicated-2",
+          "engine": "valkey",
+          "version": "",
+          "cluster_size": 3,
+          "replication_type": "",
+          "ssl_connection": true,
+          "encrypted": false,
+          "allow_list": [
+            "203.0.113.1/32"
+          ],
+          "created": "2026-01-02T03:04:05",
+          "updated": "2026-01-03T04:05:06"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

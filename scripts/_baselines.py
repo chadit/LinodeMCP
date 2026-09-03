@@ -35,12 +35,10 @@ ANNOTATION_SEPARATOR = "  # "
 # carry a free-text reason.
 ANNOTATION_PATTERN = re.compile(r"^accepted \d{4}-\d{2}-\d{2} \S")
 
-# A ratchet acceptance is a promise to come back, and a promise with no
-# issue has no home: free-text reasons pass review once and then rot, which
-# is how "needs classifier review" shipped with nowhere to follow up. The
-# guard therefore requires a resolvable issue URL inside ratchet
-# annotations. Host-agnostic on purpose; the /issues/<n> path is the issue
-# semantics being pinned, not a specific forge.
+# A ratchet acceptance is a promise to come back and a promise with no issue
+# has no home: free-text reasons pass review once and then rot, which is how
+# "needs classifier review" shipped with nowhere to follow up. Host-agnostic on
+# purpose, since the /issues/<n> path pins issue semantics, not a forge.
 ISSUE_URL_PATTERN = re.compile(r"https://\S+/issues/\d+")
 
 

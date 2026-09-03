@@ -8,8 +8,9 @@ import (
 )
 
 // minimalConfigWith returns a minimal valid config with the supplied
-// audit block spliced in (or none when auditBlock is empty).
-func minimalConfigWith(auditBlock string) string {
+// top-level block spliced in (or none when block is empty). Callers pass an
+// audit block or an objectStorage one.
+func minimalConfigWith(block string) string {
 	return `
 environments:
   default:
@@ -17,7 +18,7 @@ environments:
     linode:
       apiUrl: "https://api.linode.com/v4"
       token: "tok"
-` + auditBlock
+` + block
 }
 
 // TestAuditDefaults verifies the audit block's defaults when omitted.

@@ -171,10 +171,10 @@ it.
 
 ### Adding pagination to a list tool
 
-A tool whose spec route paginates must expose `page` and `page_size`, and
-**pagination** fails by name when one does not. That makes this the recipe for
-a new list tool, and for the moment a spec refresh turns an existing route
-paginated:
+A tool whose route paginates in the OpenAPI mirror must expose `page` and
+`page_size`, and **pagination** fails by name when one does not. That makes this
+the recipe for a new list tool, and for the moment a snapshot refresh turns an
+existing route paginated:
 
 1. Add `optional int32 page` and `optional int32 page_size` to the tool's
    proto input message and run `make proto`. Both languages pick up the
@@ -193,9 +193,12 @@ paginated:
    language-only test is not.
 
 Do not declare new page-size constants. The bounds live in
-[api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt),
-generated from the live spec, and **pagination** fails any constant in either
-language that disagrees with it.
+[api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt), which
+the scheduled `sync-pagination` gate writes from the OpenAPI mirror, and
+**pagination** fails any constant in either language that disagrees with it.
+The mirror is the secondary source: when it and TechDocs disagree, TechDocs
+rules and the snapshot is what gets refreshed, per [the network sync
+gates](./gates.md#network-sync-gates-scheduled-only).
 
 ### Changing output or behavior
 

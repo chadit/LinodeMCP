@@ -428,7 +428,8 @@ message ImageShareGroupImageUpdateInput {
 // ImageShareGroupImageDeleteInput is the input contract for
 // linode_image_sharegroup_image_delete. Unlike the group delete, this is a
 // plain confirm destroy (no mode/plan_id in the ground truth). image_id here
-// is the NUMERIC shared image ID, not the slug.
+// is the shared image slug, the same value the sibling PUT takes: the path
+// parameter is declared once for both methods.
 message ImageShareGroupImageDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_image_sharegroup_image_delete"
@@ -449,12 +450,31 @@ message ImageShareGroupImageDeleteInput {
     tool: "linode_image_sharegroup_get"
   };
 
+  // The sibling PUT holds the same path slot to this shape, and a value that
+  // clears it here would 404 at the route instead. The empty arm is what keeps
+  // the required-argument answer with the handler's own presence check, which
+  // is the sentence a caller reading no image_id already gets.
+  //
+  // The two siblings answer an absent image_id differently on purpose, and the
+  // arm is why: toolvalidate runs before the presence check, so the PUT's
+  // armless rule fires first and says "must match shared/<positive integer>",
+  // while this one falls through to "image_id is required". Each is the
+  // sentence its own callers already read, so neither moved. Making them agree
+  // means re-baselining one live sentence on an input that still exists, which
+  // is the open owner question in follow-up 19 of
+  // .claude/specs/make-check-improvements/tasks.md rather than a rider here.
+  option (buf.validate.message).cel = {
+    id: "image_sharegroup_image_delete.image_id.shape"
+    message: "image_id must match shared/<positive integer>"
+    expression: "this.image_id == '' || this.image_id.matches('^shared/[1-9][0-9]*$')"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric image share group ID.
   int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // The numeric shared image ID to remove from the group.
-  int32 image_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The shared image ID to remove from the group, for example shared/7.
+  string image_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm removing the shared image. Ignored when
   // dry_run=true.
   bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param

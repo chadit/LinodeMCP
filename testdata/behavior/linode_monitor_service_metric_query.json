@@ -103,6 +103,69 @@
       "expect_error": "each metrics entry must name a metric"
     },
     {
+      "name": "rejects a zero entity_ids entry",
+      "args": { "service_type": "dbaas", "entity_ids": [0] },
+      "expect_error": "entity_ids must be an array of positive integers"
+    },
+    {
+      "name": "rejects a negative entity_ids entry",
+      "args": { "service_type": "dbaas", "entity_ids": [13116, -1] },
+      "expect_error": "entity_ids must be an array of positive integers"
+    },
+    {
+      "name": "rejects both time windows on one query",
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [13116],
+        "relative_time_duration": { "unit": "hr", "value": 1 },
+        "absolute_time_duration": {
+          "start": "2024-10-14T01:00:00Z",
+          "end": "2024-10-16T02:00:00Z"
+        }
+      },
+      "expect_error": "relative_time_duration and absolute_time_duration are mutually exclusive"
+    },
+    {
+      "name": "carries entity_ids on a query outside Object Storage",
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [13116, 13217],
+        "metrics": [{ "name": "cpu_usage", "aggregate_function": "avg" }]
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/metrics",
+        "body": {
+          "entity_ids": [13116, 13217],
+          "metrics": [{ "name": "cpu_usage", "aggregate_function": "avg" }]
+        }
+      }
+    },
+    {
+      "name": "carries an absolute time window",
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [13116],
+        "absolute_time_duration": {
+          "start": "2024-10-14T01:00:00Z",
+          "end": "2024-10-16T02:00:00Z"
+        }
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/metrics",
+        "body": {
+          "entity_ids": [13116],
+          "absolute_time_duration": {
+            "start": "2024-10-14T01:00:00Z",
+            "end": "2024-10-16T02:00:00Z"
+          }
+        }
+      }
+    },
+    {
       "name": "carries every documented query member",
       "args": {
         "service_type": "dbaas",

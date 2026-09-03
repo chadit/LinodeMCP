@@ -286,10 +286,15 @@ func NewGeneratedSubresourceListTool[T, R proto.Message](
 	assemble func(items []T, count int32, filter *string) R,
 ) (mcp.Tool, Handler) {
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// A collection reaches its rules here rather than through an emitted
-		// call because the driver already holds the message name they are
-		// declared on, so the emitter has nothing left to write.
+		// A collection reaches its rules and its argument refusals here rather
+		// than through an emitted call because the driver already holds the
+		// message name both are derived from, so the emitter has nothing left
+		// to write.
 		if message := toolvalidate.Check(schemaName, request.GetArguments()); message != "" {
+			return mcp.NewToolResultError(message), nil
+		}
+
+		if message := CheckArgumentRefusals(schemaName, toolName, request.GetArguments()); message != "" {
 			return mcp.NewToolResultError(message), nil
 		}
 
@@ -403,6 +408,10 @@ func NewGeneratedNullListTool[T, R proto.Message](
 			return mcp.NewToolResultError(message), nil
 		}
 
+		if message := CheckArgumentRefusals(schemaName, toolName, request.GetArguments()); message != "" {
+			return mcp.NewToolResultError(message), nil
+		}
+
 		values, message := readListPath(&request, validate, readPath)
 		if message != "" {
 			return mcp.NewToolResultError(message), nil
@@ -459,6 +468,10 @@ func NewGeneratedMarkerListTool[T, R proto.Message](
 ) (mcp.Tool, Handler) {
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if message := toolvalidate.Check(schemaName, request.GetArguments()); message != "" {
+			return mcp.NewToolResultError(message), nil
+		}
+
+		if message := CheckArgumentRefusals(schemaName, toolName, request.GetArguments()); message != "" {
 			return mcp.NewToolResultError(message), nil
 		}
 

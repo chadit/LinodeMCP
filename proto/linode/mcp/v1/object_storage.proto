@@ -41,18 +41,6 @@ message ObjectStorageEndpointType {
   }
 }
 
-// PresignedURLMethod is the HTTP method the presigned-URL create tool signs for:
-// GET produces a download URL, PUT an upload URL. This is a tool-level S3
-// presign choice (not a Linode API field), so the value set is authored here.
-// See the enum-wrapper convention in nodebalancer_config.proto.
-message PresignedURLMethod {
-  enum Value {
-    unspecified = 0;
-    GET = 1;
-    PUT = 2;
-  }
-}
-
 // ObjectStorageKeyBucketAccess is a per-bucket grant on an Object Storage key:
 // the item the key create and update tools send, and the item the API answers
 // with. One declaration serves both because the API reads and writes the same
@@ -239,12 +227,12 @@ message ObjectStorageKeyUpdateInput {
   option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
   option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyWriteResponse";
-  option (linode.mcp.v1.tool_description) = "Updates an Object Storage access key's label or bucket permissions.";
+  option (linode.mcp.v1.tool_description) = "Updates an Object Storage access key's label or the regions it is valid in.";
   option (linode.mcp.v1.error_message) = "Failed to modify access key {key_id}: {error}";
-  option (linode.mcp.v1.confirm_message) = "This modifies access key permissions. Set confirm=true to proceed.";
+  option (linode.mcp.v1.confirm_message) = "This modifies an Object Storage access key: a label you send replaces the current one, and a regions list you send replaces the whole set. Leaving a region out drops it, or fails the call outright on a limited key. Set confirm=true to proceed.";
   option (linode.mcp.v1.success_message) = "Access key {key_id} modified successfully";
-  // bucket_access and regions are complete replacement sets, so a replay
-  // reapplies permissions someone else may have changed since the first call.
+  // regions is a complete replacement set, so a replay reapplies a region list
+  // someone else may have changed since the first call.
   option (linode.mcp.v1.retry_disabled) = true;
   // The read is the key, and it is credential-safe: the key GET never carries
   // the secret.
@@ -260,11 +248,6 @@ message ObjectStorageKeyUpdateInput {
     state: "label"
     argument: "label"
   };
-  option (linode.mcp.v1.preview_sentence) = {
-    template: "The key's bucket access scopes are replaced."
-    line: PREVIEW_LINE_SIDE_EFFECT
-    when_present: "bucket_access"
-  };
 
   // The id is read before the body it addresses, matching the sibling read.
   option (buf.validate.message).cel = {
@@ -277,13 +260,6 @@ message ObjectStorageKeyUpdateInput {
     message: "access key label must not exceed 50 characters"
     expression: "!has(this.label) || size(this.label) <= 50"
   };
-  // The runtime item reader owns list shape, member typing, and unknown keys;
-  // this rule adds the per-entry checks it cannot express.
-  option (buf.validate.message).cel = {
-    id: "object_storage_key_update.bucket_access.entries"
-    message: "bucket_access entries must carry a bucket_name and a region, with permissions of read_only or read_write"
-    expression: "this.bucket_access.all(entry, entry.bucket_name != '' && entry.region != '' && entry.permissions in ['read_only', 'read_write'])"
-  };
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -291,9 +267,8 @@ message ObjectStorageKeyUpdateInput {
   int32 key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the access key (max 50 characters).
   optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Replacement bucket permissions, each naming a bucket, the region it resides
-  // in, and read_only or read_write.
-  repeated ObjectStorageKeyBucketAccess bucket_access = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  reserved 4;
+  reserved "bucket_access";
   // Must be set to true to confirm key update. Ignored when dry_run=true.
   bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
@@ -977,79 +952,11 @@ message ObjectStorageTransferGetInput {
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
-// PresignedURLResponse is the linode_object_storage_presigned_url_create response:
-// just the generated URL. The tool is capability Read despite the create verb.
+// PresignedURLResponse is the answer both object-URL create tools share: just
+// the minted URL. A download URL and an upload URL differ in the verb they were
+// signed for rather than in the shape they come back as.
 message PresignedURLResponse {
   string url = 1;
-}
-
-// PresignedURLCreateInput is the input contract for
-// linode_object_storage_presigned_url_create, pairing with
-// PresignedURLResponse. region, label, name, and method are required. The tool
-// is capability Read despite the create verb, so it has no confirm/dry_run.
-message PresignedURLCreateInput {
-  option (linode.mcp.v1.tool_route) = {
-    tool: "linode_object_storage_presigned_url_create"
-    method: "POST"
-    path: "/object-storage/buckets/{region}/{label}/object-url"
-  };
-  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
-  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
-  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
-  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PresignedURLResponse";
-  option (linode.mcp.v1.tool_description) = "Generates a presigned URL for accessing an object in Object Storage. Use method=GET to create a download URL, method=PUT to create an upload URL.";
-  option (linode.mcp.v1.error_message) = "Failed to generate presigned URL for '{name}' in bucket '{label}': {error}";
-  // The method arrives in whatever case the caller typed it, so it is folded to
-  // the canonical S3 verb before the enum rule below reads it.
-  option (linode.mcp.v1.normalize_fields) = {
-    field: "method"
-    transform: NORMALIZE_TRANSFORM_UPPERCASE
-  };
-
-  option (buf.validate.message).cel = {
-    id: "object_storage_presigned_url_create.region.required"
-    message: "region is required"
-    expression: "this.region.matches('[^ \\t\\r\\n]')"
-  };
-  option (buf.validate.message).cel = {
-    id: "object_storage_presigned_url_create.label.required"
-    message: "label is required"
-    expression: "this.label.matches('[^ \\t\\r\\n]')"
-  };
-  option (buf.validate.message).cel = {
-    id: "object_storage_presigned_url_create.name.required"
-    message: "name (object key) is required"
-    expression: "this.name.matches('[^ \\t\\r\\n]')"
-  };
-  option (buf.validate.message).cel = {
-    id: "object_storage_presigned_url_create.method.known"
-    message: "method must be one of: GET, PUT"
-    expression: "this.method != 0"
-  };
-  // The rejection names the value it read, which is the one sentence in the
-  // contract a static message cannot carry: a CEL rule answering a string
-  // reports that string instead of its declared one.
-  option (buf.validate.message).cel = {
-    id: "object_storage_presigned_url_create.expires_in.range"
-    expression: "(!has(this.expires_in) || (this.expires_in >= 1 && this.expires_in <= 604800)) ? '' : string('expires_in must be between 1 and 604800 seconds (7 days), got ' + string(this.expires_in))"
-  };
-
-  // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
-  // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
-  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // The bucket label (name).
-  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
-  // The object key (path/filename within the bucket).
-  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // HTTP method: 'GET' for download URL, 'PUT' for upload URL.
-  PresignedURLMethod.Value method = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // URL expiration in seconds (1-604800, default 3600 = 1 hour).
-  optional int32 expires_in = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Content-Type the signed request must carry, for a PUT upload URL
-  // (optional). The signature covers it, so an upload that sends a different
-  // Content-Type is rejected.
-  optional string content_type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // ObjectStorageObject is one object (or common prefix) inside a bucket, as
@@ -1129,11 +1036,77 @@ message ObjectStorageObjectDownloadResponse {
   string etag = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL];
 }
 
+// ObjectStorageObjectDownloadURLCreateInput is the input contract for
+// linode_object_storage_object_download_url_create, pairing with
+// PresignedURLResponse. region, label, and name are required.
+//
+// The verb is pinned rather than declared, the way both transfer tools on this
+// route pin theirs. A URL signed for GET is a read credential, so this tool is
+// capability Read and ships in the read-only profiles; the upload half is a
+// separate message because a URL signed for PUT is a write credential and does
+// not belong in the same profiles.
+message ObjectStorageObjectDownloadURLCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_object_download_url_create"
+    method: "POST"
+    path: "/object-storage/buckets/{region}/{label}/object-url"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PresignedURLResponse";
+  option (linode.mcp.v1.tool_description) = "Generates a presigned download URL for an object in an Object Storage bucket. The URL is signed for GET and stops working when its window closes.";
+  option (linode.mcp.v1.error_message) = "Failed to generate download URL for '{name}' in bucket '{label}': {error}";
+  // The caller does not choose the verb: this tool only ever signs a GET.
+  option (linode.mcp.v1.body_constant) = {
+    key: "method"
+    text: "GET"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download_url_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download_url_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download_url_create.name.required"
+    message: "name (object key) is required"
+    expression: "this.name.matches('[^ \\t\\r\\n]')"
+  };
+  // The rejection names the value it read, which is the one sentence in the
+  // contract a static message cannot carry: a CEL rule answering a string
+  // reports that string instead of its declared one. The window is the
+  // object-url schema's own, minimum 360 and maximum 3600.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_download_url_create.expires_in.range"
+    expression: "(!has(this.expires_in) || (this.expires_in >= 360 && this.expires_in <= 3600)) ? '' : string('expires_in must be between 360 and 3600 seconds, got ' + string(this.expires_in))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Region where the bucket is located (e.g. 'us-east-1', 'us-southeast-1').
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The bucket label (name).
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The object key (path/filename within the bucket).
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // URL expiration in seconds (360-3600, the window the object-url schema
+  // publishes). Omitted from the body when absent, so the API's own 3600
+  // default applies. No content_type sits beside it: the documentation scopes
+  // that member to the verbs other than GET and DELETE.
+  optional int32 expires_in = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+}
+
 // ObjectStorageObjectDownloadInput is the input contract for
 // linode_object_storage_object_download. region, label, name, and dest_path are
 // required.
 //
-// The declared route is the presigned-URL create, for the reason the upload
+// The declared route is the object-URL create, for the reason the upload
 // gives: asking for a URL is the one Linode operation this tool performs, and
 // following that URL is not a route the client builds. Capability is Read
 // because nothing on Linode changes; the local file it writes is guarded by
@@ -1207,10 +1180,11 @@ message ObjectStorageObjectDownloadInput {
     message: "dest_path must be a local, absolute path"
     expression: "this.dest_path.startsWith('/') || this.dest_path.matches('^[A-Za-z]:')"
   };
+  // Same object-url window the download-URL create rule explains.
   option (buf.validate.message).cel = {
     id: "object_storage_object_download.expires_in.range"
-    message: "expires_in must be between 1 and 604800 seconds (7 days)"
-    expression: "!has(this.expires_in) || (this.expires_in >= 1 && this.expires_in <= 604800)"
+    message: "expires_in must be between 360 and 3600 seconds"
+    expression: "!has(this.expires_in) || (this.expires_in >= 360 && this.expires_in <= 3600)"
   };
 
   // Linode environment to use (optional, defaults to "default").
@@ -1228,16 +1202,89 @@ message ObjectStorageObjectDownloadInput {
   // Replace a file already at dest_path. Default false, which is what stands in
   // for a confirm gate on a tool that changes nothing on Linode.
   optional bool overwrite = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_TOOL];
-  // Lifetime of the presigned URL in seconds (1-604800). Defaults to the
-  // configured budget, which has to outlast the transfer it authorizes.
+  // Lifetime of the presigned URL in seconds (360-3600, the window the
+  // object-url schema publishes). Defaults to the configured budget, which has
+  // to outlast the transfer it authorizes.
   optional int32 expires_in = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+}
+
+// ObjectStorageObjectUploadURLCreateInput is the input contract for
+// linode_object_storage_object_upload_url_create, pairing with
+// PresignedURLResponse. region, label, and name are required.
+//
+// Capability Write rather than Read, which is what splits this tool off the
+// download half: a URL signed for PUT can overwrite the object for its whole
+// lifetime and travels outside every gate the server owns, so it takes the
+// confirm sentence and the dry-run flow instead of shipping in a profile whose
+// description says it cannot write.
+message ObjectStorageObjectUploadURLCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_object_upload_url_create"
+    method: "POST"
+    path: "/object-storage/buckets/{region}/{label}/object-url"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PresignedURLResponse";
+  option (linode.mcp.v1.tool_description) = "Generates a presigned upload URL for an object in an Object Storage bucket. The URL is signed for PUT, so anyone holding it can write that object until the window closes. Set dry_run=true to see the request first.";
+  option (linode.mcp.v1.error_message) = "Failed to generate upload URL for '{name}' in bucket '{label}': {error}";
+  option (linode.mcp.v1.confirm_message) = "This mints a URL signed for PUT. Anyone holding it can overwrite this object until the window closes, without a Linode token and without passing this server again. Set confirm=true to proceed.";
+  // The caller does not choose the verb: this tool only ever signs a PUT.
+  option (linode.mcp.v1.body_constant) = {
+    key: "method"
+    text: "PUT"
+  };
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload_url_create.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload_url_create.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload_url_create.name.required"
+    message: "name (object key) is required"
+    expression: "this.name.matches('[^ \\t\\r\\n]')"
+  };
+  // Same window and same value-naming form the download-URL create rule
+  // explains.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_upload_url_create.expires_in.range"
+    expression: "(!has(this.expires_in) || (this.expires_in >= 360 && this.expires_in <= 3600)) ? '' : string('expires_in must be between 360 and 3600 seconds, got ' + string(this.expires_in))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Region where the bucket is located (e.g. 'us-east-1', 'us-southeast-1').
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The bucket label (name).
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The object key (path/filename within the bucket).
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Content-Type the signed request must carry (optional). The signature covers
+  // it, so a PUT sending a different Content-Type is refused by the endpoint.
+  optional string content_type = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // URL expiration in seconds (360-3600, the window the object-url schema
+  // publishes). Omitted from the body when absent, so the API's own 3600
+  // default applies.
+  optional int32 expires_in = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to mint the URL. Ignored when dry_run=true.
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request. Default
+  // false.
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageObjectUploadInput is the input contract for
 // linode_object_storage_object_upload. region, label, name, and source_path are
 // required.
 //
-// The declared route is the presigned-URL create, because that is the one
+// The declared route is the object-URL create, because that is the one
 // Linode operation this tool calls: it asks for a URL and then PUTs the file to
 // the URL the API handed back. Following a URL is not a route the client builds,
 // which is why nothing here declares an S3 path and why no Object Storage key is
@@ -1325,10 +1372,11 @@ message ObjectStorageObjectUploadInput {
     message: "source_path must be a local, absolute path"
     expression: "this.source_path.startsWith('/') || this.source_path.matches('^[A-Za-z]:')"
   };
+  // Same object-url window the download-URL create rule explains.
   option (buf.validate.message).cel = {
     id: "object_storage_object_upload.expires_in.range"
-    message: "expires_in must be between 1 and 604800 seconds (7 days)"
-    expression: "!has(this.expires_in) || (this.expires_in >= 1 && this.expires_in <= 604800)"
+    message: "expires_in must be between 360 and 3600 seconds"
+    expression: "!has(this.expires_in) || (this.expires_in >= 360 && this.expires_in <= 3600)"
   };
 
   // Linode environment to use (optional, defaults to "default").
@@ -1348,12 +1396,124 @@ message ObjectStorageObjectUploadInput {
   // signed, not at PUT time: the signature covers this header, so a PUT sending
   // a type the presign request never named is refused by the endpoint.
   optional string content_type = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Lifetime of the presigned URL in seconds (1-604800). Defaults to the
-  // configured budget, which has to outlast the transfer it authorizes.
+  // Lifetime of the presigned URL in seconds (360-3600, the window the
+  // object-url schema publishes). Defaults to the configured budget, which has
+  // to outlast the transfer it authorizes.
   optional int32 expires_in = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm the upload. Ignored when dry_run=true.
   bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and the
   // local file it would send. Default false.
   optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// ObjectStorageObjectDeleteResponse is the linode_object_storage_object_delete
+// answer: the sentence plus the two ids the call was addressed by. The object
+// key is not a member here because it travels in the body rather than the path,
+// and a delete envelope's scalars all echo a path id; the success sentence
+// names the key instead.
+message ObjectStorageObjectDeleteResponse {
+  string message = 1;
+  string region = 2;
+  string label = 3;
+}
+
+// ObjectStorageObjectDeleteInput is the input contract for
+// linode_object_storage_object_delete. region, label, name, and confirm are
+// required.
+//
+// The declared route is the object-URL create, for the reason both transfer
+// tools give: asking for a URL is the one Linode operation this tool performs,
+// and the DELETE that follows addresses a URL the API just minted rather than a
+// route the client builds. Capability is Destroy rather than Write because a
+// removal is what the call ends in, so it takes the bypass-dry-run gate and the
+// two-stage plan and apply that every other destroy takes.
+message ObjectStorageObjectDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_object_delete"
+    method: "POST"
+    path: "/object-storage/buckets/{region}/{label}/object-url"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_OBJECT_STORAGE_READ_WRITE};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_OBJECT_STORAGE};
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectDeleteResponse";
+  option (linode.mcp.v1.tool_description) = "Deletes one object from an Object Storage bucket. Requires confirm=true to proceed. Pass dry_run=true to preview without deleting. Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes.";
+  option (linode.mcp.v1.error_message) = "Failed to delete '{name}' from bucket '{label}': {error}";
+  option (linode.mcp.v1.confirm_message) = "This removes the object from the bucket and it cannot be restored. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Object '{name}' deleted from bucket '{label}'";
+  // A replay would report an object the first attempt already removed as one
+  // the bucket never held.
+  option (linode.mcp.v1.retry_disabled) = true;
+  // The caller does not choose the verb: this tool only ever signs a DELETE.
+  option (linode.mcp.v1.body_constant) = {
+    key: "method"
+    text: "DELETE"
+  };
+  // The preview reads the object's ACL. That read is addressed by the object
+  // key in its query as well as by the bucket in its path, and the key travels
+  // in this call's body, which is why the fill is not a path slot. It also
+  // answers 404 for an object that is not there, so a delete aimed at a key
+  // nothing stores is reported in the preview rather than after the call.
+  option (linode.mcp.v1.state_route) = {
+    tool: "linode_object_storage_object_acl_get"
+  };
+  option (linode.mcp.v1.preview_sentence) = {
+    template: "Object '{name}' will be removed from bucket '{label}'."
+    line: PREVIEW_LINE_SIDE_EFFECT
+  };
+  // The declared POST mints a URL signed for DELETE; the removal that follows
+  // it addresses that URL, which no route builds.
+  option (linode.mcp.v1.execute_transport) = {
+    presign_remove {
+      url_field: "url"
+    }
+  };
+
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_delete.region.required"
+    message: "region is required"
+    expression: "this.region.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_delete.label.required"
+    message: "label is required"
+    expression: "this.label.matches('[^ \\t\\r\\n]')"
+  };
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_delete.name.required"
+    message: "name (object key) is required"
+    expression: "this.name.matches('[^ \\t\\r\\n]')"
+  };
+  // Same window and same value-naming form the download-URL create rule
+  // explains.
+  option (buf.validate.message).cel = {
+    id: "object_storage_object_delete.expires_in.range"
+    expression: "(!has(this.expires_in) || (this.expires_in >= 360 && this.expires_in <= 3600)) ? '' : string('expires_in must be between 360 and 3600 seconds, got ' + string(this.expires_in))"
+  };
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Region where the bucket is located (e.g. 'us-east-1', 'us-southeast-1').
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The bucket label (name).
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+  // The object key to remove.
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Lifetime of the signed URL in seconds (360-3600, the window the object-url
+  // schema publishes). Defaults to the configured budget, which has to outlast
+  // the removal it authorizes.
+  optional int32 expires_in = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Must be true to proceed. This removes the object from the bucket. Ignored
+  // when dry_run=true.
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Preview the call without making it: returns the would-be request and the
+  // object's current ACL. Default false.
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

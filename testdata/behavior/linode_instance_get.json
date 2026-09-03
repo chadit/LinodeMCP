@@ -51,6 +51,14 @@
         "method": "GET",
         "path": "/linode/instances/5"
       }
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": {
+        "instance_id": 5,
+        "bogus_field": "x"
+      },
+      "expect_error": "Unsupported argument(s) for linode_instance_get: bogus_field"
     }
   ]
 }

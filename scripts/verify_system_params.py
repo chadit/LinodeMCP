@@ -45,8 +45,7 @@ _MESSAGE = re.compile(r"^message\s+([A-Za-z_]\w*)\s*\{")
 # field name, the tag number, an optional field-options block, then whatever
 # trails the semicolon. The options block is load-bearing: routed input fields
 # carry `[(linode.mcp.v1.field_location) = ...]`, and a pattern stopping at the
-# tag number skipped every one of them, finding 1 marker where 970 exist while
-# still printing OK.
+# tag number found 1 marker where 970 exist while still printing OK.
 _FIELD = re.compile(
     r"^\s*(?:(?:optional|repeated)\s+)?"
     r"(map<[^>]+>|[A-Za-z_][\w.]*)\s+"

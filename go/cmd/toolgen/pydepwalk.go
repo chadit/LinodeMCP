@@ -10,13 +10,12 @@ import (
 // The Python arm of the declared walks: the same WalkSpec literals the Go arm
 // renders, interpreted by linodemcp.tools.walk_spec.
 
-// The closure's own lines. The unread variant serves a walkless plan, whose client parameter gets the underscore
-// the linter exempts.
+// The closure's own lines. A parameter nothing in the body reads gets the
+// underscore the linter exempts: the client on a walkless plan, the state on a
+// closure with no walk, no estimate and no wording naming a member of it.
 const (
-	pyWalkDefLine          = "    async def dependency_walk("
-	pyWalkClientLine       = "        client: RetryableClient, state: Any"
-	pyWalkUnreadClientLine = "        _client: RetryableClient, state: Any"
-	pyWalkTypeLine         = "    ) -> DryRunDetails:"
+	pyWalkDefLine  = "    async def dependency_walk("
+	pyWalkTypeLine = "    ) -> DryRunDetails:"
 )
 
 // Keyword-argument indents inside the rendered closure, and the extra step a
@@ -32,16 +31,24 @@ const (
 
 // pyDeclaredWalks renders the dependency_walk closure over the declared walks.
 func pyDeclaredWalks(tool *pyTool) []string {
-	clientLine := pyWalkClientLine
+	client := "client"
 	if len(tool.c.DepWalks) == 0 && tool.c.BillingDecl == nil {
-		clientLine = pyWalkUnreadClientLine
+		client = "_client"
+	}
+
+	state := "state"
+	if !walkReadsState(tool.c) {
+		state = "_state"
 	}
 
 	lines := []string{
 		pyWalkDefLine,
-		clientLine,
+		"        " + client + ": RetryableClient, " + state + ": Any",
 		pyWalkTypeLine,
-		"        declared = declared_state_of(state)",
+	}
+
+	if walkReadsState(tool.c) {
+		lines = append(lines, "        declared = declared_state_of(state)")
 	}
 
 	lines = append(lines, pyWalkProseValues(tool)...)
@@ -145,13 +152,32 @@ func pySentenceSeeds(tool *pyTool, warnings bool) []string {
 // composite member the prose is declared against so one wording serves the
 // preview and the plan.
 func pyWalkProseValues(tool *pyTool) []string {
-	if !walkSeedsRead(tool.c) || !tool.c.previewReadsStateProse() {
+	if !walkSeedsRead(tool.c) {
 		return nil
 	}
 
-	return []string{
-		"        " + pyPreviewValuesLocal + " = preview_state_values(" + pyWalkProseState(tool.c) + ")",
+	if tool.c.previewReadsStateProse() {
+		return []string{
+			"        " + pyPreviewValuesLocal + " = preview_state_values(" + pyWalkProseState(tool.c) + ")",
+		}
 	}
+
+	// A wording naming only arguments has nothing to read off the projection,
+	// so the map is built here rather than through the state closure the
+	// handler renders for the tools that do read it.
+	names := tool.c.previewValueArguments()
+	if len(names) == 0 {
+		return nil
+	}
+
+	lines := make([]string, 0, len(names)+3)
+	lines = append(lines, "        "+pyPreviewValuesLocal+" = {")
+
+	for _, name := range names {
+		lines = append(lines, "            "+pyQuote(name)+": "+pyPreviewValueRead(tool, name)+",")
+	}
+
+	return append(lines, "        }", "")
 }
 
 // pyWalkProseState is the state a seeded wording reads through.

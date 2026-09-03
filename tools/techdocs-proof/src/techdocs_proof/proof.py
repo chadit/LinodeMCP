@@ -31,6 +31,7 @@ import concurrent.futures
 import contextlib
 import hashlib
 import html
+import inspect
 import json
 import os
 import re
@@ -796,16 +797,16 @@ def build_techdocs_contract_snapshot(endpoints: list[dict[str, Any]]) -> dict[st
 ROUTE_SNAPSHOT_NAME = "route-snapshot.txt"
 ROUTE_SNAPSHOT_HEADER = """\
 # Rendered-TechDocs route snapshot (harvested {harvested}, {count} routes)
-# One line per route the rendered TechDocs state:
+# One line per rendered route:
 #   METHOD /path/shape surface=<both|v4_only|v4beta_only> status=<active|deprecated>
-# Placeholder names collapse to {{}}: TechDocs writes clusterId where the proto
-# writes cluster_id, so the shape is the only join both sides agree on.
+# Placeholder names collapse to {{}}: TechDocs writes clusterId, the proto
+# cluster_id; the shape is the only join.
 # Generated; regenerate with:
 #   PYTHONPATH=tools/techdocs-proof/src python3 -m techdocs_proof \\
 #     --techdocs-contract <run>/techdocs-contracts.json \\
 #     --emit-route-snapshot docs/contracts/api-techdocs-routes-baseline.txt
-# Consumed offline by scripts/verify_techdocs_routes.py (make techdocs-routes);
-# .github/workflows/techdocs-drift.yml reports the weekly diff for a human.
+# Read offline by scripts/verify_techdocs_routes.py (make techdocs-routes);
+# .github/workflows/techdocs-drift.yml reports the weekly diff.
 """
 
 
@@ -1574,8 +1575,8 @@ KNOWN_RENAMES: dict[tuple[str, str, str, str], dict[str, str]] = {
 # Divergences a triage confirmed are not repo defects. Every entry names the
 # exact route, location, and parameter it covers, so a name that is a real
 # field on some other route keeps its finding. The ledger is data, not source:
-# the entries are review material rather than logic, and on the retired cloud
-# host helper scripts used to patch them into this file.
+# entries are review material, and helper scripts once patched them into this
+# file.
 LEDGER_FIELDS = (
     "category",
     "kind",
@@ -1655,6 +1656,14 @@ def known_divergence_index() -> dict[tuple[str, ...], dict[str, str]]:
             raise ProofError(
                 f"known divergence route must be a collapsed shape, got {shape!r}"
             )
+        # A kind the comparison never raises can never match, so the entry would
+        # sit in known_divergences_unmatched reading like upstream drift. The
+        # severity table is the list of kinds a run can produce.
+        if entry["kind"] not in FINDING_SEVERITY:
+            raise ProofError(
+                f"known divergence names a kind the comparison cannot raise: "
+                f"{entry['kind']!r}"
+            )
         key = (
             entry["kind"],
             entry["method"],
@@ -1670,10 +1679,10 @@ def known_divergence_index() -> dict[tuple[str, ...], dict[str, str]]:
     return index
 
 
-# high      : TechDocs documents a route or parameter the repo proto does not carry.
-# medium    : both sides carry it and disagree about a contract fact.
+# high      : TechDocs documents a route or parameter the proto does not carry.
+# medium    : both sides carry it and disagree on a fact.
 # known     : triaged divergence with a recorded reason, not a repo defect.
-# limitation: proto3 cannot express the fact, so the comparison cannot judge it.
+# limitation: proto3 cannot express the fact, so nothing can judge it.
 # info      : spelling difference or an observation, not a contract gap.
 FINDING_SEVERITY = {
     "route_missing_from_proto": "high",
@@ -2471,6 +2480,8 @@ def compare_contracts(
         )
     findings, unused_known = apply_known_divergences(findings)
     findings.sort(key=sort_key)
+    # The exit code reads the count this set produces, so the two tiers named
+    # here are the ones a scheduled run is allowed to fail on.
     actionable = {"high", "medium"}
     finding_routes = {
         (str(item.get("method") or ""), str(item.get("route_shape") or ""))
@@ -3068,6 +3079,22 @@ def read_endpoint_index(path: Path) -> list[Any]:
     return endpoints
 
 
+def findings_exit_code(fail_on_findings: bool, summary: dict[str, Any]) -> int:
+    """Exit 3 for the tiers a caller can act on, and only those.
+
+    known, limitation, and info each record a disagreement someone already read
+    and accepted, so a gate that counted them would be red every week. The count
+    comes from the summary the run publishes, the same number the scheduled job
+    prints as ``actionable (medium or high) findings``, so the exit code and
+    the report cannot disagree. Note what the count leaves out: a ledger entry
+    that stopped matching lands in ``known_divergences_unmatched`` and reaches
+    no finding, so it never reaches this exit code either.
+    """
+    if not fail_on_findings:
+        return 0
+    return 3 if summary["actionable_findings"] else 0
+
+
 def run_scrape_mode(args: argparse.Namespace) -> int:
     if args.retention_days < 0:
         raise ProofError("--retention-days must be non-negative")
@@ -3176,7 +3203,7 @@ def run_scrape_mode(args: argparse.Namespace) -> int:
         if args.output:
             write_json(args.output, result)
         print(json.dumps(manifest, indent=2, sort_keys=True))
-        return 3 if args.fail_on_findings and result["findings"] else 0
+        return findings_exit_code(args.fail_on_findings, result["summary"])
     except Exception as exc:
         manifest.update(
             {
@@ -3723,11 +3750,10 @@ def run_self_test() -> None:
     # names no field of the message, so neither makes anything required.
     assert declared_required_fields(required_message) == {"saml"}
 
-    # A `.known` rule is the value set the handler holds a scalar to, so it is
-    # the proto side of an enum comparison the way a `.required` rule is the
-    # proto side of requiredness. Only a membership list on the named field is
-    # readable: a range, a member rule, and a list with a shape this reader
-    # does not know each leave the field with no declared set.
+    # A `.known` rule is the value set the handler holds a scalar to: the proto
+    # side of an enum comparison, as `.required` is of requiredness. Only a
+    # membership list on the named field is readable; a range, a member rule,
+    # or an unknown list shape leaves the field with no declared set.
     value_set_descriptor = json.loads(json.dumps(required_descriptor))
     value_set_message = value_set_descriptor["file"][1]["messageType"][0]
     for number, name, field_type in (
@@ -4188,6 +4214,20 @@ def run_self_test() -> None:
     assert len(known_divergence_index()) == len(KNOWN_DIVERGENCES)
     assert all(entry["reason"].strip() for entry in KNOWN_DIVERGENCES)
 
+    saved_kind_ledger = KNOWN_DIVERGENCES
+    try:
+        mistyped = dict(saved_kind_ledger[0])
+        mistyped["kind"] = "parameter_requiredness_mismatchh"
+        globals()["KNOWN_DIVERGENCES"] = (mistyped,)
+        try:
+            known_divergence_index()
+        except ProofError:
+            pass
+        else:
+            raise AssertionError("a ledger kind the comparison cannot raise must fail")
+    finally:
+        globals()["KNOWN_DIVERGENCES"] = saved_kind_ledger
+
     saved_ledger = KNOWN_DIVERGENCES
     try:
         globals()["KNOWN_DIVERGENCES"] = (dict(saved_ledger[0]), dict(saved_ledger[0]))
@@ -4289,6 +4329,112 @@ def run_self_test() -> None:
         assert [entry["parameter"] for entry in unused] == ["page_size"], unused
     finally:
         globals()["KNOWN_DIVERGENCES"] = saved_class_ledger
+
+    # The exit code is the only thing the scheduled job reads. These cases run
+    # the real descriptor entry point end to end: it reads two JSON files, so
+    # it needs neither buf nor the network.
+    def exit_code_for(
+        repo_descriptor: dict[str, Any], docs_descriptor: dict[str, Any]
+    ) -> int:
+        with tempfile.TemporaryDirectory(prefix="techdocs-proof-exit-") as directory:
+            root = Path(directory)
+            write_json(root / "linodemcp-descriptor.json", repo_descriptor)
+            write_json(root / "techdocs-descriptor.json", docs_descriptor)
+            saved_argv = sys.argv
+            sys.argv = [
+                "techdocs_proof",
+                "--techdocs-descriptor",
+                str(root / "techdocs-descriptor.json"),
+                "--linodemcp-descriptor",
+                str(root / "linodemcp-descriptor.json"),
+                "--output",
+                str(root / "comparison.json"),
+                "--fail-on-findings",
+            ]
+            # main() reports each run on stderr, and the gate prints one line, so
+            # these six probe runs report into the temporary directory instead.
+            try:
+                with (
+                    (root / "stderr.log").open("w", encoding="utf-8") as report,
+                    contextlib.redirect_stderr(report),
+                ):
+                    return main()
+            finally:
+                sys.argv = saved_argv
+
+    clean_docs = techdocs_fixture([path_parameter])
+    assert exit_code_for(descriptor_fixture, clean_docs) == 0
+
+    # info: a body field differing from the documented name by word segmentation
+    # is a spelling variant, so it must not fail the run.
+    segmented_descriptor = json.loads(json.dumps(descriptor_fixture))
+    segmented_descriptor["file"][1]["messageType"][0]["field"].append(
+        {
+            "name": "nodebalancer_id",
+            "jsonName": "nodebalancerId",
+            "number": 3,
+            "label": "LABEL_OPTIONAL",
+            "type": "TYPE_INT64",
+            "options": {FIELD_LOCATION_OPTION: "FIELD_LOCATION_BODY"},
+        }
+    )
+    assert (
+        exit_code_for(
+            segmented_descriptor, techdocs_fixture([path_parameter, body_parameter])
+        )
+        == 0
+    )
+
+    # limitation: the page rendered one body variant, so a member the rendered
+    # variant never carried has nothing to match.
+    variant_descriptor = json.loads(json.dumps(descriptor_fixture))
+    variant_descriptor["file"][1]["messageType"][0]["field"][1]["options"][
+        FIELD_LOCATION_OPTION
+    ] = "FIELD_LOCATION_BODY"
+    variant_docs = techdocs_fixture([path_parameter])
+    variant_docs["file"][0]["messageType"][0]["options"][
+        TECHDOCS_OPERATION_OPTION
+    ].update({"bodyVariants": ["UDP", "TCP"], "renderedBodyVariant": "UDP"})
+    assert exit_code_for(variant_descriptor, variant_docs) == 0
+
+    # medium: a proto query field the documentation never mentions.
+    query_descriptor = json.loads(json.dumps(descriptor_fixture))
+    query_descriptor["file"][1]["messageType"][0]["field"][1]["options"][
+        FIELD_LOCATION_OPTION
+    ] = "FIELD_LOCATION_QUERY"
+    assert exit_code_for(query_descriptor, clean_docs) == 3
+
+    # known: the same row, demoted by a ledger entry that matches it.
+    saved_exit_ledger = KNOWN_DIVERGENCES
+    try:
+        globals()["KNOWN_DIVERGENCES"] = (
+            {
+                "category": "probe",
+                "kind": "proto_parameter_not_in_techdocs",
+                "method": "GET",
+                "shape": "/widgets/{}",
+                "location": "query",
+                "parameter": "environment",
+                "reason": "The triage that demotes the medium row above.",
+            },
+        )
+        assert exit_code_for(query_descriptor, clean_docs) == 0
+    finally:
+        globals()["KNOWN_DIVERGENCES"] = saved_exit_ledger
+
+    # high: a documented query parameter with no proto field at all.
+    assert (
+        exit_code_for(descriptor_fixture, techdocs_fixture([path_parameter, extra]))
+        == 3
+    )
+
+    # A scrape-mode run needs buf and the network, so the offline gate cannot
+    # reach its return. Proving both entry points read the one helper is what
+    # keeps the scrape path from drifting back to counting every tier.
+    for entry_point in (run_scrape_mode, main):
+        assert "findings_exit_code(" in inspect.getsource(entry_point), (
+            entry_point.__name__
+        )
 
     # The route snapshot is the artifact scripts/verify_techdocs_routes.py gates
     # proto/ against, so the shape it is written in is a contract of its own.
@@ -4439,7 +4585,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--fail-on-findings",
         action="store_true",
-        help="Return exit 3 when comparison completes with findings",
+        help=(
+            "Return exit 3 when the completed comparison carries a finding at "
+            "medium or high; known, limitation, and info never reach the exit code"
+        ),
     )
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
@@ -4511,7 +4660,7 @@ def main() -> int:
             f"findings={summary['mismatches']}",
             file=sys.stderr,
         )
-        return 3 if args.fail_on_findings and result["findings"] else 0
+        return findings_exit_code(args.fail_on_findings, summary)
     except (ProofError, OSError, subprocess.SubprocessError) as exc:
         error = {
             "source_authority": TECHDOCS_AUTHORITY,

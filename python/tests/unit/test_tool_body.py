@@ -1006,67 +1006,6 @@ def test_folded_argument_with_no_default_is_omitted() -> None:
     assert _rendered(body) == '{"interfaces":[{}]}'
 
 
-def _firewall_update_rules() -> tuple[FoldMember, ...]:
-    """The update's fold: the create's two arguments with no default."""
-    return (
-        FoldMember("inbound_policy", ITEM_STR, argument="inbound_policy"),
-        FoldMember("outbound_policy", ITEM_STR, argument="outbound_policy"),
-    )
-
-
-@pytest.mark.parametrize(
-    ("arguments", "want"),
-    [
-        ({"label": "renamed"}, '{"label":"renamed"}'),
-        ({"inbound_policy": "DROP"}, '{"rules":{"inbound_policy":"DROP"}}'),
-        (
-            {"inbound_policy": "DROP", "outbound_policy": "ACCEPT"},
-            '{"rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT"}}',
-        ),
-        (
-            {"rules": {"inbound_policy": "DROP"}},
-            '{"rules":{"inbound_policy":"DROP"}}',
-        ),
-    ],
-)
-def test_omits_an_empty_optional_fold(arguments: dict[str, Any], want: str) -> None:
-    """The firewall update reads ``rules`` as a replacement rather than a
-    setting, so a call naming no policy leaves the member off the wire.
-
-    Sending the empty object there would clear the ruleset the caller never
-    mentioned, which is what separates fold_optional from fold.
-    """
-    body = WriteBody(arguments)
-    body.set_str("label")
-    body.fold_optional("rules", _firewall_update_rules())
-
-    assert _rendered(body) == want
-
-
-@pytest.mark.parametrize(
-    ("arguments", "want"),
-    [
-        ({"rules": 5}, "rules must be an object"),
-        ({"inbound_policy": 5}, "rules.inbound_policy must be a string"),
-    ],
-)
-def test_bad_optional_fold_is_refused(arguments: dict[str, Any], want: str) -> None:
-    """An optional fold is held to the same two failures the always-sent one is."""
-    body = WriteBody(arguments)
-    body.fold_optional("rules", _firewall_update_rules())
-
-    assert body.result() == ({}, want)
-
-
-def test_optional_fold_writes_nothing_after_a_failure() -> None:
-    """The first type failure answers the whole call."""
-    body = WriteBody({"label": 5})
-    body.put_str("label")
-    body.fold_optional("rules", _firewall_update_rules())
-
-    assert body.result() == ({}, "label must be a string")
-
-
 def test_set_int_omits_an_explicit_null() -> None:
     """null on an optional int means "use the default", never 0."""
     body = WriteBody({"description": "set", "ttl_sec": None})

@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_config_interface_add",
-  "description": "Pins the shared config_id positive-int rejection, the proto-enum purpose rejection, and the config-interface add POST body. Both languages now serve it from the proto contract, so the rejection cases carry confirm: the generated live path gates on confirm before it reads any argument.",
+  "description": "Pins the shared config_id positive-int rejection, the proto-enum purpose rejection, and the config-interface add POST body. Both languages now serve it from the proto contract, so the rejection cases carry confirm: the generated live path gates on confirm before it reads any argument. A retired ipv6 argument is dropped rather than sent: the route's body schema has no such member.",
   "cases": [
     {
       "name": "rejects non-positive config_id",
@@ -82,6 +82,20 @@
         ],
         "warnings": []
       }
+    },
+    {
+      "name": "refuses a retired ipv6 argument instead of dropping it",
+      "args": {
+        "linode_id": 123,
+        "config_id": 7,
+        "confirm": true,
+        "purpose": "vpc",
+        "subnet_id": 5,
+        "ipv6": {
+          "slaac": "any"
+        }
+      },
+      "expect_error": "Unsupported argument(s) for linode_instance_config_interface_add: ipv6"
     }
   ]
 }

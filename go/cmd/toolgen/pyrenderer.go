@@ -56,7 +56,7 @@ func (pyRenderer) acts() []optionClaim {
 		"field_location", "list_envelope", "list_filter", "local_answer", "local_operation", "local_record", "normalize_fields", "normalize_fold", "state_composite", "dependency_walk", "billing_delta",
 		"object_walk", "preview_omits_body", "preview_redact",
 		"preview_sentence", "preview_stand_in", "preview_unchanged", "reader_message", "reader_values",
-		"refuse_arguments", "refuse_unknown_arguments", "require_any_of",
+		"refuse_arguments", "require_any_of",
 		"execute_transport", "response_body_fields", "state_route", "tool_api_surface",
 		"tool_capability", "tool_categories", "tool_description",
 		"tool_meta", "tool_response", "tool_route", "tool_scopes",
@@ -372,8 +372,11 @@ func pyTypeChecking(tools []*pyTool) []string {
 		lines = append(lines, "    from linodemcp.linode import RetryableClient")
 	}
 
+	// The same predicate the walk closure is rendered under, since the closure's
+	// own annotation is what needs the name: a removal that declares only a
+	// preview sentence still hands the driver one.
 	if slices.ContainsFunc(staged, func(tool *pyTool) bool {
-		return len(tool.c.DepWalks) > 0
+		return tool.walksDependencies()
 	}) {
 		return append(lines, "    from linodemcp.tools.helpers import DryRunDetails")
 	}
@@ -570,7 +573,12 @@ func pyModuleImports(tools []*pyTool) ([]string, error) {
 		lines = append(lines, "from linodemcp.tools.segment_readers import "+strings.Join(account, ", "))
 	}
 
-	lines = append(lines, "from linodemcp.tools.constraints import check as check_constraints")
+	// Both ride in unconditionally: every tool answers the rules and the
+	// undeclared-argument refusal, so neither import is a per-tool decision.
+	// Two lines because isort splits an aliased import off from a plain one.
+	lines = append(lines,
+		"from linodemcp.tools.constraints import check as check_constraints",
+		"from linodemcp.tools.constraints import unknown_arguments")
 
 	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return tool.c.Walks }) {
 		lines = append(lines, "from linodemcp.tools.objectwalk import walk as walk_objects")

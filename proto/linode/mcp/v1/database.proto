@@ -129,3 +129,21 @@ message DatabasePostgreSQLConfigGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
+
+// DatabaseValkeyConfigGetInput is the input contract for
+// linode_database_valkey_config_get.
+message DatabaseValkeyConfigGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_valkey_config_get"
+    method: "GET"
+    path: "/databases/valkey/config"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_scopes) = {scope: TOOL_SCOPE_DATABASES_READ_ONLY};
+  option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_DATABASES};
+  option (linode.mcp.v1.tool_description) = "Lists Valkey Managed Database advanced parameters.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Valkey Managed Database advanced parameters: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}

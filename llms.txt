@@ -2,7 +2,7 @@
 
 > A Model Context Protocol (MCP) server for the Linode API, shipped as two implementations (Go and Python) that are wire-identical by construction: input schemas, output shapes, and enums all derive from one protobuf contract, and a trust-and-safety layer (profiles, dry-run previews, two-stage destructive writes, audit log) is built into the server itself.
 
-The proto contract lives in `proto/linode/mcp/v1`. Go lives in `go/`, Python in `python/`. Gate files under `docs/contracts/` pin the shared tool surface and ratchet the remaining conversion work; `make check` runs every gate for every registered language.
+The proto contract lives in `proto/linode/mcp/v1`. Go lives in `go/`, Python in `python/`. Gate files under `docs/contracts/` pin the shared tool surface and ratchet the remaining conversion work; `make check` runs every gate for every registered language. Per language the hand-written code is the bootstrap that starts the MCP server and the CLI plus the engine below it; everything per tool is emitted from that contract by one generator.
 
 This file mirrors [the docs index](docs/README.md), one line per page. The index is the source; keep the two in step. `make docs-links` walks both.
 

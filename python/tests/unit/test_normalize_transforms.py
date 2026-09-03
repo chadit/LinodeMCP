@@ -17,7 +17,6 @@ from linodemcp.tools.helpers import (
     trim_arguments,
     trim_list,
     trim_list_drop_blank,
-    uppercase_arguments,
 )
 
 LABEL = "label"
@@ -103,22 +102,6 @@ def test_trim_list_trims_entries_and_keeps_blanks(
     arguments: dict[str, Any], expected: dict[str, Any]
 ) -> None:
     trim_list(arguments, IMAGES)
-    assert arguments == expected
-
-
-@pytest.mark.parametrize(
-    ("arguments", "expected"),
-    [
-        ({LABEL: "get"}, {LABEL: "GET"}),
-        ({LABEL: "Put"}, {LABEL: "PUT"}),
-        ({LABEL: 7}, {LABEL: 7}),
-        ({ADDRESS: "x"}, {ADDRESS: "x"}),
-    ],
-)
-def test_uppercase_arguments_folds_only_text(
-    arguments: dict[str, Any], expected: dict[str, Any]
-) -> None:
-    uppercase_arguments(arguments, LABEL)
     assert arguments == expected
 
 

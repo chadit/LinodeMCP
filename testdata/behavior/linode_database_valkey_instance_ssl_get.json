@@ -1,0 +1,31 @@
+{
+  "tool": "linode_database_valkey_instance_ssl_get",
+  "description": "Pins the SSL GET path plus the Option B instance_id rejections, which agree across languages. Three cases, not the five its PostgreSQL sibling carries: that file names the same {} payload twice and the same {\"instance_id\": 0} payload twice, so the extra rows read as coverage no new input creates.",
+  "cases": [
+    {
+      "name": "requires instance_id",
+      "args": {},
+      "expect_error": "instance_id is required"
+    },
+    {
+      "name": "rejects a non-positive instance_id",
+      "args": {
+        "instance_id": 0
+      },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "gets the valkey ssl certificate",
+      "args": {
+        "instance_id": 123
+      },
+      "api_response": {
+        "ca_certificate": "cert"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/databases/valkey/instances/123/ssl"
+      }
+    }
+  ]
+}

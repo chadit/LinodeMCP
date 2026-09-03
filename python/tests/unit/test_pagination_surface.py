@@ -26,10 +26,10 @@ WANT_REJECTION = "page must be an integer"
 
 # Tools whose other required arguments take a format this test cannot
 # synthesize validate those first and report that instead. They still must
-# reject without reaching the client, which is asserted for every tool. The
-# floor keeps the specific-message assertion honest: if the shared reader
-# stopped being wired up, the count would collapse rather than a
-# hand-maintained skip list going quietly stale.
+# reject without reaching the client, asserted for every tool. The floor keeps
+# the specific-message assertion honest: if the shared reader came unwired the
+# count would collapse, rather than a hand-maintained skip list going quietly
+# stale.
 MIN_TOOLS_WITH_PAGINATION_MESSAGE = 60
 
 

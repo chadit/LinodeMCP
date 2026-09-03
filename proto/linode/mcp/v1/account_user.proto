@@ -419,12 +419,6 @@ message AccountUserGrantsUpdateInput {
     template: "Account grants for user \"{username}\" will be updated."
     line: PREVIEW_LINE_SIDE_EFFECT
   };
-
-  // A misspelled grant section would otherwise be dropped before any rule ran
-  // and the call would report success over a grant the API never saw.
-  option (linode.mcp.v1.refuse_unknown_arguments) = {
-    message: "unknown grant update fields: {fields}"
-  };
   // Every section is optional and a map carries no presence, so naming at
   // least one is a count no rule can take.
   option (linode.mcp.v1.require_any_of) = {

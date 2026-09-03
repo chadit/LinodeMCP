@@ -23,7 +23,7 @@ const pyHelpersModuleReaders = " required_int_id required_bounded_int_id" +
 	" member_choice present_text present_bool declared_int_id" +
 	" declared_member_choice declared_present_text declared_present_bool" +
 	" present_string declared_present_string id_list declared_id_list" +
-	" refused_arguments unknown_arguments service_type_slug region_slug" +
+	" refused_arguments service_type_slug region_slug" +
 	" beta_slug declared_service_type_slug declared_region_slug" +
 	" declared_beta_slug free_text declared_free_text "
 
@@ -445,8 +445,7 @@ func pyHelperFacts(tools []*pyTool) pyHelperState {
 			(tool.c.Tier == tierMeta && !tool.c.answersLocally())
 
 		state.readsReader = state.readsReader || pyReadsReader(tool)
-		state.refuses = state.refuses ||
-			len(tool.c.Refused.GetFields()) > 0 || tool.c.RefuseUnknown != nil
+		state.refuses = state.refuses || len(tool.c.Refused.GetFields()) > 0
 		state.rewrites = state.rewrites || len(tool.c.Normalizes) > 0
 	}
 
@@ -554,10 +553,6 @@ func pyConditionalHelpers(tools []*pyTool, state pyHelperState) []string {
 
 	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return len(tool.c.Refused.GetFields()) > 0 }) {
 		helpers = append(helpers, "refused_arguments")
-	}
-
-	if slices.ContainsFunc(tools, func(tool *pyTool) bool { return tool.c.RefuseUnknown != nil }) {
-		helpers = append(helpers, "unknown_arguments")
 	}
 
 	if state.numericPath {

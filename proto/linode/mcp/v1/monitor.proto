@@ -156,7 +156,7 @@ message MonitorServiceMetricQueryInput {
   option (linode.mcp.v1.tool_scopes) = {none: true};
   option (linode.mcp.v1.tool_categories) = {category: TOOL_CATEGORY_MONITOR};
   option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceMetricQueryResponse";
-  option (linode.mcp.v1.tool_description) = "Gets metrics for one supported monitoring service type by service_type. Optional body members narrow the query: metrics, group_by, filters, a time window, and an Object Storage entity_region.";
+  option (linode.mcp.v1.tool_description) = "Gets metrics for one supported monitoring service type by service_type. Optional body members narrow the query: metrics, group_by, filters, a relative or absolute time window, entity_ids, and an Object Storage entity_region.";
   option (linode.mcp.v1.success_message) = "Monitor service metrics read for '{service_type}'";
   option (linode.mcp.v1.error_message) = "Failed to retrieve monitor service metrics for '{service_type}': {error}";
   option (linode.mcp.v1.retry_disabled) = true;
@@ -188,10 +188,29 @@ message MonitorServiceMetricQueryInput {
     message: "each metrics entry must name a metric"
     expression: "this.metrics.all(metric, metric.name.matches('[^ \\t\\r\\n]'))"
   };
-  // filters, time_granularity and relative_time_duration carry no rule: the
-  // page renders no members inside them, and proto3 reads an absent map or
-  // repeated field as the empty one, so a non-empty rule would refuse the
-  // omitted call this route has always accepted.
+  // An id below 1 names no entity, so it is refused here rather than sent.
+  // The sibling token create pairs the same check with a non-empty half; this
+  // one cannot, because a caller who names no member still sends the empty
+  // body the message comment above describes.
+  option (buf.validate.message).cel = {
+    id: "monitor_service_metric_query.entity_ids.positive"
+    message: "entity_ids must be an array of positive integers"
+    expression: "this.entity_ids.all(id, id >= 1)"
+  };
+  // A query names one window or the other. The published request schema is a
+  // oneOf of four variants, each additionalProperties: false and each carrying
+  // one window only, so a body with both matches none of them. It reads sizes
+  // rather than presence, because both windows absent is still the empty body
+  // this route has always accepted.
+  option (buf.validate.message).cel = {
+    id: "monitor_service_metric_query.time_duration.exclusive"
+    message: "relative_time_duration and absolute_time_duration are mutually exclusive"
+    expression: "size(this.relative_time_duration) == 0 || size(this.absolute_time_duration) == 0"
+  };
+  // filters and time_granularity carry no rule: the page renders no members
+  // inside them, and proto3 reads an absent map or repeated field as the empty
+  // one, so a non-empty rule would refuse the omitted call this route has
+  // always accepted.
 
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
@@ -213,11 +232,22 @@ message MonitorServiceMetricQueryInput {
   // Time granularity applied to the metric data, as a free-form object
   // (optional).
   map<string, google.protobuf.Value> time_granularity = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Relative time window the query runs over, as a free-form object. The API
-  // requires it on the relative-time request variants, which is why it is
-  // optional here: the absolute-time variants send absolute_time_duration
-  // instead and the reference page renders neither of them.
+  // Relative time window the query runs over, as a free-form object. Only the
+  // two relative-time request variants carry this property, the two
+  // absolute-time ones carry absolute_time_duration instead, and the spec says
+  // a query names one window or the other and never both.
   map<string, google.protobuf.Value> relative_time_duration = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Entity IDs the query is scoped to (optional). The two "All other services"
+  // request variants require this where the Object Storage pair requires
+  // entity_region, so without it no query outside Object Storage can name what
+  // it is asking about. The reference page renders only the Object Storage
+  // variant, so openapi.json is the one place this member shows up.
+  repeated int32 entity_ids = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Absolute time window the query runs over, as a free-form object: the start
+  // and end the two absolute-time variants carry. Without it the tool cannot
+  // ask for a fixed range at all. Free-form because the page renders no members
+  // inside either window, the same reason its relative sibling is.
+  map<string, google.protobuf.Value> absolute_time_duration = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // MonitorAlertDefinitionGetInput is the input contract for

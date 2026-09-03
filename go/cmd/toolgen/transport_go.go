@@ -30,6 +30,10 @@ func emitTransportCall(out *source, tool *contract, values string) {
 		emitRawBodyCall(out, tool, values)
 	case transportPresign:
 		emitPresignCall(out, tool, values)
+	// The removal arm is rendered by destroyCall instead: it is the destroy
+	// tier's Execute closure, and the tier gate admits it nowhere else, so
+	// wiring it here would be a second call site nothing reaches.
+	case transportPresignRemove:
 	case transportNone:
 	}
 }

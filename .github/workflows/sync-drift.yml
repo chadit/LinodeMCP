@@ -1,15 +1,21 @@
 # Scheduled drift watch for the network sync gates. `make check` is strictly
 # offline, so nothing in the push or CI path ever compares the repo against
-# the LIVE Linode OpenAPI spec; the three sync gates exist for exactly that
+# the LIVE Linode OpenAPI mirror; the sync gates exist for exactly that
 # comparison, and before this workflow they ran only when a human remembered
-# to. A red run here means upstream drifted (new enum values, changed
-# defaults, pagination or bounds changes): triage per docs/parity.md and
-# refresh the snapshot baselines with --update-baseline in a reviewed change.
+# to. A red run here means the mirror moved (new enum values, changed
+# defaults, pagination or bounds changes). Triage it against TechDocs first:
+# TechDocs is the contract's authority and this mirror is secondary, so a
+# finding TechDocs contradicts is a stale mirror and the fix is to refresh the
+# snapshot baseline with --update-baseline in a reviewed change rather than to
+# move the proto. A finding TechDocs agrees with is real drift and the proto
+# moves. docs/gates.md, "Network sync gates", carries the rule.
 # This workflow only reads; it never commits or opens anything itself.
 #
 # The sync scripts are stdlib-only on purpose (see their module docstrings).
-# sync-scopes additionally dumps the Python tool registry, so the job builds
-# the venv first; everything else runs on the runner's bare python3.
+# sync-scopes additionally dumps the Python tool registry and reads the
+# generated descriptors, both of which are gitignored, so the job generates
+# them (and the venv codegen needs) first; everything else runs on the
+# runner's bare python3.
 name: sync-drift
 
 on:
@@ -33,8 +39,39 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: build python venv (sync-scopes dumps the tool registry)
-        run: make python-install-dev
+      # The proto stamp runs go/cmd/toolgen, so codegen needs the toolchain
+      # go/go.mod declares.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go/go.mod
+          cache: true
+          cache-dependency-path: go/go.sum
+
+      # python/pyproject.toml needs >=3.14.7. Without this the venv builds on
+      # the runner's default python3 and pip refuses the install, which is how
+      # every scheduled run died before it reached a single gate.
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: python/pyproject.toml
+
+      # The same provisioning script CI runs, wanted here for buf: the proto
+      # stamp probes for it and stops with an install hint when it is absent.
+      - name: Install gate toolchain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-setup.sh
+
+      # sync-scopes imports linodemcp.gentools through python/.venv and reads
+      # the genpb descriptors, and both trees are gitignored, so a fresh
+      # checkout has to generate them. The venv comes with it: the proto stamp
+      # takes it as a prerequisite because toolgen renders the Python arm
+      # through the repo's ruff.
+      - name: make proto (generated registry the scopes dump imports)
+        run: make proto
 
       - name: make sync
         run: make sync

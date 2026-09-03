@@ -1,6 +1,6 @@
 {
   "tool": "linode_database_postgresql_instance_update",
-  "description": "Confirm-gated update PUT body. Instance-id and empty-payload error text diverge between languages (see report). The dry-run case pins the full Tier B preview from docs/dry-run.md: the PUT body, the fetched current_state (the instance exists, so the preview reads it), and the side effect plus warning the update implies.",
+  "description": "Confirm-gated update PUT body. Instance-id and empty-payload error text diverge between languages (see report). The dry-run case pins the full Tier B preview from docs/dry-run.md: the PUT body, the fetched current_state (the instance exists, so the preview reads it), and the side effect plus warning the update implies. Two cluster_size cases close the 2026-09-01 techdocs drift: the resize case sends cluster_size as the only body argument, so it fails if the field is missing from require_any_of, and the out-of-set case pins the documented 1/2/3 rule.",
   "cases": [
     {
       "name": "updates a postgresql instance label",
@@ -153,6 +153,45 @@
           "Updating a Managed Database can change service behavior."
         ]
       }
+    },
+    {
+      "name": "resizes the cluster to three nodes",
+      "args": {
+        "instance_id": 123,
+        "cluster_size": 3,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "prod-pg",
+        "cluster_size": 3
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/databases/postgresql/instances/123",
+        "body": {
+          "cluster_size": 3
+        }
+      }
+    },
+    {
+      "name": "rejects a cluster size outside the documented set",
+      "args": {
+        "instance_id": 123,
+        "cluster_size": 4,
+        "confirm": true
+      },
+      "expect_error": "cluster_size must be one of: 1, 2, 3"
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-pg",
+        "confirm": true,
+        "bogus_field": "x"
+      },
+      "expect_error": "Unsupported argument(s) for linode_database_postgresql_instance_update: bogus_field"
     }
   ]
 }

@@ -15,6 +15,14 @@ callable it is handed rather than calling anything by name. Resolution is
 stricter than issuing, though. Two declarations of one name that resolve to
 different paths resolve to nothing, so a name collision costs evidence rather
 than inventing it.
+
+The route builders in _ROUTE_BUILDERS are the client methods that take a tool
+name and let the contract supply the path. Each is declared on both the plain
+client and the retrying one under one name. route_call is the destroy tier's
+primitive: same resolution, no body, and nothing decoded out of the answer.
+make_route_request_content_type carries a prepared non-JSON body (raw PNG bytes,
+a multipart form) to the same contract-resolved route, and the three transport
+primitives route_multipart, route_raw_body and route_raw_body_read reach it.
 """
 
 from __future__ import annotations
@@ -40,14 +48,8 @@ _REQUEST_BUILDER = "request"
 
 # The client methods that resolve their route from the proto contract, taking
 # the tool name first. Their call sites write no path, so the route is whatever
-# the tool declares, and their own bodies are skipped for the same reason.
-# route_raw and route_call each exist on both the plain client and the retrying
-# one under the one name. route_call is the destroy tier's primitive: same
-# resolution, no body, and nothing decoded out of the answer.
-# make_route_request_content_type carries a prepared non-JSON body (raw PNG
-# bytes, a multipart form) to the same contract-resolved route. The three
-# transport primitives below reach it, each declared on both clients under one
-# name the same way route_raw is.
+# the tool declares, and their own bodies are skipped for the same reason. The
+# module docstring says which primitive is which.
 _ROUTE_BUILDERS = frozenset(
     {
         "make_route_request",

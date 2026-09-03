@@ -1,0 +1,150 @@
+{
+  "tool": "linode_object_storage_object_delete",
+  "description": "Destroy-capability on a POST route: the declared call mints a URL signed for DELETE and the removal addresses that URL. Pins the shared bypass gate, the region and name rejections, the expires_in floor, the two-leg removal with the presign body it sends, the declared failure sentence, the refusal of a presign answer that is not an object, and the preview that reports the object's current ACL.",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "confirm": true
+      },
+      "expect_error": "linode_object_storage_object_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "requires region",
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires name",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "rejects an expires_in below the signing floor",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "expires_in": 359,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "expires_in must be between 360 and 3600 seconds, got 359"
+    },
+    {
+      "name": "deletes an object",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_responses": {
+        "POST /object-storage/buckets/us-east/artifacts/object-url": {
+          "url": "{{api_base}}/artifacts/releases/app.tar.gz?sig=fixture"
+        },
+        "DELETE /artifacts/releases/app.tar.gz": {}
+      },
+      "expect_result": {
+        "message": "Object 'releases/app.tar.gz' deleted from bucket 'artifacts'",
+        "region": "us-east",
+        "label": "artifacts"
+      },
+      "expect_requests": [
+        {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "method": "DELETE",
+            "content_type": "application/octet-stream",
+            "expires_in": 3600
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/artifacts/releases/app.tar.gz?sig=fixture"
+        }
+      ]
+    },
+    {
+      "name": "reports the API failure under the declared sentence",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_status": 404,
+      "api_response": {
+        "errors": [
+          {
+            "reason": "Not Found"
+          }
+        ]
+      },
+      "expect_api_error": "Failed to delete 'releases/app.tar.gz' from bucket 'artifacts'"
+    },
+    {
+      "name": "rejects a presign response that is not an object",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response_raw": "[]",
+      "expect_api_error": "object storage object delete"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /object-storage/buckets/us-east/artifacts/object-acl": {
+          "acl": "private",
+          "acl_xml": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_object_delete",
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "method": "DELETE"
+          }
+        },
+        "current_state": {
+          "acl": "private",
+          "acl_xml": ""
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Object 'releases/app.tar.gz' will be removed from bucket 'artifacts'."
+        ],
+        "warnings": []
+      }
+    }
+  ]
+}

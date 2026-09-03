@@ -34,9 +34,13 @@
       "expect_api_error": "Failed to update"
     },
     {
-      "name": "rejects a call naming only ssh_keys, which the route documents as read-only",
-      "args": { "username": "alice", "ssh_keys": ["ssh-rsa AAA"], "confirm": true },
-      "expect_error": "at least one account user field is required"
+      "name": "refuses ssh_keys, which the route documents as read-only",
+      "args": {
+        "username": "alice",
+        "ssh_keys": ["ssh-rsa AAA"],
+        "confirm": true
+      },
+      "expect_error": "Unsupported argument(s) for linode_account_user_update: ssh_keys"
     }
   ]
 }

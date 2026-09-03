@@ -61,9 +61,9 @@ That mode reads a contract and writes a file. It never scrapes.
 - `src/techdocs_proof/proof.py` is the comparator, including `--self-test`.
 - `data/known-divergences.json` is the exclusion ledger: divergences a triage
   ruled are not repo defects, each scoped to one route, location, and
-  parameter, each carrying its reason. The self-test refuses a duplicate or a
-  malformed entry, so a bad edit fails the gate rather than silently widening
-  what counts as accepted.
+  parameter, each carrying its reason. The self-test refuses a duplicate, a
+  malformed entry, or a kind the comparison cannot raise, so a bad edit fails
+  the gate rather than silently widening what counts as accepted.
 
   An entry takes one of two forms. The per-key form carries `category`, `kind`,
   `method`, `shape`, `location`, `parameter` and `reason`. The class form carries

@@ -64,16 +64,28 @@
       "expect_error": "source_path must be a local, absolute path"
     },
     {
-      "name": "rejects an expires_in outside the signing window",
+      "name": "rejects an expires_in below the signing floor",
       "args": {
         "region": "us-east",
         "label": "artifacts",
         "name": "releases/app.tar.gz",
         "source_path": "/tmp/app.tar.gz",
-        "expires_in": 604801,
+        "expires_in": 359,
         "confirm": true
       },
-      "expect_error": "expires_in must be between 1 and 604800 seconds (7 days)"
+      "expect_error": "expires_in must be between 360 and 3600 seconds"
+    },
+    {
+      "name": "rejects an expires_in above the signing ceiling",
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "/tmp/app.tar.gz",
+        "expires_in": 3601,
+        "confirm": true
+      },
+      "expect_error": "expires_in must be between 360 and 3600 seconds"
     },
     {
       "name": "requires confirm",
@@ -233,6 +245,57 @@
             "method": "PUT",
             "content_type": "application/octet-stream",
             "expires_in": 3600
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/artifacts/releases/app.tar.gz?sig=fixture"
+        }
+      ]
+    },
+    {
+      "name": "uploads with an explicit in-window expires_in",
+      "files": {
+        "small.bin": {
+          "content": "hello object storage"
+        }
+      },
+      "args": {
+        "region": "us-east",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "source_path": "{{file:small.bin}}",
+        "expires_in": 900,
+        "confirm": true
+      },
+      "api_responses": {
+        "POST /object-storage/buckets/us-east/artifacts/object-url": {
+          "url": "{{api_base}}/artifacts/releases/app.tar.gz?sig=fixture"
+        },
+        "PUT /artifacts/releases/app.tar.gz": {}
+      },
+      "api_response_headers": {
+        "PUT /artifacts/releases/app.tar.gz": {
+          "ETag": "\"5eb63bbbe01eeed093cb22bb8f5acdc3\""
+        }
+      },
+      "expect_result": {
+        "message": "Object 'releases/app.tar.gz' uploaded to bucket 'artifacts'",
+        "label": "artifacts",
+        "name": "releases/app.tar.gz",
+        "size_bytes": 20,
+        "etag": "5eb63bbbe01eeed093cb22bb8f5acdc3",
+        "upload_mode": "single"
+      },
+      "expect_requests": [
+        {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/artifacts/object-url",
+          "body": {
+            "name": "releases/app.tar.gz",
+            "method": "PUT",
+            "content_type": "application/octet-stream",
+            "expires_in": 900
           }
         },
         {

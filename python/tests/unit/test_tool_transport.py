@@ -15,6 +15,7 @@ import pytest
 from linodemcp.config import Config, ObjectStorageConfig
 from linodemcp.tools.transport import (
     MultipartUpload,
+    PresignRemove,
     PresignTransfer,
     RawBody,
     preview_presign_source,
@@ -35,6 +36,7 @@ ATTACHMENT_TOOL = "linode_support_ticket_attachment_create"
 THUMBNAIL_UPDATE_TOOL = "linode_account_oauth_client_thumbnail_update"
 THUMBNAIL_GET_TOOL = "linode_account_oauth_client_thumbnail_get"
 DOWNLOAD_TOOL = "linode_object_storage_object_download"
+DELETE_TOOL = "linode_object_storage_object_delete"
 
 
 def _mocked_client(**returns: Any) -> Any:
@@ -180,6 +182,67 @@ async def test_presign_refuses_an_answer_that_is_not_an_object() -> None:
         )
 
 
+async def test_presign_remove_presigns_then_deletes(monkeypatch: Any) -> None:
+    """The two legs and their order: one Linode call, then the DELETE to the URL
+    that call answered with. The engine fills the two body members the caller may
+    omit, so the request the endpoint signs is the one it accepts.
+
+    Go's twin is TestRunPresignRemovePresignsThenDeletes.
+    """
+    client = _mocked_client(route_raw={"url": "https://example.test/key?sig=fixture"})
+    client.object_storage = ObjectStorageConfig()
+
+    removed: list[tuple[str, float]] = []
+
+    async def fake_remove(url: str, timeout: float) -> None:
+        removed.append((url, timeout))
+
+    monkeypatch.setattr("linodemcp.objectdata.remove", fake_remove)
+
+    body: dict[str, Any] = {"name": "releases/app.tar.gz", "method": "DELETE"}
+
+    filled = await run_transport(
+        PresignRemove(url_field="url"),
+        client,
+        DELETE_TOOL,
+        {"name": "releases/app.tar.gz"},
+        ("us-east", "artifacts"),
+        body,
+    )
+
+    assert filled == {}
+    assert removed == [("https://example.test/key?sig=fixture", 1800.0)]
+    client.route_raw.assert_awaited_once_with(
+        DELETE_TOOL,
+        "us-east",
+        "artifacts",
+        body={
+            "name": "releases/app.tar.gz",
+            "method": "DELETE",
+            "content_type": "application/octet-stream",
+            "expires_in": 3600,
+        },
+        retry=False,
+    )
+
+
+async def test_presign_remove_refuses_an_answer_that_is_not_an_object() -> None:
+    """The removal arm mints through the same reader the transfers do, so a bare
+    array is refused with the sentence Go's decode of the same body answers."""
+    client = _mocked_client(route_raw=[])
+    client.object_storage = ObjectStorageConfig()
+
+    with pytest.raises(TypeError, match="object storage object delete"):
+        await run_transport(
+            PresignRemove(url_field="url"),
+            client,
+            DELETE_TOOL,
+            {"name": "releases/app.tar.gz"},
+            ("us-east", "artifacts"),
+            {},
+        )
+
+
 # The presigned upload's dry run: the guard the live transfer runs, taken before
 # any call. Go's twin is transport_preview_test.go.
 UPLOAD_ARGUMENTS = {"name": "releases/app.tar.gz", "label": "artifacts"}
@@ -211,14 +274,18 @@ def test_preview_presign_source_keeps_what_the_caller_sent(tmp_path: Path) -> No
     """A default fills a gap; it never overrides what the caller asked for."""
     source = tmp_path / "small.bin"
     source.write_text("hello object storage")
-    body: dict[str, Any] = {"name": "k", "content_type": "text/plain", "expires_in": 60}
+    body: dict[str, Any] = {
+        "name": "k",
+        "content_type": "text/plain",
+        "expires_in": 900,
+    }
 
     preview_presign_source(
         Config(), {**UPLOAD_ARGUMENTS, "source_path": str(source)}, body, "source_path"
     )
 
     assert body["content_type"] == "text/plain"
-    assert body["expires_in"] == 60
+    assert body["expires_in"] == 900
 
 
 def test_preview_presign_source_survives_a_tool_with_no_body(tmp_path: Path) -> None:

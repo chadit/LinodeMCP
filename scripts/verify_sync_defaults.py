@@ -11,6 +11,11 @@ and can decide whether the strip-and-defer behavior still matches.
 The code side (that both languages omit the field and produce identical bodies)
 is already pinned by the behavior fixtures; this gate only watches the API side.
 
+Authority note: this gate reads the OpenAPI mirror, which is the secondary
+source. TechDocs is the API contract's authority, so a finding a TechDocs page
+contradicts means the mirror is stale: refresh this baseline rather than the
+proto. docs/gates.md, "Network sync gates", carries the rule.
+
 Usage: verify_sync_defaults.py [--spec PATH] [--update-baseline]
 """
 

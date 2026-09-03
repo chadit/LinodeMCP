@@ -114,17 +114,13 @@ func pyBody(tool *pyTool) ([]string, error) {
 // member. The list form is what the API reads as an array and it synthesizes a
 // single element rather than merging: a caller who supplied the list gets it
 // sent verbatim, since an element beside theirs attaches something they never
-// asked for. The optional form leaves a member nothing filled off the wire.
+// asked for.
 func pyFold(tool *pyTool, entry protoreflect.FieldDescriptor) ([]string, error) {
 	name := string(entry.Name())
 
 	call := "fold"
-
-	switch {
-	case pyItemMessage(entry) != nil:
+	if pyItemMessage(entry) != nil {
 		call = "fold_list"
-	case tool.c.FoldDecls[name].GetOmitWhenEmpty():
-		call = "fold_optional"
 	}
 
 	lines := []string{"    body." + call + "(" + pyQuote(name) + ", ("}

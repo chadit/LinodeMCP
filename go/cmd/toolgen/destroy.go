@@ -386,8 +386,11 @@ func emitEnvelopeStateRead(out *source, tool *contract, ordered []field) {
 func emitStateReadBody(out *source, tool *contract, values string) {
 	out.writef("\t\t\tstate := &linodev1.%s{}", tool.StateRead.Message.TypeName)
 	out.writef("")
-	out.writef("\t\t\traw, err := client.CallProtoRouteState(ctx, %s, %s, %s, state)",
-		goStringLiteral(tool.StateRead.Tool), values, goStringLiteral(tool.StateRead.BodyKey))
+	// Through the shared call so a read a path alone does not address carries
+	// its query here too: the object ACL names the bucket in its path and the
+	// object in its query, and a fetch that dropped the query would preview the
+	// bucket while the removal took one object out of it.
+	out.writef("\t\t\t%s", goStateReadCall(tool, values))
 	out.writef("\t\t\tif err != nil {")
 	out.writef("\t\t\t\treturn nil, err")
 	out.writef("\t\t\t}")
@@ -562,9 +565,17 @@ func emitDestroyPreviewBody(out *source, tool *contract) {
 
 // destroyCall is the request a removal makes: the routed primitive with whatever
 // the contract says travels with it, since the tool and its ids are the rest.
+//
+// A declared transport takes the call instead. The tier gate admits only the
+// removal arm here, and it decodes nothing back, so the closure still answers
+// with an error alone.
 func destroyCall(tool *contract, ordered []field) string {
 	values := pathValuesLiteral(ordered)
 	name := goStringLiteral(tool.Name)
+
+	if tool.transported() {
+		return presignRemoveCall(tool, values)
+	}
 
 	if len(tool.Body) == 0 {
 		return fmt.Sprintf("client.CallRoute(ctx, %s, %s)", name, values)
@@ -576,6 +587,18 @@ func destroyCall(tool *contract, ordered []field) string {
 
 	return fmt.Sprintf("client.CallProtoRouteBody(ctx, %s, %s, body, %s, &payload)",
 		name, values, goStringLiteral(responseSubject(tool.Name)))
+}
+
+// presignRemoveCall renders the removal arm as one spec literal the shared
+// engine runs, the pattern the other transported tiers render through.
+func presignRemoveCall(tool *contract, values string) string {
+	return "tools.RunPresignRemove(ctx, client, &tools.PresignSpec{\n" +
+		"\t\t\t\tTool: " + goStringLiteral(tool.Name) + ",\n" +
+		"\t\t\t\tSubject: " + goStringLiteral(responseSubject(tool.Name)) + ",\n" +
+		"\t\t\t\tURLField: " + goStringLiteral(tool.Transport.URLField) + ",\n" +
+		"\t\t\t\tPathValues: " + values + ",\n" +
+		"\t\t\t\tBody: " + executeBody(tool) + ",\n" +
+		"\t\t\t})"
 }
 
 // destroySuccessArguments renders the call to the answer builder, in the order

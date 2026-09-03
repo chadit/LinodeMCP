@@ -1,0 +1,157 @@
+{
+  "tool": "linode_object_storage_object_upload_url_create",
+  "description": "Write-capability: a URL signed for PUT is a write credential, so this half of the object-url split takes the confirm gate and the dry-run flow. The verb is pinned to PUT by body_constant, so no method argument exists. Pins the confirm sentence ahead of the field checks, the region/label/name-required rejections, both edges of the published expires_in window (360 to 3600) with the value the caller sent named back, the content_type the signature covers, and the preview.",
+  "cases": [
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This mints a URL signed for PUT. Anyone holding it can overwrite this object until the window closes, without a Linode token and without passing this server again. Set confirm=true to proceed."
+    },
+    {
+      "name": "requires region",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires label",
+      "args": {
+        "confirm": true,
+        "region": "us-east"
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires name",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "label": "my-bucket"
+      },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "rejects an expires_in below the signing floor",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "expires_in": 359
+      },
+      "expect_error": "expires_in must be between 360 and 3600 seconds, got 359"
+    },
+    {
+      "name": "rejects an expires_in above the signing ceiling",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "expires_in": 3601
+      },
+      "expect_error": "expires_in must be between 360 and 3600 seconds, got 3601"
+    },
+    {
+      "name": "mints an upload URL with the API default expiry",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt"
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": {
+          "method": "PUT",
+          "name": "my-object.txt"
+        }
+      }
+    },
+    {
+      "name": "sends an explicit in-window expires_in",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "expires_in": 900
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": {
+          "method": "PUT",
+          "name": "my-object.txt",
+          "expires_in": 900
+        }
+      }
+    },
+    {
+      "name": "pins the content type into the signed request",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "content_type": "text/plain"
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": {
+          "method": "PUT",
+          "name": "my-object.txt",
+          "content_type": "text/plain"
+        }
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt"
+      },
+      "api_response": [],
+      "expect_api_error": "object storage object upload url create response must be a JSON object"
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_object_upload_url_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+          "body": {
+            "method": "PUT",
+            "name": "my-object.txt"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

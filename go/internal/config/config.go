@@ -53,6 +53,16 @@ const (
 	// DefaultPresignTTLSeconds is how long a minted URL stays valid. It has to
 	// outlast the transfer it authorizes, so it tracks the transfer budget.
 	DefaultPresignTTLSeconds = 3600
+
+	// MinPresignTTLSeconds and MaxPresignTTLSeconds bound the configured
+	// lifetime. The setting travels as the object-url endpoint's `expires_in`,
+	// and the CEL rules in proto/linode/mcp/v1/object_storage.proto refuse a
+	// caller-supplied value outside this window, so config was the one path
+	// that could still reach the API with one. The ceiling equals the default
+	// today; they stay separate names because a default and a limit are
+	// different facts.
+	MinPresignTTLSeconds = 360
+	MaxPresignTTLSeconds = 3600
 )
 
 // Default resilience configuration values.
@@ -668,6 +678,11 @@ func validateConfig(cfg *Config) error {
 
 	if cfg.Audit.RetentionDays != nil && *cfg.Audit.RetentionDays < 0 {
 		return ErrNegativeRetentionDays
+	}
+
+	if cfg.ObjectStorage.PresignTTLSeconds < MinPresignTTLSeconds ||
+		cfg.ObjectStorage.PresignTTLSeconds > MaxPresignTTLSeconds {
+		return ErrPresignTTLOutOfRange
 	}
 
 	return validateAuditReports(cfg.Audit.Reports)

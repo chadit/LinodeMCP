@@ -1,6 +1,6 @@
 {
   "tool": "linode_database_postgresql_connection_pool_update",
-  "description": "PostgreSQL connection pool update. pool_name addresses the pool as a path segment, so the path-safety sentences guard it, and the rename case pins that a label differing from pool_name is what renames the pool.",
+  "description": "PostgreSQL connection pool update. pool_name addresses the pool as a path segment, so the path-safety sentences guard it, and 'puts the update body' pins the body the tool sends when label differs from pool_name. TechDocs documents the label as not editable once the pool is created, so that case pins the body, not a rename.",
   "cases": [
     {
       "name": "rejects a non-positive instance_id",

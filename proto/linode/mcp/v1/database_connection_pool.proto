@@ -175,7 +175,8 @@ message DatabaseConnectionPoolCreateInput {
   // "defaultdb").
   optional string database = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Name of the connection pool (required). It addresses the pool on the
-  // read and update routes.
+  // read and update routes, and TechDocs says it cannot be edited once the
+  // pool is created.
   string label = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Pooling mode (optional, defaults to "transaction").
   optional DatabaseConnectionPoolMode.Value mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
@@ -198,8 +199,10 @@ message DatabaseConnectionPoolCreateInput {
 
 // DatabaseConnectionPoolUpdateInput is the input contract for
 // linode_database_postgresql_connection_pool_update. The route replaces the
-// pool's settings, so it carries the same body the create route does, and
-// label renames the pool the path addresses.
+// pool's settings, so it carries the same body the create route does, label
+// included. TechDocs documents that label on the create page as not editable
+// once the pool exists, so the update sends the pool's current name rather
+// than a new one.
 message DatabaseConnectionPoolUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_connection_pool_update"
@@ -257,7 +260,10 @@ message DatabaseConnectionPoolUpdateInput {
   // Name of the database the pool connects to (optional, defaults to
   // "defaultdb").
   optional string database = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
-  // Name of the connection pool (required). A different value renames it.
+  // Name of the connection pool (required). The update body requires it, and
+  // TechDocs' create page documents the label as not editable once the pool is
+  // created, so send the pool_name the path already addresses. The update page
+  // renders no label row at all, which is why the create page is the citation.
   string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Pooling mode (optional, defaults to "transaction").
   optional DatabaseConnectionPoolMode.Value mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];

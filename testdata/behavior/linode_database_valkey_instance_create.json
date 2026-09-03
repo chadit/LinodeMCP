@@ -1,0 +1,272 @@
+{
+  "tool": "linode_database_valkey_instance_create",
+  "description": "Confirm-gated create POST body. The dry-run case pins the full Tier B preview from docs/dry-run.md: the POST body, a null current_state (nothing exists to read yet), and the side effect plus billing warning the create implies. The engine value is a plain pass-through string: TechDocs publishes no Valkey engine ID, so this tool declares no engine-family rule for one to be checked against. The eight create-arg cases cover both reader arms on all four required strings, an absent key and a blank value each: the message declares reader_message on every one, so Go and Python answer with the same sentence. The MySQL and PostgreSQL create fixtures say their create-arg messages diverge and carry no such case; that was measured here and does not hold for this contract.",
+  "cases": [
+    {
+      "name": "creates a valkey instance",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "prod-valkey"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/valkey/instances",
+        "body": {
+          "label": "prod-valkey",
+          "type": "g6-nanode-1",
+          "engine": "valkey",
+          "region": "us-east"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east"
+      },
+      "expect_error": "This creates a billable Valkey Managed Database instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "sends the private network object",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "private_network": {
+          "vpc_id": 101,
+          "subnet_id": 202,
+          "public_access": false
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "prod-valkey"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/valkey/instances",
+        "body": {
+          "label": "prod-valkey",
+          "type": "g6-nanode-1",
+          "engine": "valkey",
+          "region": "us-east",
+          "private_network": {
+            "vpc_id": 101,
+            "subnet_id": 202,
+            "public_access": false
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects a null private network",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "private_network": null,
+        "confirm": true
+      },
+      "expect_error": "private_network must be an object"
+    },
+    {
+      "name": "zero-fills null and unknown response fields",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": {
+        "id": null,
+        "label": null,
+        "future_field": "ignored"
+      },
+      "expect_result": {
+        "message": "Valkey Managed Database instance '' (ID: 0) created",
+        "database_instance": {
+          "id": 0,
+          "status": "",
+          "label": "",
+          "region": "",
+          "type": "",
+          "engine": "",
+          "version": "",
+          "cluster_size": 0,
+          "replication_type": "",
+          "ssl_connection": false,
+          "encrypted": false,
+          "allow_list": [],
+          "created": "",
+          "updated": ""
+        }
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": [],
+      "expect_api_error": "Failed to create Valkey Managed Database"
+    },
+    {
+      "name": "dry run previews the create without sending it",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "dry_run": true
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_valkey_instance_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/databases/valkey/instances",
+          "body": {
+            "label": "prod-valkey",
+            "type": "g6-nanode-1",
+            "engine": "valkey",
+            "region": "us-east"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A Valkey Managed Database 'prod-valkey' will be created or restored."
+        ],
+        "warnings": [
+          "Creating a Managed Database can incur billing."
+        ]
+      }
+    },
+    {
+      "name": "rejects a cluster size outside the documented set",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true,
+        "cluster_size": 4
+      },
+      "expect_error": "cluster_size must be one of: 1, 2, 3"
+    },
+    {
+      "name": "refuses an argument the message does not declare",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true,
+        "bogus_field": "x"
+      },
+      "expect_error": "Unsupported argument(s) for linode_database_valkey_instance_create: bogus_field"
+    },
+    {
+      "name": "rejects a missing label",
+      "args": {
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects a blank label",
+      "args": {
+        "label": "",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true
+      },
+      "expect_error": "label must be a non-empty string"
+    },
+    {
+      "name": "rejects a missing type",
+      "args": {
+        "label": "prod-valkey",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true
+      },
+      "expect_error": "type must be a non-empty string"
+    },
+    {
+      "name": "rejects a blank type",
+      "args": {
+        "label": "prod-valkey",
+        "type": "",
+        "engine": "valkey",
+        "region": "us-east",
+        "confirm": true
+      },
+      "expect_error": "type must be a non-empty string"
+    },
+    {
+      "name": "rejects a missing engine",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "region": "us-east",
+        "confirm": true
+      },
+      "expect_error": "engine must be a non-empty string"
+    },
+    {
+      "name": "rejects a blank engine",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "",
+        "region": "us-east",
+        "confirm": true
+      },
+      "expect_error": "engine must be a non-empty string"
+    },
+    {
+      "name": "rejects a missing region",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "confirm": true
+      },
+      "expect_error": "region must be a non-empty string"
+    },
+    {
+      "name": "rejects a blank region",
+      "args": {
+        "label": "prod-valkey",
+        "type": "g6-nanode-1",
+        "engine": "valkey",
+        "region": "",
+        "confirm": true
+      },
+      "expect_error": "region must be a non-empty string"
+    }
+  ]
+}

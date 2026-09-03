@@ -296,8 +296,8 @@ def _retry_config_from(cfg: Config) -> RetryConfig:
     )
 
 
-def _select_environment(cfg: Config, environment: object) -> EnvironmentConfig:
-    """Select an environment from configuration.
+def environment_argument(environment: object) -> str:
+    """Name the environment a call selected, refusing a value that is not text.
 
     A value that is not text names no environment, so it is refused the way an
     unknown name is rather than read past: the default environment carries a
@@ -308,7 +308,7 @@ def _select_environment(cfg: Config, environment: object) -> EnvironmentConfig:
     leave the environment unnamed, which is what selects the default.
     """
     if environment is None:
-        return cfg.select_environment("default")
+        return ""
 
     if not isinstance(environment, str):
         spelled = json.dumps(
@@ -317,14 +317,44 @@ def _select_environment(cfg: Config, environment: object) -> EnvironmentConfig:
         msg = f"environment not found in configuration: {spelled}"
         raise EnvironmentNotFoundError(msg)
 
-    if not environment:
+    return environment
+
+
+def _select_environment(cfg: Config, environment: object) -> EnvironmentConfig:
+    """Select an environment from configuration.
+
+    The type half is environment_argument's, so a stateless preview that builds
+    no client refuses the same value this does. What stays here is the name
+    half: an environment only a configuration can answer for.
+    """
+    name = environment_argument(environment)
+
+    if not name:
         return cfg.select_environment("default")
 
-    if environment in cfg.environments:
-        return cfg.environments[environment]
+    if name in cfg.environments:
+        return cfg.environments[name]
 
-    msg = f"environment not found in configuration: {environment}"
+    msg = f"environment not found in configuration: {name}"
     raise EnvironmentNotFoundError(msg)
+
+
+def preview_environment(cfg: Config, arguments: Mapping[str, Any]) -> str:
+    """Name the environment a stateless preview reports.
+
+    A preview with no state fetch builds no client, so nothing downstream judges
+    the argument and both halves have to happen here: the type check, and the
+    lookup that tells a configured name from one nothing carries. Naming none is
+    left alone, since that selects the default and asserts nothing the preview
+    could echo back wrong. The lookup is module-private, so the preview reaches
+    it through this rather than through the name. Go spells it
+    previewEnvironment.
+    """
+    name = environment_argument(arguments.get("environment"))
+    if name:
+        _select_environment(cfg, name)
+
+    return name
 
 
 def _linode_config_complete(env: EnvironmentConfig) -> None:
@@ -907,35 +937,15 @@ def refused_arguments(
 ) -> str:
     """Answer for any of the named arguments the caller set.
 
-    Mirrors Go's RefusedArguments. The names never reach the input message, so
-    the argument map is the only place a caller's value is still visible.
+    Mirrors Go's refusedByDeclaration. The names never reach the input message,
+    so the argument map is the only place a caller's value is still visible.
+    Sorted, so a payload carrying several reads the same way every time.
     """
     supplied = sorted(name for name in names if name in arguments)
     if not supplied:
         return ""
 
-    return _fill_refused_names(sentence, supplied)
-
-
-def unknown_arguments(
-    arguments: dict[str, Any], sentence: str, declared: tuple[str, ...]
-) -> str:
-    """Answer for any argument the tool's input message does not declare.
-
-    Mirrors Go's UnknownArguments.
-    """
-    unknown = sorted(name for name in arguments if name not in declared)
-    if not unknown:
-        return ""
-
-    return _fill_refused_names(sentence, unknown)
-
-
-def _fill_refused_names(sentence: str, names: list[str]) -> str:
-    """Write the refused names into a declared sentence, sorted by the caller."""
-    filled = sentence.replace("{fields}", ", ".join(names))
-
-    return filled.replace("{field}", names[0])
+    return sentence.replace("{fields}", ", ".join(supplied))
 
 
 # The declared argument rewrites. A tool names its transforms through
@@ -990,18 +1000,6 @@ def trim_list(arguments: dict[str, Any], *names: str) -> None:
         arguments[name] = [
             entry.strip() if isinstance(entry, str) else entry for entry in entries
         ]
-
-
-def uppercase_arguments(arguments: dict[str, Any], *names: str) -> None:
-    """Fold the named text arguments to upper case in place.
-
-    Mirrors Go's UppercaseArguments: a value the API reads as an upper-case
-    vocabulary reaches the rules that way however the caller spelled it.
-    """
-    for name in names:
-        value = arguments.get(name)
-        if isinstance(value, str):
-            arguments[name] = value.upper()
 
 
 def fold_int_list(

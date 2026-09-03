@@ -42,9 +42,6 @@ func normalizeRendering() map[linodev1.NormalizeTransform]normalizeCall {
 		linodev1.NormalizeTransform_NORMALIZE_TRANSFORM_TRIM_LIST: {
 			Go: "TrimList", Python: "trim_list",
 		},
-		linodev1.NormalizeTransform_NORMALIZE_TRANSFORM_UPPERCASE: {
-			Go: "UppercaseArguments", Python: "uppercase_arguments",
-		},
 	}
 }
 

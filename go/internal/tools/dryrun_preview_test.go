@@ -30,6 +30,12 @@ const (
 	keyCurrentState = "current_state"
 	keySideEffects  = "side_effects"
 	keyWarnings     = "warnings"
+
+	// The object a caller sends where the environment name belongs. Named for
+	// that role rather than borrowed from the managed-contact and profile-label
+	// constants that happen to hold the same two strings.
+	envObjectKey   = "name"
+	envObjectValue = "prod"
 )
 
 // errWalkFailed stands in for a side-effect walk that could not finish.
@@ -149,30 +155,81 @@ func TestRunDryRunPreviewReportsANullStateWhenThereIsNothingToFetch(t *testing.T
 
 // TestRunDryRunPreviewRefusesAnEnvironmentTheConfigDoesNotName covers the
 // caller who asks for a preview under an environment the operator never
-// configured: every shared branch refuses before it reads anything.
+// configured: every shared branch refuses before it reads anything, on the arm
+// that would have built a client and on the one that never does.
 func TestRunDryRunPreviewRefusesAnEnvironmentTheConfigDoesNotName(t *testing.T) {
 	t.Parallel()
+
+	// The create arm builds no client, which is where a name the config never
+	// carried used to reach a successful preview.
+	arms := []struct {
+		name     string
+		fetching bool
+	}{
+		{name: "with a state fetch", fetching: true},
+		{name: "with no state fetch", fetching: false},
+	}
+
+	for _, entry := range previewEntryPoints() {
+		for _, arm := range arms {
+			t.Run(entry.name+"/"+arm.name, func(t *testing.T) {
+				t.Parallel()
+
+				cfg := dryRunNoCallServer(t)
+				request := createRequestWithArgs(t, map[string]any{keyDryRun: true, keyEnvironment: tcStaging})
+
+				var fetch stateFetcher
+
+				if arm.fetching {
+					fetch = func(context.Context, *linode.Client) (any, error) {
+						t.Error("fetch ran even though no client could be prepared")
+
+						return nil, errStateFetch
+					}
+				}
+
+				result, err := entry.run(t.Context(), &request, cfg, fetch)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+
+				if got := errorText(t, result); got != envNotFoundStagingText {
+					t.Errorf("text = %q, want %q", got, envNotFoundStagingText)
+				}
+			})
+		}
+	}
+}
+
+// TestRunDryRunPreviewRefusesAnEnvironmentThatIsNotAName covers a create
+// preview, the one path with no state fetch. Nothing there builds a client, so
+// prepareClient's own refusal never runs, and reading the argument as text
+// answered a successful preview with the environment dropped. Python's
+// _derived_preview refuses the same value under the same sentence.
+func TestRunDryRunPreviewRefusesAnEnvironmentThatIsNotAName(t *testing.T) {
+	t.Parallel()
+
+	const want = `environment not found in configuration: {"name":"prod"}`
+
+	envObject := map[string]any{envObjectKey: envObjectValue}
 
 	for _, entry := range previewEntryPoints() {
 		t.Run(entry.name, func(t *testing.T) {
 			t.Parallel()
 
 			cfg := dryRunNoCallServer(t)
-			request := createRequestWithArgs(t, map[string]any{keyDryRun: true, keyEnvironment: tcStaging})
+			request := createRequestWithArgs(t, map[string]any{
+				keyDryRun:      true,
+				keyEnvironment: envObject,
+			})
 
-			fetch := func(context.Context, *linode.Client) (any, error) {
-				t.Error("fetch ran even though no client could be prepared")
-
-				return nil, errStateFetch
-			}
-
-			result, err := entry.run(t.Context(), &request, cfg, fetch)
+			result, err := entry.run(t.Context(), &request, cfg, nil)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if got := errorText(t, result); got != envNotFoundStagingText {
-				t.Errorf("text = %q, want %q", got, envNotFoundStagingText)
+			if got := errorText(t, result); got != want {
+				t.Errorf("text = %q, want %q", got, want)
 			}
 		})
 	}

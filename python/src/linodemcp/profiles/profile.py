@@ -29,14 +29,12 @@ class Profile:
     allowed_tools: tuple[str, ...]
     allowed_environments: tuple[str, ...] = ()
     required_token_scopes: tuple[str, ...] = ()
-    # Elevated marks a profile that permits at least one mutating tool
-    # (Write, Destroy, or Admin capability). The missing-token policy
-    # reads it: elevated profiles refuse to start without a token,
-    # read-only ones warn and continue. Always derived from the tool
-    # catalog at construction or load, never set by user config; scope
-    # suffixes cannot stand in for it because the API documents write
-    # scopes on several read-only routes (kubeconfig, managed contacts,
-    # instance interfaces).
+    # True when the profile permits at least one Write, Destroy or Admin tool.
+    # The missing-token policy reads it: elevated profiles refuse to start
+    # without a token, read-only ones warn and continue. Derived from the tool
+    # catalog, never from user config, and a scope suffix cannot stand in for
+    # it: the API documents write scopes on read-only routes (kubeconfig,
+    # managed contacts).
     elevated: bool = False
     allow_yolo: bool = False
     disabled: bool = False
