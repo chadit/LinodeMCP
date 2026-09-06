@@ -55,7 +55,7 @@ dev = [
     # fetched per run the way python/Makefile's npx pyright is. Same reason
     # mypy sits in this group: tools-typecheck invokes it the same way.
     "basedpyright>=1.39.10",
-    "types-PyYAML>=6.0.12.20260815",
+    "types-PyYAML>=6.0.12.20260906",
     "build>=1.6.0",
 ]
 
