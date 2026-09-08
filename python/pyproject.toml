@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=2.1.1,<3.0",
+    "mcp>=2.2.0,<3.0",
     "httpx>=0.28.1",
     "pyyaml>=6.0.3",
     "structlog>=26.1.0",
@@ -54,7 +54,7 @@ dev = [
     # venv interpreter, so the checker has to be installed here rather than
     # fetched per run the way python/Makefile's npx pyright is. Same reason
     # mypy sits in this group: tools-typecheck invokes it the same way.
-    "basedpyright>=1.39.10",
+    "basedpyright>=1.40.0",
     "types-PyYAML>=6.0.12.20260906",
     "build>=1.6.0",
 ]
