@@ -48,15 +48,15 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.6",
+    "ruff>=0.16.7",
     "mypy>=2.3.1",
     # The strict-typecheck gate runs this as `python -m basedpyright` on the
     # venv interpreter, so the checker has to be installed here rather than
     # fetched per run the way python/Makefile's npx pyright is. Same reason
     # mypy sits in this group: tools-typecheck invokes it the same way.
-    "basedpyright>=1.40.0",
+    "basedpyright>=1.40.1",
     "types-PyYAML>=6.0.12.20260906",
-    "build>=1.6.0",
+    "build>=1.6.1",
 ]
 
 observability = [
