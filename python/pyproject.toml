@@ -40,7 +40,7 @@ dependencies = [
     # Remove once mcp's own floors clear these advisories.
     "cryptography>=50.0.1",
     "python-multipart>=0.0.32",
-    "starlette>=1.6.0",
+    "starlette>=1.7.0",
 ]
 
 [project.optional-dependencies]
