@@ -78,7 +78,7 @@ jobs:
       # second file passed here once drifted stale (old syntax, old
       # schedule) while the repo copy moved on, which split the source of
       # truth and warned "Config needs migrating" on every run.
-      - uses: renovatebot/github-action@9fea9f0fbf80401026d11d03911d62b1f70fef1f # v46.3.3
+      - uses: renovatebot/github-action@f3a31a786096ba6b40d0f0ffe11a494ef73bfa7c # v46.3.4
         if: steps.secrets.outputs.skip != 'true'
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
