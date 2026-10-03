@@ -7,7 +7,7 @@ name = "linodemcp"
 version = "0.1.0"
 description = "MCP server for Linode API access"
 readme = "README.md"
-requires-python = ">=3.14.7"
+requires-python = ">=3.14.8"
 license = { text = "MIT" }
 authors = [{ name = "LinodeMCP Contributors" }]
 keywords = ["mcp", "linode", "api", "server"]
@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=2.2.0,<3.0",
+    "mcp>=2.3.0,<3.0",
     "httpx>=0.28.1",
     "pyyaml>=6.0.3",
     "structlog>=26.1.0",
@@ -38,7 +38,7 @@ dependencies = [
     # constraints are open (starlette>=0.27, python-multipart>=0.0.9), so
     # without these a resolve can land on versions trivy flags HIGH.
     # Remove once mcp's own floors clear these advisories.
-    "cryptography>=50.0.1",
+    "cryptography>=50.0.2",
     "python-multipart>=0.0.32",
     "starlette>=1.7.0",
 ]
@@ -48,8 +48,8 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.9",
-    "mypy>=2.3.1",
+    "ruff>=0.16.10",
+    "mypy>=2.4.0",
     # The strict-typecheck gate runs this as `python -m basedpyright` on the
     # venv interpreter, so the checker has to be installed here rather than
     # fetched per run the way python/Makefile's npx pyright is. Same reason
