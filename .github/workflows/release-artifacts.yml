@@ -218,7 +218,7 @@ jobs:
           sha256sum "${artifact}.spdx.json" > "${artifact}.spdx.json.sha256"
 
       - name: Stage artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
@@ -266,7 +266,7 @@ jobs:
           done
 
       - name: Stage artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dist-python
           path: python/dist/
@@ -375,7 +375,7 @@ jobs:
           sha256sum linodemcp-image.spdx.json > linodemcp-image.spdx.json.sha256
 
       - name: Stage image SBOMs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dist-image-sbom
           path: linodemcp-image.*
